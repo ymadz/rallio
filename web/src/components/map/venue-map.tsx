@@ -149,6 +149,9 @@ export default function VenueMap({ venues }: VenueMapProps) {
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null)
   const [locationLoading, setLocationLoading] = useState(false)
 
+  console.log('VenueMap received venues:', venues)
+  console.log('Venues length:', venues?.length)
+
   // Default center on Zamboanga City
   const defaultCenter: [number, number] = [6.9214, 122.0790]
   const defaultZoom = 13
