@@ -190,9 +190,9 @@ export default function SetupProfilePage() {
       const { error: userError } = await supabase
         .from('profiles')
         .update({
-          display_name: `${formData.firstName} ${formData.lastName}`,
-          first_name: formData.firstName,
-          last_name: formData.lastName,
+          display_name: `${profileData.firstName} ${profileData.lastName}`,
+          first_name: profileData.firstName,
+          last_name: profileData.lastName,
           avatar_url: avatarUrl,
           profile_completed: true,
         })

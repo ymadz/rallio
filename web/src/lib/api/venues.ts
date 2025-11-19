@@ -1,0 +1,703 @@
+import { createClient } from '@/lib/supabase/client'
+
+// ============================================================
+// TYPES
+// ============================================================
+
+export interface VenueFilters {
+  searchQuery?: string
+  minPrice?: number
+  maxPrice?: number
+  amenities?: string[]
+  courtType?: 'indoor' | 'outdoor' | null
+  latitude?: number
+  longitude?: number
+  radiusKm?: number
+  sortBy?: 'distance' | 'price_low' | 'price_high' | 'rating' | 'newest'
+  limit?: number
+  offset?: number
+}
+
+export interface VenueWithDetails {
+  id: string
+  name: string
+  description: string | null
+  address: string
+  city: string
+  latitude: number
+  longitude: number
+  phone: string | null
+  email: string | null
+  website: string | null
+  opening_hours: Record<string, { open: string; close: string }> | null
+  is_active: boolean
+  is_verified: boolean
+  metadata: Record<string, any> | null
+  created_at: string
+  courts: CourtWithDetails[]
+  minPrice: number
+  maxPrice: number
+  totalCourts: number
+  activeCourtCount: number
+  amenities: string[]
+  distance?: number // in kilometers
+  averageRating?: number
+  totalReviews?: number
+}
+
+export interface CourtWithDetails {
+  id: string
+  venue_id: string
+  name: string
+  description: string | null
+  surface_type: string
+  court_type: 'indoor' | 'outdoor'
+  capacity: number
+  hourly_rate: number
+  is_active: boolean
+  metadata: Record<string, any> | null
+  amenities: Array<{ id: string; name: string; icon: string | null }>
+  images: Array<{
+    id: string
+    url: string
+    alt_text: string | null
+    is_primary: boolean
+    display_order: number
+  }>
+  averageRating?: number
+  totalReviews?: number
+}
+
+export interface CourtRating {
+  id: string
+  court_id: string
+  user_id: string
+  overall_rating: number
+  quality_rating: number
+  cleanliness_rating: number
+  facilities_rating: number
+  value_rating: number
+  review: string | null
+  created_at: string
+  helpful_count: number
+  user: {
+    id: string
+    display_name: string
+    avatar_url: string | null
+  }
+  response?: {
+    id: string
+    response: string
+    created_at: string
+    responder: {
+      id: string
+      display_name: string
+      avatar_url: string | null
+    }
+  }
+}
+
+export interface AvailabilitySlot {
+  id: string
+  court_id: string
+  date: string
+  start_time: string
+  end_time: string
+  is_available: boolean
+  max_bookings: number
+  current_bookings: number
+}
+
+// ============================================================
+// VENUE QUERIES
+// ============================================================
+
+/**
+ * Get venues with filtering, sorting, and pagination
+ */
+export async function getVenues(filters: VenueFilters = {}): Promise<{
+  venues: VenueWithDetails[]
+  total: number
+  hasMore: boolean
+}> {
+  const supabase = createClient()
+  
+  const {
+    searchQuery,
+    minPrice = 0,
+    maxPrice = 10000,
+    amenities = [],
+    courtType,
+    latitude,
+    longitude,
+    radiusKm = 50,
+    sortBy = 'newest',
+    limit = 12,
+    offset = 0,
+  } = filters
+
+  try {
+    // Build the query
+    let query = supabase
+      .from('venues')
+      .select(`
+        id,
+        name,
+        description,
+        address,
+        city,
+        latitude,
+        longitude,
+        phone,
+        email,
+        website,
+        opening_hours,
+        is_active,
+        is_verified,
+        metadata,
+        created_at,
+        courts (
+          id,
+          name,
+          court_type,
+          hourly_rate,
+          is_active,
+          surface_type,
+          capacity,
+          description,
+          metadata,
+          court_amenities (
+            amenities (
+              id,
+              name,
+              icon
+            )
+          ),
+          images:court_images (
+            id,
+            url,
+            alt_text,
+            is_primary,
+            display_order
+          )
+        )
+      `, { count: 'exact' })
+      .eq('is_active', true)
+      .eq('courts.is_active', true)
+
+    // Search filter
+    if (searchQuery) {
+      query = query.or(`name.ilike.%${searchQuery}%,address.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`)
+    }
+
+    // Execute query to get raw data
+    const { data: rawVenues, error, count } = await query
+
+    if (error) throw error
+    if (!rawVenues) return { venues: [], total: 0, hasMore: false }
+
+    // Process and filter venues
+    let processedVenues: VenueWithDetails[] = rawVenues.map((venue: any) => {
+      const activeCourts = venue.courts.filter((c: any) => c.is_active)
+      
+      // Calculate min/max price from active courts
+      const prices = activeCourts.map((c: any) => c.hourly_rate)
+      const minCourtPrice = prices.length > 0 ? Math.min(...prices) : 0
+      const maxCourtPrice = prices.length > 0 ? Math.max(...prices) : 0
+      
+      // Collect unique amenities across all courts
+      const uniqueAmenities = new Set<string>()
+      activeCourts.forEach((court: any) => {
+        court.court_amenities?.forEach((mapping: any) => {
+          if (mapping.amenities?.name) {
+            uniqueAmenities.add(mapping.amenities.name)
+          }
+        })
+      })
+
+      return {
+        ...venue,
+        courts: activeCourts.map((court: any) => ({
+          ...court,
+          venue_id: venue.id,
+          amenities: court.court_amenities?.map((m: any) => m.amenities).filter(Boolean) || [],
+          images: court.images || [],
+        })),
+        minPrice: minCourtPrice,
+        maxPrice: maxCourtPrice,
+        totalCourts: activeCourts.length,
+        activeCourtCount: activeCourts.length,
+        amenities: Array.from(uniqueAmenities),
+      }
+    })
+
+    // Apply client-side filters
+    processedVenues = processedVenues.filter(venue => {
+      // Price filter
+      if (venue.minPrice > maxPrice || venue.maxPrice < minPrice) return false
+      
+      // Court type filter
+      if (courtType) {
+        const hasMatchingType = venue.courts.some(
+          (c: any) => c.court_type === courtType
+        )
+        if (!hasMatchingType) return false
+      }
+      
+      // Amenities filter
+      if (amenities.length > 0) {
+        const hasAllAmenities = amenities.every(amenity =>
+          venue.amenities.includes(amenity)
+        )
+        if (!hasAllAmenities) return false
+      }
+      
+      return true
+    })
+
+    // Calculate distance if coordinates provided
+    if (latitude && longitude) {
+      processedVenues = processedVenues.map(venue => ({
+        ...venue,
+        distance: calculateDistance(
+          latitude,
+          longitude,
+          venue.latitude,
+          venue.longitude
+        ),
+      }))
+      
+      // Filter by radius
+      processedVenues = processedVenues.filter(
+        venue => !venue.distance || venue.distance <= radiusKm
+      )
+    }
+
+    // Sorting
+    processedVenues.sort((a, b) => {
+      switch (sortBy) {
+        case 'distance':
+          return (a.distance || Infinity) - (b.distance || Infinity)
+        case 'price_low':
+          return a.minPrice - b.minPrice
+        case 'price_high':
+          return b.maxPrice - a.maxPrice
+        case 'rating':
+          return (b.averageRating || 0) - (a.averageRating || 0)
+        case 'newest':
+        default:
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      }
+    })
+
+    // Pagination
+    const total = processedVenues.length
+    const paginatedVenues = processedVenues.slice(offset, offset + limit)
+    const hasMore = offset + limit < total
+
+    return {
+      venues: paginatedVenues,
+      total,
+      hasMore,
+    }
+  } catch (error) {
+    console.error('Error fetching venues:', error)
+    throw error
+  }
+}
+
+/**
+ * Get a single venue by ID with full details
+ */
+export async function getVenueById(
+  venueId: string,
+  userLatitude?: number,
+  userLongitude?: number
+): Promise<VenueWithDetails | null> {
+  const supabase = createClient()
+
+  try {
+    const { data: venue, error } = await supabase
+      .from('venues')
+      .select(`
+        id,
+        name,
+        description,
+        address,
+        city,
+        latitude,
+        longitude,
+        phone,
+        email,
+        website,
+        opening_hours,
+        is_active,
+        is_verified,
+        metadata,
+        created_at,
+        courts (
+          id,
+          name,
+          description,
+          surface_type,
+          court_type,
+          capacity,
+          hourly_rate,
+          is_active,
+          metadata,
+          court_amenities (
+            amenities (
+              id,
+              name,
+              icon
+            )
+          ),
+          court_images (
+            id,
+            url,
+            alt_text,
+            is_primary,
+            display_order
+          )
+        )
+      `)
+      .eq('id', venueId)
+      .eq('is_active', true)
+      .single()
+
+    if (error) throw error
+    if (!venue) return null
+
+    // Process courts
+    const activeCourts = venue.courts.filter(c => c.is_active)
+    const prices = activeCourts.map(c => c.hourly_rate)
+    
+    // Collect unique amenities
+    const uniqueAmenities = new Set<string>()
+    activeCourts.forEach(court => {
+      court.court_amenities?.forEach((mapping: any) => {
+        if (mapping.amenities?.name) {
+          uniqueAmenities.add(mapping.amenities.name)
+        }
+      })
+    })
+
+    // Calculate distance if coordinates provided
+    let distance: number | undefined
+    if (userLatitude && userLongitude) {
+      distance = calculateDistance(
+        userLatitude,
+        userLongitude,
+        venue.latitude,
+        venue.longitude
+      )
+    }
+
+    // Get average rating for the venue (average of all court ratings)
+    const courtIds = activeCourts.map(c => c.id)
+    const ratingsData = await Promise.all(
+      courtIds.map(id => getCourtRatings(id))
+    )
+    
+    const allRatings = ratingsData.flat()
+    const averageRating = allRatings.length > 0
+      ? allRatings.reduce((sum, r) => sum + r.overall_rating, 0) / allRatings.length
+      : undefined
+
+    return {
+      ...venue,
+      courts: activeCourts.map(court => ({
+        ...court,
+        venue_id: venue.id,
+        amenities: court.court_amenities?.map((m: any) => m.amenities) || [],
+        images: court.court_images || [],
+      })),
+      minPrice: prices.length > 0 ? Math.min(...prices) : 0,
+      maxPrice: prices.length > 0 ? Math.max(...prices) : 0,
+      totalCourts: activeCourts.length,
+      activeCourtCount: activeCourts.length,
+      amenities: Array.from(uniqueAmenities),
+      distance,
+      averageRating,
+      totalReviews: allRatings.length,
+    }
+  } catch (error) {
+    console.error('Error fetching venue:', error)
+    throw error
+  }
+}
+
+/**
+ * Search venues near a location using PostGIS
+ */
+export async function searchNearby(
+  latitude: number,
+  longitude: number,
+  radiusKm: number = 10,
+  limit: number = 20
+): Promise<VenueWithDetails[]> {
+  const supabase = createClient()
+
+  try {
+    // Use PostGIS earth_distance function
+    const { data: venues, error } = await supabase.rpc('nearby_venues', {
+      user_lat: latitude,
+      user_long: longitude,
+      radius_km: radiusKm,
+      result_limit: limit,
+    })
+
+    if (error) {
+      console.error('PostGIS query error, falling back to client-side calculation:', error)
+      // Fallback to getting all venues and calculating distance client-side
+      const { venues: allVenues } = await getVenues({ latitude, longitude, radiusKm, limit })
+      return allVenues
+    }
+
+    return venues || []
+  } catch (error) {
+    console.error('Error searching nearby venues:', error)
+    // Fallback
+    const { venues } = await getVenues({ latitude, longitude, radiusKm, limit })
+    return venues
+  }
+}
+
+// ============================================================
+// COURT QUERIES
+// ============================================================
+
+/**
+ * Get court ratings and reviews
+ */
+export async function getCourtRatings(courtId: string): Promise<CourtRating[]> {
+  const supabase = createClient()
+
+  try {
+    const { data: ratings, error } = await supabase
+      .from('court_ratings')
+      .select(`
+        id,
+        court_id,
+        user_id,
+        overall_rating,
+        quality_rating,
+        cleanliness_rating,
+        facilities_rating,
+        value_rating,
+        review,
+        created_at,
+        user:profiles!court_ratings_user_id_fkey (
+          id,
+          display_name,
+          avatar_url
+        ),
+        rating_responses (
+          id,
+          response,
+          created_at,
+          responder:profiles!rating_responses_responder_id_fkey (
+            id,
+            display_name,
+            avatar_url
+          )
+        ),
+        rating_helpful_votes (
+          id
+        )
+      `)
+      .eq('court_id', courtId)
+      .order('created_at', { ascending: false })
+
+    if (error) throw error
+
+    return (ratings || []).map(rating => {
+      const response = rating.rating_responses?.[0]
+      return {
+        ...rating,
+        user: (Array.isArray(rating.user) ? rating.user[0] : rating.user) as { id: string; display_name: string; avatar_url: string | null },
+        helpful_count: rating.rating_helpful_votes?.length || 0,
+        response: response ? {
+          id: response.id,
+          response: response.response,
+          created_at: response.created_at,
+          responder: (Array.isArray(response.responder) ? response.responder[0] : response.responder) as { id: string; display_name: string; avatar_url: string | null }
+        } : undefined,
+      }
+    })
+  } catch (error) {
+    console.error('Error fetching court ratings:', error)
+    return []
+  }
+}
+
+/**
+ * Get court availability for a specific date range
+ */
+export async function getCourtAvailability(
+  courtId: string,
+  startDate: string,
+  endDate: string
+): Promise<AvailabilitySlot[]> {
+  const supabase = createClient()
+
+  try {
+    const { data: slots, error } = await supabase
+      .from('court_availabilities')
+      .select('*')
+      .eq('court_id', courtId)
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .order('date', { ascending: true })
+      .order('start_time', { ascending: true })
+
+    if (error) throw error
+
+    return slots || []
+  } catch (error) {
+    console.error('Error fetching court availability:', error)
+    return []
+  }
+}
+
+/**
+ * Get average rating for a court
+ */
+export async function getCourtAverageRating(courtId: string): Promise<{
+  averageRating: number
+  totalReviews: number
+  ratingBreakdown: {
+    overall: number
+    quality: number
+    cleanliness: number
+    facilities: number
+    value: number
+  }
+}> {
+  const ratings = await getCourtRatings(courtId)
+  
+  if (ratings.length === 0) {
+    return {
+      averageRating: 0,
+      totalReviews: 0,
+      ratingBreakdown: {
+        overall: 0,
+        quality: 0,
+        cleanliness: 0,
+        facilities: 0,
+        value: 0,
+      },
+    }
+  }
+
+  const sum = {
+    overall: ratings.reduce((acc, r) => acc + r.overall_rating, 0),
+    quality: ratings.reduce((acc, r) => acc + r.quality_rating, 0),
+    cleanliness: ratings.reduce((acc, r) => acc + r.cleanliness_rating, 0),
+    facilities: ratings.reduce((acc, r) => acc + r.facilities_rating, 0),
+    value: ratings.reduce((acc, r) => acc + r.value_rating, 0),
+  }
+
+  const count = ratings.length
+
+  return {
+    averageRating: sum.overall / count,
+    totalReviews: count,
+    ratingBreakdown: {
+      overall: sum.overall / count,
+      quality: sum.quality / count,
+      cleanliness: sum.cleanliness / count,
+      facilities: sum.facilities / count,
+      value: sum.value / count,
+    },
+  }
+}
+
+// ============================================================
+// UTILITY FUNCTIONS
+// ============================================================
+
+/**
+ * Calculate distance between two coordinates using Haversine formula
+ * Returns distance in kilometers
+ */
+function calculateDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371 // Radius of the Earth in kilometers
+  const dLat = toRadians(lat2 - lat1)
+  const dLon = toRadians(lon2 - lon1)
+  
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(lat1)) *
+      Math.cos(toRadians(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2)
+  
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  const distance = R * c
+  
+  return Math.round(distance * 10) / 10 // Round to 1 decimal place
+}
+
+function toRadians(degrees: number): number {
+  return degrees * (Math.PI / 180)
+}
+
+/**
+ * Format distance for display
+ */
+export function formatDistance(km: number): string {
+  if (km < 1) {
+    return `${Math.round(km * 1000)}m`
+  }
+  return `${km.toFixed(1)}km`
+}
+
+/**
+ * Check if venue is currently open
+ */
+export function isVenueOpen(openingHours: Record<string, { open: string; close: string }> | null): boolean {
+  if (!openingHours) return false
+  
+  const now = new Date()
+  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+  const today = dayNames[now.getDay()]
+  
+  const todayHours = openingHours[today]
+  if (!todayHours) return false
+  
+  const currentTime = now.getHours() * 100 + now.getMinutes()
+  const openTime = parseInt(todayHours.open.replace(':', ''))
+  const closeTime = parseInt(todayHours.close.replace(':', ''))
+  
+  return currentTime >= openTime && currentTime <= closeTime
+}
+
+/**
+ * Format operating hours for display
+ */
+export function formatOperatingHours(openingHours: Record<string, { open: string; close: string }> | null): string {
+  if (!openingHours) return 'Hours not available'
+  
+  const now = new Date()
+  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+  const today = dayNames[now.getDay()]
+  
+  const todayHours = openingHours[today]
+  if (!todayHours) return 'Closed today'
+  
+  return `${formatTime(todayHours.open)} - ${formatTime(todayHours.close)}`
+}
+
+function formatTime(time: string): string {
+  const [hours, minutes] = time.split(':')
+  const h = parseInt(hours)
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  const displayHour = h > 12 ? h - 12 : h === 0 ? 12 : h
+  return `${displayHour}:${minutes} ${ampm}`
+}

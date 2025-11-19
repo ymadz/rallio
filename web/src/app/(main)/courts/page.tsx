@@ -1,118 +1,168 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import {
+  getVenues,
+  getCourtAverageRating,
+  formatDistance,
+  isVenueOpen,
+  type VenueFilters,
+  type VenueWithDetails,
+} from '@/lib/api/venues'
+import { createClient } from '@/lib/supabase/client'
 
 // Filter options
 const amenityOptions = [
-  'AC', 'Lighting', 'Parking', 'Restroom', 'Shower', 'Water', 'Lockers', 'Waiting Area'
+  'Parking',
+  'Restroom',
+  'Shower',
+  'Lockers',
+  'Water',
+  'Air Conditioning',
+  'Lighting',
+  'Waiting Area',
+  'Equipment Rental',
+  'WiFi',
+  'Canteen',
 ]
 
+type SortOption = 'distance' | 'price_low' | 'price_high' | 'rating' | 'newest'
+
 export default function CourtsPage() {
-  const [venues, setVenues] = useState<any[]>([])
+  const [venues, setVenues] = useState<VenueWithDetails[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [search, setSearch] = useState('')
-  const [viewMode, setViewMode] = useState<'list' | 'map'>('list')
   const [showFilters, setShowFilters] = useState(false)
+  const [total, setTotal] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
+  const [locationLoading, setLocationLoading] = useState(false)
+  const [locationError, setLocationError] = useState<string | null>(null)
 
   // Filter states
   const [priceRange, setPriceRange] = useState<number>(1000)
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([])
-  const [hasIndoor, setHasIndoor] = useState(false)
-  const [hasOutdoor, setHasOutdoor] = useState(false)
+  const [courtType, setCourtType] = useState<'indoor' | 'outdoor' | null>(null)
+  const [sortBy, setSortBy] = useState<SortOption>('newest')
+  const [offset, setOffset] = useState(0)
+  const [venueRatings, setVenueRatings] = useState<Record<string, { avg: number; count: number }>>({})
+
+  const LIMIT = 12
 
   useEffect(() => {
-    fetchVenues()
-  }, [])
+    fetchVenues(true)
+  }, [search, priceRange, selectedAmenities, courtType, sortBy, userLocation])
 
-  const fetchVenues = async () => {
-    const supabase = createClient()
-    const { data, error } = await supabase
-      .from('venues')
-      .select(`
-        id,
-        name,
-        address,
-        phone,
-        is_active,
-        courts(
-          id,
-          name,
-          court_type,
-          hourly_rate,
-          is_active,
-          court_amenity_map(
-            amenity:court_amenities(id, name)
-          )
-        )
-      `)
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
-
-    if (!error && data) {
-      const transformedData = data.map(venue => {
-        const activeCourts = venue.courts?.filter((c: any) => c.is_active) || []
-        const prices = activeCourts.map((c: any) => c.hourly_rate).filter(Boolean)
-        const minPrice = prices.length > 0 ? Math.min(...prices) : 0
-        const maxPrice = prices.length > 0 ? Math.max(...prices) : 0
-        const hasIndoorCourt = activeCourts.some((c: any) => c.court_type === 'indoor')
-        const hasOutdoorCourt = activeCourts.some((c: any) => c.court_type === 'outdoor')
-
-        const amenities = new Set<string>()
-        activeCourts.forEach((court: any) => {
-          court.court_amenity_map?.forEach((mapping: any) => {
-            if (mapping.amenity?.name) {
-              amenities.add(mapping.amenity.name)
-            }
-          })
-        })
-
-        return {
-          ...venue,
-          courtCount: activeCourts.length,
-          minPrice,
-          maxPrice,
-          hasIndoor: hasIndoorCourt,
-          hasOutdoor: hasOutdoorCourt,
-          amenities: Array.from(amenities)
-        }
-      })
-      setVenues(transformedData)
-    } else if (error) {
-      console.error('Error fetching venues:', error)
+  const fetchVenues = async (reset: boolean = false) => {
+    if (reset) {
+      setLoading(true)
+      setOffset(0)
+    } else {
+      setLoadingMore(true)
     }
-    setLoading(false)
+
+    const filters: VenueFilters = {
+      searchQuery: search || undefined,
+      minPrice: 0,
+      maxPrice: priceRange,
+      amenities: selectedAmenities.length > 0 ? selectedAmenities : undefined,
+      courtType: courtType || undefined,
+      latitude: userLocation?.lat,
+      longitude: userLocation?.lng,
+      sortBy,
+      limit: LIMIT,
+      offset: reset ? 0 : offset,
+    }
+
+    try {
+      const result = await getVenues(filters)
+      
+      if (reset) {
+        setVenues(result.venues)
+        setOffset(LIMIT)
+      } else {
+        setVenues(prev => [...prev, ...result.venues])
+        setOffset(prev => prev + LIMIT)
+      }
+      
+      setTotal(result.total)
+      setHasMore(result.hasMore)
+
+      // Fetch ratings for all courts in batch
+      const allCourtIds = result.venues.flatMap(venue => venue.courts.map(court => court.id))
+      
+      if (allCourtIds.length > 0) {
+        const supabase = createClient()
+        const { data: allRatings } = await supabase
+          .from('court_ratings')
+          .select('court_id, overall_rating')
+          .in('court_id', allCourtIds)
+
+        // Group ratings by venue
+        const ratings: Record<string, { avg: number; count: number }> = {}
+        for (const venue of result.venues) {
+          const venueRatings = allRatings?.filter((r: any) => 
+            venue.courts.some(c => c.id === r.court_id)
+          ) || []
+          
+          if (venueRatings.length > 0) {
+            const totalRating = venueRatings.reduce((sum: number, r: any) => sum + r.overall_rating, 0)
+            ratings[venue.id] = {
+              avg: totalRating / venueRatings.length,
+              count: venueRatings.length,
+            }
+          }
+        }
+        setVenueRatings(prev => ({ ...prev, ...ratings }))
+      }
+    } catch (error) {
+      console.error('Error fetching venues:', error)
+    } finally {
+      setLoading(false)
+      setLoadingMore(false)
+    }
   }
 
-  const filteredVenues = venues.filter((venue) => {
-    if (search) {
-      const searchLower = search.toLowerCase()
-      const matchesSearch =
-        venue.name?.toLowerCase().includes(searchLower) ||
-        venue.address?.toLowerCase().includes(searchLower)
-      if (!matchesSearch) return false
+  const handleLoadMore = () => {
+    fetchVenues(false)
+  }
+
+  const handleGetLocation = () => {
+    setLocationLoading(true)
+    setLocationError(null)
+
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation is not supported by your browser')
+      setLocationLoading(false)
+      return
     }
 
-    if (hasIndoor && !venue.hasIndoor) return false
-    if (hasOutdoor && !venue.hasOutdoor) return false
-    if (venue.minPrice > priceRange) return false
-
-    if (selectedAmenities.length > 0) {
-      const hasAllAmenities = selectedAmenities.every(amenity =>
-        venue.amenities.some((a: string) => a.toLowerCase() === amenity.toLowerCase())
-      )
-      if (!hasAllAmenities) return false
-    }
-
-    return true
-  })
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        })
+        setSortBy('distance')
+        setLocationLoading(false)
+      },
+      (error) => {
+        setLocationError('Unable to retrieve your location')
+        setLocationLoading(false)
+        console.error('Geolocation error:', error)
+      }
+    )
+  }
 
   const clearFilters = () => {
     setPriceRange(1000)
     setSelectedAmenities([])
-    setHasIndoor(false)
-    setHasOutdoor(false)
+    setCourtType(null)
+    setSortBy('newest')
+    setUserLocation(null)
+    setSearch('')
   }
 
   const toggleAmenity = (amenity: string) => {
@@ -123,14 +173,53 @@ export default function CourtsPage() {
     )
   }
 
+  const renderStars = (rating: number) => {
+    const stars = []
+    const fullStars = Math.floor(rating)
+    const hasHalfStar = rating % 1 >= 0.5
+
+    for (let i = 0; i < fullStars; i++) {
+      stars.push(
+        <svg key={`full-${i}`} className="w-4 h-4 fill-yellow-400" viewBox="0 0 20 20">
+          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+        </svg>
+      )
+    }
+
+    if (hasHalfStar) {
+      stars.push(
+        <svg key="half" className="w-4 h-4 fill-yellow-400" viewBox="0 0 20 20">
+          <defs>
+            <linearGradient id="half">
+              <stop offset="50%" stopColor="rgb(250 204 21)" />
+              <stop offset="50%" stopColor="rgb(229 231 235)" />
+            </linearGradient>
+          </defs>
+          <path fill="url(#half)" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+        </svg>
+      )
+    }
+
+    const emptyStars = 5 - Math.ceil(rating)
+    for (let i = 0; i < emptyStars; i++) {
+      stars.push(
+        <svg key={`empty-${i}`} className="w-4 h-4 fill-gray-200" viewBox="0 0 20 20">
+          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+        </svg>
+      )
+    }
+
+    return stars
+  }
+
   return (
     <div className="min-h-screen bg-white">
       <div className="flex">
         {/* Main Content */}
         <main className="flex-1 p-6">
-          {/* Search Bar and View Toggle */}
-          <div className="flex items-center gap-4 mb-6">
-            <div className="flex-1 relative max-w-md">
+          {/* Search Bar, Sort, and Actions */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-6">
+            <div className="flex-1 relative w-full sm:max-w-md">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
@@ -143,19 +232,51 @@ export default function CourtsPage() {
               />
             </div>
 
-            <span className="text-sm text-gray-500 whitespace-nowrap">
-              {filteredVenues.length} results
-            </span>
+            {/* Near Me Button */}
+            <button
+              onClick={handleGetLocation}
+              disabled={locationLoading}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-colors whitespace-nowrap ${
+                userLocation
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              } ${locationLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              {locationLoading ? (
+                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              )}
+              <span className="text-sm font-medium">
+                {userLocation ? 'Near Me ✓' : 'Near Me'}
+              </span>
+            </button>
+
+            {/* Sort Dropdown */}
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              className="px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white"
+            >
+              <option value="newest">Newest</option>
+              <option value="distance" disabled={!userLocation}>
+                Distance {!userLocation && '(Enable location)'}
+              </option>
+              <option value="price_low">Price: Low to High</option>
+              <option value="price_high">Price: High to Low</option>
+              <option value="rating">Highest Rated</option>
+            </select>
 
             {/* View Toggle */}
             <div className="flex rounded-lg border border-gray-300 overflow-hidden">
               <button
-                onClick={() => setViewMode('list')}
-                className={`px-4 py-2 text-sm font-medium flex items-center gap-2 ${
-                  viewMode === 'list'
-                    ? 'bg-primary text-white'
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
-                }`}
+                className="px-4 py-2 text-sm font-medium flex items-center gap-2 bg-primary text-white"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
@@ -174,60 +295,190 @@ export default function CourtsPage() {
             </div>
           </div>
 
+          {/* Results Count and Active Filters */}
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <span className="text-sm text-gray-600">
+              {loading ? 'Loading...' : `${total} ${total === 1 ? 'venue' : 'venues'} found`}
+            </span>
+            
+            {userLocation && (
+              <span className="px-2 py-1 bg-primary/10 text-primary text-xs font-medium rounded-full">
+                Within {formatDistance(50)}
+              </span>
+            )}
+            
+            {selectedAmenities.length > 0 && (
+              <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-full">
+                {selectedAmenities.length} amenities
+              </span>
+            )}
+            
+            {courtType && (
+              <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-full capitalize">
+                {courtType} only
+              </span>
+            )}
+          </div>
+
           {/* Venues Grid */}
           {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="bg-gray-100 rounded-xl h-64 animate-pulse" />
+                <div key={i} className="bg-gray-100 rounded-xl h-80 animate-pulse" />
               ))}
             </div>
-          ) : filteredVenues.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredVenues.map((venue) => (
-                <div
-                  key={venue.id}
-                  className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow"
-                >
-                  {/* Venue Image */}
-                  <div className="h-36 bg-gray-100 flex items-center justify-center relative">
-                    <svg className="w-10 h-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <span className="absolute top-3 left-3 px-2 py-1 bg-primary text-white text-xs font-medium rounded">
-                      OPEN
-                    </span>
-                  </div>
+          ) : venues.length > 0 ? (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {venues.map((venue) => {
+                  const rating = venueRatings[venue.id]
+                  const isOpen = isVenueOpen(venue.opening_hours)
 
-                  {/* Venue Info */}
-                  <div className="p-4">
-                    <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2">
-                      {venue.name}
-                    </h3>
-                    <p className="text-sm text-gray-500 mb-4 line-clamp-2">
-                      {venue.address}
-                    </p>
-
+                  return (
                     <Link
+                      key={venue.id}
                       href={`/courts/${venue.id}`}
-                      className="block w-full text-center py-2 border border-primary text-primary rounded-lg text-sm font-medium hover:bg-primary/5 transition-colors"
+                      className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg hover:border-primary/30 transition-all group"
                     >
-                      See Court
+                      {/* Venue Image */}
+                      <div className="h-44 bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center relative overflow-hidden">
+                        {venue.courts[0]?.images?.[0]?.url ? (
+                          <img
+                            src={venue.courts[0].images[0].url}
+                            alt={venue.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        ) : (
+                          <svg className="w-12 h-12 text-primary/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        )}
+                        
+                        <div className="absolute top-3 left-3 flex gap-2">
+                          <span className={`px-2.5 py-1 text-white text-xs font-bold rounded-md shadow-sm ${
+                            isOpen ? 'bg-green-500' : 'bg-gray-500'
+                          }`}>
+                            {isOpen ? 'OPEN' : 'CLOSED'}
+                          </span>
+                          {venue.is_verified && (
+                            <span className="px-2.5 py-1 bg-blue-500 text-white text-xs font-bold rounded-md shadow-sm">
+                              VERIFIED
+                            </span>
+                          )}
+                        </div>
+
+                        {venue.distance !== undefined && (
+                          <div className="absolute top-3 right-3 px-2.5 py-1 bg-black/60 text-white text-xs font-medium rounded-md backdrop-blur-sm">
+                            {formatDistance(venue.distance)}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Venue Info */}
+                      <div className="p-4">
+                        <h3 className="font-bold text-gray-900 mb-1.5 line-clamp-1 group-hover:text-primary transition-colors">
+                          {venue.name}
+                        </h3>
+
+                        {/* Rating */}
+                        {rating && (
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <div className="flex items-center gap-0.5">
+                              {renderStars(rating.avg)}
+                            </div>
+                            <span className="text-sm font-semibold text-gray-900">
+                              {rating.avg.toFixed(1)}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              ({rating.count} {rating.count === 1 ? 'review' : 'reviews'})
+                            </span>
+                          </div>
+                        )}
+
+                        <p className="text-sm text-gray-600 mb-3 line-clamp-2 flex items-start gap-1.5">
+                          <svg className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          {venue.address}
+                        </p>
+
+                        {/* Court Info */}
+                        <div className="flex items-center justify-between text-sm mb-4 pb-4 border-b border-gray-100">
+                          <span className="text-gray-600">
+                            {venue.totalCourts} {venue.totalCourts === 1 ? 'court' : 'courts'}
+                          </span>
+                          <span className="font-bold text-primary">
+                            ₱{venue.minPrice}{venue.maxPrice !== venue.minPrice && ` - ₱${venue.maxPrice}`}/hr
+                          </span>
+                        </div>
+
+                        {/* Amenities Preview */}
+                        {venue.amenities.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {venue.amenities.slice(0, 3).map((amenity) => (
+                              <span
+                                key={amenity}
+                                className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-md"
+                              >
+                                {amenity}
+                              </span>
+                            ))}
+                            {venue.amenities.length > 3 && (
+                              <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-md">
+                                +{venue.amenities.length - 3} more
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </Link>
-                  </div>
+                  )
+                })}
+              </div>
+
+              {/* Load More Button */}
+              {hasMore && (
+                <div className="flex justify-center mt-8">
+                  <button
+                    onClick={handleLoadMore}
+                    disabled={loadingMore}
+                    className="px-8 py-3 bg-white border-2 border-primary text-primary font-semibold rounded-lg hover:bg-primary hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {loadingMore ? (
+                      <>
+                        <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        Load More
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </>
+                    )}
+                  </button>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           ) : (
-            <div className="text-center py-12">
-              <svg className="w-12 h-12 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="text-center py-16">
+              <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <p className="text-gray-500">No venues found</p>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No venues found</h3>
+              <p className="text-gray-500 mb-4">
+                {locationError || 'Try adjusting your filters or search query'}
+              </p>
               <button
                 onClick={clearFilters}
-                className="mt-2 text-primary text-sm hover:underline"
+                className="px-6 py-2 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors"
               >
-                Clear filters
+                Clear All Filters
               </button>
             </div>
           )}
@@ -265,6 +516,33 @@ export default function CourtsPage() {
                 </div>
               </div>
 
+              {/* Court Type */}
+              <div className="mb-6">
+                <h3 className="font-semibold text-gray-900 mb-3">Court Type</h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setCourtType(courtType === 'indoor' ? null : 'indoor')}
+                    className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors border ${
+                      courtType === 'indoor'
+                        ? 'bg-primary text-white border-primary'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    🏠 Indoor
+                  </button>
+                  <button
+                    onClick={() => setCourtType(courtType === 'outdoor' ? null : 'outdoor')}
+                    className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors border ${
+                      courtType === 'outdoor'
+                        ? 'bg-primary text-white border-primary'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    🌤️ Outdoor
+                  </button>
+                </div>
+              </div>
+
               {/* Amenities */}
               <div className="mb-6">
                 <h3 className="font-semibold text-gray-900 mb-3">Amenities</h3>
@@ -273,7 +551,7 @@ export default function CourtsPage() {
                     <button
                       key={amenity}
                       onClick={() => toggleAmenity(amenity)}
-                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                         selectedAmenities.includes(amenity)
                           ? 'bg-primary text-white'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -282,18 +560,6 @@ export default function CourtsPage() {
                       {amenity}
                     </button>
                   ))}
-                </div>
-              </div>
-
-              {/* Places */}
-              <div className="mb-6">
-                <h3 className="font-semibold text-gray-900 mb-3">Places</h3>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Search by city or area"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                  />
                 </div>
               </div>
 
@@ -384,6 +650,33 @@ export default function CourtsPage() {
                 </div>
               </div>
 
+              {/* Court Type */}
+              <div className="mb-6">
+                <h3 className="font-semibold text-gray-900 mb-3">Court Type</h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setCourtType(courtType === 'indoor' ? null : 'indoor')}
+                    className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors border ${
+                      courtType === 'indoor'
+                        ? 'bg-primary text-white border-primary'
+                        : 'bg-white text-gray-700 border-gray-300'
+                    }`}
+                  >
+                    🏠 Indoor
+                  </button>
+                  <button
+                    onClick={() => setCourtType(courtType === 'outdoor' ? null : 'outdoor')}
+                    className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors border ${
+                      courtType === 'outdoor'
+                        ? 'bg-primary text-white border-primary'
+                        : 'bg-white text-gray-700 border-gray-300'
+                    }`}
+                  >
+                    🌤️ Outdoor
+                  </button>
+                </div>
+              </div>
+
               {/* Amenities */}
               <div className="mb-6">
                 <h3 className="font-semibold text-gray-900 mb-3">Amenities</h3>
@@ -392,10 +685,10 @@ export default function CourtsPage() {
                     <button
                       key={amenity}
                       onClick={() => toggleAmenity(amenity)}
-                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                         selectedAmenities.includes(amenity)
                           ? 'bg-primary text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          : 'bg-gray-100 text-gray-700'
                       }`}
                     >
                       {amenity}
@@ -410,13 +703,16 @@ export default function CourtsPage() {
                   onClick={() => setShowFilters(false)}
                   className="w-full bg-primary text-white py-3 rounded-lg font-medium hover:bg-primary/90 transition-colors"
                 >
-                  Apply Filters
+                  Show Results ({total})
                 </button>
                 <button
-                  onClick={clearFilters}
+                  onClick={() => {
+                    clearFilters()
+                    setShowFilters(false)
+                  }}
                   className="w-full text-primary py-2 text-sm font-medium hover:underline"
                 >
-                  Clear All
+                  Clear All Filters
                 </button>
               </div>
             </div>
