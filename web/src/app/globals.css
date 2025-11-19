@@ -1,0 +1,150 @@
+@import "tailwindcss";
+
+:root {
+  /* ===========================================
+     RALLIO THEME CONFIGURATION
+     Change these values to update the entire site theme
+     =========================================== */
+
+  /* Primary Brand Color - Teal */
+  --color-primary: #0d9488;
+  --color-primary-dark: #0f766e;
+  --color-primary-light: #14b8a6;
+  --color-primary-lighter: #99f6e4;
+  --color-primary-subtle: #ccfbf1;
+
+  /* Secondary Accent - Cyan */
+  --color-accent: #06b6d4;
+  --color-accent-light: #67e8f9;
+
+  /* Neutral Colors */
+  --color-white: #ffffff;
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+
+  /* Semantic Colors */
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #3b82f6;
+
+  /* ===========================================
+     COMPONENT TOKENS (derived from above)
+     =========================================== */
+
+  /* Page Background */
+  --background: var(--color-white);
+  --foreground: var(--color-gray-900);
+
+  /* Primary */
+  --primary: var(--color-primary);
+  --primary-foreground: var(--color-white);
+
+  /* Secondary */
+  --secondary: var(--color-gray-100);
+  --secondary-foreground: var(--color-gray-800);
+
+  /* Muted */
+  --muted: var(--color-gray-100);
+  --muted-foreground: var(--color-gray-500);
+
+  /* Accent */
+  --accent: var(--color-primary-light);
+  --accent-foreground: var(--color-white);
+
+  /* Destructive */
+  --destructive: var(--color-error);
+  --destructive-foreground: var(--color-white);
+
+  /* Borders & Inputs */
+  --border: var(--color-gray-200);
+  --input: var(--color-gray-200);
+  --ring: var(--color-primary);
+
+  /* Card */
+  --card: var(--color-white);
+  --card-foreground: var(--color-gray-800);
+
+  /* Radius */
+  --radius: 0.5rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+}
+
+/* Base styles - IMPORTANT: Set background on html and body */
+html,
+body {
+  background-color: var(--color-white) !important;
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  min-height: 100vh;
+}
+
+/* Utility classes for Rallio brand */
+.bg-rallio-gradient {
+  background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary) 100%);
+}
+
+.bg-rallio-header {
+  background-color: var(--color-primary-dark);
+}
+
+.text-rallio-primary {
+  color: var(--color-primary);
+}
+
+/* Focus styles */
+*:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-gray-100);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-gray-300);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-gray-400);
+}
