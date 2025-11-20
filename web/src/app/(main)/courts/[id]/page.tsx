@@ -93,9 +93,10 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
             )}
 
             {/* Courts List - Pass to Client Component */}
-            <VenueDetailsClient 
+            <VenueDetailsClient
               courts={activeCourts}
               venueId={venue.id}
+              venueName={venue.name}
             />
 
             {/* Reviews Section */}

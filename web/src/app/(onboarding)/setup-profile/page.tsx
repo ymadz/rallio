@@ -74,6 +74,19 @@ export default function SetupProfilePage() {
       const { data: { user } } = await supabase.auth.getUser()
 
       if (user) {
+        // Check if profile is already completed
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('profile_completed')
+          .eq('id', user.id)
+          .single()
+
+        // If profile is already completed, redirect to home
+        if (profile?.profile_completed) {
+          router.push('/home')
+          return
+        }
+
         setProfileData(prev => ({
           ...prev,
           firstName: user.user_metadata?.first_name || user.user_metadata?.full_name?.split(' ')[0] || '',
@@ -87,7 +100,7 @@ export default function SetupProfilePage() {
     }
 
     fetchUserData()
-  }, [])
+  }, [router])
 
   const updateProfile = (field: keyof ProfileData, value: string | number | string[] | File | null) => {
     setProfileData(prev => ({ ...prev, [field]: value }))
@@ -214,6 +227,8 @@ export default function SetupProfilePage() {
 
       if (playerError) throw playerError
 
+      // Refresh to clear cached data, then navigate
+      router.refresh()
       router.push('/home')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save profile')
@@ -222,8 +237,24 @@ export default function SetupProfilePage() {
     }
   }
 
-  const handleSkip = () => {
-    router.push('/home')
+  const handleSkip = async () => {
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+
+      if (user) {
+        // Mark profile as completed even when skipping
+        await supabase
+          .from('profiles')
+          .update({ profile_completed: true })
+          .eq('id', user.id)
+      }
+
+      router.push('/home')
+    } catch (err) {
+      console.error('Error skipping profile setup:', err)
+      router.push('/home')
+    }
   }
 
   if (isFetching) {

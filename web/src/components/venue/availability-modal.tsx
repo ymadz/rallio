@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { DayPicker } from 'react-day-picker'
 import { format, addDays, startOfDay } from 'date-fns'
 import 'react-day-picker/dist/style.css'
 import { createClient } from '@/lib/supabase/client'
+import { useCheckoutStore } from '@/stores/checkout-store'
 
 interface TimeSlot {
   id: string
@@ -19,9 +21,23 @@ interface AvailabilityModalProps {
   courtId: string
   courtName: string
   hourlyRate: number
+  venueId: string
+  venueName: string
+  capacity: number
 }
 
-export function AvailabilityModal({ isOpen, onClose, courtId, courtName, hourlyRate }: AvailabilityModalProps) {
+export function AvailabilityModal({
+  isOpen,
+  onClose,
+  courtId,
+  courtName,
+  hourlyRate,
+  venueId,
+  venueName,
+  capacity
+}: AvailabilityModalProps) {
+  const router = useRouter()
+  const { setBookingData } = useCheckoutStore()
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
   const [loading, setLoading] = useState(false)
@@ -69,7 +85,21 @@ export function AvailabilityModal({ isOpen, onClose, courtId, courtName, hourlyR
 
   const handleBook = () => {
     if (selectedSlot) {
-      alert(`Booking functionality coming soon!\nCourt: ${courtName}\nDate: ${format(selectedDate, 'MMM d, yyyy')}\nTime: ${formatTime(selectedSlot.start_time)} - ${formatTime(selectedSlot.end_time)}\nRate: ₱${hourlyRate}`)
+      // Set booking data in checkout store
+      setBookingData({
+        courtId,
+        courtName,
+        venueId,
+        venueName,
+        date: selectedDate,
+        startTime: selectedSlot.start_time,
+        endTime: selectedSlot.end_time,
+        hourlyRate,
+        capacity,
+      })
+
+      // Navigate to checkout page
+      router.push('/checkout')
     }
   }
 

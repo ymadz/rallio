@@ -76,7 +76,7 @@ rallio/
 - **Shared**: Types, Zod validations, utility functions (date-fns)
 
 ### Database
-- 27-table PostgreSQL schema in `backend/supabase/migrations/001_initial_schema.sql`
+- 27-table PostgreSQL schema in `backend/supabase/migrations/001_initial_schema_v2.sql`
 - Uses UUID primary keys, geospatial indexing (PostGIS), JSONB metadata columns
 - Core entities: users, roles, players, venues, courts, reservations, queue sessions, payments, ratings
 

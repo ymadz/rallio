@@ -24,12 +24,16 @@ export type Role = 'player' | 'court_admin' | 'queue_master' | 'global_admin';
 export interface Player {
   id: string;
   userId: string;
-  skillLevel: number; // 1-10
-  eloRating: number; // starts at 1500
-  wins: number;
-  losses: number;
-  gamesPlayed: number;
-  preferredPlayStyle?: PlayStyle;
+  birthDate?: Date;
+  gender?: string;
+  skillLevel?: number; // 1-10
+  playStyle?: string;
+  rating: number; // ELO rating, starts at 1500
+  totalGamesPlayed: number;
+  totalWins: number;
+  totalLosses: number;
+  verifiedPlayer: boolean;
+  bio?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -39,18 +43,20 @@ export type PlayStyle = 'singles' | 'doubles' | 'mixed' | 'all';
 // Venue & Court Types
 export interface Venue {
   id: string;
+  ownerId?: string;
   name: string;
   description?: string;
-  address: string;
+  address?: string;
   city: string;
-  latitude: number;
-  longitude: number;
+  latitude?: number;
+  longitude?: number;
   phone?: string;
   email?: string;
   website?: string;
-  imageUrl?: string;
+  openingHours?: Record<string, { open: string; close: string }>;
   isActive: boolean;
-  ownerId: string;
+  isVerified: boolean;
+  metadata?: Record<string, any>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -61,18 +67,20 @@ export interface Court {
   name: string;
   description?: string;
   courtType: CourtType;
-  surfaceType: SurfaceType;
-  isIndoor: boolean;
+  surfaceType?: SurfaceType;
   capacity: number;
   hourlyRate: number;
   isActive: boolean;
-  imageUrl?: string;
+  metadata?: Record<string, any>;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export type CourtType = 'standard' | 'professional' | 'training';
+export type CourtType = 'indoor' | 'outdoor';
 export type SurfaceType = 'wood' | 'synthetic' | 'concrete' | 'rubber';
+
+// Court category for additional classification if needed
+export type CourtCategory = 'standard' | 'professional' | 'training';
 
 export interface CourtAmenity {
   id: string;

@@ -23,6 +23,7 @@ const amenityOptions = [
   'Lighting',
   'Waiting Area',
   'Equipment Rental',
+  'First Aid',
   'WiFi',
   'Canteen',
 ]
@@ -42,10 +43,11 @@ export default function CourtsPage() {
   const [locationError, setLocationError] = useState<string | null>(null)
 
   // Filter states
-  const [priceRange, setPriceRange] = useState<number>(1000)
+  const [priceRange, setPriceRange] = useState<[number, number]>([100, 1000])
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([])
   const [courtType, setCourtType] = useState<'indoor' | 'outdoor' | null>(null)
   const [sortBy, setSortBy] = useState<SortOption>('newest')
+  const [minRating, setMinRating] = useState<number>(0)
   const [offset, setOffset] = useState(0)
   const [venueRatings, setVenueRatings] = useState<Record<string, { avg: number; count: number }>>({})
 
@@ -66,7 +68,7 @@ export default function CourtsPage() {
     const filters: VenueFilters = {
       searchQuery: search || undefined,
       minPrice: 0,
-      maxPrice: priceRange,
+      maxPrice: priceRange[1],
       amenities: selectedAmenities.length > 0 ? selectedAmenities : undefined,
       courtType: courtType || undefined,
       latitude: userLocation?.lat,
@@ -157,12 +159,11 @@ export default function CourtsPage() {
   }
 
   const clearFilters = () => {
-    setPriceRange(1000)
+    setPriceRange([100, 1000])
     setSelectedAmenities([])
     setCourtType(null)
-    setSortBy('newest')
-    setUserLocation(null)
     setSearch('')
+    setMinRating(0)
   }
 
   const toggleAmenity = (amenity: string) => {
@@ -213,25 +214,31 @@ export default function CourtsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="flex">
-        {/* Main Content */}
-        <main className="flex-1 p-6">
-          {/* Search Bar, Sort, and Actions */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-6">
-            <div className="flex-1 relative w-full sm:max-w-md">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <input
-                type="text"
-                placeholder="Search courts..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white"
-              />
-            </div>
+    <div className="fixed inset-0 md:left-20 bg-gray-50 flex flex-col">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0 z-20">
+        <div className="flex items-center justify-between gap-4">
+          {/* Search Bar */}
+          <div className="flex-1 max-w-md relative">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search courts, city, or area"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white"
+            />
+          </div>
 
+          {/* Results Count */}
+          <span className="text-sm text-gray-600 hidden md:block">
+            {loading ? 'Loading...' : `${total} ${total === 1 ? 'result' : 'results'} found`}
+          </span>
+
+          {/* Right Side Actions */}
+          <div className="flex items-center gap-3">
             {/* Near Me Button */}
             <button
               onClick={handleGetLocation}
@@ -253,7 +260,7 @@ export default function CourtsPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               )}
-              <span className="text-sm font-medium">
+              <span className="text-sm font-medium hidden sm:inline">
                 {userLocation ? 'Near Me ✓' : 'Near Me'}
               </span>
             </button>
@@ -276,30 +283,32 @@ export default function CourtsPage() {
             {/* View Toggle */}
             <div className="flex rounded-lg border border-gray-300 overflow-hidden">
               <button
-                className="px-4 py-2 text-sm font-medium flex items-center gap-2 bg-primary text-white"
+                className="px-4 py-2.5 text-sm font-medium flex items-center gap-2 bg-primary text-white"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                 </svg>
-                List
+                <span className="hidden sm:inline">List</span>
               </button>
               <Link
                 href="/courts/map"
-                className="px-4 py-2 text-sm font-medium flex items-center gap-2 bg-white text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2.5 text-sm font-medium flex items-center gap-2 bg-white text-gray-700 hover:bg-gray-50"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                 </svg>
-                Map
+                <span className="hidden sm:inline">Map</span>
               </Link>
             </div>
           </div>
+        </div>
+      </header>
 
-          {/* Results Count and Active Filters */}
+      {/* Main Content */}
+      <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 p-6 overflow-y-auto">
+          {/* Active Filters */}
           <div className="flex flex-wrap items-center gap-2 mb-4">
-            <span className="text-sm text-gray-600">
-              {loading ? 'Loading...' : `${total} ${total === 1 ? 'venue' : 'venues'} found`}
-            </span>
             
             {userLocation && (
               <span className="px-2 py-1 bg-primary/10 text-primary text-xs font-medium rounded-full">
@@ -482,43 +491,63 @@ export default function CourtsPage() {
               </button>
             </div>
           )}
-        </main>
+        </div>
 
-        {/* Right Sidebar - Filters (Collapsible) */}
-        <aside className={`hidden lg:block bg-white border-l border-gray-200 transition-all duration-300 ${showFilters ? 'w-80' : 'w-0 overflow-hidden'}`}>
-          {showFilters && (
-            <div className="p-6 h-full overflow-y-auto">
-              <h2 className="text-lg font-bold text-primary mb-6">FILTERS</h2>
+        {/* Filters Sidebar */}
+        <div 
+          className={`bg-white border-l border-gray-200 transition-all duration-300 flex-shrink-0 overflow-hidden relative z-20 ${
+            showFilters ? 'w-80' : 'w-0'
+          }`}
+        >
+          <div className="w-80 h-full overflow-y-auto p-6">
+            {/* Filters Header */}
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-bold text-gray-900">Filters</h2>
+              <button
+                onClick={clearFilters}
+                className="text-sm text-primary hover:text-primary-dark font-medium"
+              >
+                Clear All
+              </button>
+            </div>
 
-              {/* Category */}
-              <div className="mb-6">
-                <h3 className="font-semibold text-gray-900 mb-3">Category</h3>
-                <select className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
-                  <option>Badminton</option>
-                </select>
-              </div>
+            {/* Category */}
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-gray-900 mb-3">Category</label>
+              <select className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm">
+                <option>Badminton</option>
+                <option>Tennis</option>
+                <option>Basketball</option>
+              </select>
+            </div>
 
-              {/* Price Range */}
-              <div className="mb-6">
-                <h3 className="font-semibold text-gray-900 mb-3">Price Range</h3>
+            {/* Price Range */}
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-gray-900 mb-3">Price Range</label>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm text-gray-600">
+                  <span>₱{priceRange[0]}</span>
+                  <span>₱{priceRange[1]}</span>
+                </div>
                 <input
                   type="range"
                   min="100"
                   max="1000"
                   step="50"
-                  value={priceRange}
-                  onChange={(e) => setPriceRange(Number(e.target.value))}
+                  value={priceRange[1]}
+                  onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value)])}
                   className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
                 />
-                <div className="flex justify-between text-sm text-gray-500 mt-2">
+                <div className="flex items-center justify-between text-xs text-gray-500">
                   <span>₱100</span>
-                  <span>₱{priceRange}</span>
+                  <span>₱1000</span>
                 </div>
               </div>
+            </div>
 
-              {/* Court Type */}
-              <div className="mb-6">
-                <h3 className="font-semibold text-gray-900 mb-3">Court Type</h3>
+            {/* Court Type */}
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-gray-900 mb-3">Court Type</label>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setCourtType(courtType === 'indoor' ? null : 'indoor')}
@@ -543,63 +572,78 @@ export default function CourtsPage() {
                 </div>
               </div>
 
-              {/* Amenities */}
-              <div className="mb-6">
-                <h3 className="font-semibold text-gray-900 mb-3">Amenities</h3>
-                <div className="flex flex-wrap gap-2">
-                  {amenityOptions.map((amenity) => (
-                    <button
-                      key={amenity}
-                      onClick={() => toggleAmenity(amenity)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                        selectedAmenities.includes(amenity)
-                          ? 'bg-primary text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      {amenity}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="space-y-3">
-                <button
-                  onClick={() => {}}
-                  className="w-full bg-primary text-white py-3 rounded-lg font-medium hover:bg-primary/90 transition-colors"
-                >
-                  Apply Filters
-                </button>
-                <button
-                  onClick={clearFilters}
-                  className="w-full text-primary py-2 text-sm font-medium hover:underline"
-                >
-                  Clear All
-                </button>
+            {/* Amenities */}
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-gray-900 mb-3">Amenities</label>
+              <div className="flex flex-wrap gap-2">
+                {amenityOptions.map((amenity) => (
+                  <button
+                    key={amenity}
+                    onClick={() => toggleAmenity(amenity)}
+                    className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
+                      selectedAmenities.includes(amenity)
+                        ? 'bg-primary text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {amenity}
+                  </button>
+                ))}
               </div>
             </div>
-          )}
-        </aside>
 
-        {/* Filter Toggle Button (Fixed on right edge) */}
+            {/* Customer Rating */}
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-gray-900 mb-3">Customer Review</label>
+              <div className="space-y-2">
+                {[3, 4, 5].reverse().map((rating) => (
+                  <button
+                    key={rating}
+                    onClick={() => setMinRating(rating === minRating ? 0 : rating)}
+                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                      minRating === rating
+                        ? 'bg-primary/10 border-2 border-primary'
+                        : 'border-2 border-transparent hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1">
+                      {[...Array(5)].map((_, i) => (
+                        <svg
+                          key={i}
+                          className={`w-4 h-4 ${
+                            i < rating ? 'text-primary fill-primary' : 'text-gray-300 fill-gray-300'
+                          }`}
+                          viewBox="0 0 20 20"
+                        >
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                      ))}
+                    </div>
+                    <span className="text-sm text-gray-700 font-medium">{rating} stars & up</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Toggle Filters Button */}
         <button
           onClick={() => setShowFilters(!showFilters)}
-          className="hidden lg:flex fixed right-0 top-1/2 -translate-y-1/2 bg-primary text-white p-2 rounded-l-lg shadow-lg hover:bg-primary/90 transition-colors z-30"
+          className="absolute right-0 top-1/2 -translate-y-1/2 bg-white border border-gray-200 rounded-l-lg p-2 shadow-lg hover:bg-gray-50 transition-colors z-30"
           style={{ right: showFilters ? '320px' : '0' }}
         >
           <svg
-            className={`w-5 h-5 transition-transform ${showFilters ? 'rotate-180' : ''}`}
+            className={`w-5 h-5 text-gray-600 transition-transform ${showFilters ? '' : 'rotate-180'}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </button>
-
-        {/* Mobile Filters Button */}
-        <button
+      {/* Mobile Filters Button */}
+      <button
           onClick={() => setShowFilters(!showFilters)}
           className="lg:hidden fixed bottom-20 right-4 bg-primary text-white p-4 rounded-full shadow-lg hover:bg-primary/90 transition-colors z-30"
         >
@@ -635,18 +679,24 @@ export default function CourtsPage() {
               {/* Price Range */}
               <div className="mb-6">
                 <h3 className="font-semibold text-gray-900 mb-3">Price Range</h3>
-                <input
-                  type="range"
-                  min="100"
-                  max="1000"
-                  step="50"
-                  value={priceRange}
-                  onChange={(e) => setPriceRange(Number(e.target.value))}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
-                />
-                <div className="flex justify-between text-sm text-gray-500 mt-2">
-                  <span>₱100</span>
-                  <span>₱{priceRange}</span>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-sm text-gray-600">
+                    <span>₱{priceRange[0]}</span>
+                    <span>₱{priceRange[1]}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="100"
+                    max="1000"
+                    step="50"
+                    value={priceRange[1]}
+                    onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value)])}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                  />
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span>₱100</span>
+                    <span>₱1000</span>
+                  </div>
                 </div>
               </div>
 

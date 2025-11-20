@@ -116,7 +116,7 @@ export default async function ProfilePage() {
           <h3 className="font-semibold text-gray-900 mb-4">Play Styles</h3>
           <div className="flex flex-wrap gap-2">
             {playStyles.length > 0 ? (
-              playStyles.map((style) => (
+              playStyles.map((style: string) => (
                 <span
                   key={style}
                   className="px-3 py-1.5 bg-primary/10 text-primary text-xs font-medium rounded-full uppercase"

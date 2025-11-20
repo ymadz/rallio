@@ -9,10 +9,10 @@ export function formatDate(date: Date | string, formatStr: string = 'MMM d, yyyy
 
 export function formatTime(time: string): string {
   const [hours, minutes] = time.split(':');
-  const hour = parseInt(hours, 10);
+  const hour = parseInt(hours || '0', 10);
   const ampm = hour >= 12 ? 'PM' : 'AM';
   const displayHour = hour % 12 || 12;
-  return `${displayHour}:${minutes} ${ampm}`;
+  return `${displayHour}:${minutes || '00'} ${ampm}`;
 }
 
 export function formatRelativeTime(date: Date | string): string {
@@ -34,7 +34,7 @@ export function formatCurrency(amount: number, currency: string = 'PHP'): string
 }
 
 // Distance Utilities
-export function formatDistance(meters: number): string {
+export function formatDistanceMetric(meters: number): string {
   if (meters < 1000) {
     return `${Math.round(meters)}m`;
   }

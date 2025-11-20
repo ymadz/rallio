@@ -5,6 +5,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import Link from 'next/link'
 import { format } from 'date-fns'
+import { formatDistanceMetric } from '@rallio/shared'
 import 'leaflet/dist/leaflet.css'
 
 interface Venue {
@@ -107,11 +108,10 @@ function isVenueOpen(openingHours: Record<string, { open: string; close: string 
   return currentTime >= todayHours.open && currentTime <= todayHours.close
 }
 
-// Helper function to format distance
+// Helper function to format distance (converts km to meters for shared utility)
 function formatDistance(distance?: number): string {
   if (!distance) return ''
-  if (distance < 1) return `${Math.round(distance * 1000)}m`
-  return `${distance.toFixed(1)}km`
+  return formatDistanceMetric(distance * 1000) // Convert km to meters
 }
 
 // Component to fit map bounds to all markers
@@ -168,11 +168,11 @@ export default function VenueMap({ venues }: VenueMapProps) {
   }
 
   return (
-    <>
+    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       <MapContainer
         center={defaultCenter}
         zoom={defaultZoom}
-        style={{ height: '100%', width: '100%' }}
+        style={{ height: '100%', width: '100%', minHeight: '400px' }}
         zoomControl={true}
       >
         <TileLayer
@@ -343,6 +343,6 @@ export default function VenueMap({ venues }: VenueMapProps) {
           </span>
         </button>
       </div>
-    </>
+    </div>
   )
 }

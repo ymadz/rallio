@@ -109,51 +109,8 @@ export default function SignupPage() {
         return
       }
 
-      // Create user profile and player profile records
-      if (authData.user?.id) {
-        // Create users table record
-        const fullNameForDb = [formData.firstName, formData.middleInitial, formData.lastName]
-          .filter(Boolean)
-          .join(' ')
-        
-        const { error: userError } = await supabase
-          .from('profiles')
-          .insert({
-            id: authData.user.id,
-            email: formData.email,
-            display_name: fullNameForDb,
-            first_name: formData.firstName,
-            middle_initial: formData.middleInitial,
-            last_name: formData.lastName,
-            phone: formData.phoneNumber,
-            avatar_url: null,
-            profile_completed: false,
-          })
-          .select()
-          .single()
-
-        if (userError) {
-          console.error('Error creating user profile:', userError)
-          // Continue anyway - doesn't block signup
-        }
-
-        // Create player profile record
-        const { error: playerError } = await supabase
-          .from('players')
-          .insert({
-            user_id: authData.user.id,
-            skill_level: 5,
-            play_style: '',
-            bio: null,
-          })
-          .select()
-          .single()
-
-        if (playerError) {
-          console.error('Error creating player profile:', playerError)
-          // Continue anyway
-        }
-      }
+      // Profile and player records are automatically created by database trigger (handle_new_user)
+      // No need for manual inserts here
 
       // Redirect to verification page
       router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`)

@@ -18,9 +18,10 @@ interface Court {
 interface VenueDetailsClientProps {
   courts: Court[]
   venueId: string
+  venueName: string
 }
 
-export function VenueDetailsClient({ courts, venueId }: VenueDetailsClientProps) {
+export function VenueDetailsClient({ courts, venueId, venueName }: VenueDetailsClientProps) {
   const [selectedCourt, setSelectedCourt] = useState<Court | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
@@ -113,6 +114,9 @@ export function VenueDetailsClient({ courts, venueId }: VenueDetailsClientProps)
           courtId={selectedCourt.id}
           courtName={selectedCourt.name}
           hourlyRate={selectedCourt.hourly_rate}
+          venueId={venueId}
+          venueName={venueName}
+          capacity={selectedCourt.capacity}
         />
       )}
     </>
