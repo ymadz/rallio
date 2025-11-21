@@ -64,8 +64,6 @@ export async function updatePlayerProfile(data: {
   gender?: string
   skillLevel?: number
   playStyle?: string
-  preferredTimes?: string[]
-  preferredPartners?: string[]
 }) {
   try {
     const supabase = await createClient()
@@ -83,10 +81,6 @@ export async function updatePlayerProfile(data: {
         gender: data.gender,
         skill_level: data.skillLevel,
         play_style: data.playStyle,
-        metadata: {
-          preferred_times: data.preferredTimes,
-          preferred_partners: data.preferredPartners,
-        },
       })
       .eq('user_id', user.id)
 
