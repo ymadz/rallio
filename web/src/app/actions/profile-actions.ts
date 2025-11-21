@@ -68,7 +68,7 @@ export async function completeProfile(data?: {
 
 /**
  * Server action to update player profile data
- * Uses upsert to ensure player record exists
+ * Note: Player record should be created by database trigger on signup
  */
 export async function updatePlayerProfile(data: {
   birthDate?: Date
@@ -87,18 +87,30 @@ export async function updatePlayerProfile(data: {
 
     console.log('[updatePlayerProfile] Updating player profile for user:', user.id, data)
 
-    // Use upsert to ensure player record is created if it doesn't exist
+    // First check if player record exists
+    const { data: existingPlayer } = await supabase
+      .from('players')
+      .select('id')
+      .eq('user_id', user.id)
+      .single()
+
+    if (!existingPlayer) {
+      console.error('[updatePlayerProfile] Player record not found for user:', user.id)
+      // Player record should have been created by database trigger
+      // If it doesn't exist, we can't create it due to RLS policy
+      return { success: false, error: 'Player profile not initialized. Please contact support.' }
+    }
+
+    // Update existing player data
     const { error, data: result } = await supabase
       .from('players')
-      .upsert({
-        user_id: user.id,
+      .update({
         birth_date: data.birthDate,
         gender: data.gender,
         skill_level: data.skillLevel,
         play_style: data.playStyle,
-      }, {
-        onConflict: 'user_id',
       })
+      .eq('user_id', user.id)
       .select()
 
     if (error) {
