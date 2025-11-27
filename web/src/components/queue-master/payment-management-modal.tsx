@@ -1,8 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { waiveFee } from '@/app/actions/queue-actions'
+import { waiveFee, markAsPaid } from '@/app/actions/queue-actions'
+import { initiateQueuePaymentAction } from '@/app/actions/payments'
 import { X, DollarSign, CreditCard, Loader2, CheckCircle, AlertCircle, QrCode } from 'lucide-react'
+
+type PaymentMethod = 'gcash' | 'paymaya'
 
 interface PaymentManagementModalProps {
   isOpen: boolean
@@ -15,6 +18,7 @@ interface PaymentManagementModalProps {
     amountOwed: number
     paymentStatus: 'unpaid' | 'partial' | 'paid'
   }
+  sessionId: string
   costPerGame: number
   onSuccess?: () => void
 }
@@ -23,28 +27,35 @@ export function PaymentManagementModal({
   isOpen,
   onClose,
   participant,
+  sessionId,
   costPerGame,
   onSuccess,
 }: PaymentManagementModalProps) {
   const [action, setAction] = useState<'mark-paid' | 'waive' | 'qr-code' | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [showQRCode, setShowQRCode] = useState(false)
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>('gcash')
+  const [paymentSuccess, setPaymentSuccess] = useState<string | null>(null)
 
   if (!isOpen) return null
 
   const handleMarkPaid = async () => {
+    console.log('💵 [PaymentModal] Mark as paid clicked for participant:', participant.id)
     setIsSubmitting(true)
     setError(null)
 
     try {
-      // In a real implementation, this would call a markAsPaid server action
-      // For now, we'll simulate success
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
+      const result = await markAsPaid(participant.id)
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to mark as paid')
+      }
+
+      console.log('✅ [PaymentModal] Mark as paid successful')
       onSuccess?.()
       onClose()
     } catch (err: any) {
+      console.error('❌ [PaymentModal] Mark as paid error:', err)
       setError(err.message || 'Failed to mark as paid')
     } finally {
       setIsSubmitting(false)
@@ -52,6 +63,7 @@ export function PaymentManagementModal({
   }
 
   const handleWaiveFee = async () => {
+    console.log('💸 [PaymentModal] Waive fee clicked for participant:', participant.id)
     setIsSubmitting(true)
     setError(null)
 
@@ -62,18 +74,53 @@ export function PaymentManagementModal({
         throw new Error(result.error || 'Failed to waive fee')
       }
 
+      console.log('✅ [PaymentModal] Waive fee successful')
       onSuccess?.()
       onClose()
     } catch (err: any) {
+      console.error('❌ [PaymentModal] Waive fee error:', err)
       setError(err.message || 'An error occurred')
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const handleGenerateQR = () => {
-    setShowQRCode(true)
-    setAction('qr-code')
+  const handleGenerateQR = async () => {
+    console.log('🔐 [PaymentModal] Generate QR clicked:', {
+      participantId: participant.id,
+      sessionId,
+      paymentMethod: selectedPaymentMethod,
+      amountOwed: participant.amountOwed,
+    })
+
+    setIsSubmitting(true)
+    setError(null)
+    setPaymentSuccess(null)
+
+    try {
+      // Call the queue payment action
+      const result = await initiateQueuePaymentAction(sessionId, selectedPaymentMethod)
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to generate payment QR code')
+      }
+
+      console.log('✅ [PaymentModal] QR code generated successfully:', {
+        checkoutUrl: result.checkoutUrl,
+        paymentId: result.paymentId,
+      })
+
+      // Open checkout URL in new tab
+      if (result.checkoutUrl) {
+        window.open(result.checkoutUrl, '_blank')
+        setPaymentSuccess('Payment QR code opened in new tab. Player can scan to pay.')
+      }
+    } catch (err: any) {
+      console.error('❌ [PaymentModal] QR generation error:', err)
+      setError(err.message || 'Failed to generate QR code')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const getStatusColor = (status: string) => {
@@ -118,6 +165,14 @@ export function PaymentManagementModal({
             </div>
           )}
 
+          {/* Success Alert */}
+          {paymentSuccess && (
+            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-start gap-2">
+              <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <span>{paymentSuccess}</span>
+            </div>
+          )}
+
           {/* Player Info */}
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
             <div className="flex items-center gap-3 mb-4">
@@ -158,21 +213,81 @@ export function PaymentManagementModal({
             </div>
           </div>
 
-          {/* QR Code Display */}
-          {showQRCode && (
-            <div className="bg-gradient-to-br from-primary/5 to-blue-50 border border-primary/20 rounded-xl p-6 text-center">
-              <div className="w-48 h-48 bg-white border-4 border-primary/20 rounded-xl mx-auto mb-4 flex items-center justify-center">
-                <QrCode className="w-32 h-32 text-gray-400" />
+          {/* Payment Method Selection for QR Code */}
+          {action === 'qr-code' && !paymentSuccess && (
+            <div className="space-y-4">
+              <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
+                <p className="text-sm font-medium text-gray-900 mb-3">Select Payment Method</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setSelectedPaymentMethod('gcash')}
+                    className={`p-3 rounded-lg border-2 transition-all ${
+                      selectedPaymentMethod === 'gcash'
+                        ? 'border-primary bg-primary/10'
+                        : 'border-gray-200 hover:border-primary/30'
+                    }`}
+                  >
+                    <div className="text-center">
+                      <CreditCard className="w-6 h-6 mx-auto mb-1 text-primary" />
+                      <p className="text-sm font-medium text-gray-900">GCash</p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setSelectedPaymentMethod('paymaya')}
+                    className={`p-3 rounded-lg border-2 transition-all ${
+                      selectedPaymentMethod === 'paymaya'
+                        ? 'border-primary bg-primary/10'
+                        : 'border-gray-200 hover:border-primary/30'
+                    }`}
+                  >
+                    <div className="text-center">
+                      <CreditCard className="w-6 h-6 mx-auto mb-1 text-green-600" />
+                      <p className="text-sm font-medium text-gray-900">Maya</p>
+                    </div>
+                  </button>
+                </div>
               </div>
-              <p className="text-sm font-medium text-gray-900 mb-1">
-                Scan to Pay ₱{participant.amountOwed.toLocaleString()}
-              </p>
-              <p className="text-xs text-gray-600">
-                GCash / PayMongo QR Code
-              </p>
-              <p className="text-xs text-gray-500 mt-2">
-                (QR code generation would integrate with PayMongo API)
-              </p>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-gray-700">
+                  Generate a <strong>{selectedPaymentMethod === 'gcash' ? 'GCash' : 'Maya'}</strong> payment QR code for{' '}
+                  <strong>₱{participant.amountOwed.toLocaleString()}</strong>?
+                </p>
+                <p className="text-xs text-gray-600 mt-2">
+                  Payment link will open in a new tab and can be shared with the player.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    setAction(null)
+                    setError(null)
+                    setPaymentSuccess(null)
+                  }}
+                  disabled={isSubmitting}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={handleGenerateQR}
+                  disabled={isSubmitting}
+                  className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <QrCode className="w-4 h-4" />
+                      Generate QR Code
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           )}
 
@@ -180,7 +295,7 @@ export function PaymentManagementModal({
           {!action && (
             <div className="space-y-3">
               <button
-                onClick={handleGenerateQR}
+                onClick={() => setAction('qr-code')}
                 disabled={participant.paymentStatus === 'paid'}
                 className="w-full flex items-center gap-3 p-4 border-2 border-primary/30 rounded-xl hover:bg-primary/5 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -189,7 +304,7 @@ export function PaymentManagementModal({
                 </div>
                 <div className="flex-1">
                   <p className="font-semibold text-gray-900">Generate Payment QR</p>
-                  <p className="text-sm text-gray-600">Send payment link to player</p>
+                  <p className="text-sm text-gray-600">GCash or Maya payment link</p>
                 </div>
               </button>
 

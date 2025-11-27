@@ -9,10 +9,10 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
   UPDATE queue_sessions
-  SET current_players = GREATEST(0, current_players - 1)
+   SET current_players = GREATEST(0, current_players - 1)
   WHERE id = session_id;
 END;
-$$;
+$$; 
 
 -- Function to safely increment current_players count
 -- Used when a participant joins a queue session

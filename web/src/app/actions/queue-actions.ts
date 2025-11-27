@@ -1406,6 +1406,105 @@ export async function waiveFee(
 }
 
 /**
+ * Mark participant as paid (cash payment)
+ * Queue Master action
+ */
+export async function markAsPaid(
+  participantId: string
+): Promise<{
+  success: boolean
+  error?: string
+}> {
+  console.log('[markAsPaid] 💵 Marking participant as paid:', participantId)
+
+  try {
+    const supabase = await createClient()
+
+    // 1. Verify user is authenticated
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      console.error('[markAsPaid] ❌ User not authenticated')
+      return { success: false, error: 'User not authenticated' }
+    }
+
+    // 2. Get participant and session details
+    const { data: participant, error: participantError } = await supabase
+      .from('queue_participants')
+      .select(`
+        *,
+        queue_sessions!inner (
+          id,
+          organizer_id,
+          court_id
+        )
+      `)
+      .eq('id', participantId)
+      .single()
+
+    if (participantError || !participant) {
+      console.error('[markAsPaid] ❌ Participant not found:', participantError)
+      return { success: false, error: 'Participant not found' }
+    }
+
+    console.log('[markAsPaid] 🔍 Participant data:', {
+      participantId,
+      currentStatus: participant.payment_status,
+      amountOwed: participant.amount_owed,
+      organizerId: participant.queue_sessions.organizer_id,
+    })
+
+    // 3. Verify user is session organizer (Queue Master)
+    if (participant.queue_sessions.organizer_id !== user.id) {
+      console.error('[markAsPaid] ❌ Unauthorized: Not session organizer')
+      return { success: false, error: 'Unauthorized: Not session organizer' }
+    }
+
+    // 4. Check if already paid
+    if (participant.payment_status === 'paid') {
+      console.log('[markAsPaid] ℹ️ Participant already marked as paid')
+      return { success: true } // Idempotent - already paid is success
+    }
+
+    // 5. Update participant to mark as paid (keep amount_owed for records)
+    const { error: updateError } = await supabase
+      .from('queue_participants')
+      .update({
+        payment_status: 'paid',
+        metadata: {
+          ...participant.metadata,
+          cash_payment: {
+            marked_paid_at: new Date().toISOString(),
+            marked_paid_by: user.id,
+            amount_paid: participant.amount_owed,
+            payment_method: 'cash',
+          },
+        },
+      })
+      .eq('id', participantId)
+
+    if (updateError) {
+      console.error('[markAsPaid] ❌ Failed to update participant:', updateError)
+      return { success: false, error: 'Failed to mark as paid' }
+    }
+
+    console.log('[markAsPaid] ✅ Participant marked as paid successfully')
+
+    // 6. Revalidate paths for immediate UI update
+    revalidatePath('/queue-master')
+    revalidatePath(`/queue-master/sessions/${participant.queue_sessions.id}`)
+    revalidatePath(`/queue/${participant.queue_sessions.court_id}`)
+
+    return { success: true }
+  } catch (error: any) {
+    console.error('[markAsPaid] ❌ Error:', error)
+    return { success: false, error: error.message || 'Failed to mark as paid' }
+  }
+}
+
+/**
  * Get all queue sessions created by current user (Queue Master)
  */
 export async function getMyQueueMasterSessions(filter?: {

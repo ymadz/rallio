@@ -1,6 +1,8 @@
 'use client'
 
 import { useQueue } from '@/hooks/use-queue'
+import { useQueueNotifications } from '@/hooks/use-queue-notifications'
+import { QueueNotificationBanner } from '@/components/queue/queue-notification-banner'
 import { PlayerCard } from '@/components/queue/player-card'
 import { QueueStatusBadge } from '@/components/queue/queue-status-badge'
 import { Users, Clock, Activity, Loader2, AlertCircle } from 'lucide-react'
@@ -26,6 +28,9 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
     }
     getCurrentUser()
   }, [])
+
+  // Initialize notification system
+  const { notifications, dismissNotification } = useQueueNotifications(queue, currentUserId)
 
   const handleJoinQueue = async () => {
     setIsJoining(true)
@@ -67,9 +72,16 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
   const playersAhead = isUserInQueue ? queue.userPosition! - 1 : 0
 
   return (
-    <div className="space-y-6">
-      {/* Court Info Header */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+    <>
+      {/* Notification Banner */}
+      <QueueNotificationBanner
+        notifications={notifications}
+        onDismiss={dismissNotification}
+      />
+
+      <div className="space-y-6">
+        {/* Court Info Header */}
+        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
@@ -335,6 +347,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
           </button>
         )}
       </div>
-    </div>
+      </div>
+    </>
   )
 }

@@ -802,6 +802,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                 setSelectedParticipant(null)
               }}
               participant={selectedParticipant}
+              sessionId={sessionId}
               costPerGame={session.costPerGame}
               onSuccess={handleModalSuccess}
             />

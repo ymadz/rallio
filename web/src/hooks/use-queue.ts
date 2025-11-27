@@ -20,6 +20,7 @@ export interface QueuePlayer {
   joinedAt: Date
   gamesPlayed: number
   gamesWon: number
+  status?: 'waiting' | 'playing' | 'completed' | 'left'
 }
 
 export interface QueueSession {
@@ -101,6 +102,7 @@ export function useQueue(courtId: string) {
           joinedAt: p.joinedAt,
           gamesPlayed: p.gamesPlayed,
           gamesWon: p.gamesWon,
+          status: (p as any).status as 'waiting' | 'playing' | 'completed' | 'left' | undefined,
         })),
         userPosition: queueData.userPosition,
         estimatedWaitTime: queueData.estimatedWaitTime,
