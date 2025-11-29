@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { checkRateLimit, createRateLimitConfig } from '@/lib/rate-limiter'
 
 /**
  * Match Management Server Actions
@@ -40,6 +41,16 @@ export async function assignMatchFromQueue(sessionId: string, numPlayers: number
 
     if (!user) {
       return { success: false, error: 'User not authenticated' }
+    }
+
+    // Rate limiting
+    const rateLimitResult = await checkRateLimit(createRateLimitConfig('ASSIGN_MATCH', user.id))
+    if (!rateLimitResult.allowed) {
+      console.warn('[assignMatchFromQueue] ⚠️ Rate limit exceeded for user:', user.id)
+      return {
+        success: false,
+        error: `Too many match assignment attempts. Please wait ${rateLimitResult.retryAfter} seconds.`,
+      }
     }
 
     // Get session and verify user is organizer
@@ -82,9 +93,66 @@ export async function assignMatchFromQueue(sessionId: string, numPlayers: number
 
     const matchNumber = (matchCount || 0) + 1
 
-    // Split players into two teams (for doubles)
-    const teamA = participants.slice(0, numPlayers / 2).map(p => p.user_id)
-    const teamB = participants.slice(numPlayers / 2).map(p => p.user_id)
+    // Split players into two teams
+    let teamA: string[]
+    let teamB: string[]
+
+    if (session.mode === 'competitive') {
+      // Skill-based team balancing for competitive mode
+      console.log('[assignMatchFromQueue] 🎯 Using skill-based team balancing')
+
+      // Get player skill levels
+      const { data: players } = await supabase
+        .from('players')
+        .select('user_id, skill_level')
+        .in(
+          'user_id',
+          participants.map(p => p.user_id)
+        )
+
+      // Map skill levels to participants
+      const participantsWithSkill = participants.map(p => ({
+        ...p,
+        skillLevel: players?.find(pl => pl.user_id === p.user_id)?.skill_level || 5,
+      }))
+
+      // Sort by skill level descending
+      const sorted = [...participantsWithSkill].sort((a, b) => b.skillLevel - a.skillLevel)
+
+      // Snake draft: alternate teams to balance skill
+      const teamAList: typeof sorted = []
+      const teamBList: typeof sorted = []
+
+      for (const player of sorted) {
+        const sumA = teamAList.reduce((sum, p) => sum + p.skillLevel, 0)
+        const sumB = teamBList.reduce((sum, p) => sum + p.skillLevel, 0)
+
+        // Add to team with lower total skill (or team A if equal)
+        if (sumA <= sumB && teamAList.length < numPlayers / 2) {
+          teamAList.push(player)
+        } else if (teamBList.length < numPlayers / 2) {
+          teamBList.push(player)
+        } else {
+          teamAList.push(player)
+        }
+      }
+
+      teamA = teamAList.map(p => p.user_id)
+      teamB = teamBList.map(p => p.user_id)
+
+      const avgSkillA = teamAList.reduce((sum, p) => sum + p.skillLevel, 0) / teamAList.length
+      const avgSkillB = teamBList.reduce((sum, p) => sum + p.skillLevel, 0) / teamBList.length
+
+      console.log('[assignMatchFromQueue] 📊 Team balance:', {
+        teamA: { players: teamA.length, avgSkill: avgSkillA.toFixed(2) },
+        teamB: { players: teamB.length, avgSkill: avgSkillB.toFixed(2) },
+      })
+    } else {
+      // Simple sequential split for casual games
+      console.log('[assignMatchFromQueue] 🎲 Using sequential split (casual mode)')
+      teamA = participants.slice(0, numPlayers / 2).map(p => p.user_id)
+      teamB = participants.slice(numPlayers / 2).map(p => p.user_id)
+    }
 
     // Create match record
     const { data: match, error: matchError } = await supabase
@@ -151,6 +219,16 @@ export async function startMatch(matchId: string) {
 
     if (!user) {
       return { success: false, error: 'User not authenticated' }
+    }
+
+    // Rate limiting
+    const rateLimitResult = await checkRateLimit(createRateLimitConfig('START_MATCH', user.id))
+    if (!rateLimitResult.allowed) {
+      console.warn('[startMatch] ⚠️ Rate limit exceeded for user:', user.id)
+      return {
+        success: false,
+        error: `Too many start match attempts. Please wait ${rateLimitResult.retryAfter} seconds.`,
+      }
     }
 
     // Get match and verify permissions
@@ -228,6 +306,16 @@ export async function recordMatchScore(
       return { success: false, error: 'User not authenticated' }
     }
 
+    // Rate limiting
+    const rateLimitResult = await checkRateLimit(createRateLimitConfig('RECORD_SCORE', user.id))
+    if (!rateLimitResult.allowed) {
+      console.warn('[recordMatchScore] ⚠️ Rate limit exceeded for user:', user.id)
+      return {
+        success: false,
+        error: `Too many score recording attempts. Please wait ${rateLimitResult.retryAfter} seconds.`,
+      }
+    }
+
     // Get match details
     const { data: match, error: matchError } = await supabase
       .from('matches')
@@ -249,6 +337,17 @@ export async function recordMatchScore(
     // Verify user is organizer
     if (match.queue_sessions?.organizer_id !== user.id) {
       return { success: false, error: 'Unauthorized: Only queue master can record scores' }
+    }
+
+    // Validate match status
+    if (match.status === 'completed') {
+      return { success: false, error: 'Match already completed' }
+    }
+    if (match.status === 'scheduled') {
+      return { success: false, error: 'Match not started yet. Please start the match first.' }
+    }
+    if (match.status === 'cancelled') {
+      return { success: false, error: 'Cannot record score for cancelled match' }
     }
 
     // Update match with final scores

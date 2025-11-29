@@ -234,6 +234,9 @@ export const RATE_LIMITS = {
   // Payment actions
   INITIATE_PAYMENT: { maxAttempts: 5, windowMs: 300000 }, // 5 initiations per 5 minutes
 
+  // Rating actions
+  SUBMIT_RATING: { maxAttempts: 10, windowMs: 60000 }, // 10 ratings per minute
+
   // Default fallback
   DEFAULT: { maxAttempts: 10, windowMs: 60000 }, // 10 actions per minute
 } as const

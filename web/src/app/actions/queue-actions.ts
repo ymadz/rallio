@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { checkRateLimit, createRateLimitConfig } from '@/lib/rate-limiter'
 
 /**
  * Queue Management Server Actions
@@ -190,6 +191,16 @@ export async function joinQueue(sessionId: string) {
       return { success: false, error: 'User not authenticated' }
     }
 
+    // Rate limiting
+    const rateLimitResult = await checkRateLimit(createRateLimitConfig('JOIN_QUEUE', user.id))
+    if (!rateLimitResult.allowed) {
+      console.warn('[joinQueue] ⚠️ Rate limit exceeded for user:', user.id)
+      return {
+        success: false,
+        error: `Too many join attempts. Please wait ${rateLimitResult.retryAfter} seconds.`,
+      }
+    }
+
     // Check if session exists and is joinable
     const { data: session, error: sessionError } = await supabase
       .from('queue_sessions')
@@ -223,6 +234,7 @@ export async function joinQueue(sessionId: string) {
       .select('*')
       .eq('queue_session_id', sessionId)
       .eq('user_id', user.id)
+      .order('left_at', { ascending: false, nullsFirst: true })
 
     console.log('[joinQueue] 🔍 Existing participants:', existingParticipants)
 
@@ -234,6 +246,21 @@ export async function joinQueue(sessionId: string) {
       if (!existingRecord.left_at) {
         console.log('[joinQueue] ⚠️ User already in queue (active):', existingRecord.id)
         return { success: false, error: 'You are already in this queue' }
+      }
+      
+      // Check rejoin cooldown (5 minutes)
+      const timeSinceLeave = Date.now() - new Date(existingRecord.left_at).getTime()
+      const cooldownMs = 5 * 60 * 1000 // 5 minutes
+      
+      if (timeSinceLeave < cooldownMs) {
+        const remainingSeconds = Math.ceil((cooldownMs - timeSinceLeave) / 1000)
+        const minutes = Math.floor(remainingSeconds / 60)
+        const seconds = remainingSeconds % 60
+        console.log('[joinQueue] ⏳ Cooldown active:', { timeSinceLeave, remainingSeconds })
+        return {
+          success: false,
+          error: `Please wait ${minutes}m ${seconds}s before rejoining this queue`,
+        }
       }
       
       // If they previously left, reactivate their record instead of inserting new
@@ -314,6 +341,16 @@ export async function leaveQueue(sessionId: string) {
     if (!user) {
       console.error('[leaveQueue] ❌ User not authenticated')
       return { success: false, error: 'User not authenticated' }
+    }
+
+    // Rate limiting
+    const rateLimitResult = await checkRateLimit(createRateLimitConfig('LEAVE_QUEUE', user.id))
+    if (!rateLimitResult.allowed) {
+      console.warn('[leaveQueue] ⚠️ Rate limit exceeded for user:', user.id)
+      return {
+        success: false,
+        error: `Too many leave attempts. Please wait ${rateLimitResult.retryAfter} seconds.`,
+      }
     }
 
     // Get participant record
@@ -635,6 +672,16 @@ export async function createQueueSession(data: {
     if (!user) {
       console.error('[createQueueSession] ❌ User not authenticated')
       return { success: false, error: 'User not authenticated' }
+    }
+
+    // Rate limiting
+    const rateLimitResult = await checkRateLimit(createRateLimitConfig('CREATE_SESSION', user.id))
+    if (!rateLimitResult.allowed) {
+      console.warn('[createQueueSession] ⚠️ Rate limit exceeded for user:', user.id)
+      return {
+        success: false,
+        error: `Too many session creation attempts. Please wait ${rateLimitResult.retryAfter} seconds.`,
+      }
     }
 
     // 2. Check user has queue_master role
@@ -1261,12 +1308,20 @@ export async function removeParticipant(
       return { success: false, error: 'Participant not found' }
     }
 
-    // 4. Calculate amount owed if not already set
+    // 4. Prevent removing players in active matches
+    if (participant.status === 'playing') {
+      return {
+        success: false,
+        error: 'Cannot remove player from active match. Please complete or cancel the match first.',
+      }
+    }
+
+    // 5. Calculate amount owed if not already set
     const gamesPlayed = participant.games_played || 0
     const costPerGame = parseFloat(session.cost_per_game || '0')
     const amountOwed = gamesPlayed * costPerGame
 
-    // 5. Update participant with metadata about removal
+    // 6. Update participant with metadata about removal
     const { error: updateError } = await supabase
       .from('queue_participants')
       .update({
@@ -1287,7 +1342,7 @@ export async function removeParticipant(
       return { success: false, error: 'Failed to remove participant' }
     }
 
-    // 6. Decrement current_players count
+    // 7. Decrement current_players count
     const { error: decrementError } = await supabase.rpc('decrement_queue_players', {
       session_id: sessionId,
     })
@@ -1302,7 +1357,7 @@ export async function removeParticipant(
       gamesPlayed,
     })
 
-    // 7. Revalidate paths
+    // 8. Revalidate paths
     revalidatePath('/queue')
     revalidatePath('/queue-master')
     revalidatePath(`/queue/${session.court_id}`)
