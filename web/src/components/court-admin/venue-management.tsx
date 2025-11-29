@@ -108,7 +108,7 @@ export function VenueManagement() {
           <p className="text-sm text-gray-500 mb-4">{error}</p>
           <button
             onClick={loadVenues}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
           >
             Try Again
           </button>
@@ -128,7 +128,7 @@ export function VenueManagement() {
           <p className="text-gray-500 mb-6 max-w-md mx-auto">
             You haven't registered any venues yet. Create your first venue to start managing courts and accepting reservations.
           </p>
-          <button className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+          <button className="inline-flex items-center gap-2 px-6 py-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors">
             <Plus className="w-5 h-5" />
             <span>Create Venue</span>
           </button>

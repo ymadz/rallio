@@ -55,14 +55,14 @@ export function CourtAdminSidebar({ user, venues }: CourtAdminSidebarProps) {
     <>
       {/* Desktop Sidebar */}
       <aside
-        className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-20 bg-white border-r border-gray-200 z-40"
+        className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-20 bg-gradient-to-b from-blue-50 to-blue-100 border-r border-blue-200 z-40"
         onMouseEnter={() => setIsExpanded(true)}
         onMouseLeave={() => setIsExpanded(false)}
       >
         {/* Expanded overlay */}
         <div
           className={cn(
-            "absolute inset-y-0 left-0 bg-white border-r border-gray-200 shadow-lg transition-all duration-300 flex flex-col",
+            "absolute inset-y-0 left-0 bg-gradient-to-b from-blue-50 to-blue-100 border-r border-blue-200 shadow-lg transition-all duration-300 flex flex-col",
             isExpanded ? "w-64" : "w-20"
           )}
         >

@@ -218,7 +218,7 @@ export function ReservationManagement() {
           <p className="text-sm text-gray-500 mb-4">{error}</p>
           <button
             onClick={loadReservations}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
           >
             Try Again
           </button>
@@ -278,7 +278,7 @@ export function ReservationManagement() {
           onClick={() => setStatusFilter('all')}
           className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
             statusFilter === 'all'
-              ? 'bg-primary text-white shadow-sm'
+              ? 'bg-blue-100 text-blue-700 shadow-sm'
               : 'text-gray-600 hover:bg-gray-100'
           }`}
         >
@@ -288,7 +288,7 @@ export function ReservationManagement() {
           onClick={() => setStatusFilter('pending')}
           className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
             statusFilter === 'pending'
-              ? 'bg-amber-500 text-white shadow-sm'
+              ? 'bg-amber-100 text-amber-700 shadow-sm'
               : 'text-gray-600 hover:bg-gray-100'
           }`}
         >
@@ -298,7 +298,7 @@ export function ReservationManagement() {
           onClick={() => setStatusFilter('confirmed')}
           className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
             statusFilter === 'confirmed'
-              ? 'bg-emerald-500 text-white shadow-sm'
+              ? 'bg-emerald-100 text-emerald-700 shadow-sm'
               : 'text-gray-600 hover:bg-gray-100'
           }`}
         >
@@ -308,7 +308,7 @@ export function ReservationManagement() {
           onClick={() => setStatusFilter('completed')}
           className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
             statusFilter === 'completed'
-              ? 'bg-blue-500 text-white shadow-sm'
+              ? 'bg-blue-100 text-blue-700 shadow-sm'
               : 'text-gray-600 hover:bg-gray-100'
           }`}
         >
@@ -318,7 +318,7 @@ export function ReservationManagement() {
           onClick={() => setStatusFilter('cancelled')}
           className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
             statusFilter === 'cancelled'
-              ? 'bg-rose-500 text-white shadow-sm'
+              ? 'bg-rose-100 text-rose-700 shadow-sm'
               : 'text-gray-600 hover:bg-gray-100'
           }`}
         >
