@@ -210,7 +210,7 @@ rallio/
 
 ### Database Triggers & Patterns
 - **Automatic Profile Creation**: `handle_new_user()` trigger runs on `auth.users` INSERT
-  - Automatically creates `profiles` and `players` records
+  - Automatically creates `profiles` and `players`  records
   - Assigns default "player" role via `user_roles` table
   - **IMPORTANT**: Never manually insert profiles after signup - let the trigger handle it
 - **Geospatial Queries**: Use `nearby_venues(lat, lng, radius_km, limit)` RPC function

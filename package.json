@@ -9,6 +9,9 @@
     "mobile"
   ],
   "scripts": {
+    "dev": "next dev",
+    "dev:3001": "next dev -p 3001",
+    "dev:3002": "next dev -p 3002",
     "dev:web": "npm run dev --workspace=web",
     "dev:mobile": "npm run start --workspace=mobile",
     "build:web": "npm run build --workspace=web",

@@ -20,9 +20,14 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
     >
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1">
-          <h3 className="font-semibold text-gray-900 mb-1">
-            {queue.courtName}
-          </h3>
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="font-semibold text-gray-900">
+              {queue.courtName}
+            </h3>
+            <span className="text-xs font-mono text-gray-400 bg-gray-50 px-2 py-0.5 rounded">
+              #{queue.id.slice(0, 8)}
+            </span>
+          </div>
           <div className="flex items-center gap-1.5 text-sm text-gray-500">
             <MapPin className="w-4 h-4" />
             <span>{queue.venueName}</span>

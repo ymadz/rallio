@@ -1,13 +1,33 @@
 'use client'
 
 import { useMyQueues, useNearbyQueues } from '@/hooks/use-queue'
+import { useQueueNotifications } from '@/hooks/use-queue-notifications'
+import { QueueNotificationBanner } from '@/components/queue/queue-notification-banner'
 import { QueueCard } from '@/components/queue/queue-card'
 import { Users, MapPin, Loader2, Activity, Clock } from 'lucide-react'
 import Link from 'next/link'
+import { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
 
 export function QueueDashboardClient() {
   const { queues: myQueues, isLoading: loadingMy } = useMyQueues()
   const { queues: nearbyQueues, isLoading: loadingNearby } = useNearbyQueues()
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const supabase = createClient()
+
+  // Get current user ID
+  useEffect(() => {
+    async function getCurrentUser() {
+      const { data: { user } } = await supabase.auth.getUser()
+      setCurrentUserId(user?.id || null)
+    }
+    getCurrentUser()
+  }, [])
+
+  // Set up notifications for the first active queue
+  const activeQueues = myQueues.filter(q => q.status === 'active' || q.status === 'waiting')
+  const primaryQueue = activeQueues.length > 0 ? activeQueues[0] : null
+  const { notifications, dismissNotification } = useQueueNotifications(primaryQueue, currentUserId)
 
   if (loadingMy || loadingNearby) {
     return (
@@ -17,11 +37,17 @@ export function QueueDashboardClient() {
     )
   }
 
-  const activeQueues = myQueues.filter(q => q.status === 'active' || q.status === 'waiting')
   const topPosition = activeQueues.length > 0 ? Math.min(...activeQueues.map(q => q.userPosition || Infinity)) : null
 
   return (
-    <div className="space-y-6">
+    <>
+      {/* Notification Banner */}
+      <QueueNotificationBanner
+        notifications={notifications}
+        onDismiss={dismissNotification}
+      />
+
+      <div className="space-y-6">
       {/* Quick Stats - Only show if user has active queues */}
       {activeQueues.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -157,6 +183,7 @@ export function QueueDashboardClient() {
           </li>
         </ul>
       </div>
-    </div>
+      </div>
+    </>
   )
 }

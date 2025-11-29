@@ -1,19 +1,133 @@
 'use client'
 
 import { useQueue } from '@/hooks/use-queue'
+import { useQueueNotifications } from '@/hooks/use-queue-notifications'
+import { useMatchNotifications } from '@/hooks/use-match-notifications'
+import { QueueNotificationBanner } from '@/components/queue/queue-notification-banner'
 import { PlayerCard } from '@/components/queue/player-card'
 import { QueueStatusBadge } from '@/components/queue/queue-status-badge'
-import { Users, Clock, Activity, Loader2, AlertCircle } from 'lucide-react'
-import { useState } from 'react'
+import { QueuePositionTracker } from '@/components/queue/queue-position-tracker'
+import { PaymentSummaryWidget } from '@/components/queue/payment-summary-widget'
+import { MatchHistoryViewer } from '@/components/queue/match-history-viewer'
+import { PostMatchRating } from '@/components/queue/post-match-rating'
+import { Users, Clock, Activity, Loader2, AlertCircle, Trophy } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 interface QueueDetailsClientProps {
   courtId: string
 }
 
 export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
+  const router = useRouter()
   const { queue, isLoading, error, joinQueue, leaveQueue, refreshQueue } = useQueue(courtId)
   const [isJoining, setIsJoining] = useState(false)
   const [isLeaving, setIsLeaving] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [participant, setParticipant] = useState<any>(null)
+  const [showRatingModal, setShowRatingModal] = useState(false)
+  const [ratingOpponents, setRatingOpponents] = useState<any[]>([])
+  const [completedMatchId, setCompletedMatchId] = useState<string | null>(null)
+  const [showMatchHistory, setShowMatchHistory] = useState(false)
+  const supabase = createClient()
+
+  // Get current user ID
+  useEffect(() => {
+    async function getCurrentUser() {
+      const { data: { user } } = await supabase.auth.getUser()
+      setCurrentUserId(user?.id || null)
+    }
+    getCurrentUser()
+  }, [])
+
+  // Initialize notification system
+  const { notifications, dismissNotification } = useQueueNotifications(queue, currentUserId)
+
+  // Enable match assignment notifications
+  const { activeMatch } = useMatchNotifications(currentUserId || undefined)
+
+  // Fetch participant details when queue loads
+  useEffect(() => {
+    const fetchParticipant = async () => {
+      if (!queue?.id || !currentUserId) return
+
+      try {
+        const { data, error } = await supabase
+          .from('queue_participants')
+          .select('*')
+          .eq('queue_session_id', queue.id)
+          .eq('user_id', currentUserId)
+          .is('left_at', null)
+          .single()
+
+        if (!error && data) {
+          setParticipant(data)
+        }
+      } catch (err) {
+        console.error('Error fetching participant:', err)
+      }
+    }
+
+    fetchParticipant()
+  }, [queue?.id, currentUserId])
+
+  // Listen for match completions to trigger rating modal
+  useEffect(() => {
+    if (!currentUserId || !queue?.id) return
+
+    const channel = supabase
+      .channel(`match-completion-${currentUserId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'matches',
+          filter: `queue_session_id=eq.${queue.id}`,
+        },
+        async (payload) => {
+          const match = payload.new as any
+
+          if (match.status === 'completed') {
+            const isUserMatch =
+              match.team_a_players?.includes(currentUserId) ||
+              match.team_b_players?.includes(currentUserId)
+
+            if (isUserMatch) {
+              // Fetch opponent details
+              const opponentIds = [
+                ...match.team_a_players,
+                ...match.team_b_players,
+              ].filter((id: string) => id !== currentUserId)
+
+              const { data: profiles } = await supabase
+                .from('profiles')
+                .select('id, first_name, last_name, avatar_url')
+                .in('id', opponentIds)
+
+              if (profiles) {
+                const opponents = profiles.map((p) => ({
+                  id: p.id,
+                  name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Player',
+                  avatar_url: p.avatar_url,
+                }))
+
+                setRatingOpponents(opponents)
+                setCompletedMatchId(match.id)
+                setShowRatingModal(true)
+              }
+            }
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [currentUserId, queue?.id])
 
   const handleJoinQueue = async () => {
     setIsJoining(true)
@@ -55,14 +169,49 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
   const playersAhead = isUserInQueue ? queue.userPosition! - 1 : 0
 
   return (
-    <div className="space-y-6">
-      {/* Court Info Header */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+    <>
+      {/* Notification Banner */}
+      <QueueNotificationBanner
+        notifications={notifications}
+        onDismiss={dismissNotification}
+      />
+
+      {/* Active Match Alert */}
+      {activeMatch && (
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-5 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center animate-pulse">
+                <Activity className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="font-bold text-green-900 text-lg">You Have an Active Match!</h3>
+                <p className="text-sm text-green-700">Match #{activeMatch.match_number} is ready</p>
+              </div>
+            </div>
+            <Link
+              href={`/queue/${courtId}/match/${activeMatch.id}`}
+              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold shadow-md"
+            >
+              View Match
+            </Link>
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-6">
+        {/* Court Info Header */}
+        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1">
-            <h2 className="text-xl font-bold text-gray-900 mb-1">
-              {queue.courtName}
-            </h2>
+            <div className="flex items-center gap-2 mb-1">
+              <h2 className="text-xl font-bold text-gray-900">
+                {queue.courtName}
+              </h2>
+              <span className="text-xs font-mono text-gray-400 bg-gray-50 px-2 py-1 rounded">
+                #{queue.id.slice(0, 8)}
+              </span>
+            </div>
             <p className="text-gray-600 text-sm">{queue.venueName}</p>
           </div>
           <QueueStatusBadge status={queue.status} size="md" />
@@ -102,30 +251,49 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
         </div>
       </div>
 
-      {/* Your Position Card (if in queue) */}
-      {isUserInQueue && (
-        <div className="bg-gradient-to-br from-primary to-primary/80 text-white rounded-xl p-6 shadow-lg">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-white/80 text-sm mb-1">Your Position</p>
-              <p className="text-5xl font-bold">#{queue.userPosition}</p>
-            </div>
-            <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
-              <Users className="w-10 h-10 text-white" />
-            </div>
-          </div>
+      {/* Queue Position Tracker (if in queue) */}
+      {isUserInQueue && participant && (
+        <QueuePositionTracker
+          position={queue.userPosition!}
+          totalPlayers={queue.currentPlayers}
+          estimatedWaitTime={queue.estimatedWaitTime}
+          gamesPlayed={participant.games_played || 0}
+          status={participant.status || 'waiting'}
+        />
+      )}
 
-          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/20">
-            <div>
-              <p className="text-white/80 text-xs mb-1">Players Ahead</p>
-              <p className="text-2xl font-bold">{playersAhead}</p>
-            </div>
-            <div>
-              <p className="text-white/80 text-xs mb-1">Est. Wait Time</p>
-              <p className="text-2xl font-bold">{queue.estimatedWaitTime}m</p>
-            </div>
-          </div>
+      {/* Payment Summary Widget (if amount owed) */}
+      {isUserInQueue && participant && participant.amount_owed > 0 && queue && (
+        <PaymentSummaryWidget
+          participantId={participant.id}
+          amountOwed={participant.amount_owed}
+          gamesPlayed={participant.games_played || 0}
+          costPerGame={parseFloat((queue as any).cost_per_game || '0')}
+          paymentStatus={participant.payment_status || 'pending'}
+          courtId={courtId}
+        />
+      )}
+
+      {/* Match History Toggle (if in queue) */}
+      {isUserInQueue && currentUserId && (
+        <div className="flex gap-3">
+          <button
+            onClick={() => setShowMatchHistory(!showMatchHistory)}
+            className="flex-1 px-4 py-3 bg-white border-2 border-gray-200 text-gray-700 rounded-lg hover:border-primary hover:text-primary transition-colors font-medium flex items-center justify-center gap-2"
+          >
+            <Trophy className="w-5 h-5" />
+            {showMatchHistory ? 'Hide Match History' : 'View Match History'}
+          </button>
         </div>
+      )}
+
+      {/* Match History Viewer */}
+      {showMatchHistory && isUserInQueue && currentUserId && queue && (
+        <MatchHistoryViewer
+          sessionId={queue.id}
+          userId={currentUserId}
+          courtId={courtId}
+        />
       )}
 
       {/* Current Queue List */}
@@ -161,7 +329,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
               <PlayerCard
                 key={player.id}
                 player={player}
-                isCurrentUser={player.id === 'current-user'}
+                isCurrentUser={player.userId === currentUserId}
               />
             ))}
           </div>
@@ -318,6 +486,26 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
           </button>
         )}
       </div>
-    </div>
+
+      {/* Post-Match Rating Modal */}
+      {showRatingModal && completedMatchId && ratingOpponents.length > 0 && (
+        <PostMatchRating
+          matchId={completedMatchId}
+          opponents={ratingOpponents}
+          onClose={() => {
+            setShowRatingModal(false)
+            setRatingOpponents([])
+            setCompletedMatchId(null)
+          }}
+          onComplete={() => {
+            setShowRatingModal(false)
+            setRatingOpponents([])
+            setCompletedMatchId(null)
+            refreshQueue()
+          }}
+        />
+      )}
+      </div>
+    </>
   )
 }
