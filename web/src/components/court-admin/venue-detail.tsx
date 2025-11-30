@@ -24,6 +24,7 @@ import { PricingManagement } from './pricing-management'
 import { AvailabilityManagement } from './availability-management'
 import { AnalyticsDashboard } from './analytics-dashboard'
 import { ReviewsManagement } from './reviews-management'
+import DiscountManagement from './discount-management'
 
 interface VenueDetailProps {
   venueId: string
@@ -92,6 +93,7 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
   const tabs = [
     { id: 'courts', label: 'Courts', icon: Building2 },
     { id: 'pricing', label: 'Pricing', icon: DollarSign },
+    { id: 'discounts', label: 'Discounts', icon: DollarSign },
     { id: 'availability', label: 'Availability', icon: Clock },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'reviews', label: 'Reviews', icon: Star },
@@ -220,6 +222,7 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
       <div className="min-h-96">
         {activeTab === 'courts' && <VenueCourts venueId={venueId} />}
         {activeTab === 'pricing' && <PricingManagement venueId={venueId} />}
+        {activeTab === 'discounts' && <DiscountManagement venueId={venueId} />}
         {activeTab === 'availability' && <AvailabilityManagement venueId={venueId} />}
         {activeTab === 'analytics' && <AnalyticsDashboard venueId={venueId} />}
         {activeTab === 'reviews' && <ReviewsManagement venueId={venueId} />}

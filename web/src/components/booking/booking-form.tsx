@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { TimeSlotGrid } from './time-slot-grid'
+import { DiscountDisplay } from './discount-display'
 import { getAvailableTimeSlotsAction } from '@/app/actions/reservations'
 import { useCheckoutStore } from '@/stores/checkout-store'
 import { format } from 'date-fns'
@@ -24,7 +25,7 @@ interface BookingFormProps {
 
 export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingFormProps) {
   const router = useRouter()
-  const { setBookingData } = useCheckoutStore()
+  const { setBookingData, setDiscountDetails } = useCheckoutStore()
 
   // Form state
   const [courtId, setCourtId] = useState(selectedCourtId)
@@ -32,6 +33,13 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
   const [selectedTime, setSelectedTime] = useState<string | undefined>(undefined)
   const [duration, setDuration] = useState(1) // hours
   const [notes, setNotes] = useState('')
+  const [numPlayers, setNumPlayers] = useState(2) // default to 2 players
+
+  // Discount state
+  const [discountAmount, setDiscountAmount] = useState(0)
+  const [finalPrice, setFinalPrice] = useState(0)
+  const [discountType, setDiscountType] = useState<string | undefined>()
+  const [discountReason, setDiscountReason] = useState<string | undefined>()
 
   // UI state
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
@@ -93,6 +101,13 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
     return true
   }
 
+  const handleDiscountCalculated = (discount: number, final: number, type?: string, reason?: string) => {
+    setDiscountAmount(discount)
+    setFinalPrice(final)
+    setDiscountType(type)
+    setDiscountReason(reason)
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -117,9 +132,18 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
       date: selectedDate,
       startTime: selectedTime,
       endTime: endTime,
-      hourlyRate: totalPrice,
+      hourlyRate: finalPrice > 0 ? finalPrice : totalPrice,
       capacity: selectedCourt.capacity,
     })
+
+    // Save discount details
+    if (discountAmount !== 0) {
+      setDiscountDetails({
+        amount: discountAmount,
+        type: discountType,
+        reason: discountReason,
+      })
+    }
 
     // Navigate to checkout
     router.push('/checkout')
@@ -215,6 +239,27 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
           </div>
         )}
 
+        {/* Number of Players */}
+        {selectedDate && selectedTime && selectedCourt && (
+          <div className="mb-6">
+            <Label htmlFor="players" className="block mb-2">
+              Number of Players
+            </Label>
+            <Input
+              id="players"
+              type="number"
+              min="1"
+              max={selectedCourt.capacity}
+              value={numPlayers}
+              onChange={(e) => setNumPlayers(parseInt(e.target.value) || 2)}
+              className="w-full"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              This affects group booking discounts (max {selectedCourt.capacity} players)
+            </p>
+          </div>
+        )}
+
         {/* Notes */}
         <div className="mb-6">
           <Label htmlFor="notes" className="block mb-2">
@@ -238,11 +283,41 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
         )}
       </div>
 
+      {/* Discount Display */}
+      {selectedDate && selectedTime && selectedCourt && (
+        <DiscountDisplay
+          venueId={venue.id}
+          courtId={courtId}
+          startDate={selectedDate.toISOString()}
+          endDate={selectedDate.toISOString()}
+          numberOfDays={duration}
+          numberOfPlayers={numPlayers}
+          basePrice={totalPrice}
+          onDiscountCalculated={handleDiscountCalculated}
+        />
+      )}
+
       {/* Price Summary & Submit */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex justify-between items-center mb-4">
-          <span className="text-gray-600">Subtotal</span>
-          <span className="text-xl font-bold text-gray-900">₱{totalPrice.toFixed(2)}</span>
+        <div className="space-y-2 mb-4">
+          <div className="flex justify-between items-center text-gray-600">
+            <span>Base Price</span>
+            <span>₱{totalPrice.toFixed(2)}</span>
+          </div>
+          {discountAmount !== 0 && (
+            <div className={`flex justify-between items-center font-medium ${
+              discountAmount < 0 ? 'text-orange-600' : 'text-green-600'
+            }`}>
+              <span>{discountAmount < 0 ? 'Surcharge' : 'Discount'}</span>
+              <span>{discountAmount < 0 ? '+' : '-'}₱{Math.abs(discountAmount).toFixed(2)}</span>
+            </div>
+          )}
+          <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+            <span className="text-lg font-semibold text-gray-900">Total</span>
+            <span className="text-2xl font-bold text-gray-900">
+              ₱{(finalPrice > 0 ? finalPrice : totalPrice).toFixed(2)}
+            </span>
+          </div>
         </div>
 
         <Button

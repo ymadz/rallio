@@ -12,6 +12,7 @@ export function BookingSummaryCard() {
     getTotalAmount,
     getPerPlayerAmount,
     discountAmount,
+    applicableDiscounts,
   } = useCheckoutStore()
 
   if (!bookingData) return null
@@ -65,10 +66,29 @@ export function BookingSummaryCard() {
           <span className="font-medium text-gray-900">₱{subtotal.toFixed(2)}</span>
         </div>
 
-        {discountAmount > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-600">Discount</span>
-            <span className="font-medium text-green-600">-₱{discountAmount.toFixed(2)}</span>
+        {discountAmount !== 0 && (
+          <div className="space-y-1">
+            {applicableDiscounts && applicableDiscounts.length > 0 ? (
+              applicableDiscounts.map((discount, index) => (
+                <div key={index} className="flex justify-between text-sm">
+                  <span className={discount.isIncrease ? 'text-orange-600' : 'text-green-600'}>
+                    {discount.name}
+                  </span>
+                  <span className={`font-medium ${discount.isIncrease ? 'text-orange-600' : 'text-green-600'}`}>
+                    {discount.isIncrease ? '+' : '-'}₱{discount.amount.toFixed(2)}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div className="flex justify-between text-sm">
+                <span className={discountAmount < 0 ? 'text-orange-600' : 'text-green-600'}>
+                  {discountAmount < 0 ? 'Surcharge' : 'Discount'}
+                </span>
+                <span className={`font-medium ${discountAmount < 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                  {discountAmount < 0 ? '+' : '-'}₱{Math.abs(discountAmount).toFixed(2)}
+                </span>
+              </div>
+            )}
           </div>
         )}
 

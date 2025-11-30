@@ -20,6 +20,9 @@ export function PaymentProcessing() {
     getTotalAmount,
     setCurrentStep,
     setBookingReference,
+    discountAmount,
+    discountType,
+    discountReason,
   } = useCheckoutStore()
 
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null)
@@ -123,6 +126,9 @@ export function PaymentProcessing() {
           paymentType: isSplitPayment ? 'split' : 'full',
           paymentMethod,
           notes: isSplitPayment ? `Split payment with ${playerCount} players` : undefined,
+          discountApplied: Math.abs(discountAmount),
+          discountType,
+          discountReason,
         })
 
         if (!reservationResult.success || !reservationResult.reservationId) {

@@ -45,6 +45,15 @@ interface CheckoutState {
   // Discount (if applicable)
   discountAmount: number
   discountCode?: string
+  discountType?: string
+  discountReason?: string
+  applicableDiscounts?: Array<{
+    type: string
+    name: string
+    description: string
+    amount: number
+    isIncrease: boolean
+  }>
 
   // Confirmation
   bookingReference?: string
@@ -59,6 +68,7 @@ interface CheckoutState {
   setPolicyAccepted: (accepted: boolean) => void
   updatePlayerPayment: (playerNumber: number, updates: Partial<PlayerPaymentStatus>) => void
   setDiscount: (amount: number, code?: string) => void
+  setDiscountDetails: (details: { amount: number; type?: string; reason?: string; discounts?: any[] }) => void
   setBookingReference: (reference: string, reservationId: string) => void
   resetCheckout: () => void
 
@@ -162,6 +172,13 @@ export const useCheckoutStore = create<CheckoutState>()(
       },
 
       setDiscount: (amount, code) => set({ discountAmount: amount, discountCode: code }),
+
+      setDiscountDetails: (details) => set({
+        discountAmount: details.amount,
+        discountType: details.type,
+        discountReason: details.reason,
+        applicableDiscounts: details.discounts
+      }),
 
       setBookingReference: (reference, reservationId) =>
         set({ bookingReference: reference, reservationId }),

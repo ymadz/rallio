@@ -146,6 +146,9 @@ export async function createReservationAction(data: {
   paymentType?: 'full' | 'split'
   paymentMethod?: 'cash' | 'e-wallet'
   notes?: string
+  discountApplied?: number
+  discountType?: string
+  discountReason?: string
 }): Promise<{ success: boolean; reservationId?: string; error?: string }> {
   const supabase = await createClient()
 
@@ -264,6 +267,9 @@ export async function createReservationAction(data: {
       amount_paid: 0,
       num_players: data.numPlayers || 1,
       payment_type: data.paymentType || 'full',
+      discount_applied: data.discountApplied || 0,
+      discount_type: data.discountType || null,
+      discount_reason: data.discountReason || null,
       metadata: {
         booking_origin: 'web_checkout',
         intended_payment_method: data.paymentMethod ?? null,
