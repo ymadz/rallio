@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { checkRateLimit, createRateLimitConfig } from '@/lib/rate-limiter'
+import { createBulkNotifications, NotificationTemplates } from '@/lib/notifications'
 
 /**
  * Match Management Server Actions
@@ -186,6 +187,23 @@ export async function assignMatchFromQueue(sessionId: string, numPlayers: number
     if (updateError) {
       console.error('[assignMatchFromQueue] ⚠️ Failed to update participant status:', updateError)
     }
+
+    // 🔔 Send notifications to all assigned players
+    const { data: court } = await supabase
+      .from('courts')
+      .select('name')
+      .eq('id', session.court_id)
+      .single()
+
+    const courtName = court?.name || 'Court'
+    
+    const notificationData = participants.map(p => ({
+      userId: p.user_id,
+      ...NotificationTemplates.queueMatchAssigned(matchNumber, courtName, sessionId, match.id),
+    }))
+
+    await createBulkNotifications(notificationData)
+    console.log('[assignMatchFromQueue] 📬 Sent notifications to', participants.length, 'players')
 
     console.log('[assignMatchFromQueue] ✅ Match assigned successfully:', {
       matchId: match.id,

@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { format } from 'date-fns'
 import { revalidatePath } from 'next/cache'
+import { createNotification, NotificationTemplates } from '@/lib/notifications'
 
 export interface TimeSlot {
   time: string
