@@ -319,7 +319,7 @@ export async function approveReservation(reservationId: string) {
       .eq('id', reservationId)
       .single()
 
-    if (!reservation || reservation.court?.venue?.owner_id !== user.id) {
+    if (!reservation || (reservation.court as any)?.venue?.owner_id !== user.id) {
       return { success: false, error: 'Unauthorized' }
     }
 
@@ -366,7 +366,7 @@ export async function rejectReservation(reservationId: string, reason: string) {
       .eq('id', reservationId)
       .single()
 
-    if (!reservation || reservation.court?.venue?.owner_id !== user.id) {
+    if (!reservation || (reservation.court as any)?.venue?.owner_id !== user.id) {
       return { success: false, error: 'Unauthorized' }
     }
 

@@ -29,7 +29,20 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white min-h-screen`}
       >
         {children}
-        <Toaster position="top-center" richColors expand={true} />
+        <Toaster 
+          position="top-center" 
+          richColors 
+          expand={true}
+          toastOptions={{
+            style: {
+              padding: '16px',
+              gap: '12px',
+              minWidth: '320px',
+              maxWidth: '500px',
+            },
+            className: 'text-base',
+          }}
+        />
       </body>
     </html>
   );

@@ -15,9 +15,12 @@ import {
   CheckCircle,
   Edit,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Settings,
+  ClipboardCheck
 } from 'lucide-react'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
 import { getVenueById } from '@/app/actions/court-admin-actions'
 import { VenueCourts } from './venue-courts'
 import { PricingManagement } from './pricing-management'
@@ -25,6 +28,7 @@ import { AvailabilityManagement } from './availability-management'
 import { AnalyticsDashboard } from './analytics-dashboard'
 import { ReviewsManagement } from './reviews-management'
 import DiscountManagement from './discount-management'
+import { QueueApprovalsManagement } from './queue-approvals-management'
 
 interface VenueDetailProps {
   venueId: string
@@ -34,6 +38,7 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const activeTab = searchParams.get('tab') || 'courts'
+  const supabase = createClient()
 
   const [venue, setVenue] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -95,6 +100,7 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
     { id: 'pricing', label: 'Pricing', icon: DollarSign },
     { id: 'discounts', label: 'Discounts', icon: DollarSign },
     { id: 'availability', label: 'Availability', icon: Clock },
+    { id: 'approvals', label: 'Queue Approvals', icon: ClipboardCheck },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'reviews', label: 'Reviews', icon: Star },
   ]
@@ -218,12 +224,60 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
         </div>
       </div>
 
+      {/* Queue Settings Section */}
+      <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <Settings className="w-5 h-5" />
+          Queue Session Settings
+        </h3>
+        
+        <div className="flex items-start justify-between p-4 bg-gray-50 rounded-lg">
+          <div className="flex-1">
+            <label htmlFor="requires-approval" className="block text-sm font-medium text-gray-900 mb-1">
+              Require Approval for Queue Sessions
+            </label>
+            <p className="text-sm text-gray-600">
+              When enabled, Queue Masters must wait for your approval before their sessions go live.
+              This gives you control over who uses your courts and when.
+            </p>
+          </div>
+          <div className="ml-4 flex-shrink-0">
+            <input
+              type="checkbox"
+              id="requires-approval"
+              checked={venue?.requires_queue_approval ?? true}
+              onChange={async (e) => {
+                try {
+                  const { error } = await supabase
+                    .from('venues')
+                    .update({ requires_queue_approval: e.target.checked })
+                    .eq('id', venueId)
+                  
+                  if (error) throw error
+                  
+                  await loadVenue()
+                  
+                  alert(e.target.checked 
+                    ? '✅ Queue sessions now require your approval' 
+                    : '✅ Queue sessions no longer require approval - they will go live immediately')
+                } catch (error) {
+                  console.error('Failed to update setting:', error)
+                  alert('❌ Failed to update setting. Please try again.')
+                }
+              }}
+              className="h-5 w-5 text-primary border-gray-300 rounded focus:ring-2 focus:ring-primary cursor-pointer"
+            />
+          </div>
+        </div>
+      </div>
+
       {/* Tab Content */}
       <div className="min-h-96">
         {activeTab === 'courts' && <VenueCourts venueId={venueId} />}
         {activeTab === 'pricing' && <PricingManagement venueId={venueId} />}
         {activeTab === 'discounts' && <DiscountManagement venueId={venueId} />}
         {activeTab === 'availability' && <AvailabilityManagement venueId={venueId} />}
+        {activeTab === 'approvals' && <QueueApprovalsManagement />}
         {activeTab === 'analytics' && <AnalyticsDashboard venueId={venueId} />}
         {activeTab === 'reviews' && <ReviewsManagement venueId={venueId} />}
       </div>

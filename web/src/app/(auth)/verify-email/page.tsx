@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Alert } from '@/components/ui/alert'
 
-export default function VerifyEmailPage() {
+function VerifyEmailContent() {
   const searchParams = useSearchParams()
   const email = searchParams.get('email') || ''
   const [isResending, setIsResending] = useState(false)
@@ -112,5 +112,13 @@ export default function VerifyEmailPage() {
         </Link>
       </div>
     </div>
+  )
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <Suspense fallback={<div className="text-center">Loading...</div>}>
+      <VerifyEmailContent />
+    </Suspense>
   )
 }

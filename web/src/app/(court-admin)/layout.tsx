@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { CourtAdminSidebar } from '@/components/court-admin/court-admin-sidebar'
+import { NotificationBell } from '@/components/notifications/notification-bell'
 
 export default async function CourtAdminRootLayout({
   children,
@@ -60,6 +61,18 @@ export default async function CourtAdminRootLayout({
 
       {/* Main content area - offset for collapsed sidebar on desktop */}
       <div className="md:pl-20">
+        {/* Header with notifications */}
+        <header className="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              {/* Breadcrumb or title can go here */}
+            </div>
+            <div className="flex items-center gap-4">
+              <NotificationBell />
+            </div>
+          </div>
+        </header>
+
         <main className="min-h-screen pb-16 md:pb-0">{children}</main>
       </div>
     </div>

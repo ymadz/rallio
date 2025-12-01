@@ -657,6 +657,7 @@ export async function createQueueSession(data: {
 }): Promise<{
   success: boolean
   session?: QueueSessionData
+  requiresApproval?: boolean
   error?: string
 }> {
   console.log('[createQueueSession] 🚀 Creating queue session:', data)
@@ -715,7 +716,7 @@ export async function createQueueSession(data: {
       return { success: false, error: 'Max players must be between 4 and 20' }
     }
 
-    // 4. Verify court exists and is active
+    // 4. Verify court exists and get venue approval settings
     const { data: court, error: courtError } = await supabase
       .from('courts')
       .select(`
@@ -725,7 +726,8 @@ export async function createQueueSession(data: {
         venue_id,
         venues!inner (
           id,
-          name
+          name,
+          requires_queue_approval
         )
       `)
       .eq('id', data.courtId)
@@ -740,7 +742,46 @@ export async function createQueueSession(data: {
       return { success: false, error: 'Court is not active' }
     }
 
-    // 5. Insert queue session
+    // Determine if approval is required
+    const venue = court.venues as any
+    const requiresApproval = venue?.requires_queue_approval ?? true
+    const initialStatus = requiresApproval ? 'pending_approval' : 'draft'
+    const approvalStatus = requiresApproval ? 'pending' : 'approved'
+
+    console.log('[createQueueSession] 📋 Venue approval settings:', {
+      requiresApproval,
+      initialStatus,
+      approvalStatus,
+    })
+
+    // 5. Check for conflicting reservations before creating queue session
+    const { data: conflictingReservations, error: conflictError } = await supabase
+      .from('reservations')
+      .select('id, start_time, end_time, status, user_id')
+      .eq('court_id', data.courtId)
+      .in('status', ['pending', 'confirmed', 'pending_payment', 'paid'])
+      .lt('start_time', data.endTime.toISOString())
+      .gt('end_time', data.startTime.toISOString())
+
+    if (conflictError) {
+      console.error('[createQueueSession] ❌ Error checking for reservation conflicts:', conflictError)
+    }
+
+    if (conflictingReservations && conflictingReservations.length > 0) {
+      const reservation = conflictingReservations[0]
+      const resStart = new Date(reservation.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+      const resEnd = new Date(reservation.end_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+
+      console.warn('[createQueueSession] ⚠️ Reservation conflict detected:', reservation)
+      return {
+        success: false,
+        error: `Court already has a confirmed reservation during this time (${resStart} - ${resEnd}). Please choose a different time slot.`,
+      }
+    }
+
+    console.log('[createQueueSession] ✅ No conflicting reservations found')
+
+    // 6. Insert queue session with approval status
     const { data: session, error: insertError } = await supabase
       .from('queue_sessions')
       .insert({
@@ -753,8 +794,10 @@ export async function createQueueSession(data: {
         max_players: data.maxPlayers,
         cost_per_game: data.costPerGame,
         is_public: data.isPublic,
-        status: 'open',
+        status: initialStatus,
         current_players: 0,
+        requires_approval: requiresApproval,
+        approval_status: approvalStatus,
       })
       .select()
       .single()
@@ -765,7 +808,6 @@ export async function createQueueSession(data: {
     }
 
     // 6. Format response
-    const venue = court.venues as any
     const queueData: QueueSessionData = {
       id: session.id,
       courtId: session.court_id,
@@ -782,14 +824,19 @@ export async function createQueueSession(data: {
       gameFormat: session.game_format,
     }
 
-    console.log('[createQueueSession] ✅ Queue session created successfully:', queueData.id)
+    console.log('[createQueueSession] ✅ Queue session created successfully:', {
+      id: queueData.id,
+      requiresApproval,
+      status: initialStatus,
+      approvalStatus,
+    })
 
     // 7. Revalidate paths
     revalidatePath('/queue')
     revalidatePath('/queue-master')
     revalidatePath(`/queue/${data.courtId}`)
 
-    return { success: true, session: queueData }
+    return { success: true, session: queueData, requiresApproval }
   } catch (error: any) {
     console.error('[createQueueSession] ❌ Error:', error)
     return { success: false, error: error.message || 'Failed to create queue session' }

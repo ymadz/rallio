@@ -56,8 +56,8 @@ export function PostMatchRating({ matchId, opponents, onClose, onComplete }: Pos
       }
 
       // Check if any submissions failed
-      if (result.failCount > 0) {
-        const failedRatings = result.results.filter((r) => !r.success)
+      if ((result.failCount ?? 0) > 0) {
+        const failedRatings = result.results?.filter((r) => !r.success) || []
         const errorMessages = failedRatings
           .map((r) => r.error)
           .filter(Boolean)
@@ -66,7 +66,7 @@ export function PostMatchRating({ matchId, opponents, onClose, onComplete }: Pos
         setError(`Some ratings failed: ${errorMessages}`)
 
         // If all failed, don't show completion
-        if (result.successCount === 0) {
+        if ((result.successCount ?? 0) === 0) {
           return
         }
       }

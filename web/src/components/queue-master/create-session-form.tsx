@@ -117,8 +117,13 @@ export function CreateSessionForm() {
         throw new Error(result.error || 'Failed to create session')
       }
 
-      // Redirect to session management page
-      router.push(`/queue-master/sessions/${result.session?.id}`)
+      // Handle approval requirement
+      if (result.requiresApproval) {
+        alert('✅ Session created! It will be visible once the venue owner approves it. You\'ll be notified of their decision.')
+        router.push('/queue-master/sessions')
+      } else {
+        router.push(`/queue-master/sessions/${result.session?.id}`)
+      }
     } catch (err: any) {
       setError(err.message || 'An error occurred')
     } finally {

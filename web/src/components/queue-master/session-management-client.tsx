@@ -73,6 +73,8 @@ interface QueueSession {
   mode: string
   gameFormat: string
   players: Participant[]
+  requiresApproval?: boolean
+  approvalStatus?: string
 }
 
 export function SessionManagementClient({ sessionId }: SessionManagementClientProps) {
@@ -485,6 +487,24 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
           <ArrowLeft className="w-4 h-4" />
           <span>Back to Dashboard</span>
         </Link>
+
+        {/* Pending Approval Alert */}
+        {session.status === 'pending_approval' && (
+          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 rounded-r-lg">
+            <div className="flex items-start">
+              <Clock className="h-5 w-5 text-yellow-400 mt-0.5 mr-3 flex-shrink-0" />
+              <div>
+                <h3 className="text-sm font-medium text-yellow-800">
+                  Pending Venue Owner Approval
+                </h3>
+                <p className="mt-1 text-sm text-yellow-700">
+                  Your session is waiting for approval from the venue owner. 
+                  You'll be notified once a decision is made. Players cannot join until the session is approved.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="flex items-start justify-between">
           <div>

@@ -291,6 +291,7 @@ export async function recordMatchScore(
     teamAScore: number
     teamBScore: number
     winner: 'team_a' | 'team_b' | 'draw'
+    metadata?: any
   }
 ) {
   console.log('[recordMatchScore] 📊 Recording match score:', { matchId, scores })
@@ -351,15 +352,21 @@ export async function recordMatchScore(
     }
 
     // Update match with final scores
+    const updateData: any = {
+      score_a: scores.teamAScore,
+      score_b: scores.teamBScore,
+      winner: scores.winner,
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+    }
+
+    if (scores.metadata) {
+      updateData.metadata = scores.metadata
+    }
+
     const { error: updateMatchError } = await supabase
       .from('matches')
-      .update({
-        score_a: scores.teamAScore,
-        score_b: scores.teamBScore,
-        winner: scores.winner,
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', matchId)
 
     if (updateMatchError) {

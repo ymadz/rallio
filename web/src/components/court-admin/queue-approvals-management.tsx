@@ -18,8 +18,11 @@ import {
   Loader2,
   AlertCircle,
   Hourglass,
-  TrendingUp
+  TrendingUp,
+  MessageSquare,
+  X
 } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
 
 interface QueueApproval {
   id: string
@@ -43,10 +46,18 @@ interface QueueApproval {
 }
 
 export function QueueApprovalsManagement() {
+  const { toast } = useToast()
   const [approvals, setApprovals] = useState<QueueApproval[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [processingId, setProcessingId] = useState<string | null>(null)
+  
+  // Modal states
+  const [showApproveModal, setShowApproveModal] = useState(false)
+  const [showRejectModal, setShowRejectModal] = useState(false)
+  const [selectedSession, setSelectedSession] = useState<QueueApproval | null>(null)
+  const [approvalNotes, setApprovalNotes] = useState('')
+  const [rejectionReason, setRejectionReason] = useState('')
 
   useEffect(() => {
     loadApprovals()
@@ -68,40 +79,74 @@ export function QueueApprovalsManagement() {
     }
   }
 
-  const handleApprove = async (sessionId: string) => {
-    const notes = prompt('Optional approval notes (e.g., "Please arrive 10 minutes early"):')
+  const openApproveModal = (approval: QueueApproval) => {
+    setSelectedSession(approval)
+    setApprovalNotes('')
+    setShowApproveModal(true)
+  }
+
+  const openRejectModal = (approval: QueueApproval) => {
+    setSelectedSession(approval)
+    setRejectionReason('')
+    setShowRejectModal(true)
+  }
+
+  const handleApprove = async () => {
+    if (!selectedSession) return
     
-    setProcessingId(sessionId)
+    setProcessingId(selectedSession.id)
     try {
-      const result = await approveQueueSession(sessionId, notes || undefined)
+      const result = await approveQueueSession(selectedSession.id, approvalNotes || undefined)
       if (!result.success) {
         throw new Error(result.error)
       }
       // Remove from list
-      setApprovals(prev => prev.filter(a => a.id !== sessionId))
-      alert('Queue session approved successfully!')
+      setApprovals(prev => prev.filter(a => a.id !== selectedSession.id))
+      toast({
+        title: 'Session Approved',
+        description: `Queue session at ${selectedSession.courtName} has been approved. The organizer has been notified.`,
+      })
+      setShowApproveModal(false)
     } catch (err: any) {
-      alert(err.message || 'Failed to approve session')
+      toast({
+        title: 'Approval Failed',
+        description: err.message || 'Failed to approve session',
+        variant: 'destructive',
+      })
     } finally {
       setProcessingId(null)
     }
   }
 
-  const handleReject = async (sessionId: string) => {
-    const reason = prompt('Reason for rejection (required):')
-    if (!reason) return
+  const handleReject = async () => {
+    if (!selectedSession || !rejectionReason.trim()) {
+      toast({
+        title: 'Rejection Reason Required',
+        description: 'Please provide a reason for rejecting this session.',
+        variant: 'destructive',
+      })
+      return
+    }
 
-    setProcessingId(sessionId)
+    setProcessingId(selectedSession.id)
     try {
-      const result = await rejectQueueSession(sessionId, reason)
+      const result = await rejectQueueSession(selectedSession.id, rejectionReason)
       if (!result.success) {
         throw new Error(result.error)
       }
       // Remove from list
-      setApprovals(prev => prev.filter(a => a.id !== sessionId))
-      alert('Queue session rejected.')
+      setApprovals(prev => prev.filter(a => a.id !== selectedSession.id))
+      toast({
+        title: 'Session Rejected',
+        description: `Queue session at ${selectedSession.courtName} has been rejected. The organizer has been notified.`,
+      })
+      setShowRejectModal(false)
     } catch (err: any) {
-      alert(err.message || 'Failed to reject session')
+      toast({
+        title: 'Rejection Failed',
+        description: err.message || 'Failed to reject session',
+        variant: 'destructive',
+      })
     } finally {
       setProcessingId(null)
     }
@@ -243,33 +288,184 @@ export function QueueApprovalsManagement() {
 
                 <div className="flex gap-3 pt-4 border-t border-gray-200">
                   <button
-                    onClick={() => handleApprove(approval.id)}
+                    onClick={() => openApproveModal(approval)}
                     disabled={processingId === approval.id}
-                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    {processingId === approval.id ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <CheckCircle className="w-4 h-4" />
-                    )}
-                    Approve
+                    <CheckCircle className="w-5 h-5" />
+                    Approve Session
                   </button>
                   <button
-                    onClick={() => handleReject(approval.id)}
+                    onClick={() => openRejectModal(approval)}
                     disabled={processingId === approval.id}
-                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    {processingId === approval.id ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <XCircle className="w-4 h-4" />
-                    )}
-                    Reject
+                    <XCircle className="w-5 h-5" />
+                    Reject Session
                   </button>
                 </div>
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Approve Modal */}
+      {showApproveModal && selectedSession && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 mb-1">Approve Queue Session</h3>
+                <p className="text-sm text-gray-600">
+                  {selectedSession.venueName} - {selectedSession.courtName}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowApproveModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-start gap-3">
+                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-green-900 mb-1">
+                    This will make the session live and visible to players
+                  </p>
+                  <p className="text-sm text-green-700">
+                    The organizer will be notified immediately and players can start joining the queue.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <MessageSquare className="w-4 h-4 inline mr-1" />
+                Approval Notes (Optional)
+              </label>
+              <textarea
+                value={approvalNotes}
+                onChange={(e) => setApprovalNotes(e.target.value)}
+                placeholder="e.g., Please arrive 10 minutes early for setup..."
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                These notes will be sent to the organizer
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowApproveModal(false)}
+                className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApprove}
+                disabled={processingId === selectedSession.id}
+                className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {processingId === selectedSession.id ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Approving...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    Confirm Approval
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Modal */}
+      {showRejectModal && selectedSession && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 mb-1">Reject Queue Session</h3>
+                <p className="text-sm text-gray-600">
+                  {selectedSession.venueName} - {selectedSession.courtName}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowRejectModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-red-900 mb-1">
+                    This will cancel the session request
+                  </p>
+                  <p className="text-sm text-red-700">
+                    The organizer will be notified with your rejection reason. This action cannot be undone.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <MessageSquare className="w-4 h-4 inline mr-1" />
+                Rejection Reason <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="e.g., Court maintenance scheduled, conflicts with existing booking..."
+                rows={4}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                required
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                This reason will be sent to the organizer
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowRejectModal(false)}
+                className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReject}
+                disabled={processingId === selectedSession.id || !rejectionReason.trim()}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {processingId === selectedSession.id ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Rejecting...
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-4 h-4" />
+                    Confirm Rejection
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

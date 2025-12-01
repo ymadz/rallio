@@ -1,11 +1,16 @@
-import { Metadata } from 'next'
+'use client'
+
+import { useSearchParams } from 'next/navigation'
+import { VenueSelector } from '@/components/court-admin/venue-selector'
 import { AnalyticsDashboard } from '@/components/court-admin/analytics-dashboard'
 
-export const metadata: Metadata = {
-  title: 'Analytics | Court Admin',
-  description: 'View revenue analytics and insights',
-}
-
 export default function AnalyticsPage() {
-  return <AnalyticsDashboard />
+  const searchParams = useSearchParams()
+  const venueId = searchParams.get('venueId')
+
+  if (!venueId) {
+    return <VenueSelector message="Select a venue to view analytics" />
+  }
+
+  return <AnalyticsDashboard venueId={venueId} />
 }

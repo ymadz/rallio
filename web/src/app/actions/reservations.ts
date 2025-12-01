@@ -66,30 +66,52 @@ export async function getAvailableTimeSlotsAction(
     })
   }
 
-  // Get existing reservations for this court on this date
-  // Query for the entire day range to catch any overlapping reservations
+  // Get existing reservations AND queue sessions for this court on this date
+  // Query for the entire day range to catch any overlapping bookings
   const dateOnlyString = format(date, 'yyyy-MM-dd')
   const activeStatuses = ['pending_payment', 'pending', 'paid', 'confirmed']
 
-  const { data: reservations, error: reservationsError } = await supabase
-    .from('reservations')
-    .select('start_time, end_time, status')
-    .eq('court_id', courtId)
-    // Use overlapping range query to catch any reservation that spans into this date
-    .gte('end_time', `${dateOnlyString}T00:00:00`)
-    .lt('start_time', `${dateOnlyString}T23:59:59`)
-    .in('status', activeStatuses)
+  const [reservationsResult, queueSessionsResult] = await Promise.all([
+    // Get reservations
+    supabase
+      .from('reservations')
+      .select('start_time, end_time, status')
+      .eq('court_id', courtId)
+      .gte('end_time', `${dateOnlyString}T00:00:00`)
+      .lt('start_time', `${dateOnlyString}T23:59:59`)
+      .in('status', activeStatuses),
 
-  if (reservationsError) {
-    console.error('Error fetching reservations:', reservationsError)
+    // Get queue sessions
+    supabase
+      .from('queue_sessions')
+      .select('start_time, end_time, status, approval_status')
+      .eq('court_id', courtId)
+      .gte('end_time', `${dateOnlyString}T00:00:00`)
+      .lt('start_time', `${dateOnlyString}T23:59:59`)
+      .in('status', ['draft', 'active', 'pending_approval'])
+      .in('approval_status', ['pending', 'approved'])
+  ])
+
+  if (reservationsResult.error) {
+    console.error('Error fetching reservations:', reservationsResult.error)
   }
 
-  console.log(`[Availability Check] Court: ${courtId}, Date: ${dateOnlyString}`)
-  console.log(`[Availability Check] Found ${reservations?.length || 0} reservations:`, reservations)
+  if (queueSessionsResult.error) {
+    console.error('Error fetching queue sessions:', queueSessionsResult.error)
+  }
 
-  // Mark unavailable slots based on existing reservations
-  if (reservations && reservations.length > 0) {
-    for (const reservation of reservations) {
+  // Combine both reservations and queue sessions into a single list
+  const reservations = reservationsResult.data || []
+  const queueSessions = queueSessionsResult.data || []
+  const allBookedSlots = [...reservations, ...queueSessions]
+
+  console.log(`[Availability Check] Court: ${courtId}, Date: ${dateOnlyString}`)
+  console.log(`[Availability Check] Found ${reservations.length} reservations and ${queueSessions.length} queue sessions`)
+  console.log(`[Availability Check] Total booked slots: ${allBookedSlots.length}`)
+
+  // Mark unavailable slots based on existing reservations AND queue sessions
+  if (allBookedSlots && allBookedSlots.length > 0) {
+    for (const reservation of allBookedSlots) {
       try {
         // Parse ISO timestamps to get local hours
         const startTime = new Date(reservation.start_time)
@@ -193,24 +215,55 @@ export async function createReservationAction(data: {
     statuses: conflictStatuses
   })
 
-  // Check for conflicts - a reservation conflicts if:
-  // 1. It's for the same court
-  // 2. It's in pending or confirmed status
-  // 3. The time ranges overlap (start_time < our_end AND end_time > our_start)
-  const { data: conflicts, error: conflictError } = await supabase
-    .from('reservations')
-    .select('id, start_time, end_time, status, user_id, created_at')
-    .eq('court_id', data.courtId)
-    .in('status', conflictStatuses)
-    .lt('start_time', endTimeISO)
-    .gt('end_time', startTimeISO)
+  // Check for conflicts in BOTH reservations AND queue_sessions
+  // A conflict exists if the time ranges overlap for the same court
+  const [reservationConflicts, queueConflicts] = await Promise.all([
+    // Check reservation conflicts
+    supabase
+      .from('reservations')
+      .select('id, start_time, end_time, status, user_id, created_at')
+      .eq('court_id', data.courtId)
+      .in('status', conflictStatuses)
+      .lt('start_time', endTimeISO)
+      .gt('end_time', startTimeISO),
 
-  if (conflictError) {
-    console.error('Error checking for conflicts:', conflictError)
+    // Check queue session conflicts
+    supabase
+      .from('queue_sessions')
+      .select('id, start_time, end_time, status, approval_status')
+      .eq('court_id', data.courtId)
+      .in('status', ['draft', 'active', 'pending_approval'])
+      .in('approval_status', ['pending', 'approved'])
+      .lt('start_time', endTimeISO)
+      .gt('end_time', startTimeISO)
+  ])
+
+  if (reservationConflicts.error) {
+    console.error('Error checking for reservation conflicts:', reservationConflicts.error)
     // Continue anyway - better to attempt creation than block user
   }
 
-  console.log('Found potential conflicts:', conflicts)
+  if (queueConflicts.error) {
+    console.error('Error checking for queue conflicts:', queueConflicts.error)
+  }
+
+  console.log('Found potential reservation conflicts:', reservationConflicts.data)
+  console.log('Found potential queue session conflicts:', queueConflicts.data)
+
+  // Check for queue session conflicts first (hard block)
+  if (queueConflicts.data && queueConflicts.data.length > 0) {
+    const queueSession = queueConflicts.data[0]
+    const queueStart = new Date(queueSession.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    const queueEnd = new Date(queueSession.end_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+
+    console.warn('⚠️ Queue session conflict detected:', queueSession)
+    return {
+      success: false,
+      error: `This time slot is reserved for a queue session (${queueStart} - ${queueEnd}). Please choose a different time.`,
+    }
+  }
+
+  const conflicts = reservationConflicts.data
 
   // Filter out conflicts that are:
   // - Very recent (< 2 minutes old) pending reservations from the same user

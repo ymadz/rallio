@@ -403,34 +403,76 @@
 
 ---
 
-## Phase 6: Admin Dashboards
+## Phase 6: Admin Dashboards - 60% COMPLETE 🚧
 
-### Court Admin Dashboard
-- [ ] Create dashboard layout
-- [ ] Build reservation calendar view
-- [ ] Implement booking approval flow
-- [ ] Create pricing management UI
-- [ ] Add operating hours configuration
-- [ ] Build revenue reports
-- [ ] Show booking analytics
-- [ ] Implement court status management
+### Court Admin Dashboard ✅ MOSTLY COMPLETE (Dec 2025)
+- [x] Create dashboard layout
+  - ✅ Court Admin sidebar with navigation
+  - ✅ Header with notification bell
+  - ✅ Mobile bottom navigation
+- [x] Build reservation calendar view (integrated into reservations page)
+- [x] Implement booking approval flow (approve/reject server actions)
+- [x] Create pricing management UI
+  - ✅ Discount rules management
+  - ✅ Holiday pricing
+  - ✅ Multi-day discounts
+  - ✅ Early bird pricing
+- [x] Add operating hours configuration (in availability management)
+- [x] Build revenue reports (in analytics dashboard)
+- [x] Show booking analytics
+  - ✅ Revenue charts
+  - ✅ Booking statistics
+  - ✅ Court performance metrics
+  - ✅ Peak hours analysis
+- [x] Implement court status management (in venue/court pages)
+- [x] Create venue management UI
+  - ✅ Venue list, create, edit, delete
+  - ✅ Court list, create, edit, delete
+  - ✅ Image uploads
+  - ✅ Amenity management
+- [x] Create availability management page
+  - ✅ Operating hours configuration
+  - ✅ Blocked dates management (using dedicated table)
+  - ✅ Holiday blocking
+- [x] Create reviews management page
+  - ✅ Review list with filtering
+  - ✅ Respond to reviews
+  - ✅ Rating analytics
+- [x] Implement queue approval workflow
+  - ✅ Pending queue approvals list
+  - ✅ Approve/reject actions
+  - ✅ Automatic notifications
+  - ✅ 48-hour expiration
 
-### Dynamic Pricing
-- [ ] Create pricing rule builder
-- [ ] Implement peak/off-peak pricing
-- [ ] Add holiday surcharge configuration
-- [ ] Create multi-day discount settings
-- [ ] Implement promo code management
-- [ ] Build early bird discount settings
+### Multi-Venue Support ✅ COMPLETE (Dec 1, 2025)
+- [x] Create VenueSelector component
+  - ✅ Dropdown for venue selection
+  - ✅ Auto-selection for single venue owners
+  - ✅ Empty state with CTA
+  - ✅ URL param-based filtering
+- [x] Apply VenueSelector to all venue-scoped pages
+  - ✅ Analytics page
+  - ✅ Pricing page
+  - ✅ Availability page
+  - ✅ Reviews page
+- [x] Create testing documentation (31 test cases in TESTING-PHASE-1-2.md)
 
-### Queue Master Dashboard
-- [ ] Create session management view
-- [ ] Build player management interface
+### Dynamic Pricing ✅ COMPLETE
+- [x] Create pricing rule builder
+- [x] Implement peak/off-peak pricing
+- [x] Add holiday surcharge configuration
+- [x] Create multi-day discount settings
+- [x] Build early bird discount settings
+- [ ] Implement promo code management (partial - needs completion)
+
+### Queue Master Dashboard 🚧 40% COMPLETE
+- [x] Create session management view (basic)
+- [x] Build player management interface (basic)
 - [ ] Implement dispute resolution UI
-- [ ] Create game history viewer
+- [ ] Create game history viewer (exists but needs improvements)
 - [ ] Build session analytics
 
-### Global Admin Dashboard
+### Global Admin Dashboard ⏳ PENDING
 - [ ] Create platform overview dashboard
 - [ ] Build user management interface
 - [ ] Implement venue approval flow
@@ -438,18 +480,70 @@
 - [ ] Build platform analytics
 - [ ] Implement system configuration UI
 
+### Database Migrations (Court Admin)
+- [x] Migration 012: Queue session approval workflow ✅
+- [x] Migration 013: Queue approval RLS policies ✅
+- [x] Migration 014: Blocked dates table ✅
+- [x] Migration 015: Discount fields to reservations ✅
+
 ---
 
-## Phase 7: Notifications
+## Phase 7: Notifications - 40% COMPLETE 🚧
 
-### Push Notifications
+### In-App Notifications ✅ COMPLETE (Dec 1, 2025)
+- [x] Create notification types and interfaces (`/types/notifications.ts`)
+- [x] Create notification server actions (`/app/actions/notification-actions.ts`)
+  - ✅ getNotifications()
+  - ✅ getUnreadCount()
+  - ✅ markNotificationAsRead()
+  - ✅ markAllNotificationsAsRead()
+  - ✅ deleteNotification()
+- [x] Create useNotifications hook (`/hooks/useNotifications.ts`)
+  - ✅ Real-time Supabase subscriptions (INSERT, UPDATE, DELETE)
+  - ✅ Auto-fetch on mount
+  - ✅ Optimistic updates
+- [x] Create NotificationBell component
+  - ✅ Bell icon with unread badge
+  - ✅ Click to open/close dropdown
+  - ✅ Click-outside-to-close functionality
+- [x] Create NotificationList component
+  - ✅ Scrollable list (max 600px)
+  - ✅ "Mark all read" button
+  - ✅ Empty state
+  - ✅ Loading state
+- [x] Create NotificationItem component
+  - ✅ Type-based icons and colors
+  - ✅ Relative time formatting (date-fns)
+  - ✅ Click to mark as read and navigate
+  - ✅ Visual unread indicator
+- [x] Integrate with Court Admin layout header
+- [x] Implement notification badge (unread count)
+- [x] Create notification list view (dropdown)
+- [x] Add mark as read functionality (single and bulk)
+- [x] Implement real-time updates (Supabase subscriptions)
+- [x] Create testing documentation (24 test cases in TESTING-PHASE-1-2.md)
+
+### Queue Approval Notifications ✅ COMPLETE (Migration 012)
+- [x] Database triggers for queue approval workflow
+  - ✅ notify_court_admin_new_queue_approval() - Notifies Court Admin
+  - ✅ notify_organizer_approval_decision() - Notifies organizer
+  - ✅ Automatic notifications on INSERT/UPDATE
+- [x] Notification types:
+  - ✅ queue_approval_request
+  - ✅ queue_approval_approved
+  - ✅ queue_approval_rejected
+- [x] Action URLs for navigation
+  - ✅ `/court-admin/approvals/{id}` for Court Admin
+  - ✅ `/queue/{id}` for organizer
+
+### Push Notifications ⏳ PENDING
 - [ ] Set up Firebase Cloud Messaging
 - [ ] Implement notification sending service
 - [ ] Create notification preferences UI
 - [ ] Handle notification permissions
 - [ ] Implement deep linking from notifications
 
-### Email Notifications
+### Email Notifications ⏳ PENDING
 - [ ] Set up SendGrid account
 - [ ] Create email templates
 - [ ] Implement booking confirmation emails
@@ -457,12 +551,14 @@
 - [ ] Implement reminder emails
 - [ ] Create queue turn notifications
 
-### In-App Notifications
-- [ ] Create notification center UI
-- [ ] Implement notification badge
-- [ ] Create notification list view
-- [ ] Add mark as read functionality
-- [ ] Implement notification filtering
+### Notification System Features
+- [x] Notification filtering (by type - client-side)
+- [ ] Notification pagination (currently loads max 50)
+- [ ] Delete individual notifications (server action exists, UI missing)
+- [ ] Notification preferences (opt-in/opt-out)
+- [ ] Notification grouping ("5 new reservations")
+- [ ] Notification sounds/vibrations
+- [ ] Email digests for unread notifications
 
 ---
 

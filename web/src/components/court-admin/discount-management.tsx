@@ -115,9 +115,9 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
         discount_type: rule.discount_type,
         discount_value: rule.discount_value,
         discount_unit: rule.discount_unit,
-        min_days: rule.min_days,
-        min_players: rule.min_players,
-        advance_days: rule.advance_days,
+        min_days: rule.min_days ?? null,
+        min_players: rule.min_players ?? null,
+        advance_days: rule.advance_days ?? null,
         is_active: rule.is_active,
         priority: rule.priority,
         valid_from: rule.valid_from,
@@ -449,7 +449,7 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
                       <div className="flex items-center gap-2">
                         <Switch
                           checked={rule.is_active}
-                          onCheckedChange={(checked) => handleToggleRule(rule.id, checked)}
+                          onCheckedChange={(checked: boolean) => handleToggleRule(rule.id, checked)}
                         />
                         <Button
                           variant="ghost"
@@ -561,7 +561,7 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
                         <div className="flex items-center gap-2">
                           <Switch
                             checked={holiday.is_active}
-                            onCheckedChange={(checked) => handleToggleHoliday(holiday.id, checked)}
+                            onCheckedChange={(checked: boolean) => handleToggleHoliday(holiday.id, checked)}
                           />
                           <Button
                             variant="ghost"
@@ -641,7 +641,7 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
                 <Label htmlFor="rule-type">Discount Type *</Label>
                 <Select
                   value={ruleForm.discount_type}
-                  onValueChange={(value) =>
+                  onValueChange={(value: string) =>
                     setRuleForm({ ...ruleForm, discount_type: value as DiscountType })
                   }
                 >
@@ -686,7 +686,7 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
                 <Label htmlFor="discount-unit">Unit *</Label>
                 <Select
                   value={ruleForm.discount_unit}
-                  onValueChange={(value) =>
+                  onValueChange={(value: string) =>
                     setRuleForm({ ...ruleForm, discount_unit: value as 'percent' | 'fixed' })
                   }
                 >
@@ -793,7 +793,7 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
               <Switch
                 id="rule-active"
                 checked={ruleForm.is_active}
-                onCheckedChange={(checked) => setRuleForm({ ...ruleForm, is_active: checked })}
+                onCheckedChange={(checked: boolean) => setRuleForm({ ...ruleForm, is_active: checked })}
               />
               <Label htmlFor="rule-active">Active</Label>
             </div>
@@ -901,7 +901,7 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
               <Switch
                 id="holiday-active"
                 checked={holidayForm.is_active}
-                onCheckedChange={(checked) =>
+                onCheckedChange={(checked: boolean) =>
                   setHolidayForm({ ...holidayForm, is_active: checked })
                 }
               />

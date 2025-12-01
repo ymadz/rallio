@@ -41,7 +41,6 @@ export function QueueMasterSidebar({ user }: QueueMasterSidebarProps) {
     { href: '/queue-master', label: 'Dashboard', icon: LayoutDashboard, exact: true },
     { href: '/queue-master/create', label: 'Create Session', icon: Calendar },
     { href: '/queue-master/analytics', label: 'Analytics', icon: BarChart3 },
-    { href: '/queue', label: 'Back to Player View', icon: ArrowLeft, isExternal: true },
   ]
 
   return (
@@ -59,8 +58,8 @@ export function QueueMasterSidebar({ user }: QueueMasterSidebarProps) {
             isExpanded ? "w-64" : "w-20"
           )}
         >
-          {/* Logo & Badge */}
-          <div className="px-4 py-6">
+          {/* Logo */}
+          <div className="px-4 py-6 flex justify-center">
             <Link href="/queue-master" className="flex items-center gap-2">
               <img
                 src="/logo.svg"
@@ -68,12 +67,9 @@ export function QueueMasterSidebar({ user }: QueueMasterSidebarProps) {
                 className="w-10 h-10 flex-shrink-0 brightness-0 invert"
               />
               {isExpanded && (
-                <div>
-                  <span className="text-xl font-bold text-white tracking-wider whitespace-nowrap block">
-                    RALLIO
-                  </span>
-                  <span className="text-white/80 text-xs font-medium">Queue Master</span>
-                </div>
+                <span className="text-xl font-bold text-white tracking-wider whitespace-nowrap">
+                  RALLIO
+                </span>
               )}
             </Link>
           </div>
@@ -82,21 +78,20 @@ export function QueueMasterSidebar({ user }: QueueMasterSidebarProps) {
           <nav className="flex-1 px-3 space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon
-              const isActive = item.exact 
-                ? pathname === item.href 
+              const isActive = item.exact
+                ? pathname === item.href
                 : pathname.startsWith(item.href)
-              
+
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    'flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-all',
+                    'flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors',
                     isExpanded ? '' : 'justify-center',
                     isActive
-                      ? 'bg-white/20 text-white shadow-lg backdrop-blur-sm'
-                      : 'text-white/80 hover:bg-white/10 hover:text-white',
-                    item.isExternal && 'mt-4 border-t border-white/20 pt-4'
+                      ? 'bg-white/20 text-white'
+                      : 'text-white/80 hover:bg-white/10 hover:text-white'
                   )}
                   title={!isExpanded ? item.label : undefined}
                 >
@@ -111,101 +106,70 @@ export function QueueMasterSidebar({ user }: QueueMasterSidebarProps) {
 
           {/* Bottom Actions */}
           <div className="px-3 py-4 border-t border-white/20 space-y-1">
-            {/* User Profile */}
+            {/* Back to Player View */}
             <Link
-              href="/profile"
+              href="/queue"
               className={cn(
-                'flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors text-white/80 hover:bg-white/10 hover:text-white',
+                'flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors bg-white/5 text-white/90 hover:bg-white/10',
                 isExpanded ? '' : 'justify-center'
               )}
-              title={!isExpanded ? 'Profile' : undefined}
+              title={!isExpanded ? 'Back to Player View' : undefined}
             >
-              {user.avatarUrl ? (
-                <img
-                  src={user.avatarUrl}
-                  alt={user.displayName || 'User'}
-                  className="w-5 h-5 rounded-full flex-shrink-0"
-                />
-              ) : (
-                <User className="w-5 h-5 flex-shrink-0" />
-              )}
-              {isExpanded && (
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-white truncate">
-                    {user.displayName || 'Profile'}
-                  </div>
-                  <div className="text-xs text-white/60 truncate">
-                    {user.email}
-                  </div>
-                </div>
-              )}
+              <ArrowLeft className="w-5 h-5 flex-shrink-0" />
+              {isExpanded && <span>Back to Player View</span>}
             </Link>
 
-            {/* Sign Out */}
+            {/* Settings */}
+            <Link
+              href="/settings"
+              className={cn(
+                'flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white transition-colors',
+                isExpanded ? '' : 'justify-center'
+              )}
+              title={!isExpanded ? 'Settings' : undefined}
+            >
+              <Settings className="w-5 h-5 flex-shrink-0" />
+              {isExpanded && <span>Settings</span>}
+            </Link>
+
+            {/* Logout */}
             <button
               onClick={handleSignOut}
               className={cn(
-                'w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors text-white/80 hover:bg-white/10 hover:text-white',
+                'flex items-center gap-3 px-3 py-3 w-full rounded-lg text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white transition-colors',
                 isExpanded ? '' : 'justify-center'
               )}
-              title={!isExpanded ? 'Sign Out' : undefined}
+              title={!isExpanded ? 'Logout' : undefined}
             >
               <LogOut className="w-5 h-5 flex-shrink-0" />
-              {isExpanded && <span className="whitespace-nowrap">Sign Out</span>}
+              {isExpanded && <span>Logout</span>}
             </button>
           </div>
         </div>
       </aside>
 
-      {/* Mobile Bottom Nav */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-gradient-to-r from-primary to-primary/90 border-t border-primary-dark shadow-2xl z-50 backdrop-blur-lg">
-        <div className="grid grid-cols-4 gap-1 px-2 py-2">
-          {navItems.slice(0, 3).map((item) => {
+      {/* Mobile Bottom Navigation */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-gradient-to-r from-primary to-primary/90 border-t border-primary-dark z-50">
+        <div className="flex items-center justify-around h-16 px-2">
+          {navItems.map((item) => {
             const Icon = item.icon
-            const isActive = item.exact 
-              ? pathname === item.href 
+            const isActive = item.exact
+              ? pathname === item.href
               : pathname.startsWith(item.href)
-
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-lg text-xs font-medium transition-colors',
-                  isActive
-                    ? 'bg-white/20 text-white'
-                    : 'text-white/80 hover:bg-white/10 hover:text-white'
+                  'flex flex-col items-center gap-1 px-2 py-2 rounded-lg transition-colors',
+                  isActive ? 'text-white' : 'text-white/70 hover:text-white'
                 )}
               >
                 <Icon className="w-5 h-5" />
-                <span className="truncate max-w-full text-[10px]">
-                  {item.label.replace('Create ', '')}
-                </span>
+                <span className="text-[10px] font-medium">{item.label}</span>
               </Link>
             )
           })}
-          
-          {/* Profile button on mobile */}
-          <Link
-            href="/profile"
-            className={cn(
-              'flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-lg text-xs font-medium transition-colors',
-              pathname === '/profile'
-                ? 'bg-white/20 text-white'
-                : 'text-white/80 hover:bg-white/10 hover:text-white'
-            )}
-          >
-            {user.avatarUrl ? (
-              <img
-                src={user.avatarUrl}
-                alt="Profile"
-                className="w-5 h-5 rounded-full"
-              />
-            ) : (
-              <User className="w-5 h-5" />
-            )}
-            <span className="text-[10px]">Profile</span>
-          </Link>
         </div>
       </nav>
     </>

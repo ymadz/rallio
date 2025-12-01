@@ -59,10 +59,6 @@ export async function getPendingQueueApprovals() {
           first_name,
           last_name,
           avatar_url
-        ),
-        player:players!inner(
-          skill_level,
-          rating
         )
       `)
       .in('court_id', courtIds)
@@ -75,31 +71,45 @@ export async function getPendingQueueApprovals() {
     // Filter to only sessions for venues owned by this user
     const approvals = pendingSessions?.filter((session: any) =>
       session.court?.venue?.owner_id === user.id
-    ).map((session: any) => ({
-      id: session.id,
-      courtId: session.court_id,
-      courtName: session.court?.name,
-      venueId: session.court?.venue?.id,
-      venueName: session.court?.venue?.name,
-      organizerId: session.organizer_id,
-      organizerName: session.organizer?.display_name ||
-        `${session.organizer?.first_name || ''} ${session.organizer?.last_name || ''}`.trim(),
-      organizerAvatar: session.organizer?.avatar_url,
-      organizerSkillLevel: session.player?.skill_level,
-      organizerRating: session.player?.rating,
-      startTime: session.start_time,
-      endTime: session.end_time,
-      mode: session.mode,
-      gameFormat: session.game_format,
-      maxPlayers: session.max_players,
-      costPerGame: session.cost_per_game,
-      isPublic: session.is_public,
-      settings: session.settings,
-      approvalExpiresAt: session.approval_expires_at,
-      createdAt: session.created_at,
-    })) || []
+    ) || []
 
-    return { success: true, approvals }
+    // Fetch player data for each organizer
+    const approvalsWithPlayerData = await Promise.all(
+      approvals.map(async (session: any) => {
+        // Try to get player data for the organizer
+        const { data: playerData } = await supabase
+          .from('players')
+          .select('skill_level, rating')
+          .eq('user_id', session.organizer_id)
+          .single()
+
+        return {
+          id: session.id,
+          courtId: session.court_id,
+          courtName: session.court?.name,
+          venueId: session.court?.venue?.id,
+          venueName: session.court?.venue?.name,
+          organizerId: session.organizer_id,
+          organizerName: session.organizer?.display_name ||
+            `${session.organizer?.first_name || ''} ${session.organizer?.last_name || ''}`.trim(),
+          organizerAvatar: session.organizer?.avatar_url,
+          organizerSkillLevel: playerData?.skill_level,
+          organizerRating: playerData?.rating,
+          startTime: session.start_time,
+          endTime: session.end_time,
+          mode: session.mode,
+          gameFormat: session.game_format,
+          maxPlayers: session.max_players,
+          costPerGame: session.cost_per_game,
+          isPublic: session.is_public,
+          settings: session.settings,
+          approvalExpiresAt: session.approval_expires_at,
+          createdAt: session.created_at,
+        }
+      })
+    )
+
+    return { success: true, approvals: approvalsWithPlayerData }
   } catch (error: any) {
     console.error('Error fetching pending queue approvals:', error)
     return { success: false, error: error.message }
@@ -139,12 +149,6 @@ export async function getQueueSessionForApproval(sessionId: string) {
           last_name,
           avatar_url,
           phone
-        ),
-        player:players!inner(
-          skill_level,
-          rating,
-          total_games_played,
-          verified_player
         )
       `)
       .eq('id', sessionId)

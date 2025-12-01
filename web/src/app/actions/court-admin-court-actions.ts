@@ -104,7 +104,7 @@ export async function getCourtById(courtId: string) {
     if (error) throw error
 
     // Verify ownership
-    if (court.venue.owner_id !== user.id) {
+    if ((court.venue as any).owner_id !== user.id) {
       return { success: false, error: 'Unauthorized - You do not own this court' }
     }
 
@@ -224,7 +224,7 @@ export async function updateCourt(courtId: string, updates: {
       .eq('id', courtId)
       .single()
 
-    if (!court || court.venue.owner_id !== user.id) {
+    if (!court || (court.venue as any).owner_id !== user.id) {
       return { success: false, error: 'Unauthorized - You do not own this court' }
     }
 
@@ -299,7 +299,7 @@ export async function deleteCourt(courtId: string) {
       .eq('id', courtId)
       .single()
 
-    if (!court || court.venue.owner_id !== user.id) {
+    if (!court || (court.venue as any).owner_id !== user.id) {
       return { success: false, error: 'Unauthorized - You do not own this court' }
     }
 
@@ -365,7 +365,7 @@ export async function updateCourtPricing(courtId: string, hourlyRate: number) {
       .eq('id', courtId)
       .single()
 
-    if (!court || court.venue.owner_id !== user.id) {
+    if (!court || (court.venue as any).owner_id !== user.id) {
       return { success: false, error: 'Unauthorized - You do not own this court' }
     }
 

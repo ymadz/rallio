@@ -89,7 +89,7 @@ export async function getVenueAnalytics(
     const averageBookingValue = confirmedBookings > 0 ? totalRevenue / confirmedBookings : 0
 
     // Calculate utilization rate (hours booked / total available hours)
-    const totalHoursInPeriod = courts.length * 24 * Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+    const totalHoursInPeriod = (courts?.length || 0) * 24 * Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
     const bookedHours = reservations
       ?.filter(r => r.status === 'confirmed' || r.status === 'completed')
       .reduce((sum, r) => {

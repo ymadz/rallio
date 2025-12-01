@@ -1,11 +1,16 @@
-import { Metadata } from 'next'
+'use client'
+
+import { useSearchParams } from 'next/navigation'
+import { VenueSelector } from '@/components/court-admin/venue-selector'
 import { ReviewsManagement } from '@/components/court-admin/reviews-management'
 
-export const metadata: Metadata = {
-  title: 'Reviews | Court Admin',
-  description: 'Manage and respond to customer reviews',
-}
-
 export default function ReviewsPage() {
-  return <ReviewsManagement />
+  const searchParams = useSearchParams()
+  const venueId = searchParams.get('venueId')
+
+  if (!venueId) {
+    return <VenueSelector message="Select a venue to manage reviews" />
+  }
+
+  return <ReviewsManagement venueId={venueId} />
 }

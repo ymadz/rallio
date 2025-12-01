@@ -159,7 +159,7 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
           <Select
             label="Select Court"
             value={courtId}
-            onChange={(e) => setCourtId(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setCourtId(e.target.value)}
             required
           >
             {courts.map((court) => (
@@ -217,7 +217,7 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
             <Select
               id="duration"
               value={duration.toString()}
-              onChange={(e) => setDuration(parseInt(e.target.value))}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setDuration(parseInt(e.target.value))}
               required
             >
               {[1, 2, 3, 4].map((hours) => (

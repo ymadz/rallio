@@ -60,7 +60,7 @@ export function AnalyticsDashboard({ venueId }: AnalyticsDashboardProps) {
         setAnalytics(analyticsResult.analytics)
       }
       if (courtResult.success) {
-        setCourtPerformance(courtResult.courts || [])
+        setCourtPerformance(courtResult.performance || [])
       }
       if (peakResult.success) {
         setPeakHours(peakResult.peakHours || [])

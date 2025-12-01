@@ -1,11 +1,16 @@
-import { Metadata } from 'next'
+'use client'
+
+import { useSearchParams } from 'next/navigation'
+import { VenueSelector } from '@/components/court-admin/venue-selector'
 import { PricingManagement } from '@/components/court-admin/pricing-management'
 
-export const metadata: Metadata = {
-  title: 'Pricing | Court Admin',
-  description: 'Manage court pricing and rates',
-}
-
 export default function PricingPage() {
-  return <PricingManagement />
+  const searchParams = useSearchParams()
+  const venueId = searchParams.get('venueId')
+
+  if (!venueId) {
+    return <VenueSelector message="Select a venue to manage pricing" />
+  }
+
+  return <PricingManagement venueId={venueId} />
 }
