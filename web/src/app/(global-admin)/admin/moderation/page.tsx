@@ -1,4 +1,5 @@
 import { Metadata } from 'next'
+import ModerationDashboard from '@/components/global-admin/moderation-dashboard'
 
 export const metadata: Metadata = {
   title: 'Content Moderation | Admin',
@@ -6,10 +7,5 @@ export const metadata: Metadata = {
 }
 
 export default function ModerationPage() {
-  return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Content Moderation</h1>
-      <p className="text-gray-600">Coming soon...</p>
-    </div>
-  )
+  return <ModerationDashboard />
 }
