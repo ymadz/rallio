@@ -283,6 +283,19 @@ export function ReviewsSection({ courtIds, venueName, firstCourtName }: ReviewsS
               <span className="text-xs text-gray-600">Facilities</span>
               <span className="text-xs font-semibold text-gray-900">{stats.averageFacilities.toFixed(1)}</span>
             </div>
+            <div className="flex items-center gap-1">
+              {renderStars(stats.averageFacilities, 'sm')}
+            </div>
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-gray-600">Value</span>
+              <span className="text-xs font-semibold text-gray-900">{stats.averageValue.toFixed(1)}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              {renderStars(stats.averageValue, 'sm')}
+            </div>
+          </div>
         </div>
 
         {/* Rating Distribution */}
@@ -380,46 +393,46 @@ export function ReviewsSection({ courtIds, venueName, firstCourtName }: ReviewsS
             <div key={review.id} className="border border-gray-200 rounded-xl p-4">
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
-                {review.user.avatar_url ? (
-                  <img src={review.user.avatar_url} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                )}
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-1">
-                  <h4 className="font-medium text-gray-900 text-sm">{review.user.display_name}</h4>
-                  <span className="text-xs text-gray-400">{formatDate(review.created_at)}</span>
+                  {review.user.avatar_url ? (
+                    <img src={review.user.avatar_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  )}
                 </div>
 
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="flex items-center">
-                    {renderStars(review.overall_rating, 'sm')}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <h4 className="font-medium text-gray-900 text-sm">{review.user.display_name}</h4>
+                    <span className="text-xs text-gray-400">{formatDate(review.created_at)}</span>
                   </div>
-                  <span className="text-xs font-semibold text-gray-700">{review.overall_rating.toFixed(1)}</span>
-                </div>
 
-                {review.review && (
-                  <p className="text-sm text-gray-600 leading-relaxed mb-3">{review.review}</p>
-                )}
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center">
+                      {renderStars(review.overall_rating, 'sm')}
+                    </div>
+                    <span className="text-xs font-semibold text-gray-700">{review.overall_rating.toFixed(1)}</span>
+                  </div>
 
-                {/* Detailed Ratings */}
-                <div className="flex flex-wrap gap-2 text-xs">
-                  <span className="px-2 py-1 bg-gray-50 text-gray-600 rounded">
-                    Quality: {review.quality_rating}/5
-                  </span>
-                  <span className="px-2 py-1 bg-gray-50 text-gray-600 rounded">
-                    Cleanliness: {review.cleanliness_rating}/5
-                  </span>
-                  <span className="px-2 py-1 bg-gray-50 text-gray-600 rounded">
-                    Facilities: {review.facilities_rating}/5
-                  </span>
-                  <span className="px-2 py-1 bg-gray-50 text-gray-600 rounded">
-                    Value: {review.value_rating}/5
-                  </span>
+                  {review.review && (
+                    <p className="text-sm text-gray-600 leading-relaxed mb-3">{review.review}</p>
+                  )}
+
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <span className="px-2 py-1 bg-gray-50 text-gray-600 rounded">
+                      Quality: {review.quality_rating}/5
+                    </span>
+                    <span className="px-2 py-1 bg-gray-50 text-gray-600 rounded">
+                      Cleanliness: {review.cleanliness_rating}/5
+                    </span>
+                    <span className="px-2 py-1 bg-gray-50 text-gray-600 rounded">
+                      Facilities: {review.facilities_rating}/5
+                    </span>
+                    <span className="px-2 py-1 bg-gray-50 text-gray-600 rounded">
+                      Value: {review.value_rating}/5
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
