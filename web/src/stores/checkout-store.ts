@@ -201,7 +201,15 @@ export const useCheckoutStore = create<CheckoutState>()(
       // Computed values
       getSubtotal: () => {
         const state = get()
-        const baseRate = state.bookingData?.hourlyRate || 0
+        const bookingData = state.bookingData
+        if (!bookingData) return 0
+        
+        // Calculate duration in hours from startTime and endTime
+        const startHour = parseInt(bookingData.startTime.split(':')[0])
+        const endHour = parseInt(bookingData.endTime.split(':')[0])
+        const duration = endHour - startHour
+        
+        const baseRate = bookingData.hourlyRate * duration
         // Apply discount to subtotal
         return Math.max(0, baseRate - state.discountAmount)
       },

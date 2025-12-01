@@ -22,6 +22,7 @@ export default function CheckoutPage() {
     playerCount,
     setCurrentStep,
     resetCheckout,
+    getSubtotal,
   } = useCheckoutStore()
 
   // Redirect if no booking data
@@ -38,6 +39,12 @@ export default function CheckoutPage() {
       </div>
     )
   }
+
+  // Calculate duration from startTime and endTime
+  const startHour = parseInt(bookingData.startTime.split(':')[0])
+  const endHour = parseInt(bookingData.endTime.split(':')[0])
+  const duration = endHour - startHour
+  const totalBookingFee = getSubtotal() // This now includes duration
 
   const handleCancel = () => {
     if (confirm('Are you sure you want to cancel this booking?')) {
@@ -148,9 +155,17 @@ export default function CheckoutPage() {
                       <span className="text-gray-600">Players Allowed to Play:</span>
                       <span className="font-medium text-gray-900">{bookingData.capacity}</span>
                     </div>
+                    <div className="flex justify-between py-3 border-b border-gray-100">
+                      <span className="text-gray-600">Duration:</span>
+                      <span className="font-medium text-gray-900">{duration} {duration === 1 ? 'hour' : 'hours'}</span>
+                    </div>
+                    <div className="flex justify-between py-3 border-b border-gray-100">
+                      <span className="text-gray-600">Hourly Rate:</span>
+                      <span className="font-medium text-gray-900">₱{bookingData.hourlyRate.toFixed(2)}</span>
+                    </div>
                     <div className="flex justify-between py-3">
                       <span className="text-gray-600">Booking Fee:</span>
-                      <span className="font-medium text-gray-900">₱{bookingData.hourlyRate.toFixed(2)}</span>
+                      <span className="font-medium text-gray-900">₱{totalBookingFee.toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
@@ -164,15 +179,15 @@ export default function CheckoutPage() {
                     <div className="grid grid-cols-3 gap-4">
                       <div>
                         <p className="text-white/80 text-sm mb-1">Booking Fee:</p>
-                        <p className="text-xl font-bold">₱{bookingData.hourlyRate.toFixed(2)}</p>
+                        <p className="text-xl font-bold">₱{totalBookingFee.toFixed(2)}</p>
                       </div>
                       <div>
                         <p className="text-white/80 text-sm mb-1">Player(s) Fee:</p>
-                        <p className="text-xl font-bold">₱{(bookingData.hourlyRate / playerCount).toFixed(2)}</p>
+                        <p className="text-xl font-bold">₱{(totalBookingFee / playerCount).toFixed(2)}</p>
                       </div>
                       <div>
                         <p className="text-white/80 text-sm mb-1">Total Amount Due:</p>
-                        <p className="text-xl font-bold">₱{(bookingData.hourlyRate / playerCount).toFixed(2)}</p>
+                        <p className="text-xl font-bold">₱{(totalBookingFee / playerCount).toFixed(2)}</p>
                       </div>
                     </div>
                   </div>
@@ -191,9 +206,17 @@ export default function CheckoutPage() {
                       <span className="text-gray-600">Players Allowed to Play:</span>
                       <span className="font-medium text-gray-900">{bookingData.capacity}</span>
                     </div>
+                    <div className="flex justify-between py-3 border-b border-gray-100">
+                      <span className="text-gray-600">Duration:</span>
+                      <span className="font-medium text-gray-900">{duration} {duration === 1 ? 'hour' : 'hours'}</span>
+                    </div>
+                    <div className="flex justify-between py-3 border-b border-gray-100">
+                      <span className="text-gray-600">Hourly Rate:</span>
+                      <span className="font-medium text-gray-900">₱{bookingData.hourlyRate.toFixed(2)}</span>
+                    </div>
                     <div className="flex justify-between py-3">
                       <span className="text-gray-600">Booking Fee:</span>
-                      <span className="font-medium text-gray-900">₱{bookingData.hourlyRate.toFixed(2)}</span>
+                      <span className="font-medium text-gray-900">₱{totalBookingFee.toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
@@ -215,15 +238,15 @@ export default function CheckoutPage() {
                       <div className="grid grid-cols-3 gap-4">
                         <div>
                           <p className="text-white/80 text-sm mb-1">Booking Fee:</p>
-                          <p className="text-xl font-bold">₱{bookingData.hourlyRate.toFixed(2)}</p>
+                          <p className="text-xl font-bold">₱{totalBookingFee.toFixed(2)}</p>
                         </div>
                         <div>
                           <p className="text-white/80 text-sm mb-1">Player(s) Fee:</p>
-                          <p className="text-xl font-bold">₱{(bookingData.hourlyRate / playerCount).toFixed(2)}</p>
+                          <p className="text-xl font-bold">₱{(totalBookingFee / playerCount).toFixed(2)}</p>
                         </div>
                         <div>
                           <p className="text-white/80 text-sm mb-1">Total Amount Due:</p>
-                          <p className="text-xl font-bold">₱{(bookingData.hourlyRate / playerCount).toFixed(2)}</p>
+                          <p className="text-xl font-bold">₱{(totalBookingFee / playerCount).toFixed(2)}</p>
                         </div>
                       </div>
                     </div>
