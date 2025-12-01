@@ -378,7 +378,7 @@ export function ReviewsSection({ courtIds, venueName, firstCourtName }: ReviewsS
         ) : (
           displayedReviews.map((review) => (
             <div key={review.id} className="border border-gray-200 rounded-xl p-4">
-            <div className="flex items-start gap-3">
+              <div className="flex items-start gap-3">
               <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
                 {review.user.avatar_url ? (
                   <img src={review.user.avatar_url} alt="" className="w-full h-full object-cover" />
