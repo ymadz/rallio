@@ -52,8 +52,8 @@ export async function getPlayerMatchHistory(
   const supabase = await createClient()
 
   try {
-    // Get all matches where user is in either team
-    const { data: matches, error } = await supabase
+    // Get all completed matches first
+    const { data: allMatches, error: fetchError } = await supabase
       .from('matches')
       .select(`
         id,
@@ -79,14 +79,20 @@ export async function getPlayerMatchHistory(
           )
         )
       `)
-      .or(`team_a_players.cs.{${userId}},team_b_players.cs.{${userId}}`)
       .eq('status', 'completed')
       .order('completed_at', { ascending: false })
 
-    if (error) {
-      console.error('Error fetching matches:', error)
-      return { matches: [], error: error.message }
+    if (fetchError) {
+      console.error('Error fetching matches:', fetchError)
+      return { matches: [], error: fetchError.message }
     }
+
+    // Filter matches where user is in either team (client-side filtering)
+    const matches = allMatches?.filter((match: any) => {
+      const inTeamA = match.team_a_players?.includes(userId)
+      const inTeamB = match.team_b_players?.includes(userId)
+      return inTeamA || inTeamB
+    }) || []
 
     if (!matches || matches.length === 0) {
       return { matches: [] }
@@ -176,17 +182,23 @@ export async function getPlayerStats(userId: string): Promise<{ stats: PlayerSta
   const supabase = await createClient()
 
   try {
-    // Get all completed matches for the player
-    const { data: matches, error: matchError } = await supabase
+    // Get all completed matches
+    const { data: allMatches, error: matchError } = await supabase
       .from('matches')
       .select('team_a_players, team_b_players, winner, completed_at')
-      .or(`team_a_players.cs.{${userId}},team_b_players.cs.{${userId}}`)
       .eq('status', 'completed')
 
     if (matchError) {
       console.error('Error fetching matches for stats:', matchError)
       return { stats: null, error: matchError.message }
     }
+
+    // Filter matches where user is in either team
+    const matches = allMatches?.filter((match: any) => {
+      const inTeamA = match.team_a_players?.includes(userId)
+      const inTeamB = match.team_b_players?.includes(userId)
+      return inTeamA || inTeamB
+    }) || []
 
     // Get player's skill level
     const { data: player } = await supabase
