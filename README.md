@@ -1,4 +1,4 @@
-# 🎾 Rallio
+# 🏸 Rallio
 
 Badminton Court Finder & Queue Management System for Zamboanga City, Philippines
 
