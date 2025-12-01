@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -11,11 +11,23 @@ import { Alert } from '@/components/ui/alert'
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    const errorParam = searchParams.get('error')
+    if (errorParam === 'banned') {
+      setError('Your account has been permanently banned. Please contact support.')
+    } else if (errorParam === 'suspended') {
+      setError('Your account has been temporarily suspended.')
+    } else if (errorParam === 'deactivated') {
+      setError('Your account has been deactivated. Please contact support.')
+    }
+  }, [searchParams])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -24,7 +36,7 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient()
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
@@ -32,6 +44,42 @@ export default function LoginPage() {
       if (error) {
         setError(error.message)
         return
+      }
+
+      // Check if user is banned or suspended
+      if (data.user) {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('is_banned, is_active, banned_reason, banned_until')
+          .eq('id', data.user.id)
+          .single()
+
+        if (profileError) {
+          console.error('Error checking user status:', profileError)
+        }
+
+        if (profile?.is_banned) {
+          // Sign them back out
+          await supabase.auth.signOut()
+          
+          if (profile.banned_until) {
+            const bannedUntil = new Date(profile.banned_until)
+            if (bannedUntil > new Date()) {
+              setError(`Your account has been suspended until ${bannedUntil.toLocaleDateString()}. Reason: ${profile.banned_reason || 'No reason provided'}`)
+              return
+            }
+            // If suspension has expired, allow login (admin should unban manually though)
+          } else {
+            setError(`Your account has been permanently banned. Reason: ${profile.banned_reason || 'No reason provided'}`)
+            return
+          }
+        }
+
+        if (profile && !profile.is_active) {
+          await supabase.auth.signOut()
+          setError('Your account has been deactivated. Please contact support for assistance.')
+          return
+        }
       }
 
       router.push('/home')

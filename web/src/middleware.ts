@@ -13,5 +13,9 @@ export const config = {
     '/profile/:path*',
     '/courts/:path*',
     '/queues/:path*',
+    '/home/:path*',
+    '/bookings/:path*',
+    '/admin/:path*',
+    '/(global-admin)/:path*',
   ],
 };
