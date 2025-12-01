@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
 import crypto from 'crypto'
+import { createNotification, NotificationTemplates } from '@/lib/notifications'
 
 /**
  * CORS headers for webhook endpoint
@@ -513,6 +514,58 @@ async function markReservationPaidAndConfirmed({
     status: confirmedReservation.status,
     amountPaid: confirmedReservation.amount_paid,
   })
+
+  // 🔔 Send notifications to user
+  try {
+    const { data: fullReservation } = await supabase
+      .from('reservations')
+      .select(`
+        id,
+        user_id,
+        start_time,
+        courts (
+          id,
+          name,
+          venues (
+            id,
+            name
+          )
+        )
+      `)
+      .eq('id', confirmedReservation.id)
+      .single()
+
+    if (fullReservation && fullReservation.user_id) {
+      const courtData = Array.isArray(fullReservation.courts) ? fullReservation.courts[0] : fullReservation.courts
+      const venueData = courtData?.venues ? (Array.isArray(courtData.venues) ? courtData.venues[0] : courtData.venues) : null
+      
+      const venueName = venueData?.name || 'Venue'
+      const courtName = courtData?.name || 'Court'
+      const bookingDate = new Date(fullReservation.start_time).toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+
+      // Send booking confirmed notification
+      await createNotification({
+        userId: fullReservation.user_id,
+        ...NotificationTemplates.bookingConfirmed(venueName, courtName, bookingDate, confirmedReservation.id),
+      })
+
+      // Send payment received notification
+      await createNotification({
+        userId: fullReservation.user_id,
+        ...NotificationTemplates.paymentReceived(payment.amount / 100, confirmedReservation.id),
+      })
+
+      console.log('[markReservationPaidAndConfirmed] 📬 Notifications sent to user:', fullReservation.user_id)
+    }
+  } catch (notificationError) {
+    console.error('[markReservationPaidAndConfirmed] ⚠️ Failed to send notifications (non-critical):', notificationError)
+    // Don't throw - notifications are non-critical, booking is already confirmed
+  }
 }
 
 /**

@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { checkRateLimit, createRateLimitConfig } from '@/lib/rate-limiter'
+import { createBulkNotifications, NotificationTemplates } from '@/lib/notifications'
 
 /**
  * Queue Management Server Actions
@@ -1204,7 +1205,37 @@ export async function closeQueueSession(sessionId: string): Promise<{
 
     console.log('[closeQueueSession] ✅ Queue session closed successfully:', summary)
 
-    // 6. Revalidate paths
+    // 6. Send notifications to all participants
+    try {
+      const { data: venue } = await supabase
+        .from('courts')
+        .select('name, venues(name)')
+        .eq('id', session.court_id)
+        .single()
+
+      const venueData = venue?.venues ? (Array.isArray(venue.venues) ? venue.venues[0] : venue.venues) : null
+      const venueName = venueData?.name || 'Venue'
+
+      const { data: allParticipants } = await supabase
+        .from('queue_participants')
+        .select('user_id, games_played')
+        .eq('queue_session_id', sessionId)
+        .is('left_at', null)
+
+      if (allParticipants && allParticipants.length > 0) {
+        const notifications = allParticipants.map(p => ({
+          userId: p.user_id,
+          ...NotificationTemplates.queueSessionEnded(venueName, p.games_played || 0, sessionId),
+        }))
+
+        await createBulkNotifications(notifications)
+        console.log('[closeQueueSession] 📬 Sent', notifications.length, 'end-of-session notifications')
+      }
+    } catch (notificationError) {
+      console.error('[closeQueueSession] ⚠️ Failed to send notifications (non-critical):', notificationError)
+    }
+
+    // 7. Revalidate paths
     revalidatePath('/queue')
     revalidatePath('/queue-master')
     revalidatePath(`/queue/${session.court_id}`)
