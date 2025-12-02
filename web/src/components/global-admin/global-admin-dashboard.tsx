@@ -276,30 +276,53 @@ export default function GlobalAdminDashboard() {
             </h3>
             <div className="space-y-3">
               {activity.recentVenues?.slice(0, 5).map((venue: any) => (
-                <div key={venue.id} className="flex items-center justify-between py-2">
-                  <div>
+                <div key={venue.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                  <div className="flex-1">
                     <p className="font-medium text-gray-900">{venue.name}</p>
-                    <p className="text-xs text-gray-600">
-                      {venue.approval_status === 'pending' && (
+                    <p className="text-xs">
+                      {!venue.is_verified ? (
                         <span className="text-yellow-600">⏳ Pending approval</span>
-                      )}
-                      {venue.approval_status === 'approved' && (
+                      ) : (
                         <span className="text-green-600">✓ Approved</span>
-                      )}
-                      {venue.approval_status === 'rejected' && (
-                        <span className="text-red-600">✗ Rejected</span>
                       )}
                     </p>
                   </div>
-                  <p className="text-xs text-gray-500">
-                    {new Date(venue.created_at).toLocaleDateString()}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-gray-500">
+                      {new Date(venue.created_at).toLocaleDateString()}
+                    </p>
+                    {!venue.is_verified ? (
+                      <Link
+                        href="/admin/venues?tab=pending"
+                        className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded hover:bg-yellow-200 transition-colors"
+                      >
+                        Review
+                      </Link>
+                    ) : (
+                      <Link
+                        href={`/admin/venues`}
+                        className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-gray-200 transition-colors"
+                      >
+                        View
+                      </Link>
+                    )}
+                  </div>
                 </div>
               ))}
               {activity.recentVenues?.length === 0 && (
                 <p className="text-sm text-gray-500 text-center py-4">No recent venues</p>
               )}
             </div>
+            {activity.recentVenues?.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <Link
+                  href="/admin/venues"
+                  className="text-sm text-primary hover:text-primary-dark font-medium"
+                >
+                  View all venues →
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       )}

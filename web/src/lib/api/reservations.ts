@@ -32,6 +32,7 @@ export async function getAvailableTimeSlots(
     .select(`
       id,
       hourly_rate,
+      venue_id,
       venues (
         opening_hours
       )
@@ -42,6 +43,43 @@ export async function getAvailableTimeSlots(
   if (courtError || !court) {
     console.error('Error fetching court:', courtError)
     return []
+  }
+
+  const dateString = format(date, 'yyyy-MM-dd')
+
+  // Check for blocked dates (maintenance, holidays, private events)
+  // Block applies if: matches this court specifically OR matches venue (court_id is null)
+  const { data: blockedDates, error: blockedError } = await supabase
+    .from('blocked_dates')
+    .select('id, court_id, start_date, end_date, reason, block_type')
+    .eq('venue_id', court.venue_id)
+    .eq('is_active', true)
+    .lte('start_date', `${dateString}T23:59:59`)
+    .gte('end_date', `${dateString}T00:00:00`)
+
+  if (blockedError) {
+    console.error('Error checking blocked dates:', blockedError)
+  }
+
+  // Check if entire day is blocked for this court or venue
+  const dayBlocked = blockedDates?.some(block => {
+    // Block applies to this court if: court_id matches OR court_id is null (venue-wide block)
+    const appliesToThisCourt = block.court_id === null || block.court_id === courtId
+    if (!appliesToThisCourt) return false
+
+    // Check if the block covers the entire day
+    const blockStart = new Date(block.start_date)
+    const blockEnd = new Date(block.end_date)
+    const dayStart = new Date(`${dateString}T00:00:00`)
+    const dayEnd = new Date(`${dateString}T23:59:59`)
+
+    // If block spans across this entire day, return true
+    return blockStart <= dayStart && blockEnd >= dayEnd
+  })
+
+  if (dayBlocked) {
+    console.log(`[getAvailableTimeSlots] Court ${courtId} is fully blocked on ${dateString}`)
+    return [] // Entire day is blocked
   }
 
   // Get day of week from date (0 = Sunday, 6 = Saturday)
@@ -72,9 +110,32 @@ export async function getAvailableTimeSlots(
     })
   }
 
+  // Mark slots as unavailable based on partial-day blocks
+  if (blockedDates && blockedDates.length > 0) {
+    for (const block of blockedDates) {
+      // Block applies to this court if: court_id matches OR court_id is null (venue-wide block)
+      const appliesToThisCourt = block.court_id === null || block.court_id === courtId
+      if (!appliesToThisCourt) continue
+
+      const blockStart = new Date(block.start_date)
+      const blockEnd = new Date(block.end_date)
+
+      // Mark blocked hours as unavailable
+      for (const slot of allSlots) {
+        const slotHour = parseInt(slot.time.split(':')[0])
+        const slotStart = new Date(`${dateString}T${slot.time}:00`)
+        const slotEnd = new Date(`${dateString}T${(slotHour + 1).toString().padStart(2, '0')}:00:00`)
+
+        // Check if this slot overlaps with the blocked period
+        if (slotStart < blockEnd && slotEnd > blockStart) {
+          slot.available = false
+        }
+      }
+    }
+  }
+
   // Get existing reservations for this court on this date
   // Query for the entire day range to catch any overlapping reservations
-  const dateString = format(date, 'yyyy-MM-dd')
   const activeStatuses = ['pending_payment', 'pending', 'paid', 'confirmed']
 
   const { data: reservations } = await supabase

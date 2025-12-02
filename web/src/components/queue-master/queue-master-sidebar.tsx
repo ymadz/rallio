@@ -47,14 +47,14 @@ export function QueueMasterSidebar({ user }: QueueMasterSidebarProps) {
     <>
       {/* Desktop Sidebar */}
       <aside
-        className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-20 bg-gradient-to-b from-primary to-primary/90 border-r border-primary-dark z-40"
+        className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-20 bg-gradient-to-b from-primary to-primary/90 z-40"
         onMouseEnter={() => setIsExpanded(true)}
         onMouseLeave={() => setIsExpanded(false)}
       >
         {/* Expanded overlay */}
         <div
           className={cn(
-            "absolute inset-y-0 left-0 bg-gradient-to-b from-primary to-primary/90 border-r border-primary-dark shadow-2xl transition-all duration-300 flex flex-col",
+            "absolute inset-y-0 left-0 bg-gradient-to-b from-primary to-primary/90 shadow-lg transition-all duration-300 flex flex-col",
             isExpanded ? "w-64" : "w-20"
           )}
         >

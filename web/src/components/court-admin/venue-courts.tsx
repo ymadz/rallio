@@ -312,6 +312,54 @@ export function VenueCourts({ venueId }: VenueCourtsProps) {
                 </div>
               </div>
 
+              {/* Amenities Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Court Amenities
+                </label>
+                <p className="text-xs text-gray-500 mb-3">
+                  Select amenities available at this court
+                </p>
+                <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                  {amenities.map((amenity) => (
+                    <label
+                      key={amenity.id}
+                      className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.amenities.includes(amenity.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setFormData({
+                              ...formData,
+                              amenities: [...formData.amenities, amenity.id]
+                            })
+                          } else {
+                            setFormData({
+                              ...formData,
+                              amenities: formData.amenities.filter(id => id !== amenity.id)
+                            })
+                          }
+                        }}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700">{amenity.name}</span>
+                    </label>
+                  ))}
+                  {amenities.length === 0 && (
+                    <p className="col-span-2 text-sm text-gray-500 text-center py-4">
+                      No amenities available
+                    </p>
+                  )}
+                </div>
+                {formData.amenities.length > 0 && (
+                  <p className="text-xs text-blue-600 mt-2">
+                    {formData.amenities.length} amenity{formData.amenities.length !== 1 ? 's' : ''} selected
+                  </p>
+                )}
+              </div>
+
               <div className="flex gap-2 pt-4 border-t">
                 <button
                   type="button"

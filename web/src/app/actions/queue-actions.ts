@@ -491,6 +491,8 @@ export async function getMyQueues() {
           estimatedWaitTime,
           maxPlayers: p.queue_sessions.max_players,
           currentPlayers: count || 0,
+          userGamesPlayed: p.games_played || 0,
+          userAmountOwed: parseFloat(p.amount_owed || '0'),
         }
       })
     )
@@ -783,7 +785,37 @@ export async function createQueueSession(data: {
 
     console.log('[createQueueSession] ✅ No conflicting reservations found')
 
-    // 6. Insert queue session with approval status
+    // 6. Create a reservation to block the time slot for the queue session
+    const { data: reservation, error: reservationError } = await supabase
+      .from('reservations')
+      .insert({
+        court_id: data.courtId,
+        user_id: user.id,
+        start_time: data.startTime.toISOString(),
+        end_time: data.endTime.toISOString(),
+        status: 'confirmed', // Queue session reservations are immediately confirmed
+        total_amount: 0, // No upfront payment for queue sessions
+        amount_paid: 0,
+        num_players: data.maxPlayers,
+        payment_type: 'full',
+        metadata: {
+          booking_origin: 'queue_session',
+          queue_session_organizer: true,
+          is_queue_session_reservation: true,
+        },
+        notes: `Queue Session (${data.mode} - ${data.gameFormat}) - Reserved by Queue Master`,
+      })
+      .select('id')
+      .single()
+
+    if (reservationError || !reservation) {
+      console.error('[createQueueSession] ❌ Failed to create reservation:', reservationError)
+      return { success: false, error: 'Failed to reserve time slot for queue session' }
+    }
+
+    console.log('[createQueueSession] ✅ Reservation created for queue session:', reservation.id)
+
+    // 7. Insert queue session with approval status and link to reservation
     const { data: session, error: insertError } = await supabase
       .from('queue_sessions')
       .insert({
@@ -800,16 +832,23 @@ export async function createQueueSession(data: {
         current_players: 0,
         requires_approval: requiresApproval,
         approval_status: approvalStatus,
+        metadata: {
+          reservation_id: reservation.id, // Link queue session to its blocking reservation
+        },
       })
       .select()
       .single()
 
     if (insertError || !session) {
       console.error('[createQueueSession] ❌ Failed to create session:', insertError)
+      
+      // Rollback: Delete the reservation if queue session creation fails
+      await supabase.from('reservations').delete().eq('id', reservation.id)
+      
       return { success: false, error: insertError?.message || 'Failed to create queue session' }
     }
 
-    // 6. Format response
+    // 8. Format response
     const queueData: QueueSessionData = {
       id: session.id,
       courtId: session.court_id,
@@ -833,7 +872,7 @@ export async function createQueueSession(data: {
       approvalStatus,
     })
 
-    // 7. Revalidate paths
+    // 9. Revalidate paths
     revalidatePath('/queue')
     revalidatePath('/queue-master')
     revalidatePath(`/queue/${data.courtId}`)
@@ -1758,5 +1797,257 @@ export async function getMyQueueMasterSessions(filter?: {
   } catch (error: any) {
     console.error('[getMyQueueMasterSessions] ❌ Error:', error)
     return { success: false, error: error.message || 'Failed to fetch sessions' }
+  }
+}
+
+/**
+ * Get comprehensive queue session summary for closed/completed sessions
+ * Includes all participants, match results, payment status, and session statistics
+ */
+export async function getQueueSessionSummary(sessionId: string): Promise<{
+  success: boolean
+  summary?: {
+    session: {
+      id: string
+      status: string
+      mode: 'casual' | 'competitive'
+      gameFormat: 'singles' | 'doubles' | 'mixed'
+      costPerGame: number
+      startTime: string
+      endTime: string
+      courtName: string
+      venueName: string
+      venueId: string
+      organizerName: string
+      settings?: any
+      summary?: {
+        totalGames: number
+        totalRevenue: number
+        totalParticipants: number
+        unpaidBalances: number
+        closedAt: string
+        closedBy: string
+        closedReason: string
+      }
+    }
+    participants: Array<{
+      id: string
+      userId: string
+      playerName: string
+      avatarUrl?: string
+      skillLevel: number
+      position: number
+      joinedAt: string
+      leftAt?: string
+      gamesPlayed: number
+      gamesWon: number
+      status: string
+      amountOwed: number
+      paymentStatus: string
+    }>
+    matches: Array<{
+      id: string
+      matchNumber: number
+      startTime: string
+      endTime?: string
+      status: string
+      team1Players: Array<{ id: string; name: string; skillLevel: number }>
+      team2Players: Array<{ id: string; name: string; skillLevel: number }>
+      team1Score?: number
+      team2Score?: number
+      winnerTeam?: number
+    }>
+  }
+  error?: string
+}> {
+  console.log('[getQueueSessionSummary] 🔍 Fetching summary for session:', sessionId)
+
+  try {
+    const supabase = await createClient()
+
+    // 1. Verify user is authenticated
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'User not authenticated' }
+    }
+
+    // 2. Fetch session details with court and venue info
+    const { data: session, error: sessionError } = await supabase
+      .from('queue_sessions')
+      .select(`
+        *,
+        courts (
+          id,
+          name,
+          venues (
+            id,
+            name
+          )
+        ),
+        organizer:organizer_id (
+          display_name,
+          first_name,
+          last_name
+        )
+      `)
+      .eq('id', sessionId)
+      .single()
+
+    if (sessionError || !session) {
+      console.error('[getQueueSessionSummary] ❌ Session not found:', sessionError)
+      return { success: false, error: 'Queue session not found' }
+    }
+
+    // Verify user is the organizer or has queue master role
+    if (session.organizer_id !== user.id) {
+      // Check if user has queue_master role
+      const { data: userRoles } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('role', 'queue_master')
+        .maybeSingle()
+
+      if (!userRoles) {
+        return { success: false, error: 'Unauthorized to view this session summary' }
+      }
+    }
+
+    // 3. Fetch all participants (including those who left)
+    const { data: participants, error: participantsError } = await supabase
+      .from('queue_participants')
+      .select(`
+        *,
+        user:user_id!inner (
+          id,
+          display_name,
+          first_name,
+          last_name,
+          avatar_url
+        ),
+        player:user_id (
+          skill_level
+        )
+      `)
+      .eq('queue_session_id', sessionId)
+      .order('position', { ascending: true })
+
+    if (participantsError) {
+      console.error('[getQueueSessionSummary] ❌ Failed to fetch participants:', participantsError)
+      return { success: false, error: 'Failed to fetch participants' }
+    }
+
+    // 4. Fetch all matches for this session
+    const { data: matches, error: matchesError } = await supabase
+      .from('matches')
+      .select(`
+        *,
+        match_players (
+          user_id,
+          team,
+          user:user_id (
+            display_name,
+            first_name,
+            last_name
+          ),
+          player:user_id (
+            skill_level
+          )
+        )
+      `)
+      .eq('queue_session_id', sessionId)
+      .order('match_number', { ascending: true })
+
+    if (matchesError) {
+      console.error('[getQueueSessionSummary] ❌ Failed to fetch matches:', matchesError)
+      return { success: false, error: 'Failed to fetch matches' }
+    }
+
+    // 5. Transform data for frontend
+    const participantsSummary = (participants || []).map((p: any) => ({
+      id: p.id,
+      userId: p.user_id,
+      playerName: p.user.display_name || `${p.user.first_name} ${p.user.last_name}`.trim(),
+      avatarUrl: p.user.avatar_url,
+      skillLevel: p.player?.skill_level || 1,
+      position: p.position,
+      joinedAt: p.joined_at,
+      leftAt: p.left_at,
+      gamesPlayed: p.games_played || 0,
+      gamesWon: p.games_won || 0,
+      status: p.status,
+      amountOwed: p.amount_owed || 0,
+      paymentStatus: p.payment_status,
+    }))
+
+    const matchesSummary = (matches || []).map((m: any) => {
+      const team1Players = (m.match_players || [])
+        .filter((mp: any) => mp.team === 1)
+        .map((mp: any) => ({
+          id: mp.user_id,
+          name: mp.user?.display_name || `${mp.user?.first_name} ${mp.user?.last_name}`.trim(),
+          skillLevel: mp.player?.skill_level || 1,
+        }))
+
+      const team2Players = (m.match_players || [])
+        .filter((mp: any) => mp.team === 2)
+        .map((mp: any) => ({
+          id: mp.user_id,
+          name: mp.user?.display_name || `${mp.user?.first_name} ${mp.user?.last_name}`.trim(),
+          skillLevel: mp.player?.skill_level || 1,
+        }))
+
+      return {
+        id: m.id,
+        matchNumber: m.match_number,
+        startTime: m.start_time,
+        endTime: m.end_time,
+        status: m.status,
+        team1Players,
+        team2Players,
+        team1Score: m.team1_score,
+        team2Score: m.team2_score,
+        winnerTeam: m.winner_team,
+      }
+    })
+
+    // Extract summary from settings if available
+    const sessionSummary = session.settings?.summary
+
+    const summary = {
+      session: {
+        id: session.id,
+        status: session.status,
+        mode: session.mode,
+        gameFormat: session.game_format,
+        costPerGame: session.cost_per_game,
+        startTime: session.start_time,
+        endTime: session.end_time,
+        courtName: session.courts?.name || 'Unknown Court',
+        venueName: session.courts?.venues?.name || 'Unknown Venue',
+        venueId: session.courts?.venues?.id || '',
+        organizerName:
+          session.organizer?.display_name ||
+          `${session.organizer?.first_name} ${session.organizer?.last_name}`.trim() ||
+          'Unknown',
+        settings: session.settings,
+        summary: sessionSummary,
+      },
+      participants: participantsSummary,
+      matches: matchesSummary,
+    }
+
+    console.log('[getQueueSessionSummary] ✅ Summary fetched:', {
+      participants: participantsSummary.length,
+      matches: matchesSummary.length,
+    })
+
+    return { success: true, summary }
+  } catch (error: any) {
+    console.error('[getQueueSessionSummary] ❌ Error:', error)
+    return { success: false, error: error.message || 'Failed to fetch session summary' }
   }
 }

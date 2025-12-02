@@ -188,6 +188,7 @@ export async function getVenues(filters: VenueFilters = {}): Promise<{
         )
       `, { count: 'exact' })
       .eq('is_active', true)
+      .eq('is_verified', true) // Only show verified/approved venues in public listings
       .eq('courts.is_active', true)
 
     // Search filter
@@ -419,10 +420,20 @@ export async function getVenueById(
       `)
       .eq('id', venueId)
       .eq('is_active', true)
+      .eq('is_verified', true) // Only allow viewing verified venues
       .single()
 
     if (error) throw error
     if (!venue) return null
+
+    console.log('🔍 [getVenueById] Raw venue data:', {
+      id: venue.id,
+      name: venue.name,
+      is_active: venue.is_active,
+      is_verified: venue.is_verified,
+      courtsCount: venue.courts?.length || 0,
+      courts: venue.courts?.map(c => ({ id: c.id, name: c.name, is_active: c.is_active }))
+    })
 
     // Process courts
     const activeCourts = venue.courts.filter(c => c.is_active)

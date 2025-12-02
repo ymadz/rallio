@@ -50,7 +50,8 @@ const amenityOptions = [
 ]
 
 export default function MapViewPage() {
-  const [venues, setVenues] = useState<Venue[]>([])
+  const [allVenues, setAllVenues] = useState<Venue[]>([]) // Store original unfiltered data
+  const [venues, setVenues] = useState<Venue[]>([]) // Store filtered data for display
   const [loading, setLoading] = useState(true)
   const [showFilters, setShowFilters] = useState(true)
   const [priceRange, setPriceRange] = useState([100, 1000])
@@ -62,7 +63,13 @@ export default function MapViewPage() {
     fetchVenues()
   }, [])
 
+  // Apply filters when filter state changes
+  useEffect(() => {
+    applyFilters()
+  }, [allVenues, priceRange, selectedAmenities, minRating, searchQuery])
+
   const fetchVenues = async () => {
+    setLoading(true)
     try {
       const supabase = createClient()
       const { data, error } = await supabase
@@ -89,6 +96,7 @@ export default function MapViewPage() {
           )
         `)
         .eq('is_active', true)
+        .eq('is_verified', true) // Only show verified/approved venues
 
       if (error) {
         console.error('Error fetching venues:', error)
@@ -135,20 +143,61 @@ export default function MapViewPage() {
         }
       }).filter(v => v.latitude && v.longitude)
 
-      setVenues(transformedData)
+      // Store original unfiltered data
+      setAllVenues(transformedData)
+      setVenues(transformedData) // Initially show all
       }
       setLoading(false)
     } catch (error) {
       console.error('Unexpected error fetching venues:', error)
+      setAllVenues([])
       setVenues([])
       setLoading(false)
     }
+  }
+
+  const applyFilters = () => {
+    if (allVenues.length === 0) return
+
+    let filtered = [...allVenues]
+
+    // Search query filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(v => 
+        v.name.toLowerCase().includes(query) ||
+        v.address.toLowerCase().includes(query)
+      )
+    }
+
+    // Price range filter
+    filtered = filtered.filter(v => 
+      v.minPrice <= priceRange[1] && v.maxPrice >= priceRange[0]
+    )
+
+    // Amenities filter
+    if (selectedAmenities.length > 0) {
+      filtered = filtered.filter(v => 
+        selectedAmenities.every(amenity => v.amenities?.includes(amenity))
+      )
+    }
+
+    // Rating filter
+    if (minRating > 0) {
+      filtered = filtered.filter(v => 
+        v.averageRating && v.averageRating >= minRating
+      )
+    }
+
+    setVenues(filtered)
   }
 
   const handleClearFilters = () => {
     setPriceRange([100, 1000])
     setSelectedAmenities([])
     setMinRating(0)
+    setSearchQuery('')
+    // Filters will auto-apply via useEffect, showing all venues
   }
 
   const toggleAmenity = (amenity: string) => {

@@ -285,6 +285,16 @@ export function QueueMasterDashboard() {
                     })}
                   </div>
                 </div>
+
+                {/* View Summary for closed sessions */}
+                {(session.status === 'closed' || session.status === 'cancelled') && (
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <div className="flex items-center justify-center gap-2 text-primary font-medium text-sm group-hover:text-primary-dark transition-colors">
+                      <CheckCircle className="w-4 h-4" />
+                      <span>View Session Summary</span>
+                    </div>
+                  </div>
+                )}
               </Link>
             ))}
           </div>

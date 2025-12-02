@@ -37,7 +37,8 @@ export function QueueDashboardClient() {
     )
   }
 
-  const topPosition = activeQueues.length > 0 ? Math.min(...activeQueues.map(q => q.userPosition || Infinity)) : null
+  const totalGamesPlayed = activeQueues.reduce((sum, q) => sum + (q.userGamesPlayed || 0), 0)
+  const totalAmountOwed = activeQueues.reduce((sum, q) => sum + (q.userAmountOwed || 0), 0)
 
   return (
     <>
@@ -66,22 +67,30 @@ export function QueueDashboardClient() {
               <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
                 <Activity className="w-4 h-4 text-blue-600" />
               </div>
-              <span className="text-xs text-gray-600 font-medium">Best Position</span>
+              <span className="text-xs text-gray-600 font-medium">Games Played</span>
             </div>
             <p className="text-2xl font-bold text-gray-900">
-              {topPosition ? `#${topPosition}` : '-'}
+              {totalGamesPlayed}
             </p>
           </div>
 
-          <div className="bg-white border border-gray-200 rounded-xl p-4 col-span-2 md:col-span-1">
+          <div className={`bg-white border rounded-xl p-4 col-span-2 md:col-span-1 ${
+            totalAmountOwed > 0 ? 'border-orange-300 bg-orange-50' : 'border-gray-200'
+          }`}>
             <div className="flex items-center gap-2 mb-1">
-              <div className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center">
-                <Clock className="w-4 h-4 text-green-600" />
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                totalAmountOwed > 0 ? 'bg-orange-200' : 'bg-green-50'
+              }`}>
+                <Clock className={`w-4 h-4 ${
+                  totalAmountOwed > 0 ? 'text-orange-700' : 'text-green-600'
+                }`} />
               </div>
-              <span className="text-xs text-gray-600 font-medium">Shortest Wait</span>
+              <span className="text-xs text-gray-600 font-medium">Outstanding Balance</span>
             </div>
-            <p className="text-2xl font-bold text-gray-900">
-              {activeQueues.length > 0 ? `~${Math.min(...activeQueues.map(q => q.estimatedWaitTime))}m` : '-'}
+            <p className={`text-2xl font-bold ${
+              totalAmountOwed > 0 ? 'text-orange-700' : 'text-gray-900'
+            }`}>
+              ₱{totalAmountOwed.toFixed(2)}
             </p>
           </div>
         </div>

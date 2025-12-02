@@ -28,7 +28,7 @@ export function CreateSessionForm() {
   // Form state
   const [courtId, setCourtId] = useState('')
   const [startDate, setStartDate] = useState('')
-  const [startTime, setStartTime] = useState('')
+  const [startTime, setStartTime] = useState('') // Format: "HH:00"
   const [duration, setDuration] = useState(3) // hours
   const [mode, setMode] = useState<'casual' | 'competitive'>('casual')
   const [gameFormat, setGameFormat] = useState<'singles' | 'doubles' | 'mixed'>('doubles')
@@ -42,14 +42,28 @@ export function CreateSessionForm() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Generate hourly time options (6 AM to 11 PM)
+  const timeOptions = Array.from({ length: 18 }, (_, i) => {
+    const hour = i + 6 // Start from 6 AM
+    return `${hour.toString().padStart(2, '0')}:00`
+  })
+
   // Load venues and courts
   useEffect(() => {
     loadVenuesAndCourts()
     
-    // Set default date/time to now
+    // Set default date to today
     const now = new Date()
     setStartDate(now.toISOString().split('T')[0])
-    setStartTime(now.toTimeString().slice(0, 5))
+    
+    // Set default time to next hour
+    const currentHour = now.getHours()
+    const nextHour = currentHour + 1
+    if (nextHour >= 6 && nextHour <= 23) {
+      setStartTime(`${nextHour.toString().padStart(2, '0')}:00`)
+    } else {
+      setStartTime('10:00') // Default to 10 AM if outside range
+    }
   }, [])
 
   const loadVenuesAndCourts = async () => {
@@ -60,19 +74,23 @@ export function CreateSessionForm() {
         .select(`
           id,
           name,
-          courts (
+          courts!inner (
             id,
             name,
             venue_id,
             capacity,
-            hourly_rate
+            hourly_rate,
+            is_active
           )
         `)
         .eq('is_active', true)
+        .eq('is_verified', true)
+        .eq('courts.is_active', true)
         .order('name')
 
       if (venuesError) throw venuesError
 
+      console.log('🔍 [CreateSession] Loaded venues:', venuesData)
       setVenues(venuesData || [])
     } catch (err: any) {
       setError(err.message || 'Failed to load venues')
@@ -248,13 +266,24 @@ export function CreateSessionForm() {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Start Time <span className="text-red-500">*</span>
             </label>
-            <input
-              type="time"
+            <select
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
               required
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-            />
+            >
+              <option value="">Select time</option>
+              {timeOptions.map((time) => {
+                const hour = parseInt(time.split(':')[0])
+                const period = hour >= 12 ? 'PM' : 'AM'
+                const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour
+                return (
+                  <option key={time} value={time}>
+                    {displayHour}:00 {period}
+                  </option>
+                )
+              })}
+            </select>
           </div>
 
           <div>
@@ -514,7 +543,12 @@ export function CreateSessionForm() {
                     <div className="flex items-center gap-2 text-sm">
                       <Clock className="w-4 h-4 text-gray-400" />
                       <span className="text-gray-900">
-                        {startTime || '--:--'} - {duration}h duration
+                        {startTime ? (() => {
+                          const hour = parseInt(startTime.split(':')[0])
+                          const period = hour >= 12 ? 'PM' : 'AM'
+                          const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour
+                          return `${displayHour}:00 ${period}`
+                        })() : '--:--'} - {duration}h duration
                       </span>
                     </div>
                   </div>

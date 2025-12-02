@@ -1,8 +1,69 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import type { Notification } from '@/types/notifications'
+
+export type NotificationType = 
+  | 'booking_confirmed'
+  | 'booking_cancelled'
+  | 'payment_received'
+  | 'payment_failed'
+  | 'queue_match_assigned'
+  | 'queue_session_starting'
+  | 'queue_session_ended'
+  | 'queue_payment_due'
+  | 'review_received'
+  | 'queue_approval_pending'
+  | 'queue_approval_approved'
+  | 'queue_approval_rejected'
+  | 'refund_processed'
+  | 'system_announcement'
+
+interface CreateNotificationData {
+  userId: string
+  type: NotificationType
+  title: string
+  message: string
+  actionUrl?: string
+  metadata?: Record<string, any>
+}
+
+/**
+ * Create a notification for a user (server action)
+ * Uses service client to bypass RLS since this is a system operation
+ */
+export async function createNotification(data: CreateNotificationData) {
+  const supabase = createServiceClient()
+
+  try {
+    const { data: notification, error } = await supabase
+      .from('notifications')
+      .insert({
+        user_id: data.userId,
+        type: data.type,
+        title: data.title,
+        message: data.message,
+        action_url: data.actionUrl,
+        metadata: data.metadata,
+        is_read: false,
+        created_at: new Date().toISOString(),
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('❌ [createNotification] Error:', error)
+      return { success: false, error: error.message }
+    }
+
+    console.log('✅ [createNotification] Created:', notification.id, 'for user:', data.userId)
+    return { success: true, notification }
+  } catch (error: any) {
+    console.error('❌ [createNotification] Exception:', error)
+    return { success: false, error: error.message }
+  }
+}
 
 /**
  * Get all notifications for the current user

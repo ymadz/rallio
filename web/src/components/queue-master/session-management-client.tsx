@@ -552,34 +552,46 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
 
         {/* Action Buttons */}
         <div className="flex items-center gap-3 mt-6 pt-6 border-t border-white/20">
-          {session.status === 'active' && (
-            <button
-              onClick={handlePause}
-              disabled={actionLoading === 'pause'}
-              className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors disabled:opacity-50"
+          {(session.status === 'closed' || session.status === 'cancelled') ? (
+            <Link
+              href={`/queue-master/sessions/${sessionId}/summary`}
+              className="flex items-center gap-2 px-4 py-2 bg-white text-primary rounded-lg hover:bg-white/90 transition-colors font-medium"
             >
-              <PauseCircle className="w-4 h-4" />
-              <span>Pause</span>
-            </button>
+              <Trophy className="w-4 h-4" />
+              <span>View Session Summary</span>
+            </Link>
+          ) : (
+            <>
+              {session.status === 'active' && (
+                <button
+                  onClick={handlePause}
+                  disabled={actionLoading === 'pause'}
+                  className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  <PauseCircle className="w-4 h-4" />
+                  <span>Pause</span>
+                </button>
+              )}
+              {session.status === 'paused' && (
+                <button
+                  onClick={handleResume}
+                  disabled={actionLoading === 'resume'}
+                  className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  <PlayCircle className="w-4 h-4" />
+                  <span>Resume</span>
+                </button>
+              )}
+              <button
+                onClick={handleClose}
+                disabled={actionLoading === 'close'}
+                className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <StopCircle className="w-4 h-4" />
+                <span>Close Session</span>
+              </button>
+            </>
           )}
-          {session.status === 'paused' && (
-            <button
-              onClick={handleResume}
-              disabled={actionLoading === 'resume'}
-              className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors disabled:opacity-50"
-            >
-              <PlayCircle className="w-4 h-4" />
-              <span>Resume</span>
-            </button>
-          )}
-          <button
-            onClick={handleClose}
-            disabled={actionLoading === 'close'}
-            className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors disabled:opacity-50"
-          >
-            <StopCircle className="w-4 h-4" />
-            <span>Close Session</span>
-          </button>
         </div>
       </div>
 

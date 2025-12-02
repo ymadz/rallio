@@ -1,12 +1,30 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { VenueManagementGlobal } from '@/components/global-admin/venue-management-global'
 import { AmenityManagement } from '@/components/global-admin/amenity-management'
-import { Building2, Package } from 'lucide-react'
+import { PendingVenueApprovals } from '@/components/global-admin/pending-venue-approvals'
+import { Building2, Package, Clock } from 'lucide-react'
+import { getAllVenues } from '@/app/actions/global-admin-venue-actions'
 
 export default function VenuesPage() {
-  const [activeTab, setActiveTab] = useState<'venues' | 'amenities'>('venues')
+  const [activeTab, setActiveTab] = useState<'venues' | 'pending' | 'amenities'>('venues')
+  const [pendingCount, setPendingCount] = useState(0)
+
+  useEffect(() => {
+    loadPendingCount()
+  }, [])
+
+  const loadPendingCount = async () => {
+    const result = await getAllVenues({ statusFilter: 'unverified', pageSize: 1 })
+    if (result.success) {
+      setPendingCount(result.total || 0)
+    }
+  }
+
+  const handleApprovalComplete = () => {
+    loadPendingCount()
+  }
 
   return (
     <div className="p-8">
@@ -25,6 +43,22 @@ export default function VenuesPage() {
             Venues & Courts
           </button>
           <button
+            onClick={() => setActiveTab('pending')}
+            className={`inline-flex items-center gap-2 px-1 pb-4 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'pending'
+                ? 'border-yellow-600 text-yellow-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <Clock className="w-5 h-5" />
+            Pending Approvals
+            {pendingCount > 0 && (
+              <span className="ml-1 px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full text-xs font-bold">
+                {pendingCount}
+              </span>
+            )}
+          </button>
+          <button
             onClick={() => setActiveTab('amenities')}
             className={`inline-flex items-center gap-2 px-1 pb-4 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'amenities'
@@ -39,7 +73,9 @@ export default function VenuesPage() {
       </div>
 
       {/* Content */}
-      {activeTab === 'venues' ? <VenueManagementGlobal /> : <AmenityManagement />}
+      {activeTab === 'venues' && <VenueManagementGlobal />}
+      {activeTab === 'pending' && <PendingVenueApprovals onApprovalComplete={handleApprovalComplete} />}
+      {activeTab === 'amenities' && <AmenityManagement />}
     </div>
   )
 }

@@ -81,6 +81,26 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
         </div>
       )}
 
+      {/* Outstanding Balance Warning (if applicable) */}
+      {variant === 'active' && queue.userAmountOwed && queue.userAmountOwed > 0 && (
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <p className="text-xs text-orange-700 font-medium">Payment Required</p>
+                <p className="text-sm text-orange-600">{queue.userGamesPlayed || 0} games played</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-bold text-orange-700">₱{queue.userAmountOwed.toFixed(2)}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Action Button */}
       <div className="flex items-center justify-between pt-3 border-t border-gray-100">
         <span className={`text-sm font-medium ${isUserInQueue ? 'text-primary' : 'text-gray-600'}`}>

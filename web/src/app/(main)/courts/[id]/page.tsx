@@ -1,13 +1,88 @@
-import { getVenueById, isVenueOpen } from '@/lib/api/venues'
+import { isVenueOpen } from '@/lib/api/venues'
+import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ReviewsSection } from '@/components/venue/reviews-section'
 import { VenueDetailsClient } from './venue-details-client'
 import { ImageGallery } from '@/components/venue/image-gallery'
 
+// Server-side venue fetch
+async function getVenueByIdServer(venueId: string) {
+  const supabase = await createClient()
+  
+  const { data: venue, error } = await supabase
+    .from('venues')
+    .select(`
+      id,
+      name,
+      description,
+      address,
+      city,
+      latitude,
+      longitude,
+      phone,
+      email,
+      website,
+      opening_hours,
+      is_active,
+      is_verified,
+      metadata,
+      created_at,
+      courts (
+        id,
+        name,
+        description,
+        surface_type,
+        court_type,
+        capacity,
+        hourly_rate,
+        is_active,
+        metadata,
+        court_amenities (
+          amenities (
+            id,
+            name,
+            icon
+          )
+        ),
+        court_images (
+          id,
+          url,
+          alt_text,
+          is_primary,
+          display_order
+        )
+      )
+    `)
+    .eq('id', venueId)
+    .eq('is_active', true)
+    .eq('is_verified', true)
+    .single()
+
+  if (error || !venue) {
+    console.error('🔍 [getVenueByIdServer] Error:', error)
+    return null
+  }
+
+  console.log('🔍 [getVenueByIdServer] Fetched venue:', venue.name, 'Courts:', venue.courts?.length)
+
+  // Process courts to add images array
+  const processedCourts = (venue.courts || []).map((court: any) => ({
+    ...court,
+    venue_id: venue.id,
+    amenities: court.court_amenities?.map((m: any) => m.amenities) || [],
+    images: court.court_images || [],
+  }))
+
+  return {
+    ...venue,
+    courts: processedCourts,
+  }
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const venue = await getVenueById(id)
+  const venue = await getVenueByIdServer(id)
 
   return {
     title: venue ? `${venue.name} | Rallio` : 'Venue | Rallio',
@@ -17,7 +92,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function VenueDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const venue = await getVenueById(id)
+  const venue = await getVenueByIdServer(id)
 
   if (!venue) {
     notFound()

@@ -49,6 +49,7 @@ export default async function HomePage() {
       )
     `)
     .eq('is_active', true)
+    .eq('is_verified', true) // Only show verified/approved venues
     .eq('courts.is_active', true)
     .limit(3)
 

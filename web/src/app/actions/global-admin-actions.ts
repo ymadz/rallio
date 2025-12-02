@@ -60,12 +60,12 @@ export async function getDashboardStats() {
       .from('venues')
       .select('*', { count: 'exact', head: true })
       .eq('is_active', true)
-      .eq('approval_status', 'approved')
+      .eq('is_verified', true)
 
     const { count: pendingVenues } = await supabase
       .from('venues')
       .select('*', { count: 'exact', head: true })
-      .eq('approval_status', 'pending')
+      .eq('is_verified', false)
 
     // Get monthly revenue (last 30 days)
     const { data: revenueData } = await supabase
@@ -139,7 +139,7 @@ export async function getRecentActivity() {
     // Get last 10 venues created
     const { data: recentVenues } = await supabase
       .from('venues')
-      .select('id, name, created_at, approval_status')
+      .select('id, name, created_at, is_verified')
       .order('created_at', { ascending: false })
       .limit(10)
 

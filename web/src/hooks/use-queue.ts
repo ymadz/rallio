@@ -35,6 +35,8 @@ export interface QueueSession {
   estimatedWaitTime: number // in minutes
   maxPlayers: number
   currentPlayers: number
+  userGamesPlayed?: number // Games played by current user
+  userAmountOwed?: number // Amount owed by current user
   currentMatch?: {
     courtName: string
     players: string[]
