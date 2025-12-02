@@ -215,6 +215,48 @@ export async function createReservationAction(data: {
   const startTimeISO = startTime.toISOString()
   const endTimeISO = endTime.toISOString()
 
+  // FIRST: Clean up any old pending_payment reservations from this user for overlapping time slots
+  // This prevents conflicts from previous failed booking attempts
+  // Clean up ALL pending_payment reservations for this user/court/time (not just old ones)
+  
+  const { data: oldPendingReservations, error: cleanupFetchError } = await supabase
+    .from('reservations')
+    .select('id, created_at, start_time, end_time')
+    .eq('court_id', data.courtId)
+    .eq('user_id', data.userId)
+    .eq('status', 'pending_payment')
+    .lt('start_time', endTimeISO)
+    .gt('end_time', startTimeISO)
+
+  if (cleanupFetchError) {
+    console.error('Error fetching old pending reservations for cleanup:', cleanupFetchError)
+  } else if (oldPendingReservations && oldPendingReservations.length > 0) {
+    console.log(`🧹 Found ${oldPendingReservations.length} pending_payment reservations to clean up:`, 
+      oldPendingReservations.map(r => ({
+        id: r.id, 
+        created: r.created_at,
+        time: `${r.start_time} - ${r.end_time}`
+      }))
+    )
+    
+    const { error: cleanupError } = await supabase
+      .from('reservations')
+      .update({ 
+        status: 'cancelled',
+        cancelled_at: new Date().toISOString(),
+        cancellation_reason: 'Auto-cancelled: Replaced by new booking attempt'
+      })
+      .in('id', oldPendingReservations.map(r => r.id))
+
+    if (cleanupError) {
+      console.error('Error cleaning up old pending reservations:', cleanupError)
+    } else {
+      console.log(`✅ Successfully cleaned up ${oldPendingReservations.length} stale reservations`)
+    }
+  } else {
+    console.log('🔍 No existing pending_payment reservations to clean up for this user/court/time')
+  }
+
   // Check for reservation statuses that represent active bookings
   // With migration 006: 'pending_payment', 'pending', 'paid', 'confirmed'
   // Without migration 006: 'pending', 'confirmed'
@@ -225,6 +267,8 @@ export async function createReservationAction(data: {
     userId: data.userId,
     startTimeISO,
     endTimeISO,
+    startTimeLocal: startTime.toLocaleString('en-PH', { timeZone: 'Asia/Manila' }),
+    endTimeLocal: endTime.toLocaleString('en-PH', { timeZone: 'Asia/Manila' }),
     statuses: conflictStatuses
   })
 
@@ -281,31 +325,28 @@ export async function createReservationAction(data: {
   // Filter out conflicts that are:
   // - Very recent (< 2 minutes old) pending reservations from the same user
   // - This handles the case where a user accidentally triggers multiple reservation attempts
-  const now = new Date()
-  const twoMinutesAgo = new Date(now.getTime() - 2 * 60 * 1000)
-
   const realConflicts = conflicts?.filter(conflict => {
     // If it's a confirmed or paid reservation, it's always a real conflict
     // Note: 'paid' is a valid status if migration 006 has been applied
     if (conflict.status === 'confirmed' || conflict.status === 'paid') {
+      console.log(`⚠️ Real conflict found (${conflict.status}):`, conflict.id)
       return true
+    }
+
+    // If it's a pending_payment or pending reservation from the SAME user, 
+    // it's not a real conflict - we should have cleaned it up above, or it's the user's own pending
+    if (conflict.user_id === data.userId && (conflict.status === 'pending_payment' || conflict.status === 'pending')) {
+      console.log(`✓ Ignoring own ${conflict.status} reservation: ${conflict.id}`)
+      return false // Not a real conflict - user is replacing their own pending reservation
     }
 
     // If it's a pending or pending_payment reservation from a different user, it's a real conflict
     if (conflict.user_id !== data.userId) {
+      console.log(`⚠️ Real conflict found from different user (${conflict.status}):`, conflict.id)
       return true
     }
 
-    // If it's a pending reservation from the same user, check how old it is
-    const createdAt = new Date(conflict.created_at)
-    const isVeryRecent = createdAt > twoMinutesAgo
-
-    if (isVeryRecent) {
-      console.log(`Ignoring very recent pending reservation from same user: ${conflict.id} (created ${Math.round((now.getTime() - createdAt.getTime()) / 1000)}s ago)`)
-      return false // Not a real conflict, likely a duplicate attempt
-    }
-
-    return true // Old pending reservation, could be legitimate
+    return true // Other cases, treat as legitimate conflict
   }) || []
 
   console.log('Real conflicts after filtering:', realConflicts)
@@ -348,15 +389,88 @@ export async function createReservationAction(data: {
   if (error) {
     console.error('Error creating reservation:', error)
     console.error('Error details:', JSON.stringify(error, null, 2))
+    console.error('Attempted reservation data:', {
+      court_id: data.courtId,
+      user_id: data.userId,
+      start_time: startTimeISO,
+      end_time: endTimeISO,
+      status: initialStatus,
+    })
 
     const overlapViolation =
       error?.code === '23P01' ||
       error?.code === '23505' ||
       (typeof error?.message === 'string' &&
         (error.message.includes('no_overlapping_reservations') ||
+         error.message.includes('overlaps with existing') ||
          error.message.toLowerCase().includes('overlap')))
 
     if (overlapViolation) {
+      // Try to find what's conflicting for better error message
+      const { data: conflictingRes } = await supabase
+        .from('reservations')
+        .select('id, status, start_time, end_time, user_id, created_at')
+        .eq('court_id', data.courtId)
+        .in('status', ['pending_payment', 'pending', 'paid', 'confirmed'])
+        .lt('start_time', endTimeISO)
+        .gt('end_time', startTimeISO)
+        .limit(3)
+
+      console.error('🔍 Found conflicting reservations:', conflictingRes)
+
+      // If the conflict is from the same user, try to cancel it
+      const userConflict = conflictingRes?.find(r => r.user_id === data.userId)
+      if (userConflict && userConflict.status === 'pending_payment') {
+        console.log('🔄 Attempting to cancel user\'s own conflicting pending_payment reservation:', userConflict.id)
+        
+        const { error: cancelError } = await supabase
+          .from('reservations')
+          .update({ 
+            status: 'cancelled',
+            cancelled_at: new Date().toISOString(),
+            cancellation_reason: 'Auto-cancelled: Replaced by new booking attempt'
+          })
+          .eq('id', userConflict.id)
+
+        if (!cancelError) {
+          // Retry the insert
+          console.log('✅ Cancelled conflicting reservation, retrying insert...')
+          
+          const { data: retryReservation, error: retryError } = await supabase
+            .from('reservations')
+            .insert({
+              court_id: data.courtId,
+              user_id: data.userId,
+              start_time: startTimeISO,
+              end_time: endTimeISO,
+              status: initialStatus,
+              total_amount: data.totalAmount,
+              amount_paid: 0,
+              num_players: data.numPlayers || 1,
+              payment_type: data.paymentType || 'full',
+              discount_applied: data.discountApplied || 0,
+              discount_type: data.discountType || null,
+              discount_reason: data.discountReason || null,
+              metadata: {
+                booking_origin: 'web_checkout',
+                intended_payment_method: data.paymentMethod ?? null,
+              },
+              notes: data.notes,
+            })
+            .select('id')
+            .single()
+
+          if (!retryError && retryReservation) {
+            console.log('✅ Retry successful! Reservation created:', retryReservation.id)
+            revalidatePath('/reservations')
+            revalidatePath('/bookings')
+            return { success: true, reservationId: retryReservation.id }
+          }
+          
+          console.error('Retry also failed:', retryError)
+        }
+      }
+
       return {
         success: false,
         error: 'This time slot has just been reserved. Please choose another time.',

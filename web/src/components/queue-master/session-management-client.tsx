@@ -93,6 +93,15 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null)
   const [activeMatches, setActiveMatches] = useState<any[]>([])
+  
+  // Session summary modal state
+  const [showSummaryModal, setShowSummaryModal] = useState(false)
+  const [sessionSummary, setSessionSummary] = useState<{
+    totalGames: number
+    totalRevenue: number
+    totalParticipants: number
+    unpaidBalances: number
+  } | null>(null)
 
   useEffect(() => {
     loadSession()
@@ -380,9 +389,17 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
     try {
       const result = await closeQueueSession(sessionId)
       if (!result.success) throw new Error(result.error)
-      router.push('/queue-master')
+      
+      // Show summary modal instead of redirecting immediately
+      if (result.summary) {
+        setSessionSummary(result.summary)
+        setShowSummaryModal(true)
+      } else {
+        router.push('/queue-master')
+      }
     } catch (err: any) {
       alert(err.message || 'Failed to close session')
+    } finally {
       setActionLoading(null)
     }
   }
@@ -525,10 +542,18 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
 
       {/* Session Info Card */}
       <div className="bg-gradient-to-br from-primary to-primary/80 text-white rounded-xl p-6 mb-6 shadow-lg">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div>
-            <div className="text-white/80 text-sm mb-1">Players</div>
+            <div className="text-white/80 text-sm mb-1">Total Players</div>
             <div className="text-2xl font-bold">{session.currentPlayers}/{session.maxPlayers}</div>
+          </div>
+          <div>
+            <div className="text-white/80 text-sm mb-1">Waiting</div>
+            <div className="text-2xl font-bold text-yellow-300">{session.players.filter(p => p.status === 'waiting').length}</div>
+          </div>
+          <div>
+            <div className="text-white/80 text-sm mb-1">Playing</div>
+            <div className="text-2xl font-bold text-green-300">{session.players.filter(p => p.status === 'playing').length}</div>
           </div>
           <div>
             <div className="text-white/80 text-sm mb-1">Total Games</div>
@@ -537,16 +562,6 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
           <div>
             <div className="text-white/80 text-sm mb-1">Revenue</div>
             <div className="text-2xl font-bold">₱{totalRevenue.toFixed(0)}</div>
-          </div>
-          <div>
-            <div className="text-white/80 text-sm mb-1">Time</div>
-            <div className="text-2xl font-bold">
-              {new Date(session.startTime).toLocaleTimeString('en-US', { 
-                hour: 'numeric', 
-                minute: '2-digit',
-                hour12: true 
-              })}
-            </div>
           </div>
         </div>
 
@@ -890,6 +905,75 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
               costPerGame={session.costPerGame}
               onSuccess={handleModalSuccess}
             />
+          )}
+
+          {/* Session Summary Modal */}
+          {showSummaryModal && sessionSummary && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+                {/* Header */}
+                <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white p-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                      <CheckCircle className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold">Session Closed</h2>
+                      <p className="text-white/80 text-sm">Summary of your queue session</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Summary Stats */}
+                <div className="p-6 space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-gray-50 rounded-xl p-4 text-center">
+                      <div className="text-3xl font-bold text-gray-900">{sessionSummary.totalParticipants}</div>
+                      <div className="text-sm text-gray-600 flex items-center justify-center gap-1 mt-1">
+                        <Users className="w-4 h-4" />
+                        Total Players
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 rounded-xl p-4 text-center">
+                      <div className="text-3xl font-bold text-gray-900">{sessionSummary.totalGames}</div>
+                      <div className="text-sm text-gray-600 flex items-center justify-center gap-1 mt-1">
+                        <Trophy className="w-4 h-4" />
+                        Games Played
+                      </div>
+                    </div>
+                    <div className="bg-green-50 rounded-xl p-4 text-center">
+                      <div className="text-3xl font-bold text-green-600">₱{sessionSummary.totalRevenue.toFixed(2)}</div>
+                      <div className="text-sm text-gray-600 flex items-center justify-center gap-1 mt-1">
+                        <DollarSign className="w-4 h-4" />
+                        Total Revenue
+                      </div>
+                    </div>
+                    <div className={`rounded-xl p-4 text-center ${sessionSummary.unpaidBalances > 0 ? 'bg-yellow-50' : 'bg-gray-50'}`}>
+                      <div className={`text-3xl font-bold ${sessionSummary.unpaidBalances > 0 ? 'text-yellow-600' : 'text-gray-900'}`}>
+                        {sessionSummary.unpaidBalances}
+                      </div>
+                      <div className="text-sm text-gray-600 flex items-center justify-center gap-1 mt-1">
+                        <AlertCircle className="w-4 h-4" />
+                        Unpaid Balances
+                      </div>
+                    </div>
+                  </div>
+
+                  {sessionSummary.unpaidBalances > 0 && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
+                      ⚠️ Some players have unpaid balances. Make sure to collect payments.
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => router.push('/queue-master')}
+                    className="w-full py-3 bg-primary text-white font-medium rounded-xl hover:bg-primary/90 transition-colors"
+                  >
+                    Back to Dashboard
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </>
       )}

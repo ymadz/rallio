@@ -91,6 +91,12 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
   }
 
   const getPaymentStatus = (booking: Booking) => {
+    // If booking status is 'confirmed' or 'paid', payment is complete
+    if (booking.status === 'confirmed' || booking.status === 'paid') {
+      return { label: 'Paid', color: 'green', needsPayment: false }
+    }
+    
+    // Check payment records
     const payment = booking.payments?.[0]
     if (!payment) return { label: 'Payment Pending', color: 'yellow', needsPayment: true }
     

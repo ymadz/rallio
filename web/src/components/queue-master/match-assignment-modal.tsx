@@ -106,7 +106,13 @@ export function MatchAssignmentModal({
     setIsSubmitting(true)
 
     try {
-      const result = await assignMatchFromQueue(sessionId, playersNeeded)
+      // Pass selected players and team assignments to the server action
+      const result = await assignMatchFromQueue(
+        sessionId, 
+        playersNeeded,
+        selectedPlayers,
+        { teamA, teamB }
+      )
 
       if (!result.success) {
         throw new Error(result.error || 'Failed to create match')

@@ -720,7 +720,7 @@ export async function createQueueSession(data: {
       return { success: false, error: 'Max players must be between 4 and 20' }
     }
 
-    // 4. Verify court exists and get venue approval settings
+    // 4. Verify court exists and get venue approval settings + opening hours
     const { data: court, error: courtError } = await supabase
       .from('courts')
       .select(`
@@ -731,7 +731,8 @@ export async function createQueueSession(data: {
         venues!inner (
           id,
           name,
-          requires_queue_approval
+          requires_queue_approval,
+          opening_hours
         )
       `)
       .eq('id', data.courtId)
@@ -751,6 +752,57 @@ export async function createQueueSession(data: {
     const requiresApproval = venue?.requires_queue_approval ?? true
     const initialStatus = requiresApproval ? 'pending_approval' : 'draft'
     const approvalStatus = requiresApproval ? 'pending' : 'approved'
+
+    // 5. Validate against venue operating hours
+    const openingHours = venue?.opening_hours as Record<string, { open: string; close: string }> | null
+    if (openingHours) {
+      const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+      const startDate = new Date(data.startTime)
+      const endDate = new Date(data.endTime)
+      const dayOfWeek = dayNames[startDate.getDay()]
+      const dayHours = openingHours[dayOfWeek]
+
+      if (!dayHours) {
+        return { 
+          success: false, 
+          error: `Venue is closed on ${dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1)}s` 
+        }
+      }
+
+      const [openHour, openMin = 0] = dayHours.open.split(':').map(Number)
+      const [closeHour, closeMin = 0] = dayHours.close.split(':').map(Number)
+
+      const sessionStartHour = startDate.getHours()
+      const sessionStartMin = startDate.getMinutes()
+      const sessionEndHour = endDate.getHours()
+      const sessionEndMin = endDate.getMinutes()
+
+      // Convert to minutes for easier comparison
+      const venueOpenMinutes = openHour * 60 + openMin
+      const venueCloseMinutes = closeHour * 60 + closeMin
+      const sessionStartMinutes = sessionStartHour * 60 + sessionStartMin
+      const sessionEndMinutes = sessionEndHour * 60 + sessionEndMin
+
+      if (sessionStartMinutes < venueOpenMinutes) {
+        return { 
+          success: false, 
+          error: `Session starts before venue opens (${dayHours.open}). Please choose a later start time.` 
+        }
+      }
+
+      if (sessionEndMinutes > venueCloseMinutes) {
+        return { 
+          success: false, 
+          error: `Session ends after venue closes (${dayHours.close}). Please choose an earlier end time or shorter duration.` 
+        }
+      }
+
+      console.log('[createQueueSession] ✅ Session time validated against venue hours:', {
+        venueHours: dayHours,
+        sessionStart: `${sessionStartHour}:${sessionStartMin.toString().padStart(2, '0')}`,
+        sessionEnd: `${sessionEndHour}:${sessionEndMin.toString().padStart(2, '0')}`,
+      })
+    }
 
     console.log('[createQueueSession] 📋 Venue approval settings:', {
       requiresApproval,

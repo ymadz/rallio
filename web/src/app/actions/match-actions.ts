@@ -31,9 +31,18 @@ export interface MatchData {
 /**
  * Assign top players from queue to a new match
  * Queue Master action
+ * @param sessionId - The queue session ID
+ * @param numPlayers - Number of players (default 4 for doubles)
+ * @param selectedPlayers - Optional: Specific player user IDs to assign (overrides auto-selection)
+ * @param teamAssignments - Optional: Pre-assigned teams { teamA: string[], teamB: string[] }
  */
-export async function assignMatchFromQueue(sessionId: string, numPlayers: number = 4) {
-  console.log('[assignMatchFromQueue] 🎯 Assigning match from queue:', { sessionId, numPlayers })
+export async function assignMatchFromQueue(
+  sessionId: string, 
+  numPlayers: number = 4,
+  selectedPlayers?: string[],
+  teamAssignments?: { teamA: string[], teamB: string[] }
+) {
+  console.log('[assignMatchFromQueue] 🎯 Assigning match from queue:', { sessionId, numPlayers, selectedPlayers, teamAssignments })
 
   try {
     const supabase = await createClient()
@@ -71,21 +80,54 @@ export async function assignMatchFromQueue(sessionId: string, numPlayers: number
       return { success: false, error: 'Unauthorized: Only queue master can assign matches' }
     }
 
-    // Get top N waiting participants
-    const { data: participants, error: participantsError } = await supabase
-      .from('queue_participants')
-      .select('*')
-      .eq('queue_session_id', sessionId)
-      .eq('status', 'waiting')
-      .is('left_at', null)
-      .order('joined_at', { ascending: true })
-      .limit(numPlayers)
+    let participants: any[]
 
-    if (participantsError || !participants || participants.length < numPlayers) {
-      return {
-        success: false,
-        error: `Not enough waiting players. Need ${numPlayers}, found ${participants?.length || 0}`,
+    // If specific players are selected, use those; otherwise get top N waiting
+    if (selectedPlayers && selectedPlayers.length > 0) {
+      // Get the selected participants
+      const { data: selectedParticipants, error: selectedError } = await supabase
+        .from('queue_participants')
+        .select('*')
+        .eq('queue_session_id', sessionId)
+        .eq('status', 'waiting')
+        .is('left_at', null)
+        .in('user_id', selectedPlayers)
+
+      if (selectedError || !selectedParticipants) {
+        return { success: false, error: 'Failed to fetch selected participants' }
       }
+
+      if (selectedParticipants.length !== selectedPlayers.length) {
+        const foundIds = selectedParticipants.map(p => p.user_id)
+        const missingIds = selectedPlayers.filter(id => !foundIds.includes(id))
+        return {
+          success: false,
+          error: `Some selected players are not in the waiting queue: ${missingIds.length} player(s) missing`,
+        }
+      }
+
+      participants = selectedParticipants
+      console.log('[assignMatchFromQueue] 📋 Using manually selected players:', participants.length)
+    } else {
+      // Get top N waiting participants (original behavior)
+      const { data: topParticipants, error: participantsError } = await supabase
+        .from('queue_participants')
+        .select('*')
+        .eq('queue_session_id', sessionId)
+        .eq('status', 'waiting')
+        .is('left_at', null)
+        .order('joined_at', { ascending: true })
+        .limit(numPlayers)
+
+      if (participantsError || !topParticipants || topParticipants.length < numPlayers) {
+        return {
+          success: false,
+          error: `Not enough waiting players. Need ${numPlayers}, found ${topParticipants?.length || 0}`,
+        }
+      }
+
+      participants = topParticipants
+      console.log('[assignMatchFromQueue] 📋 Using top waiting players:', participants.length)
     }
 
     // Get current match count for this session
@@ -100,7 +142,12 @@ export async function assignMatchFromQueue(sessionId: string, numPlayers: number
     let teamA: string[]
     let teamB: string[]
 
-    if (session.mode === 'competitive') {
+    // If team assignments are provided, use those
+    if (teamAssignments && teamAssignments.teamA.length > 0 && teamAssignments.teamB.length > 0) {
+      teamA = teamAssignments.teamA
+      teamB = teamAssignments.teamB
+      console.log('[assignMatchFromQueue] 📋 Using manually assigned teams:', { teamA, teamB })
+    } else if (session.mode === 'competitive') {
       // Skill-based team balancing for competitive mode
       console.log('[assignMatchFromQueue] 🎯 Using skill-based team balancing')
 
