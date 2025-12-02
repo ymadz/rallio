@@ -29,6 +29,7 @@ import { AnalyticsDashboard } from './analytics-dashboard'
 import { ReviewsManagement } from './reviews-management'
 import DiscountManagement from './discount-management'
 import { QueueApprovalsManagement } from './queue-approvals-management'
+import { VenueEditModal } from './venue-edit-modal'
 
 interface VenueDetailProps {
   venueId: string
@@ -43,6 +44,7 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
   const [venue, setVenue] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showEditModal, setShowEditModal] = useState(false)
 
   useEffect(() => {
     loadVenue()
@@ -160,7 +162,10 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
             </div>
           </div>
 
-          <button className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          <button 
+            onClick={() => setShowEditModal(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
             <Edit className="w-4 h-4" />
             <span>Edit Venue</span>
           </button>
@@ -281,6 +286,16 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
         {activeTab === 'analytics' && <AnalyticsDashboard venueId={venueId} />}
         {activeTab === 'reviews' && <ReviewsManagement venueId={venueId} />}
       </div>
+
+      {/* Edit Venue Modal */}
+      {venue && (
+        <VenueEditModal
+          venue={venue}
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          onSuccess={loadVenue}
+        />
+      )}
     </div>
   )
 }

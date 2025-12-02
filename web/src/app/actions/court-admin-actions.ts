@@ -401,9 +401,12 @@ export async function updateVenue(venueId: string, updates: {
   name?: string
   description?: string
   address?: string
+  city?: string
   phone?: string
   email?: string
   website?: string
+  latitude?: number
+  longitude?: number
   opening_hours?: any
 }) {
   const supabase = await createClient()

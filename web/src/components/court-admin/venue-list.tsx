@@ -17,9 +17,11 @@ import {
   XCircle,
   Loader2,
   AlertCircle,
-  X
+  X,
+  Globe
 } from 'lucide-react'
 import { getMyVenues, createVenue } from '@/app/actions/court-admin-actions'
+import { AddressAutocomplete } from '@/components/ui/address-autocomplete'
 
 interface Venue {
   id: string
@@ -47,7 +49,9 @@ export function VenueList() {
     city: 'Zamboanga City',
     phone: '',
     email: '',
-    website: ''
+    website: '',
+    latitude: '',
+    longitude: ''
   })
 
   useEffect(() => {
@@ -79,7 +83,26 @@ export function VenueList() {
 
     setIsCreating(true)
     try {
-      const result = await createVenue(formData)
+      // Prepare venue data with proper types
+      const venueData: Record<string, any> = {
+        name: formData.name,
+        description: formData.description || undefined,
+        address: formData.address || undefined,
+        city: formData.city || 'Zamboanga City',
+        phone: formData.phone || undefined,
+        email: formData.email || undefined,
+        website: formData.website || undefined
+      }
+      
+      // Add coordinates if provided
+      if (formData.latitude) {
+        venueData.latitude = parseFloat(formData.latitude)
+      }
+      if (formData.longitude) {
+        venueData.longitude = parseFloat(formData.longitude)
+      }
+
+      const result = await createVenue(venueData)
       if (!result.success) {
         throw new Error(result.error)
       }
@@ -91,7 +114,9 @@ export function VenueList() {
         city: 'Zamboanga City',
         phone: '',
         email: '',
-        website: ''
+        website: '',
+        latitude: '',
+        longitude: ''
       })
       setShowCreateModal(false)
       // Reload venues
@@ -393,21 +418,29 @@ export function VenueList() {
                 />
               </div>
 
-              {/* Address */}
+              {/* Address with Autocomplete */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-gray-500" />
-                    Address
-                  </div>
+                  Address
                 </label>
-                <input
-                  type="text"
+                <AddressAutocomplete
                   value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  placeholder="e.g., Gov. Camins Ave"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                  onChange={(address) => setFormData({ ...formData, address })}
+                  onPlaceSelect={(place) => {
+                    setFormData({
+                      ...formData,
+                      address: place.address,
+                      city: place.city || formData.city,
+                      latitude: place.latitude.toString(),
+                      longitude: place.longitude.toString()
+                    })
+                  }}
+                  placeholder="Search for an address..."
+                  className="rounded-xl"
                 />
+                <p className="mt-1 text-xs text-gray-500">
+                  Select from suggestions to auto-fill city and coordinates
+                </p>
               </div>
 
               {/* City */}
@@ -461,7 +494,10 @@ export function VenueList() {
               {/* Website */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Website (Optional)
+                  <div className="flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-gray-500" />
+                    Website (Optional)
+                  </div>
                 </label>
                 <input
                   type="url"
@@ -470,6 +506,36 @@ export function VenueList() {
                   placeholder="https://www.yourwebsite.com"
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
                 />
+              </div>
+
+              {/* Coordinates */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Latitude
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={formData.latitude}
+                    onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
+                    placeholder="e.g., 6.9214"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Longitude
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={formData.longitude}
+                    onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
+                    placeholder="e.g., 122.0790"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                  />
+                </div>
               </div>
 
               {/* Modal Footer */}

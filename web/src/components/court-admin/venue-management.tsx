@@ -18,6 +18,7 @@ import {
   Clock
 } from 'lucide-react'
 import Link from 'next/link'
+import { VenueEditModal } from './venue-edit-modal'
 
 interface Venue {
   id: string
@@ -28,6 +29,8 @@ interface Venue {
   phone?: string
   email?: string
   website?: string
+  latitude?: number
+  longitude?: number
   is_active: boolean
   is_verified: boolean
   courts?: { count: number }[]
@@ -50,6 +53,7 @@ export function VenueManagement() {
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingCourts, setIsLoadingCourts] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showEditModal, setShowEditModal] = useState(false)
 
   useEffect(() => {
     loadVenues()
@@ -216,7 +220,10 @@ export function VenueManagement() {
               <div className="bg-white border border-gray-200 rounded-xl p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xl font-bold text-gray-900">{selectedVenue.name}</h2>
-                  <button className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                  <button 
+                    onClick={() => setShowEditModal(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
                     <Edit className="w-4 h-4" />
                     <span>Edit Venue</span>
                   </button>
@@ -364,6 +371,23 @@ export function VenueManagement() {
           )}
         </div>
       </div>
+
+      {/* Edit Venue Modal */}
+      {selectedVenue && (
+        <VenueEditModal
+          venue={selectedVenue}
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          onSuccess={() => {
+            loadVenues()
+            // Update selected venue with new data
+            const updatedVenue = venues.find(v => v.id === selectedVenue.id)
+            if (updatedVenue) {
+              setSelectedVenue(updatedVenue)
+            }
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -1,198 +1,137 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import {
-  createVenue,
-  updateVenue
-} from '@/app/actions/global-admin-venue-actions'
-import { getAllUsers } from '@/app/actions/global-admin-user-actions'
-import {
-  X,
-  Loader2,
-  Search,
-  Phone,
-  Mail,
-  Globe,
-  User
-} from 'lucide-react'
-import { toast } from 'sonner'
+import { X, Loader2, Phone, Mail, Globe } from 'lucide-react'
+import { updateVenue } from '@/app/actions/court-admin-actions'
+import { useRouter } from 'next/navigation'
 import { AddressAutocomplete } from '@/components/ui/address-autocomplete'
 
-interface VenueFormModalProps {
-  venue?: any
+interface VenueEditModalProps {
+  venue: {
+    id: string
+    name: string
+    description?: string
+    address?: string
+    city?: string
+    phone?: string
+    email?: string
+    website?: string
+    latitude?: number
+    longitude?: number
+  }
+  isOpen: boolean
   onClose: () => void
-  onSuccess: () => void
+  onSuccess?: () => void
 }
 
-export function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProps) {
-  const [formData, setFormData] = useState({
-    owner_id: venue?.owner?.id || '',
-    name: venue?.name || '',
-    description: venue?.description || '',
-    address: venue?.address || '',
-    city: venue?.city || 'Zamboanga City',
-    phone: venue?.phone || '',
-    email: venue?.email || '',
-    website: venue?.website || '',
-    latitude: venue?.latitude || '',
-    longitude: venue?.longitude || ''
-  })
-  
-  const [users, setUsers] = useState<any[]>([])
-  const [isLoadingUsers, setIsLoadingUsers] = useState(false)
-  const [userSearch, setUserSearch] = useState('')
-  const [showUserDropdown, setShowUserDropdown] = useState(false)
+export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditModalProps) {
+  const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    address: '',
+    city: '',
+    phone: '',
+    email: '',
+    website: '',
+    latitude: '',
+    longitude: ''
+  })
 
+  // Reset form when venue changes
   useEffect(() => {
-    if (showUserDropdown) {
-      loadUsers()
-    }
-  }, [userSearch, showUserDropdown])
-
-  const loadUsers = async () => {
-    setIsLoadingUsers(true)
-    try {
-      const result = await getAllUsers({
-        page: 1,
-        pageSize: 20,
-        search: userSearch || undefined,
-        roleFilter: 'court_admin'
+    if (venue) {
+      setFormData({
+        name: venue.name || '',
+        description: venue.description || '',
+        address: venue.address || '',
+        city: venue.city || '',
+        phone: venue.phone || '',
+        email: venue.email || '',
+        website: venue.website || '',
+        latitude: venue.latitude?.toString() || '',
+        longitude: venue.longitude?.toString() || ''
       })
-      if (result.success) {
-        setUsers(result.users || [])
-      }
-    } catch (error) {
-      console.error('Failed to load users:', error)
-    } finally {
-      setIsLoadingUsers(false)
     }
-  }
-
-  const selectedUser = users.find(u => u.id === formData.owner_id) || 
-    (venue?.owner ? { id: venue.owner.id, display_name: venue.owner.display_name, email: venue.owner.email } : null)
+  }, [venue])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
+    setError(null)
 
     try {
-      const submitData = {
-        ...formData,
-        latitude: formData.latitude ? parseFloat(formData.latitude as any) : undefined,
-        longitude: formData.longitude ? parseFloat(formData.longitude as any) : undefined
+      const updates: Record<string, any> = {
+        name: formData.name,
+        description: formData.description || null,
+        address: formData.address || null,
+        city: formData.city || null,
+        phone: formData.phone || null,
+        email: formData.email || null,
+        website: formData.website || null
       }
 
-      const result = venue
-        ? await updateVenue(venue.id, submitData)
-        : await createVenue(submitData)
+      // Only add coordinates if provided
+      if (formData.latitude) {
+        updates.latitude = parseFloat(formData.latitude)
+      }
+      if (formData.longitude) {
+        updates.longitude = parseFloat(formData.longitude)
+      }
+
+      const result = await updateVenue(venue.id, updates)
 
       if (!result.success) {
         throw new Error(result.error)
       }
 
-      toast.success(result.message)
-      onSuccess()
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to save venue')
+      onSuccess?.()
+      onClose()
+      router.refresh()
+    } catch (err: any) {
+      setError(err.message || 'Failed to update venue')
     } finally {
       setIsSubmitting(false)
     }
   }
 
+  if (!isOpen) return null
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div 
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      
+      {/* Modal */}
+      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">
-            {venue ? 'Edit Venue' : 'Add New Venue'}
-          </h3>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
-            <X className="w-5 h-5 text-gray-600" />
+          <h2 className="text-xl font-semibold text-gray-900">Edit Venue</h2>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* Owner Selection */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Venue Owner *
-            </label>
-            <div className="relative">
-              <div
-                onClick={() => setShowUserDropdown(!showUserDropdown)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
-              >
-                {selectedUser ? (
-                  <div>
-                    <div className="font-medium text-gray-900">{selectedUser.display_name}</div>
-                    <div className="text-sm text-gray-500">{selectedUser.email}</div>
-                  </div>
-                ) : (
-                  <div className="text-gray-500">Select an owner...</div>
-                )}
-              </div>
-
-              {showUserDropdown && (
-                <>
-                  <div
-                    className="fixed inset-0 z-10"
-                    onClick={() => setShowUserDropdown(false)}
-                  />
-                  <div className="absolute z-20 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-hidden">
-                    {/* Search */}
-                    <div className="p-2 border-b border-gray-200">
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                          type="text"
-                          value={userSearch}
-                          onChange={(e) => setUserSearch(e.target.value)}
-                          placeholder="Search users..."
-                          className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </div>
-                    </div>
-
-                    {/* User List */}
-                    <div className="overflow-y-auto max-h-48">
-                      {isLoadingUsers ? (
-                        <div className="flex items-center justify-center py-4">
-                          <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
-                        </div>
-                      ) : users.length === 0 ? (
-                        <div className="text-center py-4 text-sm text-gray-500">
-                          No users found
-                        </div>
-                      ) : (
-                        users.map((user) => (
-                          <button
-                            key={user.id}
-                            type="button"
-                            onClick={() => {
-                              setFormData({ ...formData, owner_id: user.id })
-                              setShowUserDropdown(false)
-                            }}
-                            className="w-full px-4 py-2 text-left hover:bg-gray-50 transition-colors"
-                          >
-                            <div className="font-medium text-gray-900">{user.display_name}</div>
-                            <div className="text-sm text-gray-500">{user.email}</div>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              {error}
             </div>
-          </div>
+          )}
 
           {/* Venue Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Venue Name *
+              Venue Name <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -238,7 +177,7 @@ export function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProp
               placeholder="Search for an address..."
             />
             <p className="mt-1 text-xs text-gray-500">
-              Select from suggestions to auto-fill city and coordinates
+              Select from suggestions to auto-fill coordinates
             </p>
           </div>
 
@@ -351,11 +290,11 @@ export function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProp
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || !formData.owner_id}
+              disabled={isSubmitting || !formData.name}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-2"
             >
               {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-              {venue ? 'Update Venue' : 'Create Venue'}
+              Save Changes
             </button>
           </div>
         </form>
