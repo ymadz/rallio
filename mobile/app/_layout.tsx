@@ -2,46 +2,43 @@ import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { StyleSheet } from 'react-native';
-import { useAuthStore } from '@/store/authStore';
-import { supabase } from '@/services/supabase';
+import { StyleSheet, View } from 'react-native';
+import { ThemeProvider } from '@/contexts/ThemeContext';
+import { useAuthStore } from '@/stores/authStore';
 
 export default function RootLayout() {
-  const setSession = useAuthStore((state) => state.setSession);
-  const setUser = useAuthStore((state) => state.setUser);
+  const loadSession = useAuthStore((state) => state.loadSession);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-    });
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
-  }, [setSession, setUser]);
+    loadSession();
+  }, []);
 
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <StatusBar style="auto" />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(tabs)" />
-      </Stack>
-    </GestureHandlerRootView>
+    <ThemeProvider>
+      <GestureHandlerRootView style={styles.container}>
+        <StatusBar style="light" backgroundColor="#0D0B1A" />
+        <Stack 
+          screenOptions={{ 
+            headerShown: false,
+            contentStyle: { backgroundColor: '#0D0B1A' },
+            animation: 'slide_from_right',
+          }}
+        >
+          <Stack.Screen name="index" />
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="venue/[id]" options={{ presentation: 'card' }} />
+          <Stack.Screen name="booking/[courtId]" options={{ presentation: 'card' }} />
+          <Stack.Screen name="settings" options={{ presentation: 'card' }} />
+        </Stack>
+      </GestureHandlerRootView>
+    </ThemeProvider>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#0D0B1A',
   },
 });

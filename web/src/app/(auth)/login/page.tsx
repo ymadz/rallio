@@ -93,19 +93,31 @@ export default function LoginPage() {
 
   const handleGoogleLogin = async () => {
     setIsLoading(true)
+    setError(null)
     try {
       const supabase = createClient()
-      const { error } = await supabase.auth.signInWithOAuth({
+      const redirectUrl = `${window.location.origin}/auth/callback`
+      console.log('🔍 [Google Login] Redirect URL:', redirectUrl)
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: redirectUrl,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
         },
       })
 
+      console.log('🔍 [Google Login] OAuth response:', { data, error })
+
       if (error) {
+        console.error('❌ [Google Login] Error:', error)
         setError(error.message)
       }
-    } catch {
+    } catch (err) {
+      console.error('❌ [Google Login] Unexpected error:', err)
       setError('An unexpected error occurred')
     } finally {
       setIsLoading(false)
@@ -116,7 +128,7 @@ export default function LoginPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="text-center space-y-2">
-        <h1 className="text-2xl font-bold tracking-tight">Log in or Sign up</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Log in sor Sign up</h1>
         <p className="text-muted-foreground">Your game starts here</p>
       </div>
 

@@ -22,23 +22,6 @@ interface PhoneInputProps {
  */
 export const PhoneInput = forwardRef<HTMLInputElement, PhoneInputProps>(
   ({ value = '', onChange, disabled, className, placeholder, id, name, required }, ref) => {
-    // Remove +63 prefix for display
-    const getDisplayValue = (val: string) => {
-      if (!val) return ''
-      // Remove +63 prefix if present
-      let clean = val.replace(/^\+63\s?/, '')
-      // Remove any non-digit characters
-      clean = clean.replace(/\D/g, '')
-      return formatPhoneNumber(clean)
-    }
-
-    const [displayValue, setDisplayValue] = useState(() => getDisplayValue(value))
-
-    // Update display when value prop changes
-    useEffect(() => {
-      setDisplayValue(getDisplayValue(value))
-    }, [value])
-
     // Format phone number for display: 9XX XXX XXXX
     const formatPhoneNumber = (digits: string): string => {
       if (!digits) return ''
@@ -55,6 +38,23 @@ export const PhoneInput = forwardRef<HTMLInputElement, PhoneInputProps>(
         return `${limited.slice(0, 3)} ${limited.slice(3, 6)} ${limited.slice(6)}`
       }
     }
+
+    // Remove +63 prefix for display
+    const getDisplayValue = (val: string) => {
+      if (!val) return ''
+      // Remove +63 prefix if present
+      let clean = val.replace(/^\+63\s?/, '')
+      // Remove any non-digit characters
+      clean = clean.replace(/\D/g, '')
+      return formatPhoneNumber(clean)
+    }
+
+    const [displayValue, setDisplayValue] = useState(() => getDisplayValue(value))
+
+    // Update display when value prop changes
+    useEffect(() => {
+      setDisplayValue(getDisplayValue(value))
+    }, [value])
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const input = e.target.value

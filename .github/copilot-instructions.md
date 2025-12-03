@@ -4,92 +4,103 @@ Badminton Court Finder & Queue Management System for Zamboanga City, Philippines
 
 ## Quick Context
 
-**Read first:** `CLAUDE.md` (debugging), `docs/planning.md` (phases), `docs/tasks.md` (progress)
+**Read first:** `CLAUDE.md` (debugging patterns), `docs/tasks.md` (current progress)
 
-**Stack:** Next.js 16 (App Router), React 19, TypeScript 5, Supabase (PostgreSQL + Auth), PayMongo, Leaflet, Zustand
+**Stack:** Next.js 16 (App Router), React 19, TypeScript 5, Supabase (PostgreSQL + Auth + RLS), PayMongo, Leaflet, Zustand
 
 ## Architecture
 
 ```
 rallio/
-├── shared/src/           # Types, Zod validations, utils (used by web & mobile)
-├── web/src/              # Next.js 16 web app (primary)
-│   ├── app/actions/      # Server actions (24 files by feature)
-│   ├── lib/supabase/     # THREE client types (see below)
+├── shared/src/           # Types, Zod validations, utils (web + mobile)
+│   ├── types/            # Shared TypeScript interfaces
+│   └── validations/      # Zod schemas (auth, profile, reservations)
+├── web/src/
+│   ├── app/actions/      # 25 server action files by feature domain
+│   ├── app/api/webhooks/ # PayMongo webhook handler
+│   ├── lib/supabase/     # 4 client files (see below)
 │   └── lib/paymongo/     # PayMongo client library
 ├── mobile/               # React Native + Expo 54 (in development)
-└── backend/supabase/     # Migrations (001-024), edge functions
+└── backend/supabase/
+    └── migrations/       # 001-031 SQL migrations (sequential)
 ```
 
 **Path aliases:** `@/*` → `./src/*`, `@rallio/shared` → `../shared/src`
 
-## Supabase Clients (Critical)
+## Supabase Clients (Critical - 4 Files)
 
 ```typescript
-// Client component - browser context
+// CLIENT COMPONENT - browser, no async
 import { createClient } from '@/lib/supabase/client'
 const supabase = createClient()
 
-// Server component/action - respects RLS, async required
+// SERVER COMPONENT/ACTION - respects RLS, MUST await
 import { createClient } from '@/lib/supabase/server'
 const supabase = await createClient()
 
-// Admin operations ONLY - bypasses RLS (use sparingly)
-import { createServiceClient } from '@/lib/supabase/server'
-const supabase = createServiceClient()
+// ADMIN ONLY - bypasses RLS (webhooks, admin operations)
+import { createServiceClient } from '@/lib/supabase/server'   // or
+import { createServiceClient } from '@/lib/supabase/service'  // cached version
 ```
 
-## Key Patterns
+## Server Actions Pattern
 
-### Server Actions + Cache
+All data mutations use server actions in `web/src/app/actions/`:
+
 ```typescript
 'use server'
+import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-export async function updateData(data) {
+export async function updateReservation(id: string, data: UpdateData) {
   const supabase = await createClient()
-  await supabase.from('table').update(data)
-  revalidatePath('/path')  // Always invalidate cache
+  const { error } = await supabase.from('reservations').update(data).eq('id', id)
+  if (error) return { success: false, error: error.message }
+  revalidatePath('/reservations')  // ALWAYS invalidate
   return { success: true }
 }
-// Client-side: await action(); router.refresh()
 ```
 
-### Leaflet Maps (No SSR)
+**Client-side:** `await action(); router.refresh()` for immediate UI update
+
+## Leaflet Maps (No SSR)
+
 ```typescript
+// Leaflet crashes on server - ALWAYS use dynamic import
 const VenueMap = dynamic(() => import('@/components/map/venue-map'), {
-  ssr: false,  // Leaflet crashes on server
-  loading: () => <LoadingSpinner />
+  ssr: false,
+  loading: () => <MapSkeleton />
 })
 ```
 
-### Geospatial Queries
+## Geospatial Queries
+
 ```typescript
 // Use PostGIS RPC - never calculate distance client-side
 const { data } = await supabase.rpc('nearby_venues', {
-  lat, lng, radius_km: 10, limit: 20
+  lat, lng, radius_km: 10, limit_count: 20
 })
 ```
 
 ## PayMongo Integration
 
-**Flow:** Source → User pays QR → Webhook → Payment → Update reservation
+**Flow:** Create Source → User pays QR → Webhook receives event → Create Payment → Update reservation
 
 ```typescript
-// Source type is ALWAYS literal 'source', NOT payment method
+// CRITICAL: source.type is literal 'source', NOT 'gcash'/'paymaya'
 source: { id: sourceId, type: 'source' }
 
-// Webhook signature uses te=/li= fields (NOT s=)
+// Webhook signature parsing (te= for test, li= for live)
 const sig = parts.find(p => p.startsWith('te=') || p.startsWith('li='))
 ```
 
-**Webhook:** `/web/src/app/api/webhooks/paymongo/route.ts`
+**Files:** `lib/paymongo/client.ts`, `app/api/webhooks/paymongo/route.ts`
 
 ## Database
 
-**Profile auto-creation:** `handle_new_user()` trigger creates profiles + players on signup. Never manually insert after `signUp()`.
+**Auto profile creation:** `handle_new_user()` trigger creates `profiles` + `players` on auth signup. Never manually insert profiles.
 
-**Migrations:** Use CLI only, never SQL Editor:
+**Migrations:** Always use Supabase CLI:
 ```bash
 cd backend/supabase
 supabase migration new feature_name
@@ -98,39 +109,38 @@ supabase db push --linked
 
 ## User Roles
 
-1. **Player** - Book courts, join queues, rate venues
-2. **Queue Master** - Create/manage queue sessions (requires Court Admin approval)
-3. **Court Admin** - Manage venue/courts, pricing, reservations
-4. **Global Admin** - Platform management, moderation, analytics
+Check roles: `user.roles?.some(r => r.role === 'court_admin')`
 
-Check: `user.roles?.some(r => r.role === 'court_admin')`
+| Role | Access |
+|------|--------|
+| player | Book courts, join queues, rate venues |
+| queue_master | Create/manage queue sessions (needs approval) |
+| court_admin | Manage venues, courts, pricing, reservations |
+| global_admin | Platform settings, moderation, analytics |
 
 ## Commands
 
 ```bash
-npm run dev:web          # Web server (port 3000)
+npm run dev:web          # Web dev server (port 3000)
 npm run build:web        # Production build
 npm run typecheck        # TypeScript check all packages
-cd backend/supabase && supabase migration list  # Check migrations
 ```
 
-## Common Fixes
+## Common Issues
 
-| Issue | Cause | Fix |
-|-------|-------|-----|
-| Profile not found (OAuth) | Trigger failed | RLS policy allows self-insert |
-| Map white screen | SSR render | `dynamic(..., { ssr: false })` |
-| Stale data after update | Cache | `revalidatePath()` + `router.refresh()` |
-| Double booking error | Race condition | Handle `23P01` exclusion_violation |
+| Issue | Fix |
+|-------|-----|
+| Map white screen | `dynamic(..., { ssr: false })` |
+| Stale data | `revalidatePath()` + `router.refresh()` |
+| Double booking `23P01` | Handle exclusion_violation error |
+| Profile not found (OAuth) | Check `handle_new_user` trigger |
 
 ## Debugging
 
-Use emoji markers for logs: `🚨` critical, `🔍` debug, `✅` success, `❌` error
-
 ```typescript
 console.log('🔍 [FunctionName] Input:', { id, status })
+console.log('✅ [FunctionName] Success:', result)
+console.log('❌ [FunctionName] Error:', error.message)
 ```
 
----
-
-**When in doubt:** Check `CLAUDE.md` for patterns, `docs/tasks.md` for progress, search codebase for similar implementations.
+**Reference:** `CLAUDE.md` has detailed debugging methodology and PayMongo fix examples.

@@ -131,19 +131,31 @@ export default function SignupPage() {
 
   const handleGoogleSignup = async () => {
     setIsLoading(true)
+    setError(null)
     try {
       const supabase = createClient()
-      const { error } = await supabase.auth.signInWithOAuth({
+      const redirectUrl = `${window.location.origin}/auth/callback`
+      console.log('🔍 [Google Signup] Redirect URL:', redirectUrl)
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: redirectUrl,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
         },
       })
 
+      console.log('🔍 [Google Signup] OAuth response:', { data, error })
+
       if (error) {
+        console.error('❌ [Google Signup] Error:', error)
         setError(error.message)
       }
-    } catch {
+    } catch (err) {
+      console.error('❌ [Google Signup] Unexpected error:', err)
       setError('An unexpected error occurred')
     } finally {
       setIsLoading(false)
