@@ -174,7 +174,7 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
         {/* Quick Stats */}
         <div className="grid grid-cols-2 gap-4 mt-6 pt-6 border-t border-gray-200">
           <div className="text-center">
-            <p className="text-3xl font-bold text-gray-900">{venue.courts?.[0]?.count || 0}</p>
+            <p className="text-3xl font-bold text-gray-900">{venue.courtsCount ?? 0}</p>
             <p className="text-sm text-gray-500 mt-1">Courts</p>
           </div>
           <div className="text-center">
@@ -278,7 +278,7 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
 
       {/* Tab Content */}
       <div className="min-h-96">
-        {activeTab === 'courts' && <VenueCourts venueId={venueId} />}
+        {activeTab === 'courts' && <VenueCourts venueId={venueId} onCourtChange={loadVenue} />}
         {activeTab === 'pricing' && <PricingManagement venueId={venueId} />}
         {activeTab === 'discounts' && <DiscountManagement venueId={venueId} />}
         {activeTab === 'availability' && <AvailabilityManagement venueId={venueId} />}

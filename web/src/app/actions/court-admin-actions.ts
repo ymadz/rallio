@@ -288,6 +288,42 @@ export async function getMyVenueReservations(filters?: {
 
     if (error) throw error
 
+    // Fetch queue sessions for queue session reservations
+    if (reservations && reservations.length > 0) {
+      const queueReservations = reservations.filter(
+        (r: any) => r.metadata?.is_queue_session_reservation === true
+      )
+
+      if (queueReservations.length > 0) {
+        // Get queue sessions that match these reservations by court and time
+        const { data: queueSessions } = await supabase
+          .from('queue_sessions')
+          .select('id, court_id, organizer_id, start_time, end_time, approval_status, status')
+          .in(
+            'court_id',
+            queueReservations.map((r: any) => r.court_id)
+          )
+
+        // Match queue sessions to reservations
+        if (queueSessions) {
+          reservations.forEach((reservation: any) => {
+            if (reservation.metadata?.is_queue_session_reservation) {
+              const matchingSession = queueSessions.find(
+                (qs: any) =>
+                  qs.court_id === reservation.court_id &&
+                  qs.organizer_id === reservation.user_id &&
+                  qs.start_time === reservation.start_time &&
+                  qs.end_time === reservation.end_time
+              )
+              if (matchingSession) {
+                reservation.queue_session = [matchingSession]
+              }
+            }
+          })
+        }
+      }
+    }
+
     return { success: true, reservations }
   } catch (error: any) {
     console.error('Error fetching reservations:', error)
@@ -457,12 +493,10 @@ export async function getVenueById(venueId: string) {
   }
 
   try {
+    // Get venue with courts count
     const { data: venue, error } = await supabase
       .from('venues')
-      .select(`
-        *,
-        courts:courts(count)
-      `)
+      .select('*')
       .eq('id', venueId)
       .eq('owner_id', user.id)
       .single()
@@ -472,6 +506,15 @@ export async function getVenueById(venueId: string) {
     if (!venue) {
       return { success: false, error: 'Venue not found or access denied' }
     }
+
+    // Get actual courts count separately
+    const { count: courtsCount } = await supabase
+      .from('courts')
+      .select('*', { count: 'exact', head: true })
+      .eq('venue_id', venueId)
+
+    // Add courts count to venue object
+    venue.courtsCount = courtsCount || 0
 
     return { success: true, venue }
   } catch (error: any) {

@@ -43,6 +43,13 @@ interface Reservation {
   num_players: number
   notes?: string
   created_at: string
+  metadata?: any
+  queue_session?: Array<{
+    id: string
+    approval_status: 'pending' | 'approved' | 'rejected'
+    status: string
+    organizer_id: string
+  }>
 }
 
 export function ReservationManagement() {
@@ -86,6 +93,24 @@ export function ReservationManagement() {
     }
   }
 
+  // Helper to get effective status for queue session reservations
+  const getEffectiveStatus = (reservation: Reservation): string => {
+    // Check if this is a queue session reservation
+    const isQueueSession = reservation.metadata?.is_queue_session_reservation === true
+    if (isQueueSession && reservation.queue_session && reservation.queue_session.length > 0) {
+      const queueSession = reservation.queue_session[0]
+      // Map queue session approval status to reservation status
+      if (queueSession.approval_status === 'pending') {
+        return 'pending'
+      }
+      if (queueSession.approval_status === 'rejected') {
+        return 'cancelled'
+      }
+      // If approved, keep the reservation status (should be 'confirmed')
+    }
+    return reservation.status
+  }
+
   const setupRealtimeSubscription = () => {
     const channel = supabase
       .channel('court-admin-reservations')
@@ -110,9 +135,9 @@ export function ReservationManagement() {
   const applyFilters = () => {
     let filtered = [...reservations]
 
-    // Status filter
+    // Status filter (using effective status for queue sessions)
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(r => r.status === statusFilter)
+      filtered = filtered.filter(r => getEffectiveStatus(r) === statusFilter)
     }
 
     // Date filter
@@ -195,10 +220,10 @@ export function ReservationManagement() {
 
   const statusCounts = {
     all: reservations.length,
-    pending: reservations.filter(r => r.status === 'pending').length,
-    confirmed: reservations.filter(r => r.status === 'confirmed').length,
-    completed: reservations.filter(r => r.status === 'completed').length,
-    cancelled: reservations.filter(r => r.status === 'cancelled').length,
+    pending: reservations.filter(r => getEffectiveStatus(r) === 'pending').length,
+    confirmed: reservations.filter(r => getEffectiveStatus(r) === 'confirmed').length,
+    completed: reservations.filter(r => getEffectiveStatus(r) === 'completed').length,
+    cancelled: reservations.filter(r => getEffectiveStatus(r) === 'cancelled').length,
   }
 
   if (isLoading) {
@@ -413,10 +438,17 @@ export function ReservationManagement() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium ${getStatusColor(reservation.status)}`}>
-                          {getStatusIcon(reservation.status)}
-                          <span className="capitalize">{reservation.status}</span>
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium ${getStatusColor(getEffectiveStatus(reservation))}`}>
+                            {getStatusIcon(getEffectiveStatus(reservation))}
+                            <span className="capitalize">{getEffectiveStatus(reservation).replace('_', ' ')}</span>
+                          </span>
+                          {reservation.metadata?.is_queue_session_reservation && (
+                            <span className="px-2 py-1 text-xs font-medium rounded-full bg-purple-50 text-purple-700">
+                              Queue
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">

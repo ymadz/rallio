@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createQueueSession } from '@/app/actions/queue-actions'
+import { getCourtAvailabilityTimes } from '@/app/actions/court-admin-availability-actions'
 import { createClient } from '@/lib/supabase/client'
 import { Calendar, Clock, Users, DollarSign, Settings, Loader2, ArrowLeft, CheckCircle, Info, TrendingUp, Target } from 'lucide-react'
 import Link from 'next/link'
@@ -41,12 +42,16 @@ export function CreateSessionForm() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [courtAvailability, setCourtAvailability] = useState<any>(null)
+  const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([])
 
-  // Generate hourly time options (6 AM to 11 PM)
-  const timeOptions = Array.from({ length: 18 }, (_, i) => {
+  // Generate hourly time options (6 AM to 11 PM) - will be filtered by court availability
+  const allTimeOptions = Array.from({ length: 18 }, (_, i) => {
     const hour = i + 6 // Start from 6 AM
     return `${hour.toString().padStart(2, '0')}:00`
   })
+
+  const timeOptions = availableTimeSlots.length > 0 ? availableTimeSlots : allTimeOptions
 
   // Load venues and courts
   useEffect(() => {
@@ -96,6 +101,67 @@ export function CreateSessionForm() {
       setError(err.message || 'Failed to load venues')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const loadCourtAvailability = async () => {
+    try {
+      const result = await getCourtAvailabilityTimes(courtId)
+      
+      if (!result.success) {
+        console.warn('Failed to load court availability:', result.error)
+        setAvailableTimeSlots(allTimeOptions) // Fallback to all times
+        return
+      }
+
+      setCourtAvailability(result)
+      
+      // If we have opening hours, filter time slots based on selected date
+      if (result.openingHours && startDate) {
+        const date = new Date(startDate)
+        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+        const dayName = dayNames[date.getDay()]
+        const dayHours = result.openingHours[dayName]
+        
+        if (!dayHours || !dayHours.open) {
+          // Venue is closed on this day
+          setAvailableTimeSlots([])
+          setError(`${result.venueName} is closed on ${dayName}s`)
+          return
+        }
+
+        // Parse opening and closing times
+        const [openHour] = dayHours.open.split(':').map(Number)
+        const [closeHour] = dayHours.close.split(':').map(Number)
+        
+        // Generate available time slots within opening hours
+        const slots: string[] = []
+        for (let hour = openHour; hour < closeHour; hour++) {
+          slots.push(`${hour.toString().padStart(2, '0')}:00`)
+        }
+        
+        setAvailableTimeSlots(slots)
+        
+        // Reset time if current selection is outside available hours
+        if (startTime && !slots.includes(startTime)) {
+          if (slots.length > 0) {
+            setStartTime(slots[0])
+          } else {
+            setStartTime('')
+          }
+        }
+        
+        // Clear error if date is valid
+        if (error?.includes('closed')) {
+          setError(null)
+        }
+      } else {
+        setAvailableTimeSlots(allTimeOptions)
+      }
+      
+    } catch (err: any) {
+      console.error('Error loading court availability:', err)
+      setAvailableTimeSlots(allTimeOptions) // Fallback
     }
   }
 
@@ -199,8 +265,8 @@ export function CreateSessionForm() {
             </div>
           </div>
 
-      {/* Court Selection */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+          {/* Court Selection */}
+          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
             <Calendar className="w-5 h-5 text-blue-600" />
@@ -232,22 +298,32 @@ export function CreateSessionForm() {
               </optgroup>
             ))}
           </select>
-        </div>
-      </div>
-
-      {/* Schedule */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-            <Clock className="w-5 h-5 text-green-600" />
           </div>
-          <div>
-            <h3 className="font-semibold text-gray-900">Schedule</h3>
-            <p className="text-sm text-gray-600">Set the session date and time</p>
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Schedule */}
+          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                <Clock className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Schedule</h3>
+                <p className="text-sm text-gray-600">Set the session date and time</p>
+              </div>
+            </div>
+
+            {courtAvailability && availableTimeSlots.length === 0 && (
+              <div className="mb-4 bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg flex items-start gap-2">
+                <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium">Venue Closed</p>
+                  <p className="text-sm">The selected venue is closed on this date. Please choose a different date.</p>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Date <span className="text-red-500">*</span>
@@ -303,23 +379,23 @@ export function CreateSessionForm() {
               <option value={5}>5 hours</option>
               <option value={6}>6 hours</option>
             </select>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* Game Settings */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-            <Settings className="w-5 h-5 text-purple-600" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-gray-900">Game Settings</h3>
-            <p className="text-sm text-gray-600">Configure game format and mode</p>
-          </div>
-        </div>
+          {/* Game Settings */}
+          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                <Settings className="w-5 h-5 text-purple-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Game Settings</h3>
+                <p className="text-sm text-gray-600">Configure game format and mode</p>
+              </div>
+            </div>
 
-        <div className="space-y-4">
+            <div className="space-y-4">
           {/* Mode */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -452,25 +528,25 @@ export function CreateSessionForm() {
             <p className="text-xs text-gray-500 mt-1">
               Players pay based on games played
             </p>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* Visibility */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={isPublic}
-            onChange={(e) => setIsPublic(e.target.checked)}
-            className="w-5 h-5 text-primary border-gray-300 rounded focus:ring-primary"
-          />
-          <div>
-            <div className="font-medium text-gray-900">Public Session</div>
-            <div className="text-sm text-gray-600">Allow anyone to join this queue</div>
+          {/* Visibility */}
+          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isPublic}
+                onChange={(e) => setIsPublic(e.target.checked)}
+                className="w-5 h-5 text-primary border-gray-300 rounded focus:ring-primary"
+              />
+              <div>
+                <div className="font-medium text-gray-900">Public Session</div>
+                <div className="text-sm text-gray-600">Allow anyone to join this queue</div>
+              </div>
+            </label>
           </div>
-        </label>
-      </div>
 
           {/* Actions */}
           <div className="flex items-center gap-3 pt-6 border-t border-gray-200">

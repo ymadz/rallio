@@ -614,22 +614,10 @@ export async function initiateQueuePaymentAction(
       isQueueMaster: userId !== undefined,
     })
 
-    // Get participant and calculate amount owed
+    // Get participant details
     const { data: participant, error: participantError } = await supabase
       .from('queue_participants')
-      .select(`
-        *,
-        queue_sessions (
-          cost_per_game,
-          organizer_id,
-          courts (
-            name,
-            venues (
-              name
-            )
-          )
-        )
-      `)
+      .select('*')
       .eq('queue_session_id', sessionId)
       .eq('user_id', targetUserId)
       .single()
@@ -639,13 +627,34 @@ export async function initiateQueuePaymentAction(
       return { success: false, error: 'Participant not found in this session' }
     }
 
+    // Get queue session details with court and venue info
+    const { data: queueSession, error: sessionError } = await supabase
+      .from('queue_sessions')
+      .select(`
+        cost_per_game,
+        organizer_id,
+        courts (
+          name,
+          venues (
+            name
+          )
+        )
+      `)
+      .eq('id', sessionId)
+      .single()
+
+    if (sessionError || !queueSession) {
+      console.error('[initiateQueuePaymentAction] ❌ Queue session not found:', sessionError)
+      return { success: false, error: 'Queue session not found' }
+    }
+
     // If userId was provided, verify the requester is the queue organizer
-    if (userId && participant.queue_sessions.organizer_id !== user.id) {
+    if (userId && queueSession.organizer_id !== user.id) {
       console.error('[initiateQueuePaymentAction] ❌ Unauthorized: Not the queue organizer')
       return { success: false, error: 'Only the queue organizer can generate payments for others' }
     }
 
-    const costPerGame = parseFloat(participant.queue_sessions.cost_per_game || '0')
+    const costPerGame = parseFloat(queueSession.cost_per_game || '0')
     const gamesPlayed = participant.games_played || 0
     const totalAmount = costPerGame * gamesPlayed
 
@@ -667,8 +676,8 @@ export async function initiateQueuePaymentAction(
       ? `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim() || profile.email || 'Customer'
       : 'Customer'
 
-    const venueName = participant.queue_sessions.courts?.venues?.name ?? 'Queue Session'
-    const courtName = participant.queue_sessions.courts?.name ?? 'Court'
+    const venueName = (queueSession.courts as any)?.venues?.name ?? 'Queue Session'
+    const courtName = (queueSession.courts as any)?.name ?? 'Court'
     const description = `${venueName} - ${courtName} (${gamesPlayed} games)`
 
     // Generate success/failed URLs

@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
 import { checkRateLimit, createRateLimitConfig } from '@/lib/rate-limiter'
 import { createBulkNotifications, NotificationTemplates } from '@/lib/notifications'
@@ -1565,16 +1566,10 @@ export async function waiveFee(
       return { success: false, error: 'User not authenticated' }
     }
 
-    // 2. Get participant and session details
+    // 2. Get participant details
     const { data: participant, error: participantError } = await supabase
       .from('queue_participants')
-      .select(`
-        *,
-        queue_sessions!inner (
-          organizer_id,
-          court_id
-        )
-      `)
+      .select('*')
       .eq('id', participantId)
       .single()
 
@@ -1582,19 +1577,31 @@ export async function waiveFee(
       return { success: false, error: 'Participant not found' }
     }
 
-    // 3. Verify user is session organizer
-    if (participant.queue_sessions.organizer_id !== user.id) {
+    // 3. Get queue session details separately to verify organizer
+    const { data: queueSession, error: sessionError } = await supabase
+      .from('queue_sessions')
+      .select('id, organizer_id, court_id')
+      .eq('id', participant.queue_session_id)
+      .single()
+
+    if (sessionError || !queueSession) {
+      return { success: false, error: 'Queue session not found' }
+    }
+
+    // 4. Verify user is session organizer
+    if (queueSession.organizer_id !== user.id) {
       return { success: false, error: 'Unauthorized: Not session organizer' }
     }
 
-    // 4. Update participant to waive fee
-    const { error: updateError } = await supabase
+    // 5. Update participant to waive fee using service client (bypasses RLS for admin operation)
+    const serviceClient = createServiceClient()
+    const { error: updateError } = await serviceClient
       .from('queue_participants')
       .update({
         amount_owed: 0,
         payment_status: 'paid',
         metadata: {
-          ...participant.metadata,
+          ...(participant.metadata || {}),
           fee_waived: {
             waived_at: new Date().toISOString(),
             waived_by: user.id,
@@ -1612,10 +1619,10 @@ export async function waiveFee(
 
     console.log('[waiveFee] ✅ Fee waived successfully')
 
-    // 5. Revalidate paths
+    // 6. Revalidate paths
     revalidatePath('/queue')
     revalidatePath('/queue-master')
-    revalidatePath(`/queue/${participant.queue_sessions.court_id}`)
+    revalidatePath(`/queue/${queueSession.court_id}`)
 
     return { success: true }
   } catch (error: any) {
@@ -1649,51 +1656,69 @@ export async function markAsPaid(
       return { success: false, error: 'User not authenticated' }
     }
 
-    // 2. Get participant and session details
+    // 2. Get participant details
     const { data: participant, error: participantError } = await supabase
       .from('queue_participants')
-      .select(`
-        *,
-        queue_sessions!inner (
-          id,
-          organizer_id,
-          court_id
-        )
-      `)
+      .select('*')
       .eq('id', participantId)
       .single()
 
     if (participantError || !participant) {
-      console.error('[markAsPaid] ❌ Participant not found:', participantError)
-      return { success: false, error: 'Participant not found' }
+      console.error('[markAsPaid] ❌ Participant not found:', {
+        participantId,
+        error: participantError,
+        message: participantError?.message,
+        details: participantError?.details,
+        hint: participantError?.hint,
+      })
+      return { success: false, error: participantError?.message || 'Participant not found' }
     }
 
-    console.log('[markAsPaid] 🔍 Participant data:', {
-      participantId,
+    console.log('[markAsPaid] 📦 Participant found:', {
+      participantId: participant.id,
+      sessionId: participant.queue_session_id,
       currentStatus: participant.payment_status,
       amountOwed: participant.amount_owed,
-      organizerId: participant.queue_sessions.organizer_id,
     })
 
-    // 3. Verify user is session organizer (Queue Master)
-    if (participant.queue_sessions.organizer_id !== user.id) {
+    // 3. Get queue session details separately to verify organizer
+    const { data: queueSession, error: sessionError } = await supabase
+      .from('queue_sessions')
+      .select('id, organizer_id, court_id')
+      .eq('id', participant.queue_session_id)
+      .single()
+
+    if (sessionError || !queueSession) {
+      console.error('[markAsPaid] ❌ Queue session not found:', sessionError)
+      return { success: false, error: 'Queue session not found' }
+    }
+
+    console.log('[markAsPaid] 🔍 Session data:', {
+      sessionId: queueSession.id,
+      organizerId: queueSession.organizer_id,
+      currentUserId: user.id,
+    })
+
+    // 4. Verify user is session organizer (Queue Master)
+    if (queueSession.organizer_id !== user.id) {
       console.error('[markAsPaid] ❌ Unauthorized: Not session organizer')
       return { success: false, error: 'Unauthorized: Not session organizer' }
     }
 
-    // 4. Check if already paid
+    // 5. Check if already paid
     if (participant.payment_status === 'paid') {
       console.log('[markAsPaid] ℹ️ Participant already marked as paid')
       return { success: true } // Idempotent - already paid is success
     }
 
-    // 5. Update participant to mark as paid (keep amount_owed for records)
-    const { error: updateError } = await supabase
+    // 6. Update participant to mark as paid using service client (bypasses RLS for admin operation)
+    const serviceClient = createServiceClient()
+    const { error: updateError } = await serviceClient
       .from('queue_participants')
       .update({
         payment_status: 'paid',
         metadata: {
-          ...participant.metadata,
+          ...(participant.metadata || {}),
           cash_payment: {
             marked_paid_at: new Date().toISOString(),
             marked_paid_by: user.id,
@@ -1711,10 +1736,10 @@ export async function markAsPaid(
 
     console.log('[markAsPaid] ✅ Participant marked as paid successfully')
 
-    // 6. Revalidate paths for immediate UI update
+    // 7. Revalidate paths for immediate UI update
     revalidatePath('/queue-master')
-    revalidatePath(`/queue-master/sessions/${participant.queue_sessions.id}`)
-    revalidatePath(`/queue/${participant.queue_sessions.court_id}`)
+    revalidatePath(`/queue-master/sessions/${queueSession.id}`)
+    revalidatePath(`/queue/${queueSession.court_id}`)
 
     return { success: true }
   } catch (error: any) {

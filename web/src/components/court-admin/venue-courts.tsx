@@ -13,26 +13,32 @@ import {
   X
 } from 'lucide-react'
 import Link from 'next/link'
-import { getVenueCourts, createCourt, getAvailableAmenities } from '@/app/actions/court-admin-court-actions'
+import { getVenueCourts, createCourt, getAvailableAmenities, updateCourt } from '@/app/actions/court-admin-court-actions'
 
 interface Court {
   id: string
   name: string
+  description?: string
   surface_type?: string
   court_type?: string
+  capacity?: number
   hourly_rate: number
   is_active: boolean
+  amenities?: Array<{ amenity_id: string }>
 }
 
 interface VenueCourtsProps {
   venueId: string
+  onCourtChange?: () => void
 }
 
-export function VenueCourts({ venueId }: VenueCourtsProps) {
+export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
   const [courts, setCourts] = useState<Court[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editingCourt, setEditingCourt] = useState<Court | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [amenities, setAmenities] = useState<any[]>([])
   const [formData, setFormData] = useState({
@@ -82,7 +88,52 @@ export function VenueCourts({ venueId }: VenueCourtsProps) {
         throw new Error(result.error)
       }
       await loadCourts()
+      onCourtChange?.()
       setShowAddModal(false)
+      setFormData({
+        name: '',
+        description: '',
+        court_type: 'indoor',
+        surface_type: 'hardcourt',
+        capacity: 4,
+        hourly_rate: 500,
+        amenities: []
+      })
+    } catch (err: any) {
+      alert('Error: ' + err.message)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleEditClick = (court: Court) => {
+    setEditingCourt(court)
+    setFormData({
+      name: court.name,
+      description: court.description || '',
+      court_type: (court.court_type as 'indoor' | 'outdoor') || 'indoor',
+      surface_type: court.surface_type || 'hardcourt',
+      capacity: court.capacity || 4,
+      hourly_rate: court.hourly_rate,
+      amenities: court.amenities?.map(a => a.amenity_id) || []
+    })
+    setShowEditModal(true)
+  }
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingCourt) return
+    
+    setIsSubmitting(true)
+    try {
+      const result = await updateCourt(editingCourt.id, formData)
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+      await loadCourts()
+      onCourtChange?.()
+      setShowEditModal(false)
+      setEditingCourt(null)
       setFormData({
         name: '',
         description: '',
@@ -200,7 +251,10 @@ export function VenueCourts({ venueId }: VenueCourtsProps) {
               </div>
 
               <div className="flex items-center gap-2 pt-4 border-t border-gray-200">
-                <button className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm">
+                <button 
+                  onClick={() => handleEditClick(court)}
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+                >
                   <Edit className="w-4 h-4" />
                   <span>Edit</span>
                 </button>
@@ -293,7 +347,7 @@ export function VenueCourts({ venueId }: VenueCourtsProps) {
                     min="2"
                     max="20"
                     value={formData.capacity}
-                    onChange={(e) => setFormData({ ...formData, capacity: parseInt(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, capacity: parseInt(e.target.value) || 4 })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -306,7 +360,7 @@ export function VenueCourts({ venueId }: VenueCourtsProps) {
                     min="0"
                     step="50"
                     value={formData.hourly_rate}
-                    onChange={(e) => setFormData({ ...formData, hourly_rate: parseFloat(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, hourly_rate: parseFloat(e.target.value) || 0 })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -380,6 +434,182 @@ export function VenueCourts({ venueId }: VenueCourtsProps) {
                       Creating...
                     </span>
                   ) : 'Create Court'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Court Modal */}
+      {showEditModal && editingCourt && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl max-w-2xl w-full p-6 my-8">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-900">Edit Court</h3>
+              <button
+                onClick={() => {
+                  setShowEditModal(false)
+                  setEditingCourt(null)
+                }}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Court Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="e.g., Court 1, Center Court"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  rows={3}
+                  placeholder="Brief description of the court..."
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Court Type *</label>
+                  <select
+                    required
+                    value={formData.court_type}
+                    onChange={(e) => setFormData({ ...formData, court_type: e.target.value as 'indoor' | 'outdoor' })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="indoor">Indoor</option>
+                    <option value="outdoor">Outdoor</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Surface Type</label>
+                  <select
+                    value={formData.surface_type}
+                    onChange={(e) => setFormData({ ...formData, surface_type: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="hardcourt">Hardcourt</option>
+                    <option value="clay">Clay</option>
+                    <option value="grass">Grass</option>
+                    <option value="synthetic">Synthetic</option>
+                    <option value="rubber">Rubber</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Capacity</label>
+                  <input
+                    type="number"
+                    min="2"
+                    max="20"
+                    value={formData.capacity}
+                    onChange={(e) => setFormData({ ...formData, capacity: parseInt(e.target.value) || 4 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Hourly Rate (₱) *</label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    step="50"
+                    value={formData.hourly_rate}
+                    onChange={(e) => setFormData({ ...formData, hourly_rate: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* Amenities Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Court Amenities
+                </label>
+                <p className="text-xs text-gray-500 mb-3">
+                  Select amenities available at this court
+                </p>
+                <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                  {amenities.map((amenity) => (
+                    <label
+                      key={amenity.id}
+                      className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.amenities.includes(amenity.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setFormData({
+                              ...formData,
+                              amenities: [...formData.amenities, amenity.id]
+                            })
+                          } else {
+                            setFormData({
+                              ...formData,
+                              amenities: formData.amenities.filter(id => id !== amenity.id)
+                            })
+                          }
+                        }}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700">{amenity.name}</span>
+                    </label>
+                  ))}
+                  {amenities.length === 0 && (
+                    <p className="col-span-2 text-sm text-gray-500 text-center py-4">
+                      No amenities available
+                    </p>
+                  )}
+                </div>
+                {formData.amenities.length > 0 && (
+                  <p className="text-xs text-blue-600 mt-2">
+                    {formData.amenities.length} amenity{formData.amenities.length !== 1 ? 's' : ''} selected
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-2 pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditModal(false)
+                    setEditingCourt(null)
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Updating...
+                    </span>
+                  ) : 'Update Court'}
                 </button>
               </div>
             </form>

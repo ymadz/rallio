@@ -95,6 +95,52 @@ export async function updateOperatingHours(
 }
 
 /**
+ * Get court availability times (for queue masters/players)
+ * Returns venue opening hours for a specific court
+ */
+export async function getCourtAvailabilityTimes(courtId: string) {
+  const supabase = await createClient()
+
+  try {
+    // Get court with venue opening hours
+    const { data: court, error } = await supabase
+      .from('courts')
+      .select(`
+        id,
+        name,
+        venue:venues!inner (
+          id,
+          name,
+          opening_hours
+        )
+      `)
+      .eq('id', courtId)
+      .eq('is_active', true)
+      .single()
+
+    if (error) throw error
+
+    if (!court) {
+      return { success: false, error: 'Court not found' }
+    }
+
+    const venue = court.venue as any
+    const openingHours = venue.opening_hours || {}
+
+    return { 
+      success: true, 
+      courtId: court.id,
+      courtName: court.name,
+      venueName: venue.name,
+      openingHours 
+    }
+  } catch (error: any) {
+    console.error('Error fetching court availability:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
  * Note: The initial schema doesn't have a blocked_dates table.
  * If needed, create migration 014_blocked_dates_table.sql
  * For now, these are placeholder functions that can be implemented
