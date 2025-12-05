@@ -87,6 +87,9 @@ export function SidebarNav({ user }: SidebarNavProps) {
               src="/logo.png"
               alt="Rallio"
               className="w-10 h-10 flex-shrink-0"
+              style={{
+                filter: 'brightness(0) saturate(100%) invert(42%) sepia(93%) saturate(352%) hue-rotate(131deg) brightness(92%) contrast(92%)'
+              }}
             />
             {isExpanded && (
               <span className="text-xl font-bold text-primary tracking-wider whitespace-nowrap">

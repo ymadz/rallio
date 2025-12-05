@@ -219,100 +219,224 @@ export default function CourtsPage() {
 
   return (
     <div className="fixed inset-0 md:left-20 bg-gray-50 flex flex-col">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-100 px-6 py-6 flex-shrink-0 z-20">
-        <div className="flex items-center justify-between gap-4">
-          {/* Search Bar */}
-          <div className="flex-1 max-w-md relative">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search courts, city, or area"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white"
-            />
-          </div>
+      {/* Header - Mobile Optimized */}
+      <header className="bg-white border-b border-gray-100 flex-shrink-0 z-20">
+        {/* Top Row - Title and Actions */}
+        <div className="px-4 pt-4 pb-3 md:px-6 md:pt-6 md:pb-4">
+          <div className="flex items-center justify-between mb-3 md:mb-0">
+            <div className="md:hidden">
+              <h1 className="text-xl font-bold text-gray-900">Find Courts</h1>
+              <p className="text-sm text-gray-500">Discover badminton courts near you</p>
+            </div>
+            
+            {/* Desktop: Search Bar inline */}
+            <div className="hidden md:flex flex-1 max-w-md relative">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search courts, city, or area"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white"
+              />
+            </div>
 
-          {/* Results Count */}
-          <span className="text-sm text-gray-600 hidden md:block">
-            {loading ? 'Loading...' : `${total} ${total === 1 ? 'result' : 'results'} found`}
-          </span>
+            {/* Results Count - Desktop */}
+            <span className="text-sm text-gray-600 hidden md:block mx-4">
+              {loading ? 'Loading...' : `${total} ${total === 1 ? 'result' : 'results'} found`}
+            </span>
 
-          {/* Right Side Actions */}
-          <div className="flex items-center gap-3">
-            {/* Near Me Button */}
+            {/* Right Side Actions - Desktop */}
+            <div className="hidden md:flex items-center gap-3">
+              {/* Near Me Button */}
+              <button
+                onClick={handleGetLocation}
+                disabled={locationLoading}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-colors whitespace-nowrap ${
+                  userLocation
+                    ? 'bg-primary text-white border-primary'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                } ${locationLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                {locationLoading ? (
+                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                )}
+                <span className="text-sm font-medium">
+                  {userLocation ? 'Near Me ✓' : 'Near Me'}
+                </span>
+              </button>
+
+              {/* Sort Dropdown */}
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortOption)}
+                className="px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white"
+              >
+                <option value="newest">Newest</option>
+                <option value="distance" disabled={!userLocation}>
+                  Distance {!userLocation && '(Enable location)'}
+                </option>
+                <option value="price_low">Price: Low to High</option>
+                <option value="price_high">Price: High to Low</option>
+                <option value="rating">Highest Rated</option>
+              </select>
+
+              {/* View Toggle */}
+              <div className="flex rounded-lg border border-gray-300 overflow-hidden">
+                <button
+                  className="px-4 py-2.5 text-sm font-medium flex items-center gap-2 bg-primary text-white"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                  </svg>
+                  <span>List</span>
+                </button>
+                <Link
+                  href="/courts/map"
+                  className="px-4 py-2.5 text-sm font-medium flex items-center gap-2 bg-white text-gray-700 hover:bg-gray-50"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                  </svg>
+                  <span>Map</span>
+                </Link>
+              </div>
+            </div>
+
+            {/* Mobile: Location Button */}
             <button
               onClick={handleGetLocation}
               disabled={locationLoading}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-colors whitespace-nowrap ${
+              className={`md:hidden flex items-center justify-center w-10 h-10 rounded-full transition-colors ${
                 userLocation
-                  ? 'bg-primary text-white border-primary'
-                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-              } ${locationLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  ? 'bg-primary text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              } ${locationLoading ? 'opacity-50' : ''}`}
             >
               {locationLoading ? (
-                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
               ) : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill={userLocation ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               )}
-              <span className="text-sm font-medium hidden sm:inline">
-                {userLocation ? 'Near Me ✓' : 'Near Me'}
-              </span>
             </button>
+          </div>
 
-            {/* Sort Dropdown */}
+          {/* Mobile: Search Bar */}
+          <div className="md:hidden flex gap-2">
+            <div className="flex-1 relative">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search courts, city, or area"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-gray-50 text-sm"
+              />
+            </div>
+            
+            {/* Sort/Filter Button */}
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortOption)}
-              className="px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white"
+              className="px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary/20"
             >
               <option value="newest">Newest</option>
-              <option value="distance" disabled={!userLocation}>
-                Distance {!userLocation && '(Enable location)'}
-              </option>
-              <option value="price_low">Price: Low to High</option>
-              <option value="price_high">Price: High to Low</option>
-              <option value="rating">Highest Rated</option>
+              <option value="distance" disabled={!userLocation}>Nearest</option>
+              <option value="price_low">Price ↓</option>
+              <option value="price_high">Price ↑</option>
+              <option value="rating">Top Rated</option>
             </select>
+          </div>
+        </div>
 
-            {/* View Toggle */}
-            <div className="flex rounded-lg border border-gray-300 overflow-hidden">
-              <button
-                className="px-4 py-2.5 text-sm font-medium flex items-center gap-2 bg-primary text-white"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                </svg>
-                <span className="hidden sm:inline">List</span>
-              </button>
-              <Link
-                href="/courts/map"
-                className="px-4 py-2.5 text-sm font-medium flex items-center gap-2 bg-white text-gray-700 hover:bg-gray-50"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                </svg>
-                <span className="hidden sm:inline">Map</span>
-              </Link>
-            </div>
+        {/* Mobile: Filter Chips Row */}
+        <div className="md:hidden overflow-x-auto scrollbar-hide border-t border-gray-100">
+          <div className="flex items-center gap-2 px-4 py-2.5 min-w-max">
+            {/* Court Type Filters */}
+            <button
+              onClick={() => setCourtType(null)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
+                !courtType
+                  ? 'bg-primary text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              All Courts
+            </button>
+            <button
+              onClick={() => setCourtType('indoor')}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
+                courtType === 'indoor'
+                  ? 'bg-primary text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Indoor
+            </button>
+            <button
+              onClick={() => setCourtType('outdoor')}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
+                courtType === 'outdoor'
+                  ? 'bg-primary text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Outdoor
+            </button>
+
+            <div className="w-px h-4 bg-gray-200 mx-1" />
+
+            {/* View Toggle - Mobile */}
+            <Link
+              href="/courts"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-primary text-white whitespace-nowrap"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+              </svg>
+              List
+            </Link>
+            <Link
+              href="/courts/map"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 whitespace-nowrap"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+              </svg>
+              Map
+            </Link>
+
+            {/* Results count - Mobile */}
+            <span className="text-xs text-gray-500 ml-auto pl-2">
+              {loading ? '...' : `${total} found`}
+            </span>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 p-6 overflow-y-auto">
-          {/* Active Filters */}
-          <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="flex-1 p-4 md:p-6 overflow-y-auto">
+          {/* Active Filters - Desktop only */}
+          <div className="hidden md:flex flex-wrap items-center gap-2 mb-4">
             
             {userLocation && (
               <span className="px-2 py-1 bg-primary/10 text-primary text-xs font-medium rounded-full">
@@ -335,14 +459,14 @@ export default function CourtsPage() {
 
           {/* Venues Grid */}
           {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-5">
               {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="bg-gray-100 rounded-xl h-80 animate-pulse" />
+                <div key={i} className="bg-gray-100 rounded-xl h-56 md:h-80 animate-pulse" />
               ))}
             </div>
           ) : venues.length > 0 ? (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-5">
                 {venues.map((venue) => {
                   const rating = venueRatings[venue.id]
                   const isOpen = isVenueOpen(venue.opening_hours)
@@ -354,7 +478,7 @@ export default function CourtsPage() {
                       className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg hover:border-primary/30 transition-all group"
                     >
                       {/* Venue Image */}
-                      <div className="h-44 bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center relative overflow-hidden">
+                      <div className="h-28 md:h-44 bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center relative overflow-hidden">
                         {venue.courts[0]?.images?.[0]?.url ? (
                           <img
                             src={venue.courts[0].images[0].url}
@@ -362,73 +486,76 @@ export default function CourtsPage() {
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />
                         ) : (
-                          <svg className="w-12 h-12 text-primary/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-8 h-8 md:w-12 md:h-12 text-primary/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
                         )}
                         
-                        <div className="absolute top-3 left-3 flex gap-2">
-                          <span className={`px-2.5 py-1 text-white text-xs font-bold rounded-md shadow-sm ${
+                        {/* Badges - Stacked on mobile */}
+                        <div className="absolute top-2 left-2 md:top-3 md:left-3 flex flex-col md:flex-row gap-1 md:gap-2">
+                          <span className={`px-1.5 py-0.5 md:px-2.5 md:py-1 text-white text-[10px] md:text-xs font-bold rounded md:rounded-md shadow-sm ${
                             isOpen ? 'bg-green-500' : 'bg-gray-500'
                           }`}>
                             {isOpen ? 'OPEN' : 'CLOSED'}
                           </span>
                           {venue.is_verified && (
-                            <span className="px-2.5 py-1 bg-blue-500 text-white text-xs font-bold rounded-md shadow-sm">
+                            <span className="px-1.5 py-0.5 md:px-2.5 md:py-1 bg-blue-500 text-white text-[10px] md:text-xs font-bold rounded md:rounded-md shadow-sm">
                               VERIFIED
                             </span>
                           )}
                         </div>
 
                         {venue.distance !== undefined && (
-                          <div className="absolute top-3 right-3 px-2.5 py-1 bg-black/60 text-white text-xs font-medium rounded-md backdrop-blur-sm">
+                          <div className="absolute top-2 right-2 md:top-3 md:right-3 px-1.5 py-0.5 md:px-2.5 md:py-1 bg-black/60 text-white text-[10px] md:text-xs font-medium rounded md:rounded-md backdrop-blur-sm">
                             {formatDistance(venue.distance)}
                           </div>
                         )}
                       </div>
 
                       {/* Venue Info */}
-                      <div className="p-4">
-                        <h3 className="font-bold text-gray-900 mb-1.5 line-clamp-1 group-hover:text-primary transition-colors">
+                      <div className="p-2.5 md:p-4">
+                        <h3 className="font-bold text-gray-900 text-sm md:text-base mb-1 md:mb-1.5 line-clamp-1 group-hover:text-primary transition-colors">
                           {venue.name}
                         </h3>
 
-                        {/* Rating */}
+                        {/* Location - Mobile: single line with city */}
+                        <p className="text-xs md:text-sm text-gray-500 mb-1.5 md:mb-2 line-clamp-1 flex items-center gap-1">
+                          <svg className="w-3 h-3 md:w-4 md:h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          <span className="md:hidden">{venue.city}</span>
+                          <span className="hidden md:inline">{venue.address}</span>
+                        </p>
+
+                        {/* Rating - Compact on mobile */}
                         {rating && (
-                          <div className="flex items-center gap-1.5 mb-2">
-                            <div className="flex items-center gap-0.5">
-                              {renderStars(rating.avg)}
-                            </div>
-                            <span className="text-sm font-semibold text-gray-900">
+                          <div className="flex items-center gap-1 md:gap-1.5 mb-1.5 md:mb-2">
+                            <svg className="w-3.5 h-3.5 md:w-4 md:h-4 fill-yellow-400" viewBox="0 0 20 20">
+                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                            </svg>
+                            <span className="text-xs md:text-sm font-semibold text-gray-900">
                               {rating.avg.toFixed(1)}
                             </span>
-                            <span className="text-xs text-gray-500">
-                              ({rating.count} {rating.count === 1 ? 'review' : 'reviews'})
+                            <span className="text-[10px] md:text-xs text-gray-500">
+                              ({rating.count})
                             </span>
                           </div>
                         )}
 
-                        <p className="text-sm text-gray-600 mb-3 line-clamp-2 flex items-start gap-1.5">
-                          <svg className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                          </svg>
-                          {venue.address}
-                        </p>
-
-                        {/* Court Info */}
-                        <div className="flex items-center justify-between text-sm mb-4 pb-4 border-b border-gray-100">
-                          <span className="text-gray-600">
+                        {/* Court Info & Price */}
+                        <div className="flex items-center justify-between text-xs md:text-sm pt-1.5 md:pt-2 border-t border-gray-100">
+                          <span className="text-gray-500">
                             {venue.totalCourts} {venue.totalCourts === 1 ? 'court' : 'courts'}
                           </span>
-                          <span className="font-bold text-primary">
-                            ₱{venue.minPrice}{venue.maxPrice !== venue.minPrice && ` - ₱${venue.maxPrice}`}/hr
+                          <span className="font-bold text-primary text-xs md:text-sm">
+                            ₱{venue.minPrice}<span className="hidden md:inline">{venue.maxPrice !== venue.minPrice && ` - ₱${venue.maxPrice}`}</span>/hr
                           </span>
                         </div>
 
-                        {/* Amenities Preview */}
+                        {/* Amenities - Desktop only */}
                         {venue.amenities.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5">
+                          <div className="hidden md:flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-gray-100">
                             {venue.amenities.slice(0, 3).map((amenity) => (
                               <span
                                 key={amenity}

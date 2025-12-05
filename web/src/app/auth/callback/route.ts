@@ -5,11 +5,14 @@ import { NextResponse } from 'next/server'
 const ROLE_PRIORITY = ['global_admin', 'court_admin', 'queue_master', 'player'] as const
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url)
+  const { searchParams, origin: requestOrigin } = new URL(request.url)
   const code = searchParams.get('code')
   const next = searchParams.get('next')
   const error = searchParams.get('error')
   const errorDescription = searchParams.get('error_description')
+  
+  // Fix Safari issue: use localhost instead of 0.0.0.0 which Safari blocks as restricted port
+  const origin = requestOrigin.replace('0.0.0.0', 'localhost')
 
   console.log('🔍 [Auth Callback] Received callback')
   console.log('🔍 [Auth Callback] Code:', code ? 'present' : 'missing')
