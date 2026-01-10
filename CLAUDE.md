@@ -109,9 +109,24 @@ Tested payment flow, confirmed webhooks accepted with 200 status
 - **Test incrementally** - Verify each step works before moving to the next
 - **Document as you go** - Future you (or others) will thank you
 
+### ⚠️ Production Logging Warning
+
+The codebase currently has **50+ console.log statements** in production code. Before deploying:
+1. Create a logger utility with environment-based filtering
+2. Replace direct `console.log` calls with the logger
+3. Key files with excessive logging:
+   - `web/src/app/actions/payment-actions.ts`
+   - `web/src/app/actions/queue-user-actions.ts`
+   - `web/src/app/actions/queue-actions.ts`
+
 ## Project Overview
 
 Rallio is a Badminton Court Finder & Queue Management System for Zamboanga City, Philippines. It's a full-stack monorepo with web (Next.js), mobile (React Native/Expo), and backend (Supabase/PostgreSQL) applications.
+
+**Project Status (Jan 2026):** ~75-80% complete, web app production-ready with caveats
+- ✅ Web app: Core features working (auth, booking, payments, queues, admin dashboards)
+- ⚠️ Mobile app: 30% complete (auth only, no booking/queue/maps)
+- ❌ Test coverage: Zero tests (critical gap)
 
 **Key Files to Reference:**
 - `docs/planning.md` - Development phases and approach
@@ -163,7 +178,26 @@ rallio/
 - **Payments**: PayMongo integration (GCash, Maya, QR codes)
 - **Shared**: Types, Zod validations, utility functions (date-fns)
 
-**Note:** TanStack Query (React Query) is installed but not currently used. All data fetching is done through direct Supabase client calls.
+**Note:** TanStack Query (React Query) is installed but not currently used. All data fetching is done through direct Supabase client calls. Consider removing or implementing for caching benefits.
+
+### Supabase Clients (Critical - 4 Files)
+The project uses 4 different Supabase client configurations:
+
+```typescript
+// CLIENT COMPONENT - browser, no async
+import { createClient } from '@/lib/supabase/client'
+const supabase = createClient()
+
+// SERVER COMPONENT/ACTION - respects RLS, MUST await
+import { createClient } from '@/lib/supabase/server'
+const supabase = await createClient()
+
+// ADMIN ONLY - bypasses RLS (webhooks, admin operations)
+import { createServiceClient } from '@/lib/supabase/server'   // or
+import { createServiceClient } from '@/lib/supabase/service'  // cached version
+```
+
+**⚠️ Note:** There are duplicate `createServiceClient` definitions in `server.ts` and `service.ts`. Consider consolidating.
 
 ### Database
 - 27-table PostgreSQL schema in `backend/supabase/migrations/001_initial_schema_v2.sql`
@@ -320,6 +354,18 @@ The system has four user roles with different permissions:
 - `docs/system-analysis/prototype-analysis.md` - UI/UX gap analysis
 
 ## Common Issues & Solutions
+
+### ⚠️ Known Technical Debt (Jan 2026)
+
+| Issue | Severity | Location | Notes |
+|-------|----------|----------|-------|
+| No test coverage | Critical | Entire codebase | Add Jest + Playwright |
+| 50+ console.logs | High | `payment-actions.ts`, `queue-*.ts` | Create logger utility |
+| In-memory rate limiter | High | `lib/utils/rate-limiter.ts` | Won't scale, use Redis |
+| CSS @theme linting | Medium | `globals.css` | Tailwind v4 syntax |
+| Duplicate service client | Medium | `server.ts` + `service.ts` | Consolidate |
+| Unused TanStack Query | Low | `package.json` | Remove or implement |
+| `force-dynamic` on home | Low | `app/page.tsx` | Disables caching |
 
 ### Map Components Showing White Screen
 **Cause:** Leaflet doesn't support server-side rendering in Next.js
@@ -508,16 +554,46 @@ Beyond the initial schema (`001_initial_schema_v2.sql`), the following migration
 - Real-time queue updates with Supabase Realtime
 - Skill-based team balancing
 - Per-game payment splitting
-- Before answering, modifying code, or creating files, you must ALWAYS read and follow these documents:
-CLAUDE.md
-docs/planning.md
-docs/tasks.md
-docs/system-analysis/ (all files)
+
+## Development Status Summary (Updated Jan 2026)
+
+### Overall Completion: ~75-80%
+
+| Area | Status | Completion |
+|------|--------|------------|
+| Web App | ✅ Production-ready* | 85% |
+| Mobile App | 🚧 Auth only | 30% |
+| Testing | ❌ Not started | 0% |
+| Documentation | ✅ Good | 90% |
+
+*With caveats: needs tests, production logging cleanup
+
+### Phase Status Quick Reference
+| Phase | Status |
+|-------|--------|
+| Phase 1: Auth | ✅ 100% |
+| Phase 2: Court Discovery | ✅ 85% |
+| Phase 3: Bookings & Payments | ✅ 85% |
+| Phase 4: Queue Management | ✅ 85% |
+| Phase 5: Ratings | ❌ 0% |
+| Phase 6: Admin Dashboards | ✅ 85% |
+| Phase 7: Notifications | 🚧 50% |
+| Phase 8: Mobile App | 🚧 30% |
+| Phase 11: Testing | ❌ 0% (CRITICAL) |
+
+---
+
+Before answering, modifying code, or creating files, you must ALWAYS read and follow these documents:
+- CLAUDE.md
+- docs/planning.md
+- docs/tasks.md
+- docs/system-analysis/ (all files)
+
 Rules:
-Never start coding without reviewing these files first.
-Confirm which parts of the docs apply to the user’s request before generating code.
-If the request conflicts with the docs, warn the user and ask how to proceed.
-Always follow folder structure, tech stack, and conventions defined in the docs.
-After completing a task, check docs/tasks.md and suggest the next task.
-If the files cannot be found or haven't been loaded into the workspace, always ask the user to load or refresh the documentation first.
-At the beginning of each task, briefly state which documentation files you used or checked.
+- Never start coding without reviewing these files first.
+- Confirm which parts of the docs apply to the user's request before generating code.
+- If the request conflicts with the docs, warn the user and ask how to proceed.
+- Always follow folder structure, tech stack, and conventions defined in the docs.
+- After completing a task, check docs/tasks.md and suggest the next task.
+- If the files cannot be found or haven't been loaded into the workspace, always ask the user to load or refresh the documentation first.
+- At the beginning of each task, briefly state which documentation files you used or checked.

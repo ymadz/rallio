@@ -1,8 +1,19 @@
 # Rallio Task Tracker
 
-**Last Updated:** December 1, 2025  
-**Current Branch:** feature/global-admin-dashboard  
+**Last Updated:** January 9, 2026  
+**Current Branch:** main  
 **Build Status:** ✅ PASSING (Zero TypeScript errors)
+
+## ⚠️ Critical Action Items (From Jan 2026 Review)
+
+| Priority | Issue | Impact | Action Required |
+|----------|-------|--------|----------------|
+| 🔴 Critical | No test coverage | Deployment risk, regressions | Add Jest + Playwright |
+| 🔴 Critical | 50+ console.logs in production | Performance, info leak | Create logger utility |
+| 🟡 High | Mobile app 30% complete | Can't release mobile | Implement core features |
+| 🟡 High | In-memory rate limiter | Won't scale multi-server | Replace with Redis/Upstash |
+| 🟡 Medium | Email notifications not configured | Users don't get confirmations | Set up SendGrid |
+| 🟡 Medium | Payment expiration not automated | Stale pending payments | Add pg_cron or Edge Function |
 
 ## Quick Overview
 
@@ -13,14 +24,40 @@
 | Phase 3: Bookings & Payments | ✅ Mostly Done | 85% | PayMongo (GCash/Maya), webhooks working |
 | Phase 4: Queue Management | ✅ Mostly Done | 85% | User & Queue Master features complete |
 | Phase 5: Ratings & Reviews | ⏳ Not Started | 0% | Planned for future |
-| Phase 6: Admin Dashboards | 🚧 In Progress | 70% | Court Admin 90%, Queue Master 90%, Global Admin 80% |
+| Phase 6: Admin Dashboards | ✅ Mostly Done | 85% | Court Admin 90%, Queue Master 90%, Global Admin 80% |
 | Phase 7: Notifications | 🚧 Partial | 50% | In-app done, push/email pending |
+| Phase 8: Mobile App | 🚧 In Progress | 30% | Auth only, core features missing |
+| **Testing & QA** | ❌ Not Started | 0% | **No tests exist - CRITICAL** |
 
 ## How to Use This File
 - [x] Completed tasks
 - [ ] Pending tasks
 - Tasks are organized by phase and category
 - Update this file as you complete tasks
+
+## Technical Debt & Code Quality Issues
+
+### 🔴 Must Fix Before Production
+- [ ] **Add test infrastructure** - Zero tests exist (unit, integration, E2E)
+- [ ] **Remove/replace console.logs** - 50+ debug logs in production code:
+  - `web/src/app/actions/payment-actions.ts`
+  - `web/src/app/actions/queue-user-actions.ts`
+  - `web/src/app/actions/queue-actions.ts`
+- [ ] **Fix CSS linting** - `@theme` at-rule error in `globals.css` (Tailwind v4)
+
+### 🟡 Should Fix Soon
+- [ ] **Consolidate Supabase service clients** - Duplicate definitions in:
+  - `web/src/lib/supabase/server.ts` (line 27)
+  - `web/src/lib/supabase/service.ts`
+- [ ] **Remove unused TanStack Query** - Listed in package.json but not used
+- [ ] **Add Redis rate limiting** - Current in-memory store won't scale
+- [ ] **Review `force-dynamic` usage** - Home page disables all caching
+
+### 🟢 Nice to Have
+- [ ] Add Zod validation to ALL server action inputs (some missing)
+- [ ] Implement React Query for venue/court caching
+- [ ] Add error boundary components
+- [ ] Improve loading/empty states consistency
 
 ---
 
@@ -46,7 +83,7 @@
 - ⚠️ Email notifications for bookings
 - ⚠️ Modify/reschedule bookings
 - ⚠️ Split payment with friends
-- ⚠️ Mobile app
+- ⚠️ Mobile app (30% complete - auth only, no booking/queue/maps)
 
 ### 🏟️ For Court Admins
 **What's Built:**
@@ -507,7 +544,7 @@
 
 ---
 
-## Phase 6: Admin Dashboards - 70% COMPLETE 🚧
+## Phase 6: Admin Dashboards - 85% COMPLETE ✅
 
 ### Court Admin Dashboard ✅ 90% COMPLETE (Dec 2025)
 - [x] Create dashboard layout
@@ -736,13 +773,35 @@
 
 ---
 
-## Phase 8: Mobile App Polish
+## Phase 8: Mobile App - 30% COMPLETE 🚧
+
+### Current Status (Jan 2026 Review)
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Project Setup | ✅ Done | Expo 54, React Native 0.81.5 |
+| Auth (Email) | ✅ Done | Login/signup working |
+| Auth (Google) | ❌ Stub | Shows "Coming Soon" alert |
+| Tab Navigation | ✅ Done | Expo Router tabs configured |
+| Courts List | ⚠️ Partial | Basic UI only, no real data |
+| Map View | ❌ Missing | Not implemented |
+| Booking Flow | ❌ Missing | Not implemented |
+| Queue Features | ❌ Missing | Not implemented |
+| Profile | ⚠️ Partial | Basic display only |
+| Payments | ❌ Missing | Not implemented |
 
 ### Navigation
-- [ ] Set up proper tab navigation
-- [ ] Implement auth stack
+- [x] Set up proper tab navigation (Expo Router)
+- [x] Implement auth stack
 - [ ] Create drawer navigation (if needed)
-- [ ] Add deep linking configuration
+- [ ] Add deep linking configuration (scheme configured, handlers missing)
+
+### Core Features Needed
+- [ ] Implement Google OAuth (`mobile/app/(auth)/login.tsx` - currently stub)
+- [ ] Court discovery with map (react-native-maps or MapLibre)
+- [ ] Booking flow (reuse shared types/validation)
+- [ ] Queue participation with real-time updates
+- [ ] Payment integration (PayMongo WebView)
+- [ ] Push notifications (Expo Notifications configured)
 
 ### Screens
 - [ ] Complete all mobile screens to match web functionality
@@ -815,6 +874,40 @@
 - [ ] Create feedback collection system
 - [ ] Track and fix beta issues
 - [ ] Iterate based on feedback
+
+---
+
+## Phase 11: Testing & Quality Assurance - 0% COMPLETE ❌
+
+### Test Infrastructure (CRITICAL - No tests exist)
+- [ ] Set up Jest + Testing Library
+- [ ] Set up Playwright for E2E
+- [ ] Configure test database/mocking for Supabase
+- [ ] Add CI test pipeline (GitHub Actions)
+
+### Unit Tests (Priority Order)
+1. [ ] `web/src/app/actions/payment-actions.ts` - Payment flow
+2. [ ] `web/src/app/actions/reservation-actions.ts` - Booking logic
+3. [ ] `web/src/app/actions/queue-actions.ts` - Queue management
+4. [ ] `shared/src/validations/` - Zod schemas
+5. [ ] `shared/src/utils/` - Utility functions
+
+### Integration Tests
+- [ ] Auth flow (signup → verify → login)
+- [ ] Booking flow (select → pay → confirm)
+- [ ] Queue flow (join → play → pay → leave)
+- [ ] Admin operations (CRUD for venues/courts)
+
+### E2E Tests (Playwright)
+- [ ] Complete booking journey
+- [ ] Payment webhook simulation
+- [ ] Queue master session management
+- [ ] Court admin dashboard operations
+- [ ] Global admin user management
+
+### Manual Test Documentation
+- [x] 31 test cases documented in `docs/TESTING-PHASE-1-2.md`
+- [ ] Automate documented test cases
 
 ---
 
