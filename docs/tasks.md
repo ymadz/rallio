@@ -1,33 +1,38 @@
 # Rallio Task Tracker
 
-**Last Updated:** January 9, 2026  
+**Last Updated:** January 26, 2026  
 **Current Branch:** main  
-**Build Status:** ✅ PASSING (Zero TypeScript errors)
+**Build Status:** ✅ PASSING (Zero TypeScript errors)  
+**Last Audit:** January 26, 2026 (Full project audit completed)
 
-## ⚠️ Critical Action Items (From Jan 2026 Review)
+## ⚠️ Critical Action Items (Jan 2026 Audit)
 
-| Priority | Issue | Impact | Action Required |
-|----------|-------|--------|----------------|
-| 🔴 Critical | No test coverage | Deployment risk, regressions | Add Jest + Playwright |
-| 🔴 Critical | 50+ console.logs in production | Performance, info leak | Create logger utility |
-| 🟡 High | Mobile app 30% complete | Can't release mobile | Implement core features |
-| 🟡 High | In-memory rate limiter | Won't scale multi-server | Replace with Redis/Upstash |
-| 🟡 Medium | Email notifications not configured | Users don't get confirmations | Set up SendGrid |
-| 🟡 Medium | Payment expiration not automated | Stale pending payments | Add pg_cron or Edge Function |
+| Priority | Issue | Impact | Action Required | Est. Time |
+|----------|-------|--------|-----------------|-----------|
+| 🔴 P0 | No test coverage | High regression risk | Add Jest + Vitest + Playwright | 2-3 days |
+| 🔴 P0 | 100+ console.logs in production | Security leak, perf | Create logger utility | 2-3 hours |
+| 🔴 P0 | Role assignment duplicate error | UX bug (logged 23505) | Check before INSERT | 30 min |
+| 🟡 P1 | Duplicate Supabase service client | Code duplication | Consolidate to server.ts | 1 hour |
+| 🟡 P1 | In-memory rate limiter | Won't scale | Replace with Redis/Upstash | 1 day |
+| 🟡 P1 | Email notifications missing | Poor UX | Set up SendGrid | 1 day |
+| 🟡 P1 | Payment expiration not automated | Data integrity | Add pg_cron or Edge Function | 2-3 hours |
+| 🟡 P2 | Mobile app 30% complete | Can't release mobile | Implement core features | 2-3 weeks |
+| 🟢 P3 | React 18/19 version mismatch | Potential issues | Align versions | 30 min |
+| 🟢 P3 | Unused TanStack Query | Dead dependency | Remove or implement | 15 min |
 
 ## Quick Overview
 
 | Phase | Status | Completion | Key Notes |
 |-------|--------|------------|-----------|
 | Phase 1: Auth & Foundation | ✅ Complete | 100% | Email/password + Google OAuth, profile system |
-| Phase 2: Court Discovery | ✅ Mostly Done | 85% | Leaflet maps, PostGIS search, filters |
-| Phase 3: Bookings & Payments | ✅ Mostly Done | 85% | PayMongo (GCash/Maya), webhooks working |
-| Phase 4: Queue Management | ✅ Mostly Done | 85% | User & Queue Master features complete |
-| Phase 5: Ratings & Reviews | ⏳ Not Started | 0% | Planned for future |
-| Phase 6: Admin Dashboards | ✅ Mostly Done | 85% | Court Admin 90%, Queue Master 90%, Global Admin 80% |
+| Phase 2: Court Discovery | ✅ Complete | 90% | Leaflet maps, PostGIS search, filters |
+| Phase 3: Bookings & Payments | ✅ Complete | 90% | PayMongo (GCash/Maya), webhooks fixed |
+| Phase 4: Queue Management | ✅ Complete | 90% | User & Queue Master features, real-time |
+| Phase 5: Ratings & Reviews | ⏳ Not Started | 0% | Planned - important for trust |
+| Phase 6: Admin Dashboards | ✅ Complete | 90% | Court Admin, Queue Master, Global Admin |
 | Phase 7: Notifications | 🚧 Partial | 50% | In-app done, push/email pending |
 | Phase 8: Mobile App | 🚧 In Progress | 30% | Auth only, core features missing |
-| **Testing & QA** | ❌ Not Started | 0% | **No tests exist - CRITICAL** |
+| **Testing & QA** | ❌ Not Started | 0% | **No tests exist - CRITICAL GAP** |
 
 ## How to Use This File
 - [x] Completed tasks
@@ -39,25 +44,30 @@
 
 ### 🔴 Must Fix Before Production
 - [ ] **Add test infrastructure** - Zero tests exist (unit, integration, E2E)
-- [ ] **Remove/replace console.logs** - 50+ debug logs in production code:
-  - `web/src/app/actions/payment-actions.ts`
-  - `web/src/app/actions/queue-user-actions.ts`
+- [ ] **Create logger utility** - 100+ console.log statements in production code:
+  - `web/src/app/actions/payments.ts` (~25 logs)
   - `web/src/app/actions/queue-actions.ts`
-- [ ] **Fix CSS linting** - `@theme` at-rule error in `globals.css` (Tailwind v4)
+  - `web/src/app/api/webhooks/paymongo/route.ts` (~30 logs)
+  - `web/src/lib/rate-limiter.ts`
+  - `web/src/hooks/use-queue.ts`
+- [ ] **Fix role assignment duplicate error** - Auth callback logs `23505` error
+- [ ] **Fix CSS linting** - `@theme` at-rule warning in `globals.css` (Tailwind v4)
 
 ### 🟡 Should Fix Soon
 - [ ] **Consolidate Supabase service clients** - Duplicate definitions in:
   - `web/src/lib/supabase/server.ts` (line 27)
-  - `web/src/lib/supabase/service.ts`
-- [ ] **Remove unused TanStack Query** - Listed in package.json but not used
-- [ ] **Add Redis rate limiting** - Current in-memory store won't scale
-- [ ] **Review `force-dynamic` usage** - Home page disables all caching
+  - `web/src/lib/supabase/service.ts` (entire file - DELETE)
+- [ ] **Remove unused TanStack Query** - Listed in package.json but never imported
+- [ ] **Add Redis rate limiting** - Current in-memory store won't scale multi-server
+- [ ] **Align React versions** - web uses 18.3.1, root overrides to 19.1.0
+- [ ] **Review `force-dynamic` usage** - Home page disables all caching unnecessarily
 
 ### 🟢 Nice to Have
 - [ ] Add Zod validation to ALL server action inputs (some missing)
 - [ ] Implement React Query for venue/court caching
-- [ ] Add error boundary components
+- [ ] Add error boundary components throughout app
 - [ ] Improve loading/empty states consistency
+- [ ] Update README.md (says Next.js 14, actually 15)
 
 ---
 
