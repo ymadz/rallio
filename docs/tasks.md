@@ -1,9 +1,9 @@
 # Rallio Task Tracker
 
-**Last Updated:** January 26, 2026  
+**Last Updated:** January 27, 2026  
 **Current Branch:** main  
 **Build Status:** ✅ PASSING (Zero TypeScript errors)  
-**Last Audit:** January 26, 2026 (Full project audit completed)
+**Last Audit:** January 27, 2026 (Full mobile analysis completed)
 
 ## ⚠️ Critical Action Items (Jan 2026 Audit)
 
@@ -12,11 +12,11 @@
 | 🔴 P0 | No test coverage | High regression risk | Add Jest + Vitest + Playwright | 2-3 days |
 | 🔴 P0 | 100+ console.logs in production | Security leak, perf | Create logger utility | 2-3 hours |
 | 🔴 P0 | Role assignment duplicate error | UX bug (logged 23505) | Check before INSERT | 30 min |
+| 🟡 P1 | Mobile app needs rebuild | Fresh template only | Follow mobile roadmap | 7 weeks |
 | 🟡 P1 | Duplicate Supabase service client | Code duplication | Consolidate to server.ts | 1 hour |
 | 🟡 P1 | In-memory rate limiter | Won't scale | Replace with Redis/Upstash | 1 day |
 | 🟡 P1 | Email notifications missing | Poor UX | Set up SendGrid | 1 day |
 | 🟡 P1 | Payment expiration not automated | Data integrity | Add pg_cron or Edge Function | 2-3 hours |
-| 🟡 P2 | Mobile app 30% complete | Can't release mobile | Implement core features | 2-3 weeks |
 | 🟢 P3 | React 18/19 version mismatch | Potential issues | Align versions | 30 min |
 | 🟢 P3 | Unused TanStack Query | Dead dependency | Remove or implement | 15 min |
 
@@ -28,10 +28,10 @@
 | Phase 2: Court Discovery | ✅ Complete | 90% | Leaflet maps, PostGIS search, filters |
 | Phase 3: Bookings & Payments | ✅ Complete | 90% | PayMongo (GCash/Maya), webhooks fixed |
 | Phase 4: Queue Management | ✅ Complete | 90% | User & Queue Master features, real-time |
-| Phase 5: Ratings & Reviews | ⏳ Not Started | 0% | Planned - important for trust |
+| Phase 5: Ratings & Reviews | 🟡 Partial | 30% | Backend complete, UI built, flow needs testing |
 | Phase 6: Admin Dashboards | ✅ Complete | 90% | Court Admin, Queue Master, Global Admin |
 | Phase 7: Notifications | 🚧 Partial | 50% | In-app done, push/email pending |
-| Phase 8: Mobile App | 🚧 In Progress | 30% | Auth only, core features missing |
+| Phase 8: Mobile App | 🔄 Restarted | 5% | Fresh Expo template, roadmap defined |
 | **Testing & QA** | ❌ Not Started | 0% | **No tests exist - CRITICAL GAP** |
 
 ## How to Use This File
@@ -783,47 +783,181 @@
 
 ---
 
-## Phase 8: Mobile App - 30% COMPLETE 🚧
+## Phase 8: Mobile App - 🔄 RESTARTED (Jan 27, 2026)
 
-### Current Status (Jan 2026 Review)
-| Component | Status | Notes |
-|-----------|--------|-------|
-| Project Setup | ✅ Done | Expo 54, React Native 0.81.5 |
-| Auth (Email) | ✅ Done | Login/signup working |
-| Auth (Google) | ❌ Stub | Shows "Coming Soon" alert |
-| Tab Navigation | ✅ Done | Expo Router tabs configured |
-| Courts List | ⚠️ Partial | Basic UI only, no real data |
-| Map View | ❌ Missing | Not implemented |
-| Booking Flow | ❌ Missing | Not implemented |
-| Queue Features | ❌ Missing | Not implemented |
-| Profile | ⚠️ Partial | Basic display only |
-| Payments | ❌ Missing | Not implemented |
+### Project Status
+The mobile app has been **reinitialized** with a fresh Expo tabs template due to Metro bundler issues caused by npm workspace hoisting. Mobile is now independent (not in npm workspaces) with isolated `node_modules`.
 
-### Navigation
-- [x] Set up proper tab navigation (Expo Router)
-- [x] Implement auth stack
-- [ ] Create drawer navigation (if needed)
-- [ ] Add deep linking configuration (scheme configured, handlers missing)
+### Technical Setup ✅ COMPLETE
+- [x] Fresh Expo 54 project with tabs template
+- [x] Removed from npm workspaces (isolated deps)
+- [x] Metro config for monorepo (`@rallio/shared` support)
+- [x] `.env` configured with Supabase keys
+- [x] `@rallio/shared` linked via `file:../shared`
 
-### Core Features Needed
-- [ ] Implement Google OAuth (`mobile/app/(auth)/login.tsx` - currently stub)
-- [ ] Court discovery with map (react-native-maps or MapLibre)
-- [ ] Booking flow (reuse shared types/validation)
-- [ ] Queue participation with real-time updates
-- [ ] Payment integration (PayMongo WebView)
-- [ ] Push notifications (Expo Notifications configured)
+### Mobile App Roadmap
 
-### Screens
-- [ ] Complete all mobile screens to match web functionality
-- [ ] Optimize for different screen sizes
-- [ ] Add proper loading states
-- [ ] Implement error handling UI
+#### Phase M1: Foundation (Week 1) - NOT STARTED
+- [ ] **Theme & UI Components**
+  - [ ] Dark-centered theme (bg: #0A0A0F, surface: #12121A)
+  - [ ] Glassmorphism cards (5% white bg, 10% border, blur: 8px)
+  - [ ] Button, Input, Card, Avatar components
+  - [ ] Loading, Empty, Error states
+- [ ] **Supabase Setup**
+  - [ ] Create `lib/supabase.ts` with AsyncStorage
+  - [ ] Auth state listener
+  - [ ] Session persistence
+- [ ] **Auth Screens**
+  - [ ] Login screen (email/password)
+  - [ ] Signup screen
+  - [ ] Forgot password screen
+  - [ ] Google OAuth (expo-auth-session)
+  - [ ] Biometric auth (Face ID/Touch ID)
 
-### Performance
-- [ ] Optimize list rendering with FlatList
-- [ ] Implement image caching
-- [ ] Add offline support where possible
-- [ ] Optimize bundle size
+#### Phase M2: Court Discovery (Week 2) - NOT STARTED
+- [ ] **Home Screen**
+  - [ ] Welcome header with avatar
+  - [ ] Quick actions (Book, Queue, Map)
+  - [ ] Nearby courts preview
+  - [ ] Active queues nearby
+- [ ] **Courts List Screen**
+  - [ ] FlatList with court cards
+  - [ ] Pull-to-refresh
+  - [ ] Search input
+  - [ ] Filter bottom sheet
+  - [ ] Sort by distance/price/rating
+- [ ] **Map Screen**
+  - [ ] react-native-maps integration
+  - [ ] Court markers with clustering
+  - [ ] Current location button
+  - [ ] Bottom sheet on marker tap
+- [ ] **Venue Details Screen**
+  - [ ] Image carousel
+  - [ ] Amenities list
+  - [ ] Operating hours
+  - [ ] Reviews preview
+  - [ ] Book/Queue buttons
+
+#### Phase M3: Booking Flow (Week 3) - NOT STARTED
+- [ ] **Date Selection**
+  - [ ] Calendar component
+  - [ ] Today/Tomorrow quick buttons
+  - [ ] Blocked dates handling
+- [ ] **Time Slot Selection**
+  - [ ] Horizontal scroll time slots
+  - [ ] Available/unavailable states
+  - [ ] Price display per slot
+- [ ] **Booking Confirmation**
+  - [ ] Summary card
+  - [ ] Payment method selector
+  - [ ] GCash/Maya deep linking
+- [ ] **Booking Management**
+  - [ ] My Bookings list
+  - [ ] Booking detail screen
+  - [ ] Cancellation flow
+- [ ] **Profile Screen**
+  - [ ] Avatar and basic info
+  - [ ] Skill level display
+  - [ ] Match stats
+  - [ ] Settings link
+
+#### Phase M4: Queue System (Week 4) - NOT STARTED
+- [ ] **Queue Dashboard**
+  - [ ] Active queues list
+  - [ ] Queue card with position
+  - [ ] Estimated wait time
+- [ ] **Join Queue Flow**
+  - [ ] Queue details screen
+  - [ ] Join confirmation
+  - [ ] Real-time position updates
+- [ ] **In-Queue Experience**
+  - [ ] Position tracker
+  - [ ] Participant list
+  - [ ] Leave queue (with payment check)
+- [ ] **Queue Payments**
+  - [ ] Payment summary
+  - [ ] PayMongo integration
+
+#### Phase M5: Notifications (Week 5) - NOT STARTED
+- [ ] **Push Notifications Setup**
+  - [ ] expo-notifications config
+  - [ ] FCM/APNs tokens
+  - [ ] Token storage in Supabase
+- [ ] **Notification Handling**
+  - [ ] Background handlers
+  - [ ] Deep linking from notifications
+  - [ ] Notification list screen
+- [ ] **Notification Types**
+  - [ ] Booking confirmations
+  - [ ] Queue turn alerts
+  - [ ] Payment reminders
+
+#### Phase M6: Polish (Weeks 6-7) - NOT STARTED
+- [ ] **Match History Screen**
+  - [ ] Match list
+  - [ ] Stats summary
+  - [ ] Filter by result
+- [ ] **Ratings & Reviews**
+  - [ ] Post-game rating prompt
+  - [ ] Court review submission
+- [ ] **Offline Support**
+  - [ ] React Query with AsyncStorage persister
+  - [ ] Offline mutation queue
+  - [ ] Sync status indicator
+- [ ] **Performance**
+  - [ ] Image caching
+  - [ ] List virtualization
+  - [ ] Bundle size optimization
+- [ ] **App Store Prep**
+  - [ ] App icons and splash
+  - [ ] Store screenshots
+  - [ ] Privacy policy
+  - [ ] EAS Build config
+
+### Mobile UI/UX Guidelines
+
+#### Dark Theme Colors
+```
+Background:  #0A0A0F (near-black)
+Surface:     #12121A (cards)
+Primary:     #FF6B35 (Rallio orange)
+Text:        #FFFFFF / #A1A1AA / #71717A
+Success:     #22C55E
+Error:       #EF4444
+```
+
+#### Glassmorphism Rules
+- Cards: 5% white bg, 10% white border, borderRadius: 16
+- Modals: 60% black overlay, blur: 8px
+- Nav bar: 80% opacity, frosted effect
+- NO heavy glow or excessive blur
+
+#### Accessibility
+- 44×44pt minimum touch targets
+- 4.5:1 contrast ratio
+- System font scaling support
+- VoiceOver/TalkBack labels
+
+### Web → Mobile Feature Mapping
+
+| Web Feature | Mobile Enhancement |
+|-------------|-------------------|
+| Login page | + Biometric (Face ID/Touch ID) |
+| Courts listing | + Pull-to-refresh, location sort |
+| Map view | + Current location button, clusters |
+| Venue details | + Bottom sheet on map tap |
+| Date picker | + Today/Tomorrow quick buttons |
+| Time slots | + Horizontal scroll, one-tap book |
+| Payments | + Deep link to GCash/Maya app |
+| Queue position | + Push notification on turn |
+
+### Key Libraries
+- **Navigation**: expo-router (file-based)
+- **Maps**: react-native-maps
+- **State**: Zustand + AsyncStorage
+- **Forms**: react-hook-form + zod
+- **UI**: react-native-reanimated, expo-blur, @gorhom/bottom-sheet
+- **Notifications**: expo-notifications
 
 ---
 

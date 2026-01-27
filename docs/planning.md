@@ -6,10 +6,10 @@ Build a comprehensive Badminton Court Finder & Queue Management System for Zambo
 
 ---
 
-## ✅ Verification Status (Jan 26, 2026 - Full Audit)
+## ✅ Verification Status (Jan 27, 2026 - Mobile Analysis)
 
 **Build Status:** ✅ PASSING (Zero TypeScript errors)
-**Last Audit:** January 26, 2026
+**Last Audit:** January 27, 2026
 
 ### Phase Completion Summary:
 | Phase | Status | Completion |
@@ -18,10 +18,10 @@ Build a comprehensive Badminton Court Finder & Queue Management System for Zambo
 | Phase 2 (Discovery) | ✅ Complete | 90% |
 | Phase 3 (Payments) | ✅ Complete | 90% |
 | Phase 4 (Queues) | ✅ Complete | 90% |
-| Phase 5 (Ratings) | ⏳ Not Started | 0% |
+| Phase 5 (Ratings) | 🟡 Partial | 30% |
 | Phase 6 (Admin) | ✅ Complete | 90% |
 | Phase 7 (Notifications) | 🚧 Partial | 50% |
-| Phase 8 (Mobile) | 🚧 In Progress | 30% |
+| Phase 8 (Mobile) | 🔄 Restarted | 5% |
 | Testing & QA | ❌ Critical Gap | 0% |
 
 ### What's Working (Jan 2026):
@@ -33,6 +33,14 @@ Build a comprehensive Badminton Court Finder & Queue Management System for Zambo
 6. ✅ **Queue Master Dashboard** - Session mgmt, score recording
 7. ✅ **Global Admin Dashboard** - User/venue mgmt, moderation, settings
 8. ✅ **In-App Notifications** - Real-time bell with badge
+9. 🟡 **Ratings/Reviews** - Backend complete, UI exists, needs testing
+
+### Mobile App Status (Jan 27, 2026):
+- 🔄 **Reinitialized** with fresh Expo tabs template
+- ✅ Removed from npm workspaces (fixes Metro bundler issues)
+- ✅ Metro config for monorepo support
+- ✅ `@rallio/shared` linked via `file:../shared`
+- 📋 7-week roadmap defined (see tasks.md)
 
 ### Critical Issues Found:
 1. 🔴 No test coverage (zero tests)
@@ -208,14 +216,24 @@ Build a comprehensive Badminton Court Finder & Queue Management System for Zambo
 - [ ] Venue owner response to reviews
 - [ ] Rating analytics and trends
 
-### Phase 5: Ratings & Reviews - 0% NOT STARTED ⏳
+### Phase 5: Ratings & Reviews - 30% COMPLETE 🟡
 **Goal:** Build trust through ratings
 
-- [ ] Court rating system (quality, cleanliness, facilities, value)
-- [ ] Player rating system (sportsmanship, skill, reliability)
-- [ ] Review moderation
-- [ ] Venue owner response to reviews
-- [ ] Rating analytics and trends
+#### What's Built:
+- [x] Court ratings backend (rating-actions.ts, review-actions.ts)
+- [x] Player ratings backend
+- [x] Review submission form component
+- [x] Reviews section component
+- [x] Review modal component
+- [x] Rate limiting on submissions
+
+#### What's Remaining:
+- [ ] End-to-end testing of rating flow
+- [ ] Post-game rating prompt integration
+- [ ] Review moderation admin UI
+- [ ] Venue owner response feature
+- [ ] Rating analytics dashboard
+- [ ] Rating display on court cards
 
 ### Phase 6: Admin Dashboards - 70% COMPLETE 🚧
 **Goal:** Management interfaces for all roles
@@ -334,14 +352,67 @@ Build a comprehensive Badminton Court Finder & Queue Management System for Zambo
 - [ ] SMS notifications (optional)
 - [ ] Notification preferences UI
 
-### Phase 8: Mobile App Polish
-**Goal:** Full-featured mobile experience
+### Phase 8: Mobile App Polish - 🔄 RESTARTED (Jan 27, 2026)
+**Goal:** Full-featured mobile experience with dark glassmorphism theme
 
-- [ ] Mobile auth flows
-- [ ] Mobile court discovery with maps
-- [ ] Mobile reservations
-- [ ] Mobile queue participation
-- [ ] Mobile profile and stats
+**Status:** Fresh Expo 54 project initialized with tabs template. Previous code deleted due to Metro bundler issues caused by npm workspace hoisting.
+
+#### Technical Stack
+- **Framework:** React Native 0.81.5 + Expo 54
+- **Navigation:** Expo Router (file-based routing)
+- **State:** Zustand + AsyncStorage persistence
+- **Backend:** Same Supabase project (no changes needed)
+- **Maps:** react-native-maps
+- **Forms:** react-hook-form + zod (same as web)
+- **Notifications:** expo-notifications + FCM
+
+#### Mobile Development Roadmap (7 Weeks)
+
+**Phase M1: Foundation (Week 1)**
+- Dark theme setup (bg: #0A0A0F, surface: #12121A, primary: #FF6B35)
+- Glassmorphism UI components (subtle blur, transparency)
+- Supabase client with AsyncStorage
+- Auth screens (login, signup, forgot password)
+- Google OAuth + Biometric auth
+
+**Phase M2: Court Discovery (Week 2)**
+- Home screen with quick actions
+- Courts list with filters
+- Map view with markers/clusters
+- Venue details bottom sheet
+
+**Phase M3: Booking Flow (Week 3)**
+- Calendar date picker
+- Time slot selection
+- Payment integration (GCash/Maya deep links)
+- Booking management
+
+**Phase M4: Queue System (Week 4)**
+- Queue dashboard
+- Join/leave queue
+- Real-time position tracking
+- Queue payments
+
+**Phase M5: Notifications (Week 5)**
+- Push notification setup
+- Deep linking handlers
+- Notification list screen
+
+**Phase M6-M7: Polish & Launch (Weeks 6-7)**
+- Match history & stats
+- Ratings/reviews
+- Offline support
+- Performance optimization
+- App Store submission prep
+
+#### UI/UX Direction
+- **Dark-centered theme** as base
+- **Glassmorphism** applied subtly:
+  - Cards: 5% white bg, 10% border, 16px radius
+  - Modals: 60% black overlay, 8px blur
+  - Nav: Frosted glass, 80% opacity
+- **Accessibility:** 44×44pt touch targets, 4.5:1 contrast
+- **No heavy glow** - professional and calm aesthetic
 
 ### Phase 9: Advanced Features
 **Goal:** AI and advanced functionality
@@ -395,78 +466,51 @@ Build a comprehensive Badminton Court Finder & Queue Management System for Zambo
 m
 ## What's Next - Priority Roadmap
 
-### 🔥 High Priority (Next Sprint)
+### 🔥 Immediate Priority: Mobile App (Jan-Feb 2026)
 
-#### 1. Complete Queue System Polish (Remaining 15%)
-- [ ] PayMongo integration for queue payments
-- [ ] Session summary reports
-- [ ] Player notifications when matches assigned
-- [ ] Queue-reservation conflict prevention
+The mobile app has been reinitialized and a 7-week roadmap is defined. Focus areas:
 
-#### 2. Phase 5: Ratings & Reviews System (0% → 80%)
-- [ ] Court rating system (quality, cleanliness, facilities, value)
-- [ ] Player rating system (sportsmanship, skill, reliability)
-- [ ] Review submission UI for players
+| Week | Focus | Deliverables |
+|------|-------|--------------|
+| 1 | Foundation | Theme, UI components, Supabase, Auth screens |
+| 2 | Discovery | Home, Courts list, Map view, Venue details |
+| 3 | Booking | Calendar, Time slots, Payments, Management |
+| 4 | Queue | Dashboard, Join/leave, Real-time, Payments |
+| 5 | Notifications | Push setup, Deep linking, List screen |
+| 6-7 | Polish | Match history, Reviews, Offline, App Store prep |
+
+### 🎯 Secondary Priority: Web Polish
+
+#### 1. Complete Ratings & Reviews (30% → 80%)
+- [ ] Test end-to-end rating flow
+- [ ] Post-game rating prompt
 - [ ] Rating analytics for Court Admins
-- [ ] Rating display on court detail pages
+- [ ] Rating display on court cards
 
-#### 3. Email/SMS Notifications (Phase 7: 50% → 75%)
-- [ ] Set up SendGrid for emails
+#### 2. Email Notifications (50% → 75%)
+- [ ] Set up SendGrid
 - [ ] Booking confirmation emails
-- [ ] Payment receipt emails
-- [ ] Queue turn alert emails
-- [ ] Reminder emails (24 hours before booking)
-- [ ] SMS notifications via Twilio/Semaphore (optional)
+- [ ] Payment receipts
+- [ ] Queue turn alerts
 
-### 🎯 Medium Priority (Next Month)
+#### 3. Technical Debt
+- [ ] Add test infrastructure (Jest + Playwright)
+- [ ] Create logger utility (replace 100+ console.logs)
+- [ ] Fix role assignment duplicate error
+- [ ] Consolidate Supabase service clients
 
-#### 4. Court Admin Enhancements
-- [ ] Refund processing UI via PayMongo
-- [ ] Complete promo code system
-- [ ] Court photo management UI
-- [ ] Advanced analytics (conversion rates, booking trends)
-- [ ] Staff management (assign staff to venues)
+### 📱 Mobile App Estimated Timeline
 
-#### 5. Player Experience Improvements
-- [ ] Split payment backend completion
-- [ ] Booking modification/rescheduling
-- [ ] Enhanced court filtering (price sliders, amenity checkboxes)
-- [ ] Favorite venues feature
-- [ ] Booking history export
+**MVP Launch:** ~7 weeks from start
+- Weeks 1-3: Core features (auth, discovery, booking)
+- Weeks 4-5: Queue system, notifications
+- Weeks 6-7: Polish, testing, App Store submission
 
-#### 6. Global Admin Features
-- [ ] Venue approval workflow
-- [ ] Dispute escalation system
-- [ ] Financial reconciliation dashboard
-- [ ] Advanced system health monitoring
-- [ ] Promotional campaign management
-
-### 📱 Lower Priority (Later)
-
-#### 7. Mobile App Development (0% → 80%)
-- [ ] Port authentication flows to mobile
-- [ ] Mobile court discovery with react-native-maps
-- [ ] Mobile booking flow
-- [ ] Mobile queue participation
-- [ ] Mobile profile management
-- [ ] Push notifications (FCM)
-- [ ] App store deployment (iOS/Android)
-
-#### 8. Advanced Features (Phase 9)
-- [ ] AI-powered court recommendations
-- [ ] Player auto-matching based on skill level
-- [ ] Tournament management system
-- [ ] Team/club features
-- [ ] Coaching marketplace
-- [ ] Equipment rental integration
-
-#### 9. Launch Preparation (Phase 10)
-- [ ] Security audit
-- [ ] Performance testing & optimization
-- [ ] Documentation completion
-- [ ] Beta testing with 5-10 venues
-- [ ] Production deployment checklist
-- [ ] Monitoring setup (Sentry, Datadog)
+**Post-MVP:**
+- Match history & player stats
+- Advanced filtering
+- Offline mode improvements
+- Tournament features
 
 ---
 
@@ -486,7 +530,7 @@ m
 
 ## Recent Achievements Summary
 
-### What Works Right Now (Dec 1, 2025):
+### What Works Right Now (Jan 27, 2026):
 1. ✅ **Complete Authentication** - Email, Google OAuth, profile management
 2. ✅ **Court Discovery** - Map view, filters, distance search with PostGIS
 3. ✅ **Full Booking Flow** - Calendar selection, payment via GCash/Maya, webhooks working
@@ -495,12 +539,20 @@ m
 6. ✅ **Queue Master Dashboard** - Session management, analytics, score recording
 7. ✅ **Global Admin Dashboard** - User/venue management, moderation, settings, audit logs
 8. ✅ **In-App Notifications** - Real-time bell, queue approvals, mark as read
+9. 🟡 **Ratings/Reviews Backend** - Server actions complete, UI built, needs testing
 
-### What's Missing for MVP Launch:
-1. ⚠️ Email notifications (critical)
-2. ⚠️ Rating & review system (important for trust)
-3. ⚠️ Mobile app (can launch web-first)
-4. ⚠️ Refund processing (manual workaround possible)
-5. ⚠️ Split payment backend (can launch without)
+### Mobile App Restart (Jan 27, 2026):
+- ❌ Previous mobile code deleted (Metro bundler issues)
+- ✅ Fresh Expo 54 project with tabs template
+- ✅ Removed from npm workspaces (isolated dependencies)
+- ✅ Metro config for `@rallio/shared` support
+- 📋 7-week development roadmap defined
 
-**Recommendation:** Focus on ratings/reviews and email notifications for MVP launch. Mobile can follow in Phase 2.
+### What's Missing for Full Launch:
+1. ⚠️ Mobile app (7-week roadmap defined)
+2. ⚠️ Email notifications (critical)
+3. ⚠️ Rating flow testing
+4. ⚠️ Test coverage (zero tests)
+5. ⚠️ Refund processing (manual workaround possible)
+
+**Recommendation:** Focus on mobile app development. Web is production-ready for soft launch.
