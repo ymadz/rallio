@@ -2,16 +2,9 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": [
-        "./src/*"
-      ],
-      "@rallio/shared": [
-        "../shared/src"
-      ],
-      "@rallio/shared/*": [
-        "../shared/src/*"
+        "./*"
       ]
     }
   },
@@ -20,8 +13,5 @@
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
-  ],
-  "exclude": [
-    "node_modules"
   ]
 }

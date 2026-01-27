@@ -23,7 +23,7 @@ export default function AuthLayout({
             <img
               src="/logo.png"
               alt="Rallio"
-              className="w-20 h-20"
+              className="w-20 h-20 brightness-0 invert"
             />
           </div>
 
