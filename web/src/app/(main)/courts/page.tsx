@@ -83,7 +83,7 @@ export default function CourtsPage() {
 
     try {
       const result = await getVenues(filters)
-      
+
       if (reset) {
         setVenues(result.venues)
         setOffset(LIMIT)
@@ -91,13 +91,13 @@ export default function CourtsPage() {
         setVenues(prev => [...prev, ...result.venues])
         setOffset(prev => prev + LIMIT)
       }
-      
+
       setTotal(result.total)
       setHasMore(result.hasMore)
 
       // Fetch ratings for all courts in batch
       const allCourtIds = result.venues.flatMap(venue => venue.courts.map(court => court.id))
-      
+
       if (allCourtIds.length > 0) {
         const supabase = createClient()
         const { data: allRatings } = await supabase
@@ -108,10 +108,10 @@ export default function CourtsPage() {
         // Group ratings by venue
         const ratings: Record<string, { avg: number; count: number }> = {}
         for (const venue of result.venues) {
-          const venueRatings = allRatings?.filter((r: any) => 
+          const venueRatings = allRatings?.filter((r: any) =>
             venue.courts.some(c => c.id === r.court_id)
           ) || []
-          
+
           if (venueRatings.length > 0) {
             const totalRating = venueRatings.reduce((sum: number, r: any) => sum + r.overall_rating, 0)
             ratings[venue.id] = {
@@ -153,10 +153,17 @@ export default function CourtsPage() {
         setSortBy('distance')
         setLocationLoading(false)
       },
-      (error) => {
-        setLocationError('Unable to retrieve your location')
+      (error: GeolocationPositionError) => {
+        // Extract meaningful error message from GeolocationPositionError
+        const errorMessages: Record<number, string> = {
+          1: 'Location permission was denied',
+          2: 'Position unavailable - please try again',
+          3: 'Location request timed out'
+        }
+        const message = errorMessages[error.code] || 'Unable to retrieve your location'
+        setLocationError(message)
         setLocationLoading(false)
-        console.error('Geolocation error:', error)
+        console.warn('Geolocation unavailable:', message)
       }
     )
   }
@@ -228,7 +235,7 @@ export default function CourtsPage() {
               <h1 className="text-xl font-bold text-gray-900">Find Courts</h1>
               <p className="text-sm text-gray-500">Discover badminton courts near you</p>
             </div>
-            
+
             {/* Desktop: Search Bar inline */}
             <div className="hidden md:flex flex-1 max-w-md relative">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -254,11 +261,10 @@ export default function CourtsPage() {
               <button
                 onClick={handleGetLocation}
                 disabled={locationLoading}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-colors whitespace-nowrap ${
-                  userLocation
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-colors whitespace-nowrap ${userLocation
                     ? 'bg-primary text-white border-primary'
                     : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                } ${locationLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  } ${locationLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {locationLoading ? (
                   <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
@@ -317,11 +323,10 @@ export default function CourtsPage() {
             <button
               onClick={handleGetLocation}
               disabled={locationLoading}
-              className={`md:hidden flex items-center justify-center w-10 h-10 rounded-full transition-colors ${
-                userLocation
+              className={`md:hidden flex items-center justify-center w-10 h-10 rounded-full transition-colors ${userLocation
                   ? 'bg-primary text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              } ${locationLoading ? 'opacity-50' : ''}`}
+                } ${locationLoading ? 'opacity-50' : ''}`}
             >
               {locationLoading ? (
                 <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
@@ -351,7 +356,7 @@ export default function CourtsPage() {
                 className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-gray-50 text-sm"
               />
             </div>
-            
+
             {/* Sort/Filter Button */}
             <select
               value={sortBy}
@@ -373,31 +378,28 @@ export default function CourtsPage() {
             {/* Court Type Filters */}
             <button
               onClick={() => setCourtType(null)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
-                !courtType
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${!courtType
                   ? 'bg-primary text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+                }`}
             >
               All Courts
             </button>
             <button
               onClick={() => setCourtType('indoor')}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
-                courtType === 'indoor'
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${courtType === 'indoor'
                   ? 'bg-primary text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+                }`}
             >
               Indoor
             </button>
             <button
               onClick={() => setCourtType('outdoor')}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
-                courtType === 'outdoor'
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${courtType === 'outdoor'
                   ? 'bg-primary text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+                }`}
             >
               Outdoor
             </button>
@@ -437,19 +439,19 @@ export default function CourtsPage() {
         <div className="flex-1 p-4 md:p-6 overflow-y-auto">
           {/* Active Filters - Desktop only */}
           <div className="hidden md:flex flex-wrap items-center gap-2 mb-4">
-            
+
             {userLocation && (
               <span className="px-2 py-1 bg-primary/10 text-primary text-xs font-medium rounded-full">
                 Within {formatDistance(50)}
               </span>
             )}
-            
+
             {selectedAmenities.length > 0 && (
               <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-full">
                 {selectedAmenities.length} amenities
               </span>
             )}
-            
+
             {courtType && (
               <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-full capitalize">
                 {courtType} only
@@ -490,12 +492,11 @@ export default function CourtsPage() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
                         )}
-                        
+
                         {/* Badges - Stacked on mobile */}
                         <div className="absolute top-2 left-2 md:top-3 md:left-3 flex flex-col md:flex-row gap-1 md:gap-2">
-                          <span className={`px-1.5 py-0.5 md:px-2.5 md:py-1 text-white text-[10px] md:text-xs font-bold rounded md:rounded-md shadow-sm ${
-                            isOpen ? 'bg-green-500' : 'bg-gray-500'
-                          }`}>
+                          <span className={`px-1.5 py-0.5 md:px-2.5 md:py-1 text-white text-[10px] md:text-xs font-bold rounded md:rounded-md shadow-sm ${isOpen ? 'bg-green-500' : 'bg-gray-500'
+                            }`}>
                             {isOpen ? 'OPEN' : 'CLOSED'}
                           </span>
                           {venue.is_verified && (
@@ -625,10 +626,9 @@ export default function CourtsPage() {
         </div>
 
         {/* Filters Sidebar */}
-        <div 
-          className={`bg-white border-l border-gray-200 transition-all duration-300 flex-shrink-0 overflow-hidden relative z-20 ${
-            showFilters ? 'w-80' : 'w-0'
-          }`}
+        <div
+          className={`bg-white border-l border-gray-200 transition-all duration-300 flex-shrink-0 overflow-hidden relative z-20 ${showFilters ? 'w-80' : 'w-0'
+            }`}
         >
           <div className="w-80 h-full overflow-y-auto p-6">
             {/* Filters Header */}
@@ -684,29 +684,27 @@ export default function CourtsPage() {
             {/* Court Type */}
             <div className="mb-6">
               <label className="block text-sm font-semibold text-gray-900 mb-3">Court Type</label>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setCourtType(courtType === 'indoor' ? null : 'indoor')}
-                    className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors border ${
-                      courtType === 'indoor'
-                        ? 'bg-primary text-white border-primary'
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCourtType(courtType === 'indoor' ? null : 'indoor')}
+                  className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors border ${courtType === 'indoor'
+                      ? 'bg-primary text-white border-primary'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                     }`}
-                  >
-                    🏠 Indoor
-                  </button>
-                  <button
-                    onClick={() => setCourtType(courtType === 'outdoor' ? null : 'outdoor')}
-                    className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors border ${
-                      courtType === 'outdoor'
-                        ? 'bg-primary text-white border-primary'
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                >
+                  🏠 Indoor
+                </button>
+                <button
+                  onClick={() => setCourtType(courtType === 'outdoor' ? null : 'outdoor')}
+                  className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors border ${courtType === 'outdoor'
+                      ? 'bg-primary text-white border-primary'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                     }`}
-                  >
-                    🌤️ Outdoor
-                  </button>
-                </div>
+                >
+                  🌤️ Outdoor
+                </button>
               </div>
+            </div>
 
             {/* Amenities */}
             <div className="mb-6">
@@ -716,11 +714,10 @@ export default function CourtsPage() {
                   <button
                     key={amenity}
                     onClick={() => toggleAmenity(amenity)}
-                    className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
-                      selectedAmenities.includes(amenity)
+                    className={`px-3 py-1.5 text-sm rounded-full transition-colors ${selectedAmenities.includes(amenity)
                         ? 'bg-primary text-white'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                      }`}
                   >
                     {amenity}
                   </button>
@@ -732,16 +729,15 @@ export default function CourtsPage() {
             <div className="mb-6">
               <label className="block text-sm font-semibold text-gray-900 mb-3">Customer Review</label>
               <div className="flex items-center gap-2">
-                {[5,4,3,2,1].map((rating) => (
+                {[5, 4, 3, 2, 1].map((rating) => (
                   <button
                     key={rating}
                     onClick={() => setMinRating(minRating === rating ? 0 : rating)}
                     title={`${rating} stars & up`}
-                    className={`flex items-center gap-1 px-3 py-2 rounded-lg transition-colors text-sm ${
-                      minRating === rating
+                    className={`flex items-center gap-1 px-3 py-2 rounded-lg transition-colors text-sm ${minRating === rating
                         ? 'bg-primary/10 border border-primary text-primary'
                         : 'bg-white border border-gray-100 text-gray-700 hover:bg-gray-50'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center -space-x-1">
                       {[...Array(5)].map((_, i) => (
@@ -776,8 +772,8 @@ export default function CourtsPage() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </button>
-      {/* Mobile Filters Button */}
-      <button
+        {/* Mobile Filters Button */}
+        <button
           onClick={() => setShowFilters(!showFilters)}
           className="lg:hidden fixed bottom-20 right-4 bg-primary text-white p-4 rounded-full shadow-lg hover:bg-primary/90 transition-colors z-30"
         >
@@ -847,21 +843,19 @@ export default function CourtsPage() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => setCourtType(courtType === 'indoor' ? null : 'indoor')}
-                    className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors border ${
-                      courtType === 'indoor'
+                    className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors border ${courtType === 'indoor'
                         ? 'bg-primary text-white border-primary'
                         : 'bg-white text-gray-700 border-gray-300'
-                    }`}
+                      }`}
                   >
                     🏠 Indoor
                   </button>
                   <button
                     onClick={() => setCourtType(courtType === 'outdoor' ? null : 'outdoor')}
-                    className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors border ${
-                      courtType === 'outdoor'
+                    className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors border ${courtType === 'outdoor'
                         ? 'bg-primary text-white border-primary'
                         : 'bg-white text-gray-700 border-gray-300'
-                    }`}
+                      }`}
                   >
                     🌤️ Outdoor
                   </button>
@@ -876,11 +870,10 @@ export default function CourtsPage() {
                     <button
                       key={amenity}
                       onClick={() => toggleAmenity(amenity)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                        selectedAmenities.includes(amenity)
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${selectedAmenities.includes(amenity)
                           ? 'bg-primary text-white'
                           : 'bg-gray-100 text-gray-700'
-                      }`}
+                        }`}
                     >
                       {amenity}
                     </button>
@@ -892,16 +885,15 @@ export default function CourtsPage() {
               <div className="mb-6">
                 <h3 className="font-semibold text-gray-900 mb-3">Customer Review</h3>
                 <div className="flex items-center gap-2">
-                  {[5,4,3,2,1].map((rating) => (
+                  {[5, 4, 3, 2, 1].map((rating) => (
                     <button
                       key={rating}
                       onClick={() => setMinRating(minRating === rating ? 0 : rating)}
                       title={`${rating} stars & up`}
-                      className={`flex items-center gap-1 px-3 py-2 rounded-lg transition-colors text-sm ${
-                        minRating === rating
+                      className={`flex items-center gap-1 px-3 py-2 rounded-lg transition-colors text-sm ${minRating === rating
                           ? 'bg-primary/10 border border-primary text-primary'
                           : 'bg-white border border-gray-100 text-gray-700'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center -space-x-1">
                         {[...Array(5)].map((_, i) => (

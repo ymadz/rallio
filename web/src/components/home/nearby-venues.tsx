@@ -37,8 +37,14 @@ export function NearbyVenues() {
               setIsLoading(false)
             }
           },
-          (err) => {
-            console.error('Geolocation error:', err)
+          (err: GeolocationPositionError) => {
+            // Extract meaningful error message from GeolocationPositionError
+            const errorMessages: Record<number, string> = {
+              1: 'Location permission denied',
+              2: 'Position unavailable',
+              3: 'Location request timed out'
+            }
+            console.warn('Geolocation unavailable:', errorMessages[err.code] || err.message)
             setLocationDenied(true)
             setIsLoading(false)
           },
@@ -141,9 +147,8 @@ export function NearbyVenues() {
               )}
               {isOpen !== null && (
                 <span
-                  className={`absolute top-2 right-2 ${
-                    isOpen ? 'bg-primary' : 'bg-gray-500'
-                  } text-white text-[10px] px-2 py-0.5 rounded font-medium`}
+                  className={`absolute top-2 right-2 ${isOpen ? 'bg-primary' : 'bg-gray-500'
+                    } text-white text-[10px] px-2 py-0.5 rounded font-medium`}
                 >
                   {isOpen ? 'OPEN' : 'CLOSED'}
                 </span>

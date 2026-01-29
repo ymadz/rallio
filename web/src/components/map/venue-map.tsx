@@ -97,14 +97,14 @@ const createUserLocationIcon = () => {
 // Helper function to check if venue is currently open
 function isVenueOpen(openingHours: Record<string, { open: string; close: string }> | null | undefined): boolean {
   if (!openingHours) return false
-  
+
   const now = new Date()
   const dayOfWeek = now.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()
   const currentTime = format(now, 'HH:mm')
-  
+
   const todayHours = openingHours[dayOfWeek]
   if (!todayHours) return false
-  
+
   return currentTime >= todayHours.open && currentTime <= todayHours.close
 }
 
@@ -168,8 +168,13 @@ export default function VenueMap({ venues }: VenueMapProps) {
           setUserLocation([position.coords.latitude, position.coords.longitude])
           setLocationLoading(false)
         },
-        (error) => {
-          console.error('Error getting location:', error)
+        (error: GeolocationPositionError) => {
+          const errorMessages: Record<number, string> = {
+            1: 'Location permission denied',
+            2: 'Position unavailable',
+            3: 'Location request timed out'
+          }
+          console.warn('Geolocation unavailable:', errorMessages[error.code] || error.message)
           setLocationLoading(false)
         }
       )
@@ -244,7 +249,7 @@ export default function VenueMap({ venues }: VenueMapProps) {
                 <h3 className="font-semibold text-gray-900 mb-1 text-base leading-tight">
                   {venue.name}
                 </h3>
-                
+
                 {/* Rating and Status Row */}
                 <div className="flex items-center justify-between mb-2">
                   {venue.averageRating && venue.totalReviews ? (
@@ -253,11 +258,10 @@ export default function VenueMap({ venues }: VenueMapProps) {
                         {[...Array(5)].map((_, i) => (
                           <svg
                             key={i}
-                            className={`w-3.5 h-3.5 ${
-                              i < Math.round(venue.averageRating!)
+                            className={`w-3.5 h-3.5 ${i < Math.round(venue.averageRating!)
                                 ? 'text-yellow-400 fill-yellow-400'
                                 : 'text-gray-300 fill-gray-300'
-                            }`}
+                              }`}
                             viewBox="0 0 20 20"
                           >
                             <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
@@ -271,13 +275,12 @@ export default function VenueMap({ venues }: VenueMapProps) {
                   ) : (
                     <span className="text-xs text-gray-400">No reviews</span>
                   )}
-                  
+
                   {venue.opening_hours && (
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                      isVenueOpen(venue.opening_hours)
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isVenueOpen(venue.opening_hours)
                         ? 'bg-green-100 text-green-700'
                         : 'bg-red-100 text-red-700'
-                    }`}>
+                      }`}>
                       {isVenueOpen(venue.opening_hours) ? 'Open Now' : 'Closed'}
                     </span>
                   )}

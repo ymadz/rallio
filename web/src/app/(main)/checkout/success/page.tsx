@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
-import { processChargeableSourceAction } from '@/app/actions/payments'
+import { processChargeableSourceAction, processPaymentByReservationAction } from '@/app/actions/payments'
 import Link from 'next/link'
 
 export default function PaymentSuccessPage() {
@@ -22,43 +22,70 @@ export default function PaymentSuccessPage() {
         // Get the source_id from URL (PayMongo adds this on redirect)
         const sourceId = searchParams.get('source_id')
 
-        if (!sourceId) {
-          // No source_id means this was a cash payment or direct navigation
+        console.log('[PaymentSuccessPage] Processing payment:', { reservationId, sourceId })
+
+        // If we have source_id, use direct source processing
+        if (sourceId) {
+          console.log('[PaymentSuccessPage] Processing via source_id:', sourceId)
+
+          const result = await processChargeableSourceAction(sourceId)
+
+          if (!result.success) {
+            console.error('[PaymentSuccessPage] Direct processing failed, retrying...')
+            await new Promise(resolve => setTimeout(resolve, 3000))
+            const retryResult = await processChargeableSourceAction(sourceId)
+            if (!retryResult.success) {
+              setError(retryResult.error || 'Failed to process payment. Please contact support if payment was deducted.')
+            }
+          } else {
+            console.log('[PaymentSuccessPage] Payment processed successfully via source_id')
+          }
           setProcessing(false)
           return
         }
 
-        console.log('Processing payment for source:', sourceId)
+        // Fallback: No source_id in URL - use reservation-based processing
+        // This handles cases where PayMongo doesn't pass source_id back
+        if (reservationId) {
+          console.log('[PaymentSuccessPage] No source_id, using reservation-based processing:', reservationId)
 
-        // Process the chargeable source (create the payment)
-        // This is a fallback in case the webhook hasn't processed it yet
-        const result = await processChargeableSourceAction(sourceId)
+          // Wait a moment for any webhook to complete
+          await new Promise(resolve => setTimeout(resolve, 2000))
 
-        if (!result.success) {
-          console.error('Payment processing failed:', result.error)
-          // Don't immediately show error - the webhook might still process it
-          // Wait a bit and check again
-          await new Promise(resolve => setTimeout(resolve, 3000))
+          const result = await processPaymentByReservationAction(reservationId)
 
-          // Try one more time
-          const retryResult = await processChargeableSourceAction(sourceId)
-          if (!retryResult.success) {
-            setError(retryResult.error || 'Failed to process payment. Please contact support if payment was deducted.')
+          if (!result.success && result.status === 'pending_payment') {
+            // Payment might still be processing - wait and retry
+            console.log('[PaymentSuccessPage] Payment pending, waiting and retrying...')
+            await new Promise(resolve => setTimeout(resolve, 3000))
+
+            const retryResult = await processPaymentByReservationAction(reservationId)
+            if (!retryResult.success && retryResult.error) {
+              // Don't show error for pending payments - just show success and let user check bookings
+              console.warn('[PaymentSuccessPage] Payment may still be processing:', retryResult.error)
+            }
+          } else if (!result.success && result.error) {
+            setError(result.error)
+          } else {
+            console.log('[PaymentSuccessPage] Payment processed successfully via reservation')
           }
-        } else {
-          console.log('Payment processed successfully')
+          setProcessing(false)
+          return
         }
 
+        // No identifiers at all
+        console.warn('[PaymentSuccessPage] No source_id or reservation in URL')
         setProcessing(false)
+
       } catch (err) {
-        console.error('Payment processing error:', err)
+        console.error('[PaymentSuccessPage] Payment processing error:', err)
         setError(err instanceof Error ? err.message : 'Payment processing failed')
         setProcessing(false)
       }
     }
 
     processPayment()
-  }, [searchParams])
+  }, [searchParams, reservationId])
 
   if (processing) {
     return (

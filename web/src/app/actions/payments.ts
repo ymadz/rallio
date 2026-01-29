@@ -577,6 +577,110 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
 }
 
 /**
+ * Server Action: Process payment by reservation ID
+ * Fallback when PayMongo doesn't pass source_id in redirect URL
+ * Looks up the payment record by reservation ID and processes it
+ */
+export async function processPaymentByReservationAction(reservationId: string): Promise<{
+  success: boolean
+  error?: string
+  status?: string
+}> {
+  console.log('[processPaymentByReservationAction] Starting for reservation:', reservationId)
+
+  try {
+    const supabase = await createClient()
+
+    // Get the most recent payment record for this reservation
+    const { data: payment, error: paymentError } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('reservation_id', reservationId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (paymentError || !payment) {
+      console.log('[processPaymentByReservationAction] No payment found:', paymentError)
+      return { success: false, error: 'No payment record found for this reservation' }
+    }
+
+    console.log('[processPaymentByReservationAction] Found payment:', {
+      id: payment.id,
+      status: payment.status,
+      external_id: payment.external_id,
+      payment_method: payment.payment_method
+    })
+
+    // If payment is already completed, check reservation status
+    if (payment.status === 'completed') {
+      console.log('[processPaymentByReservationAction] Payment already completed, checking reservation...')
+
+      const { data: reservation } = await supabase
+        .from('reservations')
+        .select('status')
+        .eq('id', reservationId)
+        .single()
+
+      if (reservation?.status === 'confirmed') {
+        console.log('[processPaymentByReservationAction] Reservation already confirmed')
+        return { success: true, status: 'confirmed' }
+      }
+
+      // Payment completed but reservation not confirmed - fix it
+      console.warn('[processPaymentByReservationAction] Payment completed but reservation not confirmed - fixing')
+      const { error: updateError } = await supabase
+        .from('reservations')
+        .update({
+          status: 'confirmed',
+          amount_paid: payment.amount,
+        })
+        .eq('id', reservationId)
+
+      if (updateError) {
+        console.error('[processPaymentByReservationAction] Failed to confirm reservation:', updateError)
+        return { success: false, error: 'Failed to confirm reservation' }
+      }
+
+      revalidatePath('/reservations')
+      revalidatePath('/bookings')
+      return { success: true, status: 'confirmed' }
+    }
+
+    // For cash payments, no processing needed - just return pending status
+    if (payment.payment_method === 'cash') {
+      console.log('[processPaymentByReservationAction] Cash payment - no processing needed')
+      return { success: true, status: 'pending' }
+    }
+
+    // For e-wallet payments, process the source
+    const sourceId = payment.external_id
+    if (!sourceId) {
+      console.error('[processPaymentByReservationAction] No source ID found in payment record')
+      return { success: false, error: 'Payment source not found' }
+    }
+
+    console.log('[processPaymentByReservationAction] Processing source:', sourceId)
+
+    // Use the existing function to process the chargeable source
+    const result = await processChargeableSourceAction(sourceId)
+
+    if (result.success) {
+      return { success: true, status: 'confirmed' }
+    } else {
+      return { success: false, error: result.error, status: 'pending_payment' }
+    }
+
+  } catch (error) {
+    console.error('[processPaymentByReservationAction] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Payment processing failed',
+    }
+  }
+}
+
+/**
  * Server Action: Initiate payment for queue session participation
  * Creates a payment record for games played in a queue
  */
