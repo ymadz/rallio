@@ -37,6 +37,7 @@ async function getVenueByIdServer(venueId: string) {
         capacity,
         hourly_rate,
         is_active,
+        is_verified,
         metadata,
         court_amenities (
           amenities (
@@ -98,8 +99,8 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
     notFound()
   }
 
-  // Filter active courts
-  const activeCourts = venue.courts?.filter((c) => c.is_active) || []
+  // Filter active and verified courts
+  const activeCourts = venue.courts?.filter((c: any) => c.is_active && c.is_verified) || []
 
   // Get venue status
   const isOpen = isVenueOpen(venue.opening_hours)

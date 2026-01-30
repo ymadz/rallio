@@ -17,6 +17,33 @@ import {
 } from 'lucide-react'
 import { getVenueAnalytics, getCourtPerformance, getPeakHours } from '@/app/actions/court-admin-analytics-actions'
 
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+} from 'chart.js'
+import { Bar, Line } from 'react-chartjs-2'
+
+// Register ChartJS
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+)
+
 interface RevenueData {
   month: string
   revenue: number
@@ -55,7 +82,7 @@ export function AnalyticsDashboard({ venueId }: AnalyticsDashboardProps) {
         getCourtPerformance(venueId),
         getPeakHours(venueId)
       ])
-      
+
       if (analyticsResult.success) {
         setAnalytics(analyticsResult.analytics)
       }
@@ -73,6 +100,116 @@ export function AnalyticsDashboard({ venueId }: AnalyticsDashboardProps) {
   }
 
   const maxBookings = peakHours.length > 0 ? Math.max(...peakHours.map(h => h.booking_count || h.bookings || 0)) : 1
+
+  // Chart Data Configuration
+  const revenueChartData = {
+    labels: analytics?.revenue_trend?.map((d: any) => d.period || d.month || d.date) || [],
+    datasets: [
+      {
+        label: 'Revenue',
+        data: analytics?.revenue_trend?.map((d: any) => d.revenue || 0) || [],
+        backgroundColor: 'rgba(34, 197, 94, 0.8)',
+        borderRadius: 6,
+        hoverBackgroundColor: 'rgba(34, 197, 94, 1)',
+      },
+      {
+        label: 'Bookings',
+        data: analytics?.revenue_trend?.map((d: any) => d.bookings || 0) || [],
+        backgroundColor: 'rgba(59, 130, 246, 0.5)',
+        borderRadius: 6,
+        yAxisID: 'y1',
+      }
+    ],
+  }
+
+  const revenueChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+        align: 'end' as const,
+        labels: {
+          usePointStyle: true,
+          pointStyle: 'circle',
+          padding: 20
+        }
+      },
+      tooltip: {
+        mode: 'index' as const,
+        intersect: false,
+        padding: 12,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        titleColor: '#1f2937',
+        bodyColor: '#4b5563',
+        borderColor: '#e5e7eb',
+        borderWidth: 1,
+        boxPadding: 4,
+        callbacks: {
+          label: function (context: any) {
+            let label = context.dataset.label || '';
+            if (label) {
+              label += ': ';
+            }
+            if (context.dataset.label === 'Revenue') {
+              label += '₱' + context.parsed.y.toLocaleString();
+            } else {
+              label += context.parsed.y;
+            }
+            return label;
+          }
+        }
+      },
+    },
+    hover: {
+      mode: 'index' as const,
+      intersect: false
+    },
+    scales: {
+      x: {
+        grid: {
+          display: false,
+        },
+        ticks: {
+          color: '#6b7280',
+          font: {
+            size: 11
+          }
+        }
+      },
+      y: {
+        type: 'linear' as const,
+        display: true,
+        position: 'left' as const,
+        beginAtZero: true,
+        grid: {
+          color: '#f3f4f6',
+        },
+        ticks: {
+          color: '#6b7280',
+          callback: (value: any) => '₱' + value.toLocaleString(),
+          font: {
+            size: 11
+          }
+        },
+      },
+      y1: {
+        type: 'linear' as const,
+        display: true,
+        position: 'right' as const,
+        beginAtZero: true,
+        grid: {
+          drawOnChartArea: false,
+        },
+        ticks: {
+          color: '#6b7280',
+          font: {
+            size: 11
+          }
+        },
+      },
+    },
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -216,44 +353,24 @@ export function AnalyticsDashboard({ venueId }: AnalyticsDashboardProps) {
 
       {/* Revenue Trend Chart */}
       {!isLoading && !error && analytics && analytics.revenue_trend && (
-        <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8">
+        <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Revenue Trend</h2>
-              <p className="text-sm text-gray-500 mt-1">Revenue over time</p>
+              <h2 className="text-xl font-bold text-gray-900">Revenue & Bookings Trend</h2>
+              <p className="text-sm text-gray-500 mt-1">Historical performance across the selected period</p>
             </div>
-            <div className="flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-gray-400" />
+            <div className="flex items-center gap-2 text-gray-400">
+              <BarChart3 className="w-5 h-5" />
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div className="h-96 w-full">
             {analytics.revenue_trend.length === 0 ? (
-              <p className="text-center text-gray-500 py-8">No revenue data available yet</p>
+              <div className="h-full flex items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                <p className="text-gray-500">No data available for the selected period</p>
+              </div>
             ) : (
-              analytics.revenue_trend.map((data: any, index: number) => {
-                const maxRevenue = Math.max(...analytics.revenue_trend.map((d: any) => d.revenue || d.total_revenue || 0))
-                const revenue = data.revenue || data.total_revenue || 0
-                const width = maxRevenue > 0 ? (revenue / maxRevenue) * 100 : 0
-
-                return (
-                  <div key={index}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium text-gray-700">{data.period || data.month || 'N/A'}</span>
-                      <span className="text-sm font-semibold text-gray-900">
-                        ₱{revenue.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                      <div
-                        className="bg-gradient-to-r from-green-500 to-green-600 h-full rounded-full transition-all duration-500"
-                        style={{ width: `${width}%` }}
-                      />
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">{data.bookings || data.total_bookings || 0} bookings</p>
-                  </div>
-                )
-              })
+              <Bar data={revenueChartData} options={revenueChartOptions} />
             )}
           </div>
         </div>
@@ -294,29 +411,28 @@ export function AnalyticsDashboard({ venueId }: AnalyticsDashboardProps) {
                         <div className="flex items-center justify-between text-sm mb-1">
                           <span className="text-gray-600">Utilization</span>
                           <span className="font-medium text-gray-900">{court.utilization_rate || court.utilization || 0}%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                      <div
-                          className={`h-full rounded-full ${
-                            (court.utilization_rate || court.utilization) >= 80
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${(court.utilization_rate || court.utilization) >= 80
                               ? 'bg-green-500'
                               : (court.utilization_rate || court.utilization) >= 60
-                              ? 'bg-yellow-500'
-                              : 'bg-red-500'
-                          }`}
-                          style={{ width: `${court.utilization_rate || court.utilization}%` }}
-                        />
+                                ? 'bg-yellow-500'
+                                : 'bg-red-500'
+                              }`}
+                            style={{ width: `${court.utilization_rate || court.utilization}%` }}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))
+                ))
               )}
             </div>
           </div>
 
           {/* Peak Hours */}
-          <div className="bg-white border border-gray-200 rounded-xl p-6">
+          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">Peak Hours</h2>
@@ -325,44 +441,72 @@ export function AnalyticsDashboard({ venueId }: AnalyticsDashboardProps) {
               <Clock className="w-5 h-5 text-gray-400" />
             </div>
 
-            <div className="space-y-2 max-h-96 overflow-y-auto">
+            <div className="h-[400px]">
               {peakHours.length === 0 ? (
-                <p className="text-center text-gray-500 py-8">No peak hours data available</p>
+                <div className="h-full flex items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                  <p className="text-gray-500">No peak hours data available</p>
+                </div>
               ) : (
-                peakHours.map((hour: any, index: number) => {
-                  const bookingCount = hour.booking_count || hour.bookings || 0
-                  const width = maxBookings > 0 ? (bookingCount / maxBookings) * 100 : 0
-                  const isPeak = bookingCount > maxBookings * 0.7
-
-                  return (
-                    <div key={index} className="flex items-center gap-3">
-                      <span className="text-xs font-medium text-gray-600 w-16">{hour.hour_range || hour.time}</span>
-                      <div className="flex-1">
-                        <div className="w-full bg-gray-200 rounded-full h-6 overflow-hidden">
-                          <div
-                            className={`h-full rounded-full flex items-center justify-end pr-2 ${
-                              isPeak
-                                ? 'bg-gradient-to-r from-red-500 to-red-600'
-                                : 'bg-gradient-to-r from-blue-500 to-blue-600'
-                            }`}
-                            style={{ width: `${width}%` }}
-                          >
-                            {width > 15 && (
-                              <span className="text-xs font-semibold text-white">
-                                {bookingCount}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      {width <= 15 && (
-                        <span className="text-xs font-semibold text-gray-700 w-8">
-                          {bookingCount}
-                        </span>
-                      )}
-                    </div>
-                  )
-                })
+                <Bar
+                  data={{
+                    labels: peakHours.map((h: any) => h.hourLabel || h.time || `${h.hour}:00`),
+                    datasets: [
+                      {
+                        label: 'Bookings',
+                        data: peakHours.map((h: any) => h.booking_count || h.bookings || 0),
+                        backgroundColor: peakHours.map((h: any) => {
+                          const count = h.booking_count || h.bookings || 0
+                          return count > maxBookings * 0.7 ? 'rgba(239, 68, 68, 0.8)' : 'rgba(59, 130, 246, 0.8)'
+                        }),
+                        borderRadius: 4,
+                      }
+                    ],
+                  }}
+                  options={{
+                    indexAxis: 'y' as const,
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: {
+                        display: false,
+                      },
+                      tooltip: {
+                        padding: 10,
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                        titleColor: '#1f2937',
+                        bodyColor: '#4b5563',
+                        borderColor: '#e5e7eb',
+                        borderWidth: 1,
+                      }
+                    },
+                    scales: {
+                      x: {
+                        beginAtZero: true,
+                        grid: {
+                          color: '#f3f4f6',
+                        },
+                        ticks: {
+                          color: '#6b7280',
+                          stepSize: 1,
+                          font: {
+                            size: 10
+                          }
+                        }
+                      },
+                      y: {
+                        grid: {
+                          display: false,
+                        },
+                        ticks: {
+                          color: '#6b7280',
+                          font: {
+                            size: 10
+                          }
+                        }
+                      }
+                    }
+                  }}
+                />
               )}
             </div>
           </div>
@@ -377,7 +521,11 @@ export function AnalyticsDashboard({ venueId }: AnalyticsDashboardProps) {
             <div>
               <h3 className="font-semibold text-green-900 mb-1">Revenue Growth</h3>
               <p className="text-sm text-green-700">
-                Your revenue has increased by 12.5% this month. Keep up the great work!
+                {analytics.revenue_change > 0
+                  ? `Your revenue increased by ${analytics.revenue_change}% vs the previous period. Great job!`
+                  : analytics.revenue_change < 0
+                    ? `Revenue is down by ${Math.abs(analytics.revenue_change)}%. Consider promotion strategies.`
+                    : 'Revenue is stable compared to the previous period.'}
               </p>
             </div>
           </div>
@@ -387,9 +535,11 @@ export function AnalyticsDashboard({ venueId }: AnalyticsDashboardProps) {
           <div className="flex items-start gap-3">
             <Clock className="w-5 h-5 text-blue-600 mt-0.5" />
             <div>
-              <h3 className="font-semibold text-blue-900 mb-1">Peak Hours: 6-9 PM</h3>
+              <h3 className="font-semibold text-blue-900 mb-1">
+                Peak Hours: {peakHours.find((h: any) => (h.booking_count || h.bookings || 0) === maxBookings)?.hourLabel || 'N/A'}
+              </h3>
               <p className="text-sm text-blue-700">
-                Evening hours are your busiest. Consider implementing premium pricing during these times.
+                This is your busiest time. Consider dynamic pricing or maintenance during off-peak hours.
               </p>
             </div>
           </div>
@@ -399,9 +549,10 @@ export function AnalyticsDashboard({ venueId }: AnalyticsDashboardProps) {
           <div className="flex items-start gap-3">
             <Users className="w-5 h-5 text-purple-600 mt-0.5" />
             <div>
-              <h3 className="font-semibold text-purple-900 mb-1">Customer Retention</h3>
+              <h3 className="font-semibold text-purple-900 mb-1">Customer Stats</h3>
               <p className="text-sm text-purple-700">
-                65% of customers are returning players. Focus on retention strategies to boost this further.
+                You had {analytics.unique_customers} unique customers this period.
+                {analytics.customers_change > 0 && ` That's up ${analytics.customers_change}%!`}
               </p>
             </div>
           </div>

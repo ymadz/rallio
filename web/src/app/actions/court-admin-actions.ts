@@ -577,7 +577,16 @@ export async function createVenue(venueData: {
         phone: venueData.phone,
         email: venueData.email,
         website: venueData.website,
-        opening_hours: venueData.opening_hours,
+
+        opening_hours: venueData.opening_hours || {
+          monday: { open: '06:00', close: '22:00' },
+          tuesday: { open: '06:00', close: '22:00' },
+          wednesday: { open: '06:00', close: '22:00' },
+          thursday: { open: '06:00', close: '22:00' },
+          friday: { open: '06:00', close: '22:00' },
+          saturday: { open: '06:00', close: '22:00' },
+          sunday: { open: '06:00', close: '22:00' }
+        },
         is_active: true,
         is_verified: false, // Requires admin verification
       })
@@ -855,14 +864,14 @@ export async function getMyVenueRefunds(options?: {
 
     // Fetch profiles separately for the user_ids
     const userIds = [...new Set(refunds?.map(r => r.user_id).filter(Boolean) || [])]
-    
+
     let profilesMap: Record<string, any> = {}
     if (userIds.length > 0) {
       const { data: profiles } = await supabase
         .from('profiles')
         .select('id, first_name, last_name, email, phone')
         .in('id', userIds)
-      
+
       if (profiles) {
         profilesMap = profiles.reduce((acc, p) => {
           acc[p.id] = p

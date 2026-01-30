@@ -90,6 +90,7 @@ export const useCourtStore = create<CourtStore>()((set, get) => ({
                 .eq('is_active', true)
                 .eq('is_verified', true)
                 .eq('courts.is_active', true)
+                .eq('courts.is_verified', true)
                 .order('name');
 
             if (error) {

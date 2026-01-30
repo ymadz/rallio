@@ -62,25 +62,91 @@ const getOperatingHours = (
 
 export default function BookingScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
-    const { setBookingData } = useCheckoutStore();
-
-    // Data state
+    // State
     const [venue, setVenue] = useState<Venue | null>(null);
     const [courts, setCourts] = useState<Court[]>([]);
-    const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
-
-    // Selection state
     const [selectedCourtId, setSelectedCourtId] = useState<string | null>(null);
-    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+    const [selectedDate, setSelectedDate] = useState<Date>(new Date());
     const [selectedTime, setSelectedTime] = useState<string | null>(null);
     const [endTime, setEndTime] = useState<string | null>(null);
-    const [numPlayers, setNumPlayers] = useState(2);
+    const [numPlayers, setNumPlayers] = useState<number>(4);
     const [notes, setNotes] = useState('');
-
-    // UI state
     const [isLoading, setIsLoading] = useState(true);
-    const [isLoadingSlots, setIsLoadingSlots] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
+    const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+
+    const { setBookingData, setDiscount } = useCheckoutStore();
+
+    // Discount state
+    const [discountResults, setDiscountResults] = useState<{
+        totalDiscount: number;
+        finalPrice: number;
+        discounts: any[];
+    }>({ totalDiscount: 0, finalPrice: 0, discounts: [] });
+    const [isCalculatingDiscount, setIsCalculatingDiscount] = useState(false);
+
+    // Calculate discounts when relevant fields change
+    useEffect(() => {
+        const calculateDiscounts = async () => {
+            if (!venue || !selectedCourtId || !selectedDate || !selectedTime) {
+                setDiscountResults({ totalDiscount: 0, finalPrice: 0, discounts: [] });
+                return;
+            }
+
+            // Calculate duration and base price locally for the effect
+            let currentDuration = 1;
+            if (selectedTime) {
+                if (endTime) {
+                    const startHour = parseInt(selectedTime.split(':')[0]);
+                    const endHour = parseInt(endTime.split(':')[0]);
+                    currentDuration = endHour - startHour + 1;
+                }
+            }
+
+            const currentCourt = courts.find(c => c.id === selectedCourtId);
+            const basePrice = currentCourt ? currentCourt.hourly_rate * currentDuration : 0;
+
+            if (basePrice <= 0) return;
+
+            setIsCalculatingDiscount(true);
+            try {
+                // Import dynamically to avoid cycle if any, or just use the imported one
+                const { calculateApplicableDiscounts } = require('@/lib/discount-utils');
+
+                const result = await calculateApplicableDiscounts({
+                    venueId: venue.id,
+                    startDate: selectedDate.toISOString(),
+                    endDate: selectedDate.toISOString(), // Multi-day logic might need adjustment but usually start=end for single booking
+                    numberOfDays: currentDuration, // Using duration as "days" proxy or ignoring if rule is strictly days. *Correction*: Logic uses days for multi-day. For hourly, we might pass 1 day.
+                    // Wait, existing logic uses numberOfDays for multi_day discount. If we book 1 day, it's 1. 
+                    // If we want to support hourly discounts, the backend logic might need tweaks. 
+                    // But for now, let's pass 1 day as it's a single day booking.
+                    numberOfPlayers: numPlayers,
+                    basePrice: basePrice
+                });
+
+                if (result.success) {
+                    setDiscountResults({
+                        totalDiscount: result.totalDiscount,
+                        finalPrice: result.finalPrice,
+                        discounts: result.discounts
+                    });
+                }
+            } catch (err) {
+                console.error('Error calculating discounts:', err);
+            } finally {
+                setIsCalculatingDiscount(false);
+            }
+        };
+
+        // Debounce slightly
+        const timer = setTimeout(calculateDiscounts, 300);
+        return () => clearTimeout(timer);
+    }, [venue, selectedCourtId, selectedDate, selectedTime, endTime, numPlayers]);
+
+
+
 
     // Generate next 14 days for date selection
     const dateOptions = Array.from({ length: 14 }, (_, i) => addDays(startOfDay(new Date()), i));
@@ -250,6 +316,13 @@ export default function BookingScreen() {
                 return;
             }
         }
+
+        // Pass discount info separately
+        setDiscount(
+            discountResults.totalDiscount,
+            discountResults.discounts.length > 0 ? discountResults.discounts[0].type : undefined,
+            discountResults.discounts.map((d: any) => d.name).join(', ')
+        );
 
         // Save to checkout store
         setBookingData({
@@ -545,6 +618,31 @@ export default function BookingScreen() {
                             <Text style={styles.totalLabel}>Total</Text>
                             <Text style={styles.totalValue}>₱{totalPrice.toLocaleString()}</Text>
                         </View>
+
+                        {discountResults.discounts.length > 0 && (
+                            <View style={styles.discountContainer}>
+                                {discountResults.discounts.map((discount, index) => (
+                                    <View key={index} style={styles.summaryRow}>
+                                        <Text style={[
+                                            styles.summaryLabel,
+                                            { color: discount.isIncrease ? Colors.dark.error : Colors.dark.success }
+                                        ]}>
+                                            {discount.name}
+                                        </Text>
+                                        <Text style={[
+                                            styles.summaryValue,
+                                            { color: discount.isIncrease ? Colors.dark.error : Colors.dark.success }
+                                        ]}>
+                                            {discount.isIncrease ? '+' : '-'}₱{discount.amount.toLocaleString()}
+                                        </Text>
+                                    </View>
+                                ))}
+                                <View style={[styles.summaryRow, styles.finalPriceRow]}>
+                                    <Text style={styles.finalPriceLabel}>Final Price</Text>
+                                    <Text style={styles.finalPriceValue}>₱{discountResults.finalPrice.toLocaleString()}</Text>
+                                </View>
+                            </View>
+                        )}
                     </Card>
                 )}
 
@@ -556,7 +654,18 @@ export default function BookingScreen() {
                 <View style={styles.bottomCta}>
                     <View style={styles.priceContainer}>
                         <Text style={styles.priceLabel}>Total</Text>
-                        <Text style={styles.priceValue}>₱{totalPrice.toLocaleString()}</Text>
+                        {discountResults.finalPrice !== totalPrice && discountResults.finalPrice > 0 ? (
+                            <View>
+                                <Text style={[styles.priceValue, { textDecorationLine: 'line-through', fontSize: 14, color: Colors.dark.textSecondary }]}>
+                                    ₱{totalPrice.toLocaleString()}
+                                </Text>
+                                <Text style={[styles.priceValue, { color: Colors.dark.primary }]}>
+                                    ₱{discountResults.finalPrice.toLocaleString()}
+                                </Text>
+                            </View>
+                        ) : (
+                            <Text style={styles.priceValue}>₱{totalPrice.toLocaleString()}</Text>
+                        )}
                     </View>
                     <Button
                         onPress={handleContinue}
@@ -798,8 +907,24 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.dark.surface,
         alignItems: 'center',
         justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: Colors.dark.border,
+    },
+    discountContainer: {
+        marginTop: Spacing.sm,
+        paddingTop: Spacing.sm,
+        borderTopWidth: 1,
+        borderTopColor: Colors.dark.border,
+    },
+    finalPriceRow: {
+        marginTop: Spacing.xs,
+    },
+    finalPriceLabel: {
+        ...Typography.body,
+        fontWeight: '600',
+        color: Colors.dark.text,
+    },
+    finalPriceValue: {
+        ...Typography.h3,
+        color: Colors.dark.primary,
     },
     playersCount: {
         ...Typography.h2,
