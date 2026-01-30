@@ -82,10 +82,10 @@ export function VenueManagementGlobal() {
   const [totalPages, setTotalPages] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
-  
+
   // Batch selection
   const [selectedVenues, setSelectedVenues] = useState<Set<string>>(new Set())
-  
+
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -116,12 +116,12 @@ export function VenueManagementGlobal() {
       })
 
       if (!result.success) {
-        throw new Error(result.error)
+        throw new Error((result as any).error)
       }
 
-      setVenues(result.venues || [])
-      setTotalPages(result.totalPages || 1)
-      setTotalCount(result.total || 0)
+      setVenues((result as any).venues || [])
+      setTotalPages((result as any).totalPages || 1)
+      setTotalCount((result as any).total || 0)
     } catch (error: any) {
       toast.error(error.message || 'Failed to load venues')
     } finally {
@@ -132,27 +132,27 @@ export function VenueManagementGlobal() {
   const loadCities = async () => {
     const result = await getVenueCities()
     if (result.success) {
-      setCities(result.cities || [])
+      setCities((result as any).cities || [])
     }
   }
 
   const loadVenueDetails = async (venueId: string) => {
     const result = await getVenueDetails(venueId)
     if (result.success) {
-      setSelectedVenue(result.venue)
+      setSelectedVenue((result as any).venue)
     }
   }
 
   const handleToggleActive = async (venueId: string, isActive: boolean) => {
     const result = await toggleVenueActive(venueId, !isActive)
     if (result.success) {
-      toast.success(result.message)
+      toast.success((result as any).message)
       loadVenues()
       if (selectedVenue?.id === venueId) {
         loadVenueDetails(venueId)
       }
     } else {
-      toast.error(result.error)
+      toast.error((result as any).error)
     }
     setOpenDropdown(null)
   }
@@ -160,13 +160,13 @@ export function VenueManagementGlobal() {
   const handleToggleVerified = async (venueId: string, isVerified: boolean) => {
     const result = await toggleVenueVerified(venueId, !isVerified)
     if (result.success) {
-      toast.success(result.message)
+      toast.success((result as any).message)
       loadVenues()
       if (selectedVenue?.id === venueId) {
         loadVenueDetails(venueId)
       }
     } else {
-      toast.error(result.error)
+      toast.error((result as any).error)
     }
     setOpenDropdown(null)
   }
@@ -176,7 +176,7 @@ export function VenueManagementGlobal() {
 
     const result = await deleteVenue(venueToDelete)
     if (result.success) {
-      toast.success(result.message)
+      toast.success((result as any).message)
       loadVenues()
       if (selectedVenue?.id === venueToDelete) {
         setSelectedVenue(null)
@@ -184,7 +184,7 @@ export function VenueManagementGlobal() {
       setShowDeleteModal(false)
       setVenueToDelete(null)
     } else {
-      toast.error(result.error)
+      toast.error((result as any).error)
     }
   }
 
@@ -218,11 +218,11 @@ export function VenueManagementGlobal() {
 
     const result = await batchUpdateVenues(Array.from(selectedVenues), action)
     if (result.success) {
-      toast.success(result.message)
+      toast.success((result as any).message)
       setSelectedVenues(new Set())
       loadVenues()
     } else {
-      toast.error(result.error)
+      toast.error((result as any).error)
     }
   }
 
@@ -339,11 +339,10 @@ export function VenueManagementGlobal() {
               setStatusFilter('all')
               setCurrentPage(1)
             }}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg whitespace-nowrap transition-colors ${
-              statusFilter === 'all'
-                ? 'bg-purple-50 text-purple-700 border-2 border-purple-200'
-                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg whitespace-nowrap transition-colors ${statusFilter === 'all'
+              ? 'bg-purple-50 text-purple-700 border-2 border-purple-200'
+              : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
           >
             <Building2 className="w-4 h-4" />
             All Venues
@@ -353,11 +352,10 @@ export function VenueManagementGlobal() {
               setStatusFilter('active')
               setCurrentPage(1)
             }}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg whitespace-nowrap transition-colors ${
-              statusFilter === 'active'
-                ? 'bg-purple-50 text-purple-700 border-2 border-purple-200'
-                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg whitespace-nowrap transition-colors ${statusFilter === 'active'
+              ? 'bg-purple-50 text-purple-700 border-2 border-purple-200'
+              : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
           >
             <CheckCircle className="w-4 h-4" />
             Active
@@ -367,11 +365,10 @@ export function VenueManagementGlobal() {
               setStatusFilter('inactive')
               setCurrentPage(1)
             }}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg whitespace-nowrap transition-colors ${
-              statusFilter === 'inactive'
-                ? 'bg-purple-50 text-purple-700 border-2 border-purple-200'
-                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg whitespace-nowrap transition-colors ${statusFilter === 'inactive'
+              ? 'bg-purple-50 text-purple-700 border-2 border-purple-200'
+              : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
           >
             <Ban className="w-4 h-4" />
             Inactive
@@ -381,11 +378,10 @@ export function VenueManagementGlobal() {
               setStatusFilter('verified')
               setCurrentPage(1)
             }}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg whitespace-nowrap transition-colors ${
-              statusFilter === 'verified'
-                ? 'bg-purple-50 text-purple-700 border-2 border-purple-200'
-                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg whitespace-nowrap transition-colors ${statusFilter === 'verified'
+              ? 'bg-purple-50 text-purple-700 border-2 border-purple-200'
+              : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
           >
             <Shield className="w-4 h-4" />
             Verified
@@ -395,11 +391,10 @@ export function VenueManagementGlobal() {
               setStatusFilter('unverified')
               setCurrentPage(1)
             }}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg whitespace-nowrap transition-colors ${
-              statusFilter === 'unverified'
-                ? 'bg-purple-50 text-purple-700 border-2 border-purple-200'
-                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg whitespace-nowrap transition-colors ${statusFilter === 'unverified'
+              ? 'bg-purple-50 text-purple-700 border-2 border-purple-200'
+              : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
           >
             <Clock className="w-4 h-4" />
             Unverified
@@ -482,171 +477,171 @@ export function VenueManagementGlobal() {
                     </th>
                   </tr>
                 </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {venues.map((venue) => (
-                  <tr key={venue.id} className="hover:bg-gray-50 cursor-pointer">
-                    <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={selectedVenues.has(venue.id)}
-                        onChange={() => toggleVenueSelection(venue.id)}
-                        className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-                      />
-                    </td>
-                    <td className="px-6 py-4" onClick={() => handleRowClick(venue)}>
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{venue.name}</div>
-                        {venue.phone && (
-                          <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                            <Phone className="w-3 h-3" />
-                            {venue.phone}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4" onClick={() => handleRowClick(venue)}>
-                      {venue.owner ? (
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {venues.map((venue) => (
+                    <tr key={venue.id} className="hover:bg-gray-50 cursor-pointer">
+                      <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedVenues.has(venue.id)}
+                          onChange={() => toggleVenueSelection(venue.id)}
+                          className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                        />
+                      </td>
+                      <td className="px-6 py-4" onClick={() => handleRowClick(venue)}>
                         <div>
-                          <div className="text-sm text-gray-900">{venue.owner.display_name}</div>
-                          <div className="text-xs text-gray-500">{venue.owner.email}</div>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-gray-400">No owner</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4" onClick={() => handleRowClick(venue)}>
-                      <div className="text-sm text-gray-900">{venue.city || 'N/A'}</div>
-                      {venue.address && (
-                        <div className="text-xs text-gray-500 max-w-xs truncate">{venue.address}</div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4" onClick={() => handleRowClick(venue)}>
-                      <span className="text-sm text-gray-600">{venue.court_count} courts</span>
-                    </td>
-                    <td className="px-6 py-4" onClick={() => handleRowClick(venue)}>
-                      {getStatusBadge(venue)}
-                    </td>
-                    <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                      <div className="relative">
-                        <button
-                          onClick={() => setOpenDropdown(openDropdown === venue.id ? null : venue.id)}
-                          className="p-1 hover:bg-gray-100 rounded transition-colors"
-                        >
-                          <MoreVertical className="w-5 h-5 text-gray-400" />
-                        </button>
-
-                        {openDropdown === venue.id && (
-                          <>
-                            <div
-                              className="fixed inset-0 z-10"
-                              onClick={() => setOpenDropdown(null)}
-                            />
-                            <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1">
-                              <button
-                                onClick={() => {
-                                  loadVenueDetails(venue.id)
-                                  setOpenDropdown(null)
-                                }}
-                                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                              >
-                                <Eye className="w-4 h-4" />
-                                View Details
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setSelectedVenue(venue)
-                                  setShowEditModal(true)
-                                  setOpenDropdown(null)
-                                }}
-                                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                              >
-                                <Edit className="w-4 h-4" />
-                                Edit Venue
-                              </button>
-                              <button
-                                onClick={() => handleToggleActive(venue.id, venue.is_active)}
-                                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                              >
-                                {venue.is_active ? (
-                                  <>
-                                    <Ban className="w-4 h-4" />
-                                    Deactivate
-                                  </>
-                                ) : (
-                                  <>
-                                    <CheckCircle className="w-4 h-4" />
-                                    Activate
-                                  </>
-                                )}
-                              </button>
-                              <button
-                                onClick={() => handleToggleVerified(venue.id, venue.is_verified)}
-                                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                              >
-                                {venue.is_verified ? (
-                                  <>
-                                    <XCircle className="w-4 h-4" />
-                                    Unverify
-                                  </>
-                                ) : (
-                                  <>
-                                    <Shield className="w-4 h-4" />
-                                    Verify
-                                  </>
-                                )}
-                              </button>
-                              <div className="my-1 border-t border-gray-200" />
-                              <button
-                                onClick={() => {
-                                  setVenueToDelete(venue.id)
-                                  setShowDeleteModal(true)
-                                  setOpenDropdown(null)
-                                }}
-                                className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                                Delete
-                              </button>
+                          <div className="text-sm font-medium text-gray-900">{venue.name}</div>
+                          {venue.phone && (
+                            <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                              <Phone className="w-3 h-3" />
+                              {venue.phone}
                             </div>
-                          </>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4" onClick={() => handleRowClick(venue)}>
+                        {venue.owner ? (
+                          <div>
+                            <div className="text-sm text-gray-900">{venue.owner.display_name}</div>
+                            <div className="text-xs text-gray-500">{venue.owner.email}</div>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-400">No owner</span>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      </td>
+                      <td className="px-6 py-4" onClick={() => handleRowClick(venue)}>
+                        <div className="text-sm text-gray-900">{venue.city || 'N/A'}</div>
+                        {venue.address && (
+                          <div className="text-xs text-gray-500 max-w-xs truncate">{venue.address}</div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4" onClick={() => handleRowClick(venue)}>
+                        <span className="text-sm text-gray-600">{venue.court_count} courts</span>
+                      </td>
+                      <td className="px-6 py-4" onClick={() => handleRowClick(venue)}>
+                        {getStatusBadge(venue)}
+                      </td>
+                      <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                        <div className="relative">
+                          <button
+                            onClick={() => setOpenDropdown(openDropdown === venue.id ? null : venue.id)}
+                            className="p-1 hover:bg-gray-100 rounded transition-colors"
+                          >
+                            <MoreVertical className="w-5 h-5 text-gray-400" />
+                          </button>
 
-          {/* Pagination */}
-          <div className="flex-none border-t border-gray-200 px-6 py-4 bg-gray-50">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-700">
-                Showing <span className="font-medium">{venues.length > 0 ? ((currentPage - 1) * 20) + 1 : 0}</span> to{' '}
-                <span className="font-medium">{Math.min(currentPage * 20, totalCount)}</span> of{' '}
-                <span className="font-medium">{totalCount}</span> results
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  Previous
-                </button>
-                <button
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  Next
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+                          {openDropdown === venue.id && (
+                            <>
+                              <div
+                                className="fixed inset-0 z-10"
+                                onClick={() => setOpenDropdown(null)}
+                              />
+                              <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1">
+                                <button
+                                  onClick={() => {
+                                    loadVenueDetails(venue.id)
+                                    setOpenDropdown(null)
+                                  }}
+                                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  View Details
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setSelectedVenue(venue)
+                                    setShowEditModal(true)
+                                    setOpenDropdown(null)
+                                  }}
+                                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                  Edit Venue
+                                </button>
+                                <button
+                                  onClick={() => handleToggleActive(venue.id, venue.is_active)}
+                                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                >
+                                  {venue.is_active ? (
+                                    <>
+                                      <Ban className="w-4 h-4" />
+                                      Deactivate
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircle className="w-4 h-4" />
+                                      Activate
+                                    </>
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => handleToggleVerified(venue.id, venue.is_verified)}
+                                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                >
+                                  {venue.is_verified ? (
+                                    <>
+                                      <XCircle className="w-4 h-4" />
+                                      Unverify
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Shield className="w-4 h-4" />
+                                      Verify
+                                    </>
+                                  )}
+                                </button>
+                                <div className="my-1 border-t border-gray-200" />
+                                <button
+                                  onClick={() => {
+                                    setVenueToDelete(venue.id)
+                                    setShowDeleteModal(true)
+                                    setOpenDropdown(null)
+                                  }}
+                                  className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  Delete
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            <div className="flex-none border-t border-gray-200 px-6 py-4 bg-gray-50">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-700">
+                  Showing <span className="font-medium">{venues.length > 0 ? ((currentPage - 1) * 20) + 1 : 0}</span> to{' '}
+                  <span className="font-medium">{Math.min(currentPage * 20, totalCount)}</span> of{' '}
+                  <span className="font-medium">{totalCount}</span> results
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Next
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        </>
+          </>
         )}
       </div>
 
