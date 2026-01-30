@@ -1,62 +1,80 @@
-'use client'
+'use client';
 
-import { useState, Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
-import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
-import { Alert } from '@/components/ui/alert'
+import { useState, Suspense, useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Alert } from '@/components/ui/alert';
 
 function VerifyEmailContent() {
-  const searchParams = useSearchParams()
-  const email = searchParams.get('email') || ''
-  const [isResending, setIsResending] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const searchParams = useSearchParams();
+  const email = searchParams.get('email') || '';
+  const [isResending, setIsResending] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    const supabase = createClient();
+
+    const interval = setInterval(async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session) {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (user?.email_confirmed_at) {
+          router.replace('/home');
+        }
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [router]);
 
   const handleResendEmail = async () => {
     if (!email) {
-      setError('No email address provided')
-      return
+      setError('No email address provided');
+      return;
     }
 
-    setIsResending(true)
-    setError(null)
-    setMessage(null)
+    setIsResending(true);
+    setError(null);
+    setMessage(null);
 
     try {
-      const supabase = createClient()
+      const supabase = createClient();
       const { error } = await supabase.auth.resend({
         type: 'signup',
         email,
         options: {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
-      })
+      });
 
       if (error) {
-        setError(error.message)
-        return
+        setError(error.message);
+        return;
       }
 
-      setMessage('Verification email sent! Check your inbox.')
+      setMessage('Verification email sent! Check your inbox.');
     } catch {
-      setError('An unexpected error occurred')
+      setError('An unexpected error occurred');
     } finally {
-      setIsResending(false)
+      setIsResending(false);
     }
-  }
+  };
 
   return (
     <div className="space-y-6 text-center">
       {/* Icon */}
       <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
-        <svg
-          className="w-8 h-8 text-primary"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
+        <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -69,24 +87,14 @@ function VerifyEmailContent() {
       {/* Header */}
       <div className="space-y-2">
         <h1 className="text-2xl font-bold tracking-tight">Check your email</h1>
-        <p className="text-muted-foreground">
-          We sent a verification link to
-        </p>
+        <p className="text-muted-foreground">We sent a verification link to</p>
         <p className="font-medium">{email || 'your email'}</p>
       </div>
 
       {/* Messages */}
-      {error && (
-        <Alert variant="destructive">
-          {error}
-        </Alert>
-      )}
+      {error && <Alert variant="destructive">{error}</Alert>}
 
-      {message && (
-        <Alert>
-          {message}
-        </Alert>
-      )}
+      {message && <Alert>{message}</Alert>}
 
       {/* Instructions */}
       <div className="text-sm text-muted-foreground space-y-2">
@@ -112,7 +120,7 @@ function VerifyEmailContent() {
         </Link>
       </div>
     </div>
-  )
+  );
 }
 
 export default function VerifyEmailPage() {
@@ -120,5 +128,5 @@ export default function VerifyEmailPage() {
     <Suspense fallback={<div className="text-center">Loading...</div>}>
       <VerifyEmailContent />
     </Suspense>
-  )
+  );
 }
