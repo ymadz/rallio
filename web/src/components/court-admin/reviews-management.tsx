@@ -61,12 +61,12 @@ export function ReviewsManagement({ venueId }: ReviewsManagementProps) {
         getVenueReviews(venueId),
         getReviewStats(venueId)
       ])
-      
+
       if (reviewsResult.success) {
         setReviews(reviewsResult.reviews || [])
       }
       if (statsResult.success) {
-        setStats(statsResult.stats)
+        setStats((statsResult as any).stats)
       }
     } catch (err: any) {
       setError(err.message || 'Failed to load reviews')
@@ -95,7 +95,7 @@ export function ReviewsManagement({ venueId }: ReviewsManagementProps) {
 
   const handleSubmitResponse = async () => {
     if (!selectedReview || !responseText.trim()) return
-    
+
     setIsResponding(true)
     try {
       const result = await respondToReview(selectedReview.id, responseText)
@@ -121,11 +121,10 @@ export function ReviewsManagement({ venueId }: ReviewsManagementProps) {
         {[1, 2, 3, 4, 5].map((star) => (
           <Star
             key={star}
-            className={`${sizeClass} ${
-              star <= rating
+            className={`${sizeClass} ${star <= rating
                 ? 'fill-yellow-400 text-yellow-400'
                 : 'fill-gray-200 text-gray-200'
-            }`}
+              }`}
           />
         ))}
       </div>
@@ -178,30 +177,30 @@ export function ReviewsManagement({ venueId }: ReviewsManagementProps) {
       {/* Stats Overview */}
       {!isLoading && !error && reviews.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white border border-gray-200 rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-              <Star className="w-6 h-6 text-yellow-600" />
+          <div className="bg-white border border-gray-200 rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+                <Star className="w-6 h-6 text-yellow-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Average Rating</p>
+                <p className="text-3xl font-bold text-gray-900">{averageRating.toFixed(1)}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-gray-500">Average Rating</p>
-              <p className="text-3xl font-bold text-gray-900">{averageRating.toFixed(1)}</p>
-            </div>
+            {renderStars(Math.round(averageRating), 'md')}
           </div>
-          {renderStars(Math.round(averageRating), 'md')}
-        </div>
 
-        <div className="bg-white border border-gray-200 rounded-xl p-6">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <MessageSquare className="w-6 h-6 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Total Reviews</p>
-              <p className="text-3xl font-bold text-gray-900">{totalReviews}</p>
+          <div className="bg-white border border-gray-200 rounded-xl p-6">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                <MessageSquare className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Total Reviews</p>
+                <p className="text-3xl font-bold text-gray-900">{totalReviews}</p>
+              </div>
             </div>
           </div>
-        </div>
 
           <div className="bg-white border border-gray-200 rounded-xl p-6">
             <div className="flex items-center gap-3">
@@ -237,142 +236,141 @@ export function ReviewsManagement({ venueId }: ReviewsManagementProps) {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Rating Distribution */}
           <div className="bg-white border border-gray-200 rounded-xl p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Rating Distribution</h2>
-          <div className="space-y-3">
-            {ratingDistribution.map(({ rating, count, percentage }) => (
-              <div key={rating}>
-                <div className="flex items-center gap-3 mb-1">
-                  <div className="flex items-center gap-1">
-                    <span className="text-sm font-medium text-gray-700">{rating}</span>
-                    <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-yellow-400 h-2 rounded-full"
-                        style={{ width: `${percentage}%` }}
-                      />
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Rating Distribution</h2>
+            <div className="space-y-3">
+              {ratingDistribution.map(({ rating, count, percentage }) => (
+                <div key={rating}>
+                  <div className="flex items-center gap-3 mb-1">
+                    <div className="flex items-center gap-1">
+                      <span className="text-sm font-medium text-gray-700">{rating}</span>
+                      <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
                     </div>
+                    <div className="flex-1">
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-yellow-400 h-2 rounded-full"
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                    <span className="text-sm text-gray-600">{count}</span>
                   </div>
-                  <span className="text-sm text-gray-600">{count}</span>
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Reviews List */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Filters */}
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <div className="flex items-center gap-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search reviews..."
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              <select
-                value={filterRating}
-                onChange={(e) => setFilterRating(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">All Ratings</option>
-                <option value="5">5 Stars</option>
-                <option value="4">4 Stars</option>
-                <option value="3">3 Stars</option>
-                <option value="2">2 Stars</option>
-                <option value="1">1 Star</option>
-              </select>
+              ))}
             </div>
           </div>
 
-          {/* Reviews */}
-          <div className="space-y-4">
-            {filteredReviews.map((review) => (
-              <div
-                key={review.id}
-                className={`bg-white border rounded-xl p-6 ${
-                  review.is_flagged || review.isReported ? 'border-red-300 bg-red-50' : 'border-gray-200'
-                }`}
-              >
-                {/* Review Header */}
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold">
-                      {(review.player_name || review.customerName || 'U').charAt(0)}
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900">{review.player_name || review.customerName}</h3>
-                      <p className="text-sm text-gray-500">{review.court_name || review.courtName}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    {renderStars(review.rating, 'sm')}
-                    <p className="text-xs text-gray-500 mt-1">
-                      {new Date(review.created_at || review.date).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric'
-                      })}
-                    </p>
+          {/* Reviews List */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Filters */}
+            <div className="bg-white border border-gray-200 rounded-xl p-4">
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search reviews..."
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
                   </div>
                 </div>
 
-                {/* Review Content */}
-                <p className="text-gray-700 mb-4">{review.comment}</p>
-
-                {/* Review Actions */}
-                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                  <div className="flex items-center gap-4">
-                    <button className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900">
-                      <ThumbsUp className="w-4 h-4" />
-                      <span>Helpful ({review.helpful_count || review.helpful || 0})</span>
-                    </button>
-                    {(review.is_flagged || review.isReported) && (
-                      <span className="flex items-center gap-1 text-sm text-red-600">
-                        <Flag className="w-4 h-4" />
-                        <span>Reported</span>
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => handleRespond(review)}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                  >
-                    <MessageSquare className="w-4 h-4" />
-                    <span>{review.owner_response || review.response ? 'Edit Response' : 'Respond'}</span>
-                  </button>
-                </div>
-
-                {/* Admin Response */}
-                {(review.owner_response || review.response) && (
-                  <div className="mt-4 pl-6 border-l-2 border-blue-500 bg-blue-50 p-4 rounded-r-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <p className="text-sm font-semibold text-blue-900">Your Response</p>
-                      <span className="text-xs text-blue-600">
-                        {review.response_date ? new Date(review.response_date).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric'
-                        }) : review.response?.date ? new Date(review.response.date).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric'
-                        }) : ''}
-                      </span>
-                    </div>
-                    <p className="text-sm text-blue-800">{review.owner_response || review.response?.text}</p>
-                  </div>
-                )}
+                <select
+                  value={filterRating}
+                  onChange={(e) => setFilterRating(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">All Ratings</option>
+                  <option value="5">5 Stars</option>
+                  <option value="4">4 Stars</option>
+                  <option value="3">3 Stars</option>
+                  <option value="2">2 Stars</option>
+                  <option value="1">1 Star</option>
+                </select>
               </div>
-            ))}
+            </div>
+
+            {/* Reviews */}
+            <div className="space-y-4">
+              {filteredReviews.map((review) => (
+                <div
+                  key={review.id}
+                  className={`bg-white border rounded-xl p-6 ${review.is_flagged || review.isReported ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                    }`}
+                >
+                  {/* Review Header */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold">
+                        {(review.player_name || review.customerName || 'U').charAt(0)}
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{review.player_name || review.customerName}</h3>
+                        <p className="text-sm text-gray-500">{review.court_name || review.courtName}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      {renderStars(review.rating, 'sm')}
+                      <p className="text-xs text-gray-500 mt-1">
+                        {new Date(review.created_at || review.date).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Review Content */}
+                  <p className="text-gray-700 mb-4">{review.comment}</p>
+
+                  {/* Review Actions */}
+                  <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                    <div className="flex items-center gap-4">
+                      <button className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900">
+                        <ThumbsUp className="w-4 h-4" />
+                        <span>Helpful ({review.helpful_count || review.helpful || 0})</span>
+                      </button>
+                      {(review.is_flagged || review.isReported) && (
+                        <span className="flex items-center gap-1 text-sm text-red-600">
+                          <Flag className="w-4 h-4" />
+                          <span>Reported</span>
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleRespond(review)}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      <span>{review.owner_response || review.response ? 'Edit Response' : 'Respond'}</span>
+                    </button>
+                  </div>
+
+                  {/* Admin Response */}
+                  {(review.owner_response || review.response) && (
+                    <div className="mt-4 pl-6 border-l-2 border-blue-500 bg-blue-50 p-4 rounded-r-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <p className="text-sm font-semibold text-blue-900">Your Response</p>
+                        <span className="text-xs text-blue-600">
+                          {review.response_date ? new Date(review.response_date).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric'
+                          }) : review.response?.date ? new Date(review.response.date).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric'
+                          }) : ''}
+                        </span>
+                      </div>
+                      <p className="text-sm text-blue-800">{review.owner_response || review.response?.text}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
       )}
 
       {/* Response Modal */}

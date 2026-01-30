@@ -9,7 +9,7 @@ import { ImageGallery } from '@/components/venue/image-gallery'
 // Server-side venue fetch
 async function getVenueByIdServer(venueId: string) {
   const supabase = await createClient()
-  
+
   const { data: venue, error } = await supabase
     .from('venues')
     .select(`
@@ -37,6 +37,7 @@ async function getVenueByIdServer(venueId: string) {
         capacity,
         hourly_rate,
         is_active,
+        is_verified,
         metadata,
         court_amenities (
           amenities (
@@ -98,14 +99,20 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
     notFound()
   }
 
-  // Filter active courts
-  const activeCourts = venue.courts?.filter((c) => c.is_active) || []
+  // Filter active and verified courts
+  const activeCourts = venue.courts?.filter((c: any) => c.is_active && c.is_verified) || []
 
   // Get venue status
   const isOpen = isVenueOpen(venue.opening_hours)
 
-  // Collect all unique amenities from venue
-  const allAmenities = venue.amenities || []
+  // Collect all unique amenities from active courts
+  const uniqueAmenityNames = new Set<string>()
+  activeCourts.forEach(court => {
+    court.amenities?.forEach((amenity: any) => {
+      if (amenity?.name) uniqueAmenityNames.add(amenity.name)
+    })
+  })
+  const allAmenities = Array.from(uniqueAmenityNames)
 
   // Parse opening hours if it's a JSONB object
   const formatOpeningHours = (hours: any) => {
@@ -251,7 +258,7 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 919-9" />
                       </svg>
                       <a href={venue.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all">
-                        {venue.website.replace(/^https?:\/\//,'')}
+                        {venue.website.replace(/^https?:\/\//, '')}
                       </a>
                     </div>
                   )}

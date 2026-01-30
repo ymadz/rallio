@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert } from '@/components/ui/alert'
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
@@ -61,7 +61,7 @@ export default function LoginPage() {
         if (profile?.is_banned) {
           // Sign them back out
           await supabase.auth.signOut()
-          
+
           if (profile.banned_until) {
             const bannedUntil = new Date(profile.banned_until)
             if (bannedUntil > new Date()) {
@@ -98,7 +98,7 @@ export default function LoginPage() {
       const supabase = createClient()
       const redirectUrl = `${window.location.origin}/auth/callback`
       console.log('🔍 [Google Login] Redirect URL:', redirectUrl)
-      
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -253,5 +253,17 @@ export default function LoginPage() {
         Continue with Google
       </Button>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex justify-center items-center h-full">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   )
 }

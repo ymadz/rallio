@@ -34,7 +34,7 @@ export async function updateSession(request: NextRequest) {
   if (user) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('is_banned, is_active, banned_until')
+      .select('is_banned, is_active, banned_until, profile_completed')
       .eq('id', user.id)
       .single();
 
@@ -56,6 +56,16 @@ export async function updateSession(request: NextRequest) {
       // Check if account is deactivated
       if (!profile.is_active) {
         return NextResponse.redirect(new URL('/login?error=deactivated', request.url));
+      }
+
+      // Check if profile is incomplete
+      // Skip if already on setup-profile, logout, or api routes
+      const isSetupPage = request.nextUrl.pathname.startsWith('/setup-profile');
+      const isApiRoute = request.nextUrl.pathname.startsWith('/api');
+      const isAuthRoute = request.nextUrl.pathname.startsWith('/auth'); // callback is here
+
+      if (!profile.profile_completed && !isSetupPage && !isApiRoute && !isAuthRoute) {
+        return NextResponse.redirect(new URL('/setup-profile', request.url));
       }
     }
   }

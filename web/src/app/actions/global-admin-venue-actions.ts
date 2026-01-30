@@ -435,6 +435,60 @@ export async function deleteVenue(venueId: string) {
   return { success: true, message: 'Venue deleted successfully' }
 }
 
+/**
+ * Get all pending (unverified) courts
+ */
+export async function getPendingCourts(options: {
+  page?: number
+  pageSize?: number
+} = {}) {
+  const auth = await verifyGlobalAdmin()
+  if (!auth.success) return auth
+
+  const supabase = await createClient()
+  const page = options.page || 1
+  const pageSize = options.pageSize || 50
+  const from = (page - 1) * pageSize
+  const to = from + pageSize - 1
+
+  const { data: courts, error, count } = await supabase
+    .from('courts')
+    .select(`
+      *,
+      venue:venue_id (
+        id,
+        name,
+        city,
+        owner:owner_id (
+          email,
+          display_name
+        )
+      ),
+      court_amenities (
+        amenity:amenity_id (
+          name,
+          icon
+        )
+      )
+    `, { count: 'exact' })
+    .eq('is_verified', false)
+    .order('created_at', { ascending: false })
+    .range(from, to)
+
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  return {
+    success: true,
+    courts,
+    total: count || 0,
+    page,
+    pageSize,
+    totalPages: Math.ceil((count || 0) / pageSize)
+  }
+}
+
 // ============= COURT ACTIONS =============
 
 /**
@@ -797,10 +851,10 @@ export async function toggleCourtVerified(courtId: string, isVerified: boolean) 
   })
 
   revalidatePath('/admin/venues')
-  return { 
-    success: true, 
+  return {
+    success: true,
     message: `Court ${isVerified ? 'verified' : 'unverified'} successfully`,
-    court 
+    court
   }
 }
 

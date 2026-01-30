@@ -74,13 +74,20 @@ const BookingCard = React.memo(({ booking, onPress }: BookingCardProps) => {
         no_show: 'No Show',
     };
 
+    // Get status color with fallback
+    const statusColor = statusColors[booking.status] || {
+        bg: Colors.dark.textTertiary + '20',
+        text: Colors.dark.textTertiary
+    };
+    const statusLabel = statusLabels[booking.status] || booking.status;
+
     return (
         <TouchableOpacity onPress={onPress} activeOpacity={0.8}>
             <Card variant="glass" padding="md" style={styles.bookingCard}>
                 {/* Status badge */}
-                <View style={[styles.statusBadge, { backgroundColor: statusColors[booking.status].bg }]}>
-                    <Text style={[styles.statusText, { color: statusColors[booking.status].text }]}>
-                        {statusLabels[booking.status]}
+                <View style={[styles.statusBadge, { backgroundColor: statusColor.bg }]}>
+                    <Text style={[styles.statusText, { color: statusColor.text }]}>
+                        {statusLabel}
                     </Text>
                 </View>
 

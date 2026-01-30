@@ -8,6 +8,7 @@ import {
     TouchableOpacity,
     ActivityIndicator,
     Alert,
+    RefreshControl,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -19,11 +20,17 @@ import { supabase } from '@/lib/supabase';
 interface Participant {
     id: string;
     user_id: string;
-    status: string;
+    status: 'waiting' | 'playing' | 'completed' | 'left';
     games_played: number;
     games_won: number;
-    profiles?: {
+    amount_owed: number;
+    payment_status: 'unpaid' | 'partial' | 'paid';
+    joined_at: string;
+    left_at: string | null;
+    user?: {
         display_name: string;
+        first_name: string;
+        last_name: string;
         avatar_url: string | null;
     };
 }
@@ -41,101 +48,223 @@ interface QueueSession {
     cost_per_game: number | null;
     is_public: boolean;
     status: string;
-    settings: Record<string, any> | null;
     courts?: {
         name: string;
         venues?: {
             name: string;
             address: string;
-            phone?: string;
         };
     };
-    profiles?: {
+    organizer?: {
         display_name: string;
         avatar_url: string | null;
     };
-    queue_participants?: Participant[];
 }
 
 export default function QueueDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const { user } = useAuthStore();
     const [session, setSession] = useState<QueueSession | null>(null);
+    const [participants, setParticipants] = useState<Participant[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const [isJoining, setIsJoining] = useState(false);
+    const [isLeaving, setIsLeaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const isParticipant = session?.queue_participants?.some(p => p.user_id === user?.id);
+    // Active participants (not left)
+    const activeParticipants = participants.filter(p => !p.left_at && p.status !== 'left');
+
+    // User's participation info
+    const userParticipant = activeParticipants.find(p => p.user_id === user?.id);
+    const isInQueue = !!userParticipant;
+
+    // Calculate position (sorted by joined_at)
+    const sortedParticipants = [...activeParticipants].sort(
+        (a, b) => new Date(a.joined_at).getTime() - new Date(b.joined_at).getTime()
+    );
+    const userPosition = userParticipant
+        ? sortedParticipants.findIndex(p => p.user_id === user?.id) + 1
+        : null;
+    const estimatedWaitTime = userPosition ? userPosition * 15 : null;
+
+    // Queue state
     const spotsLeft = session ? session.max_players - session.current_players : 0;
     const isFull = spotsLeft <= 0;
 
-    const fetchSession = useCallback(async () => {
+    const fetchSession = useCallback(async (showRefreshIndicator = false) => {
         if (!id) return;
 
-        setIsLoading(true);
+        if (showRefreshIndicator) setIsRefreshing(true);
+        else setIsLoading(true);
         setError(null);
 
-        const { data, error: fetchError } = await supabase
-            .from('queue_sessions')
-            .select(`
-                *,
-                courts (
-                    name,
-                    venues (
+        try {
+            // Fetch session details
+            const { data: sessionData, error: sessionError } = await supabase
+                .from('queue_sessions')
+                .select(`
+                    *,
+                    courts (
                         name,
-                        address,
-                        phone
+                        venues (
+                            name,
+                            address
+                        )
+                    ),
+                    organizer:organizer_id (
+                        display_name,
+                        avatar_url
                     )
-                ),
-                profiles!queue_sessions_organizer_id_fkey (
-                    display_name,
-                    avatar_url
-                ),
-                queue_participants (
+                `)
+                .eq('id', id)
+                .single();
+
+            if (sessionError) throw sessionError;
+
+            setSession({
+                ...sessionData,
+                organizer: Array.isArray(sessionData.organizer)
+                    ? sessionData.organizer[0]
+                    : sessionData.organizer
+            });
+
+            // Fetch participants separately for better control
+            const { data: participantsData, error: participantsError } = await supabase
+                .from('queue_participants')
+                .select(`
                     id,
                     user_id,
                     status,
                     games_played,
                     games_won,
-                    profiles (
+                    amount_owed,
+                    payment_status,
+                    joined_at,
+                    left_at,
+                    user:user_id (
                         display_name,
+                        first_name,
+                        last_name,
                         avatar_url
                     )
-                )
-            `)
-            .eq('id', id)
-            .single();
+                `)
+                .eq('queue_session_id', id)
+                .is('left_at', null)
+                .order('joined_at', { ascending: true });
 
-        if (fetchError) {
-            setError(fetchError.message);
-        } else {
-            setSession(data);
+            if (participantsError) {
+                console.error('Participants fetch error:', participantsError);
+            } else {
+                const formatted = (participantsData || []).map((p: any) => ({
+                    ...p,
+                    user: Array.isArray(p.user) ? p.user[0] : p.user
+                }));
+                setParticipants(formatted);
+            }
+        } catch (err: any) {
+            console.error('Error fetching session:', err);
+            setError(err.message);
+        } finally {
+            setIsLoading(false);
+            setIsRefreshing(false);
         }
-        setIsLoading(false);
     }, [id]);
 
     useEffect(() => {
         fetchSession();
     }, [fetchSession]);
 
+    // Real-time subscription for participant updates
+    useEffect(() => {
+        if (!id) return;
+
+        const channel = supabase
+            .channel(`queue_participants_${id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'queue_participants',
+                    filter: `queue_session_id=eq.${id}`,
+                },
+                (payload) => {
+                    console.log('Queue participant change:', payload.eventType);
+                    fetchSession();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [id, fetchSession]);
+
     const handleJoinQueue = async () => {
         if (!user || !session) return;
 
         setIsJoining(true);
         try {
-            const { error: joinError } = await supabase
+            // Check for existing record (including left ones for cooldown)
+            const { data: existing } = await supabase
                 .from('queue_participants')
-                .insert({
-                    queue_session_id: session.id,
-                    user_id: user.id,
-                    status: 'waiting',
-                });
+                .select('id, left_at')
+                .eq('queue_session_id', session.id)
+                .eq('user_id', user.id)
+                .order('left_at', { ascending: false, nullsFirst: true })
+                .limit(1)
+                .maybeSingle();
 
-            if (joinError) throw joinError;
+            if (existing && !existing.left_at) {
+                Alert.alert('Already in Queue', 'You are already in this queue.');
+                return;
+            }
 
-            Alert.alert('Success', 'You have joined the queue!', [
-                { text: 'OK', onPress: fetchSession }
-            ]);
+            // Check cooldown (5 minutes after leaving)
+            if (existing?.left_at) {
+                const leftAt = new Date(existing.left_at);
+                const cooldownEnd = new Date(leftAt.getTime() + 5 * 60 * 1000);
+                const now = new Date();
+
+                if (now < cooldownEnd) {
+                    const remaining = Math.ceil((cooldownEnd.getTime() - now.getTime()) / 1000);
+                    const mins = Math.floor(remaining / 60);
+                    const secs = remaining % 60;
+                    Alert.alert('Cooldown', `Please wait ${mins}m ${secs}s before rejoining.`);
+                    return;
+                }
+
+                // Reactivate existing record
+                const { error: updateError } = await supabase
+                    .from('queue_participants')
+                    .update({
+                        left_at: null,
+                        status: 'waiting',
+                        joined_at: new Date().toISOString(),
+                    })
+                    .eq('id', existing.id);
+
+                if (updateError) throw updateError;
+            } else {
+                // Insert new participant
+                const { error: insertError } = await supabase
+                    .from('queue_participants')
+                    .insert({
+                        queue_session_id: session.id,
+                        user_id: user.id,
+                        status: 'waiting',
+                        payment_status: 'unpaid',
+                        amount_owed: 0,
+                        games_played: 0,
+                        games_won: 0,
+                    });
+
+                if (insertError) throw insertError;
+            }
+
+            Alert.alert('Joined!', 'You have joined the queue.');
+            fetchSession();
         } catch (err: any) {
             Alert.alert('Error', err.message || 'Failed to join queue');
         } finally {
@@ -144,28 +273,60 @@ export default function QueueDetailScreen() {
     };
 
     const handleLeaveQueue = async () => {
-        if (!user || !session) return;
+        if (!user || !session || !userParticipant) return;
 
+        // Check if user owes money
+        const amountOwed = parseFloat(String(userParticipant.amount_owed || 0));
+        const gamesPlayed = userParticipant.games_played || 0;
+
+        if (gamesPlayed > 0 && amountOwed > 0 && userParticipant.payment_status !== 'paid') {
+            Alert.alert(
+                'Payment Required',
+                `You owe ₱${amountOwed.toFixed(2)} for ${gamesPlayed} game(s).\n\nPlease pay the Queue Master before leaving.`,
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: 'I Have Paid',
+                        onPress: () => confirmLeave(),
+                    },
+                ]
+            );
+            return;
+        }
+
+        confirmLeave();
+    };
+
+    const confirmLeave = () => {
         Alert.alert(
             'Leave Queue',
-            'Are you sure you want to leave this queue session?',
+            'Are you sure you want to leave this queue?',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
                     text: 'Leave',
                     style: 'destructive',
                     onPress: async () => {
+                        if (!userParticipant) return;
+
+                        setIsLeaving(true);
                         try {
                             const { error: leaveError } = await supabase
                                 .from('queue_participants')
-                                .delete()
-                                .eq('queue_session_id', session.id)
-                                .eq('user_id', user.id);
+                                .update({
+                                    left_at: new Date().toISOString(),
+                                    status: 'left',
+                                })
+                                .eq('id', userParticipant.id);
 
                             if (leaveError) throw leaveError;
+
+                            Alert.alert('Left Queue', 'You have left the queue.');
                             fetchSession();
                         } catch (err: any) {
                             Alert.alert('Error', err.message || 'Failed to leave queue');
+                        } finally {
+                            setIsLeaving(false);
                         }
                     }
                 }
@@ -189,10 +350,18 @@ export default function QueueDetailScreen() {
         if (date.toDateString() === today.toDateString()) return 'Today';
         if (date.toDateString() === tomorrow.toDateString()) return 'Tomorrow';
         return date.toLocaleDateString('en-US', {
-            weekday: 'long',
+            weekday: 'short',
             month: 'short',
             day: 'numeric'
         });
+    };
+
+    const getDisplayName = (participant: Participant) => {
+        if (participant.user?.display_name) return participant.user.display_name;
+        if (participant.user?.first_name || participant.user?.last_name) {
+            return `${participant.user.first_name || ''} ${participant.user.last_name || ''}`.trim();
+        }
+        return 'Player';
     };
 
     if (isLoading) {
@@ -208,11 +377,16 @@ export default function QueueDetailScreen() {
     if (error || !session) {
         return (
             <SafeAreaView style={styles.container}>
+                <View style={styles.header}>
+                    <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+                        <Ionicons name="arrow-back" size={24} color={Colors.dark.text} />
+                    </TouchableOpacity>
+                </View>
                 <View style={styles.errorContainer}>
                     <Ionicons name="alert-circle-outline" size={64} color={Colors.dark.error} />
-                    <Text style={styles.errorTitle}>Session not found</Text>
-                    <Text style={styles.errorText}>{error || 'This session may no longer exist'}</Text>
-                    <Button onPress={() => router.back()}>Go Back</Button>
+                    <Ionicons name="alert-circle-outline" size={48} color={Colors.dark.error} />
+                    <Text style={styles.errorText}>{error || 'Queue not found'}</Text>
+                    <Button onPress={() => router.back()} style={{ marginTop: Spacing.md }}>Go Back</Button>
                 </View>
             </SafeAreaView>
         );
@@ -227,24 +401,37 @@ export default function QueueDetailScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <ScrollView showsVerticalScrollIndicator={false}>
-                {/* Header */}
-                <View style={styles.header}>
-                    <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-                        <Ionicons name="arrow-back" size={24} color={Colors.dark.text} />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Queue Details</Text>
-                    <View style={{ width: 40 }} />
-                </View>
+            {/* Header */}
+            <View style={styles.header}>
+                <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+                    <Ionicons name="arrow-back" size={24} color={Colors.dark.text} />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Queue Details</Text>
+                <View style={{ width: 40 }} />
+            </View>
 
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={isRefreshing}
+                        onRefresh={() => fetchSession(true)}
+                        tintColor={Colors.dark.primary}
+                    />
+                }
+            >
                 {/* Status Banner */}
                 <View style={[styles.statusBanner, { backgroundColor: statusColors[session.status] + '20' }]}>
                     <View style={[styles.statusDot, { backgroundColor: statusColors[session.status] }]} />
                     <Text style={[styles.statusText, { color: statusColors[session.status] }]}>
                         {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
                     </Text>
-                    <View style={styles.modeBadge}>
-                        <Text style={styles.modeText}>
+                    <View style={[styles.modeBadge, {
+                        backgroundColor: session.mode === 'competitive' ? Colors.dark.warning + '20' : Colors.dark.info + '20'
+                    }]}>
+                        <Text style={[styles.modeText, {
+                            color: session.mode === 'competitive' ? Colors.dark.warning : Colors.dark.info
+                        }]}>
                             {session.mode === 'competitive' ? '🏆 Competitive' : '🎾 Casual'}
                         </Text>
                     </View>
@@ -262,7 +449,47 @@ export default function QueueDetailScreen() {
                     </View>
                 </View>
 
-                {/* Time & Date Card */}
+                {/* User Position Card (if in queue) */}
+                {isInQueue && userParticipant && (
+                    <Card variant="elevated" padding="lg" style={styles.positionCard}>
+                        <View style={styles.positionHeader}>
+                            <Text style={styles.positionLabel}>Your Position</Text>
+                            {userParticipant.status === 'playing' && (
+                                <View style={styles.playingBadge}>
+                                    <Text style={styles.playingBadgeText}>🎮 Playing Now!</Text>
+                                </View>
+                            )}
+                        </View>
+
+                        <View style={styles.positionDisplay}>
+                            <Text style={styles.positionNumber}>
+                                {userParticipant.status === 'playing' ? '🎮' : `#${userPosition}`}
+                            </Text>
+                            {userParticipant.status === 'waiting' && estimatedWaitTime && (
+                                <Text style={styles.waitTime}>~{estimatedWaitTime} min wait</Text>
+                            )}
+                        </View>
+
+                        <View style={styles.statsRow}>
+                            <View style={styles.statItem}>
+                                <Text style={styles.statValue}>{userParticipant.games_played || 0}</Text>
+                                <Text style={styles.statLabel}>Played</Text>
+                            </View>
+                            <View style={styles.statItem}>
+                                <Text style={styles.statValue}>{userParticipant.games_won || 0}</Text>
+                                <Text style={styles.statLabel}>Won</Text>
+                            </View>
+                            <View style={styles.statItem}>
+                                <Text style={[styles.statValue, { color: Colors.dark.primary }]}>
+                                    ₱{parseFloat(String(userParticipant.amount_owed || 0)).toFixed(0)}
+                                </Text>
+                                <Text style={styles.statLabel}>Owed</Text>
+                            </View>
+                        </View>
+                    </Card>
+                )}
+
+                {/* Time & Details Card */}
                 <Card variant="glass" padding="md" style={styles.infoCard}>
                     <View style={styles.infoRow}>
                         <View style={styles.infoItem}>
@@ -297,7 +524,7 @@ export default function QueueDetailScreen() {
                         <View style={styles.detailItem}>
                             <Text style={styles.detailLabel}>Players</Text>
                             <Text style={styles.detailValue}>
-                                {session.current_players}/{session.max_players}
+                                {activeParticipants.length}/{session.max_players}
                             </Text>
                         </View>
                         <View style={styles.detailItem}>
@@ -315,18 +542,18 @@ export default function QueueDetailScreen() {
                     </View>
                 </Card>
 
-                {/* Organizer */}
+                {/* Queue Master */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Organizer</Text>
+                    <Text style={styles.sectionTitle}>Queue Master</Text>
                     <View style={styles.organizerCard}>
                         <Avatar
-                            source={session.profiles?.avatar_url}
-                            name={session.profiles?.display_name || 'Organizer'}
+                            source={session.organizer?.avatar_url}
+                            name={session.organizer?.display_name || 'Organizer'}
                             size="md"
                         />
                         <View style={styles.organizerInfo}>
                             <Text style={styles.organizerName}>
-                                {session.profiles?.display_name || 'Unknown'}
+                                {session.organizer?.display_name || 'Unknown'}
                             </Text>
                             <Text style={styles.organizerRole}>Queue Master</Text>
                         </View>
@@ -336,61 +563,83 @@ export default function QueueDetailScreen() {
                 {/* Participants */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>
-                        Participants ({session.queue_participants?.length || 0})
+                        Players in Queue ({sortedParticipants.length})
                     </Text>
-                    {session.queue_participants && session.queue_participants.length > 0 ? (
+                    {sortedParticipants.length > 0 ? (
                         <View style={styles.participantsList}>
-                            {session.queue_participants.map((p, index) => (
-                                <View key={p.id} style={styles.participantItem}>
-                                    <Avatar
-                                        source={p.profiles?.avatar_url}
-                                        name={p.profiles?.display_name || 'Player'}
-                                        size="sm"
-                                    />
-                                    <Text style={styles.participantName}>
-                                        {p.profiles?.display_name || 'Player'}
-                                    </Text>
-                                    <View style={[
-                                        styles.participantStatus,
-                                        { backgroundColor: p.status === 'playing' ? Colors.dark.success + '20' : Colors.dark.info + '20' }
-                                    ]}>
-                                        <Text style={[
-                                            styles.participantStatusText,
-                                            { color: p.status === 'playing' ? Colors.dark.success : Colors.dark.info }
+                            {sortedParticipants.map((p, index) => {
+                                const isCurrentUser = p.user_id === user?.id;
+                                return (
+                                    <View
+                                        key={p.id}
+                                        style={[
+                                            styles.participantItem,
+                                            isCurrentUser && styles.participantItemCurrent
+                                        ]}
+                                    >
+                                        <View style={styles.positionBadge}>
+                                            <Text style={styles.positionBadgeText}>#{index + 1}</Text>
+                                        </View>
+                                        <Avatar
+                                            source={p.user?.avatar_url}
+                                            name={getDisplayName(p)}
+                                            size="sm"
+                                        />
+                                        <View style={styles.participantInfo}>
+                                            <Text style={[
+                                                styles.participantName,
+                                                isCurrentUser && styles.participantNameCurrent
+                                            ]}>
+                                                {getDisplayName(p)} {isCurrentUser && '(You)'}
+                                            </Text>
+                                            <Text style={styles.participantStats}>
+                                                {p.games_played || 0} games • {p.games_won || 0} wins
+                                            </Text>
+                                        </View>
+                                        <View style={[
+                                            styles.participantStatus,
+                                            { backgroundColor: p.status === 'playing' ? Colors.dark.success + '20' : Colors.dark.info + '20' }
                                         ]}>
-                                            {p.status}
-                                        </Text>
+                                            <Text style={[
+                                                styles.participantStatusText,
+                                                { color: p.status === 'playing' ? Colors.dark.success : Colors.dark.info }
+                                            ]}>
+                                                {p.status === 'playing' ? '🎮' : '⏳'}
+                                            </Text>
+                                        </View>
                                     </View>
-                                </View>
-                            ))}
+                                );
+                            })}
                         </View>
                     ) : (
-                        <Text style={styles.noParticipants}>No participants yet. Be the first to join!</Text>
+                        <Text style={styles.noParticipants}>No players yet. Be the first to join!</Text>
                     )}
                 </View>
 
-                {/* Join/Leave Button */}
-                <View style={styles.buttonContainer}>
-                    {isParticipant ? (
-                        <Button
-                            variant="secondary"
-                            fullWidth
-                            onPress={handleLeaveQueue}
-                        >
-                            Leave Queue
-                        </Button>
-                    ) : (
-                        <Button
-                            fullWidth
-                            onPress={handleJoinQueue}
-                            disabled={isFull}
-                            loading={isJoining}
-                        >
-                            {isFull ? 'Queue Full' : 'Join Queue'}
-                        </Button>
-                    )}
-                </View>
+                <View style={{ height: 120 }} />
             </ScrollView>
+
+            {/* Bottom Action */}
+            <View style={styles.bottomAction}>
+                {isInQueue ? (
+                    <Button
+                        variant="secondary"
+                        onPress={handleLeaveQueue}
+                        loading={isLeaving}
+                        style={styles.leaveButton}
+                    >
+                        {isLeaving ? 'Leaving...' : 'Leave Queue'}
+                    </Button>
+                ) : (
+                    <Button
+                        onPress={handleJoinQueue}
+                        loading={isJoining}
+                        disabled={isFull || isJoining}
+                    >
+                        {isJoining ? 'Joining...' : isFull ? 'Queue Full' : 'Join Queue'}
+                    </Button>
+                )}
+            </View>
         </SafeAreaView>
     );
 }
@@ -458,14 +707,13 @@ const styles = StyleSheet.create({
     },
     modeBadge: {
         marginLeft: 'auto',
-        backgroundColor: Colors.dark.surface,
         paddingHorizontal: Spacing.sm,
         paddingVertical: 4,
         borderRadius: Radius.full,
     },
     modeText: {
         ...Typography.caption,
-        color: Colors.dark.text,
+        fontWeight: '600',
     },
     section: {
         padding: Spacing.lg,
@@ -494,6 +742,65 @@ const styles = StyleSheet.create({
         ...Typography.body,
         color: Colors.dark.textSecondary,
         flex: 1,
+    },
+    positionCard: {
+        marginHorizontal: Spacing.lg,
+        marginBottom: Spacing.md,
+        backgroundColor: Colors.dark.primary + '10',
+        borderWidth: 1,
+        borderColor: Colors.dark.primary + '30',
+    },
+    positionHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    positionLabel: {
+        ...Typography.body,
+        color: Colors.dark.textSecondary,
+    },
+    playingBadge: {
+        backgroundColor: Colors.dark.success + '20',
+        paddingHorizontal: Spacing.sm,
+        paddingVertical: 4,
+        borderRadius: Radius.full,
+    },
+    playingBadgeText: {
+        ...Typography.caption,
+        color: Colors.dark.success,
+        fontWeight: '600',
+    },
+    positionDisplay: {
+        alignItems: 'center',
+        marginVertical: Spacing.md,
+    },
+    positionNumber: {
+        fontSize: 48,
+        fontWeight: 'bold',
+        color: Colors.dark.text,
+    },
+    waitTime: {
+        ...Typography.body,
+        color: Colors.dark.textSecondary,
+        marginTop: Spacing.xs,
+    },
+    statsRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        borderTopWidth: 1,
+        borderTopColor: Colors.dark.border,
+        paddingTop: Spacing.md,
+    },
+    statItem: {
+        alignItems: 'center',
+    },
+    statValue: {
+        ...Typography.h3,
+        color: Colors.dark.text,
+    },
+    statLabel: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
     },
     infoCard: {
         marginHorizontal: Spacing.lg,
@@ -573,22 +880,47 @@ const styles = StyleSheet.create({
         borderRadius: Radius.md,
         borderWidth: 1,
         borderColor: Colors.dark.border,
+        gap: Spacing.sm,
+    },
+    participantItemCurrent: {
+        borderColor: Colors.dark.primary + '50',
+        backgroundColor: Colors.dark.primary + '10',
+    },
+    positionBadge: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: Colors.dark.background,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    positionBadgeText: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+        fontWeight: '600',
+    },
+    participantInfo: {
+        flex: 1,
     },
     participantName: {
         ...Typography.body,
         color: Colors.dark.text,
-        flex: 1,
-        marginLeft: Spacing.sm,
+    },
+    participantNameCurrent: {
+        color: Colors.dark.primary,
+        fontWeight: '600',
+    },
+    participantStats: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
     },
     participantStatus: {
         paddingHorizontal: Spacing.sm,
-        paddingVertical: 2,
+        paddingVertical: 4,
         borderRadius: Radius.full,
     },
     participantStatusText: {
-        ...Typography.caption,
-        fontWeight: '500',
-        textTransform: 'capitalize',
+        fontSize: 14,
     },
     noParticipants: {
         ...Typography.body,
@@ -596,8 +928,18 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         padding: Spacing.lg,
     },
-    buttonContainer: {
+    bottomAction: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
         padding: Spacing.lg,
         paddingBottom: Spacing.xl,
+        backgroundColor: Colors.dark.background,
+        borderTopWidth: 1,
+        borderTopColor: Colors.dark.border,
+    },
+    leaveButton: {
+        borderColor: Colors.dark.error,
     },
 });

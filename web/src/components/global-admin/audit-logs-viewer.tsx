@@ -71,10 +71,10 @@ export default function AuditLogsViewer() {
         getAdminList(),
       ])
 
-      if (statsResult.success) setStats(statsResult.stats)
-      if (actionsResult.success) setActionTypes(actionsResult.actionTypes || [])
-      if (targetsResult.success) setTargetTypes(targetsResult.targetTypes || [])
-      if (adminsResult.success) setAdminList(adminsResult.admins || [])
+      if (statsResult.success) setStats((statsResult as any).stats)
+      if (actionsResult.success) setActionTypes((actionsResult as any).actionTypes || [])
+      if (targetsResult.success) setTargetTypes((targetsResult as any).targetTypes || [])
+      if (adminsResult.success) setAdminList((adminsResult as any).admins || [])
     } catch (err: any) {
       console.error('Error loading initial data:', err)
     }
@@ -88,8 +88,8 @@ export default function AuditLogsViewer() {
       const result = await getAuditLogs(filters)
 
       if (result.success) {
-        setLogs(result.logs || [])
-        setPagination(result.pagination || {
+        setLogs((result as any).logs || [])
+        setPagination((result as any).pagination || {
           page: 1,
           limit: 50,
           total: 0,
@@ -110,13 +110,13 @@ export default function AuditLogsViewer() {
     try {
       const result = await exportAuditLogs(filters)
 
-      if (result.success && result.csv) {
+      if (result.success && (result as any).csv) {
         // Create download link
-        const blob = new Blob([result.csv], { type: 'text/csv' })
+        const blob = new Blob([(result as any).csv], { type: 'text/csv' })
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = result.filename || 'audit_logs.csv'
+        a.download = (result as any).filename || `audit-logs-${new Date().toISOString()}.csv`
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)

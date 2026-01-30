@@ -37,7 +37,7 @@ export function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProp
     latitude: venue?.latitude || '',
     longitude: venue?.longitude || ''
   })
-  
+
   const [users, setUsers] = useState<any[]>([])
   const [isLoadingUsers, setIsLoadingUsers] = useState(false)
   const [userSearch, setUserSearch] = useState('')
@@ -60,7 +60,7 @@ export function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProp
         roleFilter: 'court_admin'
       })
       if (result.success) {
-        setUsers(result.users || [])
+        setUsers((result as any).users || [])
       }
     } catch (error) {
       console.error('Failed to load users:', error)
@@ -69,7 +69,7 @@ export function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProp
     }
   }
 
-  const selectedUser = users.find(u => u.id === formData.owner_id) || 
+  const selectedUser = users.find(u => u.id === formData.owner_id) ||
     (venue?.owner ? { id: venue.owner.id, display_name: venue.owner.display_name, email: venue.owner.email } : null)
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -88,10 +88,10 @@ export function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProp
         : await createVenue(submitData)
 
       if (!result.success) {
-        throw new Error(result.error)
+        throw new Error((result as any).error)
       }
 
-      toast.success(result.message)
+      toast.success((result as any).message)
       onSuccess()
     } catch (error: any) {
       toast.error(error.message || 'Failed to save venue')

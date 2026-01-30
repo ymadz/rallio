@@ -13,7 +13,7 @@ export const metadata = {
 export default async function MatchesPage({
   searchParams,
 }: {
-  searchParams: { filter?: string }
+  searchParams: Promise<{ filter?: string }>
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -22,7 +22,8 @@ export default async function MatchesPage({
     redirect('/login')
   }
 
-  const filter = (searchParams.filter || 'all') as 'all' | 'wins' | 'losses' | 'draws'
+  const { filter: rawFilter } = await searchParams
+  const filter = (rawFilter || 'all') as 'all' | 'wins' | 'losses' | 'draws'
 
   // Fetch player stats and match history
   const [statsResult, matchesResult] = await Promise.all([
@@ -32,7 +33,7 @@ export default async function MatchesPage({
 
   const stats = statsResult.stats
   const matches = matchesResult.matches
-  
+
   // Log errors for debugging
   if (statsResult.error) {
     console.error('[MatchesPage] Stats error:', statsResult.error)

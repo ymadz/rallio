@@ -15,11 +15,13 @@ import { Colors, Spacing, Typography, Radius } from '@/constants/Colors';
 import { Card, CourtListSkeleton } from '@/components/ui';
 import { CourtCard } from '@/components/courts/CourtCard';
 import { useCourtStore, useFilteredVenues } from '@/store/court-store';
+import { FilterBottomSheet } from '@/components/courts/FilterBottomSheet';
 
 export default function CourtsScreen() {
     const { isLoading, error, searchQuery, fetchVenues, searchVenues } = useCourtStore();
     const venues = useFilteredVenues();
     const [isInitialLoad, setIsInitialLoad] = React.useState(true);
+    const [isFilterVisible, setIsFilterVisible] = React.useState(false);
 
     useEffect(() => {
         fetchVenues().finally(() => setIsInitialLoad(false));
@@ -80,22 +82,30 @@ export default function CourtsScreen() {
 
             {/* Search Bar */}
             <View style={styles.searchContainer}>
-                <View style={styles.searchBar}>
-                    <Ionicons name="search" size={20} color={Colors.dark.textTertiary} />
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="Search courts or venues..."
-                        placeholderTextColor={Colors.dark.textTertiary}
-                        value={searchQuery}
-                        onChangeText={searchVenues}
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                    />
-                    {searchQuery.length > 0 && (
-                        <TouchableOpacity onPress={() => searchVenues('')}>
-                            <Ionicons name="close-circle" size={20} color={Colors.dark.textTertiary} />
-                        </TouchableOpacity>
-                    )}
+                <View style={styles.searchRow}>
+                    <View style={styles.searchBar}>
+                        <Ionicons name="search" size={20} color={Colors.dark.textTertiary} />
+                        <TextInput
+                            style={styles.searchInput}
+                            placeholder="Search courts or venues..."
+                            placeholderTextColor={Colors.dark.textTertiary}
+                            value={searchQuery}
+                            onChangeText={searchVenues}
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                        />
+                        {searchQuery.length > 0 && (
+                            <TouchableOpacity onPress={() => searchVenues('')}>
+                                <Ionicons name="close-circle" size={20} color={Colors.dark.textTertiary} />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                    <TouchableOpacity
+                        style={styles.filterButton}
+                        onPress={() => setIsFilterVisible(true)}
+                    >
+                        <Ionicons name="options" size={24} color={Colors.dark.text} />
+                    </TouchableOpacity>
                 </View>
             </View>
 
@@ -137,6 +147,11 @@ export default function CourtsScreen() {
                     ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
                 />
             )}
+
+            <FilterBottomSheet
+                visible={isFilterVisible}
+                onClose={() => setIsFilterVisible(false)}
+            />
         </SafeAreaView>
     );
 }
@@ -171,7 +186,13 @@ const styles = StyleSheet.create({
         paddingHorizontal: Spacing.lg,
         paddingBottom: Spacing.md,
     },
+    searchRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm,
+    },
     searchBar: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: Colors.dark.surface,
@@ -187,6 +208,16 @@ const styles = StyleSheet.create({
         ...Typography.body,
         color: Colors.dark.text,
     },
+    filterButton: {
+        width: 48,
+        height: 48,
+        borderRadius: Radius.md,
+        backgroundColor: Colors.dark.surface,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: Colors.dark.border,
+    },
     resultCount: {
         ...Typography.bodySmall,
         color: Colors.dark.textSecondary,
@@ -196,6 +227,7 @@ const styles = StyleSheet.create({
     listContent: {
         padding: Spacing.lg,
         paddingTop: 0,
+        paddingBottom: 80, // Add bottom padding for better scrolling experience
     },
     cardWrapper: {
         marginBottom: 0,

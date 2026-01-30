@@ -37,7 +37,7 @@ export async function submitCourtReview(input: SubmitCourtReviewInput) {
   }
 
   // Check rate limit (3 reviews per hour)
-  const rateLimitResult = await checkRateLimit(createRateLimitConfig('SUBMIT_REVIEW', user.id))
+  const rateLimitResult = await checkRateLimit(createRateLimitConfig('SUBMIT_RATING', user.id))
   if (!rateLimitResult.allowed) {
     return {
       success: false,
@@ -173,12 +173,13 @@ export async function submitCourtReview(input: SubmitCourtReviewInput) {
     }
 
     // Notify venue owner about new review
-    if (court.venue?.owner_id) {
+    const venue = Array.isArray(court.venue) ? court.venue[0] : court.venue
+    if (venue?.owner_id) {
       await createNotification({
-        userId: court.venue.owner_id,
-        type: 'venue_review_received',
+        userId: venue.owner_id,
+        type: 'review_received',
         title: 'New Review Received',
-        message: `${input.overallRating} ★ review for ${court.name} at ${court.venue.name}`,
+        message: `${input.overallRating} ★ review for ${court.name} at ${venue.name}`,
         actionUrl: `/court-admin/venues/${court.venue_id}?tab=reviews`,
       })
     }

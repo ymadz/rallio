@@ -90,7 +90,7 @@ export async function updatePlayerProfile(data: {
     // First check if player record exists
     const { data: existingPlayer, error: selectError } = await supabase
       .from('players')
-      .select('id')
+      .select('id, skill_level, skill_level_updated_at')
       .eq('user_id', user.id)
       .maybeSingle()
 

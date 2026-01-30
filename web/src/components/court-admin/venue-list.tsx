@@ -20,7 +20,21 @@ import {
   X,
   Globe
 } from 'lucide-react'
+import dynamic from 'next/dynamic'
 import { getMyVenues, createVenue } from '@/app/actions/court-admin-actions'
+
+const LocationPicker = dynamic(
+  () => import('@/components/map/location-picker'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-full w-full flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    )
+  }
+)
+
 import { AddressAutocomplete } from '@/components/ui/address-autocomplete'
 
 interface Venue {
@@ -53,6 +67,8 @@ export function VenueList() {
     latitude: '',
     longitude: ''
   })
+  const [showMapPicker, setShowMapPicker] = useState(false)
+
 
   useEffect(() => {
     loadVenues()
@@ -93,7 +109,7 @@ export function VenueList() {
         email: formData.email || undefined,
         website: formData.website || undefined
       }
-      
+
       // Add coordinates if provided
       if (formData.latitude) {
         venueData.latitude = parseFloat(formData.latitude)
@@ -102,7 +118,7 @@ export function VenueList() {
         venueData.longitude = parseFloat(formData.longitude)
       }
 
-      const result = await createVenue(venueData)
+      const result = await createVenue(venueData as any)
       if (!result.success) {
         throw new Error(result.error)
       }
@@ -169,7 +185,7 @@ export function VenueList() {
             <h1 className="text-3xl font-bold text-gray-900 mb-2">My Venues</h1>
             <p className="text-gray-600">Manage your badminton court venues</p>
           </div>
-          <button 
+          <button
             onClick={() => setShowCreateModal(true)}
             className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm hover:shadow-md"
           >
@@ -240,7 +256,7 @@ export function VenueList() {
           <p className="text-gray-500 mb-6 max-w-md mx-auto">
             Create your first venue to start managing courts and accepting reservations.
           </p>
-          <button 
+          <button
             onClick={() => setShowCreateModal(true)}
             className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
@@ -318,14 +334,12 @@ export function VenueList() {
                   </div>
                   <div className="text-center">
                     <div className="space-y-1">
-                      <p className={`text-sm font-medium ${
-                        venue.is_active ? 'text-green-600' : 'text-gray-400'
-                      }`}>
+                      <p className={`text-sm font-medium ${venue.is_active ? 'text-green-600' : 'text-gray-400'
+                        }`}>
                         {venue.is_active ? 'Active' : 'Inactive'}
                       </p>
-                      <p className={`text-xs font-medium ${
-                        venue.is_verified ? 'text-blue-600' : 'text-yellow-600'
-                      }`}>
+                      <p className={`text-xs font-medium ${venue.is_verified ? 'text-blue-600' : 'text-yellow-600'
+                        }`}>
                         {venue.is_verified ? 'Verified' : 'Pending Verification'}
                       </p>
                     </div>
@@ -337,11 +351,10 @@ export function VenueList() {
               {/* Status */}
               <div className="mt-4 pt-4 border-t border-gray-200">
                 <div className="flex items-center justify-between">
-                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${
-                    venue.is_active
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-gray-100 text-gray-700'
-                  }`}>
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${venue.is_active
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-gray-100 text-gray-700'
+                    }`}>
                     {venue.is_active ? (
                       <>
                         <CheckCircle className="w-3 h-3" />
@@ -509,32 +522,47 @@ export function VenueList() {
               </div>
 
               {/* Coordinates */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Latitude
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={formData.latitude}
-                    onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
-                    placeholder="e.g., 6.9214"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
-                  />
+              {/* Coordinates */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-gray-700">Venue Location</div>
+                  <button
+                    type="button"
+                    onClick={() => setShowMapPicker(true)}
+                    className="inline-flex items-center gap-1.5 text-sm text-blue-600 font-medium hover:text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    <MapPin className="w-4 h-4" />
+                    Pick on Map
+                  </button>
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Longitude
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={formData.longitude}
-                    onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
-                    placeholder="e.g., 122.0790"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
-                  />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                      Latitude
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={formData.latitude}
+                      onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
+                      placeholder="e.g., 6.9214"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                      Longitude
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={formData.longitude}
+                      onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
+                      placeholder="e.g., 122.0790"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -558,6 +586,28 @@ export function VenueList() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Map Picker Modal - Z-index higher than Create Modal */}
+      {showMapPicker && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full h-[600px] overflow-hidden animate-in zoom-in-95 duration-200 ring-1 ring-gray-200">
+            <LocationPicker
+              initialLatitude={formData.latitude ? parseFloat(formData.latitude) : undefined}
+              initialLongitude={formData.longitude ? parseFloat(formData.longitude) : undefined}
+              onConfirm={(lat, lng, address) => {
+                setFormData({
+                  ...formData,
+                  latitude: lat.toString(),
+                  longitude: lng.toString(),
+                  address: address || formData.address // Use fetched address if available
+                })
+                setShowMapPicker(false)
+              }}
+              onCancel={() => setShowMapPicker(false)}
+            />
           </div>
         </div>
       )}

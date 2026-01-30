@@ -44,9 +44,9 @@ export function AmenityManagement() {
     try {
       const result = await getAllAmenities()
       if (!result.success) {
-        throw new Error(result.error)
+        throw new Error((result as any).error)
       }
-      setAmenities(result.amenities || [])
+      setAmenities((result as any).amenities || [])
     } catch (error: any) {
       toast.error(error.message || 'Failed to load amenities')
     } finally {
@@ -59,12 +59,12 @@ export function AmenityManagement() {
 
     const result = await deleteAmenity(amenityToDelete)
     if (result.success) {
-      toast.success(result.message)
+      toast.success((result as any).message)
       loadAmenities()
       setShowDeleteModal(false)
       setAmenityToDelete(null)
     } else {
-      toast.error(result.error)
+      toast.error((result as any).error)
     }
   }
 
@@ -125,46 +125,46 @@ export function AmenityManagement() {
         ) : (
           <div className="flex-1 overflow-auto p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredAmenities.map((amenity) => (
-              <div
-                key={amenity.id}
-                className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors"
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    {amenity.icon && (
-                      <div className="text-2xl">{amenity.icon}</div>
-                    )}
-                    <h3 className="font-semibold text-gray-900">{amenity.name}</h3>
+              {filteredAmenities.map((amenity) => (
+                <div
+                  key={amenity.id}
+                  className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      {amenity.icon && (
+                        <div className="text-2xl">{amenity.icon}</div>
+                      )}
+                      <h3 className="font-semibold text-gray-900">{amenity.name}</h3>
+                    </div>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => {
+                          setSelectedAmenity(amenity)
+                          setShowEditModal(true)
+                        }}
+                        className="p-1 hover:bg-gray-100 rounded transition-colors"
+                        title="Edit"
+                      >
+                        <Edit className="w-4 h-4 text-gray-600" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setAmenityToDelete(amenity.id)
+                          setShowDeleteModal(true)
+                        }}
+                        className="p-1 hover:bg-red-50 rounded transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-600" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => {
-                        setSelectedAmenity(amenity)
-                        setShowEditModal(true)
-                      }}
-                      className="p-1 hover:bg-gray-100 rounded transition-colors"
-                      title="Edit"
-                    >
-                      <Edit className="w-4 h-4 text-gray-600" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        setAmenityToDelete(amenity.id)
-                        setShowDeleteModal(true)
-                      }}
-                      className="p-1 hover:bg-red-50 rounded transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 className="w-4 h-4 text-red-600" />
-                    </button>
-                  </div>
+                  {amenity.description && (
+                    <p className="text-sm text-gray-600">{amenity.description}</p>
+                  )}
                 </div>
-                {amenity.description && (
-                  <p className="text-sm text-gray-600">{amenity.description}</p>
-                )}
-              </div>
-            ))}
+              ))}
             </div>
           </div>
         )}
@@ -252,10 +252,10 @@ function AmenityFormModal({ amenity, onClose, onSuccess }: {
         : await createAmenity(formData)
 
       if (!result.success) {
-        throw new Error(result.error)
+        throw new Error((result as any).error)
       }
 
-      toast.success(result.message)
+      toast.success((result as any).message)
       onSuccess()
     } catch (error: any) {
       toast.error(error.message || 'Failed to save amenity')

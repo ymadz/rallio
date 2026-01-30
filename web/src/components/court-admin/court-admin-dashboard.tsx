@@ -66,8 +66,8 @@ export function CourtAdminDashboard() {
         throw new Error(reservationsResult.error)
       }
 
-      setStats(statsResult.stats!)
-      setReservations(reservationsResult.reservations!)
+      setStats((statsResult as any).stats!)
+      setReservations((reservationsResult as any).reservations!)
     } catch (err: any) {
       setError(err.message || 'Failed to load dashboard')
     } finally {

@@ -96,19 +96,19 @@ export default function ModerationDashboard() {
       ])
 
       if (statsResult.success && 'stats' in statsResult) {
-        setStats(statsResult.stats)
+        setStats((statsResult as any).stats)
       }
 
       if (reviewsResult.success && 'reviews' in reviewsResult) {
-        setFlaggedReviews(reviewsResult.reviews)
+        setFlaggedReviews((reviewsResult as any).reviews || [])
       }
 
       if (usersResult.success && 'users' in usersResult) {
-        setBannedUsers(usersResult.users)
+        setBannedUsers((usersResult as any).users || [])
       }
 
       if (activityResult.success && 'activities' in activityResult) {
-        setActivities(activityResult.activities)
+        setActivities((activityResult as any).activities || [])
       }
     } catch (error) {
       console.error('Failed to load moderation data:', error)
@@ -297,11 +297,10 @@ export default function ModerationDashboard() {
         <div className="flex gap-6">
           <button
             onClick={() => setActiveTab('flagged')}
-            className={`pb-3 border-b-2 transition-colors ${
-              activeTab === 'flagged'
-                ? 'border-purple-600 text-purple-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
+            className={`pb-3 border-b-2 transition-colors ${activeTab === 'flagged'
+              ? 'border-purple-600 text-purple-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
           >
             <div className="flex items-center gap-2">
               <Flag className="w-4 h-4" />
@@ -316,11 +315,10 @@ export default function ModerationDashboard() {
 
           <button
             onClick={() => setActiveTab('banned')}
-            className={`pb-3 border-b-2 transition-colors ${
-              activeTab === 'banned'
-                ? 'border-purple-600 text-purple-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
+            className={`pb-3 border-b-2 transition-colors ${activeTab === 'banned'
+              ? 'border-purple-600 text-purple-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
           >
             <div className="flex items-center gap-2">
               <UserX className="w-4 h-4" />
@@ -335,11 +333,10 @@ export default function ModerationDashboard() {
 
           <button
             onClick={() => setActiveTab('activity')}
-            className={`pb-3 border-b-2 transition-colors ${
-              activeTab === 'activity'
-                ? 'border-purple-600 text-purple-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
+            className={`pb-3 border-b-2 transition-colors ${activeTab === 'activity'
+              ? 'border-purple-600 text-purple-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
           >
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4" />

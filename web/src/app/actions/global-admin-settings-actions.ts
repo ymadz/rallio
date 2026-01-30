@@ -68,20 +68,25 @@ export async function getPublicSettings(settingKey?: string) {
   try {
     const supabase = await createClient()
 
-    let query = supabase
-      .from('platform_settings')
-      .select('setting_key, setting_value, updated_at')
-      .eq('is_public', true)
-
     if (settingKey) {
-      query = query.eq('setting_key', settingKey).single()
+      const { data, error } = await supabase
+        .from('platform_settings')
+        .select('setting_key, setting_value, updated_at')
+        .eq('is_public', true)
+        .eq('setting_key', settingKey)
+        .single()
+
+      if (error) throw error
+      return { success: true, data }
+    } else {
+      const { data, error } = await supabase
+        .from('platform_settings')
+        .select('setting_key, setting_value, updated_at')
+        .eq('is_public', true)
+
+      if (error) throw error
+      return { success: true, data }
     }
-
-    const { data, error } = await query
-
-    if (error) throw error
-
-    return { success: true, data }
   } catch (error: any) {
     console.error('Error fetching public settings:', error)
     return { success: false, error: error.message }
@@ -402,7 +407,7 @@ export async function calculatePlatformFee(amount: number) {
     if (error) throw error
 
     const feeSettings = data.setting_value as any
-    
+
     if (!feeSettings.enabled) {
       return {
         success: true,

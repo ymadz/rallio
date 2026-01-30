@@ -9,11 +9,12 @@ import {
     TouchableOpacity,
     ActivityIndicator,
     Dimensions,
+    Linking,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Colors, Spacing, Typography, Radius } from '@/constants/Colors';
-import { Card, Button } from '@/components/ui';
+import { Card, Button, Avatar } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 
 const { width } = Dimensions.get('window');
@@ -21,10 +22,24 @@ const { width } = Dimensions.get('window');
 interface Court {
     id: string;
     name: string;
+    description?: string;
     hourly_rate: number;
     court_type: string;
+    surface_type?: string;
+    capacity?: number;
     is_active: boolean;
     court_images?: { url: string; is_primary: boolean }[];
+}
+
+interface Review {
+    id: string;
+    overall_rating: number;
+    review: string | null;
+    created_at: string;
+    user: {
+        display_name: string;
+        avatar_url: string | null;
+    };
 }
 
 interface Venue {
@@ -33,17 +48,57 @@ interface Venue {
     address: string;
     latitude: number | null;
     longitude: number | null;
-    opening_hours: Record<string, any> | null;
+    opening_hours: Record<string, { open: string; close: string }> | string | null;
     description: string | null;
     phone: string | null;
     email: string | null;
+    website: string | null;
     metadata: { amenities?: string[] } | null;
     courts?: Court[];
 }
 
+// Helper to check if venue is currently open
+const isVenueOpen = (hours: Venue['opening_hours']): boolean => {
+    if (!hours || typeof hours === 'string') return true; // Assume open if no structured data
+
+    const now = new Date();
+    const day = now.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+    const currentTime = now.getHours() * 60 + now.getMinutes();
+
+    const todayHours = hours[day];
+    if (!todayHours) return false;
+
+    const [openHour, openMin] = todayHours.open.split(':').map(Number);
+    const [closeHour, closeMin] = todayHours.close.split(':').map(Number);
+    const openTime = openHour * 60 + (openMin || 0);
+    const closeTime = closeHour * 60 + (closeMin || 0);
+
+    return currentTime >= openTime && currentTime < closeTime;
+};
+
+// Helper to format opening hours
+const formatOpeningHours = (hours: Venue['opening_hours']) => {
+    if (!hours) return null;
+    if (typeof hours === 'string') return [hours];
+
+    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+    const formatted = days.map(day => {
+        const schedule = hours[day];
+        if (!schedule) return null;
+        return {
+            day: day.charAt(0).toUpperCase() + day.slice(1, 3),
+            hours: `${schedule.open} - ${schedule.close}`
+        };
+    }).filter(Boolean);
+
+    return formatted;
+};
+
 export default function VenueDetailsScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const [venue, setVenue] = useState<Venue | null>(null);
+    const [reviews, setReviews] = useState<Review[]>([]);
+    const [averageRating, setAverageRating] = useState<number>(0);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedImageIndex, setSelectedImageIndex] = useState(0);
@@ -51,6 +106,7 @@ export default function VenueDetailsScreen() {
     useEffect(() => {
         if (id) {
             fetchVenue();
+            fetchReviews();
         }
     }, [id]);
 
@@ -61,29 +117,33 @@ export default function VenueDetailsScreen() {
         const { data, error: fetchError } = await supabase
             .from('venues')
             .select(`
-        id,
-        name,
-        address,
-        latitude,
-        longitude,
-        opening_hours,
-        description,
-        phone,
-        email,
-        metadata,
-        courts (
-          id,
-          name,
-          hourly_rate,
-          court_type,
-          is_active,
-          court_images (
-            url,
-            is_primary,
-            display_order
-          )
-        )
-      `)
+                id,
+                name,
+                address,
+                latitude,
+                longitude,
+                opening_hours,
+                description,
+                phone,
+                email,
+                website,
+                metadata,
+                courts (
+                    id,
+                    name,
+                    description,
+                    hourly_rate,
+                    court_type,
+                    surface_type,
+                    capacity,
+                    is_active,
+                    court_images (
+                        url,
+                        is_primary,
+                        display_order
+                    )
+                )
+            `)
             .eq('id', id)
             .single();
 
@@ -95,6 +155,49 @@ export default function VenueDetailsScreen() {
         setIsLoading(false);
     };
 
+    const fetchReviews = async () => {
+        // Fetch court IDs for this venue first
+        const { data: courts } = await supabase
+            .from('courts')
+            .select('id')
+            .eq('venue_id', id);
+
+        if (!courts || courts.length === 0) return;
+
+        const courtIds = courts.map(c => c.id);
+
+        // Fetch ratings for these courts
+        const { data: ratings, error: ratingsError } = await supabase
+            .from('court_ratings')
+            .select(`
+                id,
+                overall_rating,
+                review,
+                created_at,
+                user:user_id (
+                    display_name,
+                    avatar_url
+                )
+            `)
+            .in('court_id', courtIds)
+            .order('created_at', { ascending: false })
+            .limit(5);
+
+        if (!ratingsError && ratings) {
+            const formattedReviews = ratings.map((r: any) => ({
+                ...r,
+                user: Array.isArray(r.user) ? r.user[0] : r.user
+            }));
+            setReviews(formattedReviews);
+
+            // Calculate average
+            if (formattedReviews.length > 0) {
+                const avg = formattedReviews.reduce((sum: number, r: Review) => sum + r.overall_rating, 0) / formattedReviews.length;
+                setAverageRating(avg);
+            }
+        }
+    };
+
     // Get all images from all courts
     const allImages = venue?.courts
         ?.flatMap((c) => c.court_images || [])
@@ -104,9 +207,29 @@ export default function VenueDetailsScreen() {
     const formatPrice = (price: number) => `₱${price.toLocaleString()}`;
 
     // Get price range
-    const prices = venue?.courts?.map((c) => c.hourly_rate).filter(Boolean) || [];
+    const activeCourts = venue?.courts?.filter(c => c.is_active) || [];
+    const prices = activeCourts.map((c) => c.hourly_rate).filter(Boolean);
     const minPrice = prices.length > 0 ? Math.min(...prices) : null;
-    const maxPrice = prices.length > 0 ? Math.max(...prices) : null;
+
+    // Venue status
+    const isOpen = venue ? isVenueOpen(venue.opening_hours) : false;
+    const openingHours = venue ? formatOpeningHours(venue.opening_hours) : null;
+
+    // Render stars
+    const renderStars = (rating: number) => {
+        const stars = [];
+        for (let i = 1; i <= 5; i++) {
+            stars.push(
+                <Ionicons
+                    key={i}
+                    name={i <= rating ? 'star' : i - 0.5 <= rating ? 'star-half' : 'star-outline'}
+                    size={14}
+                    color={Colors.dark.warning}
+                />
+            );
+        }
+        return <View style={styles.starsRow}>{stars}</View>;
+    };
 
     if (isLoading) {
         return (
@@ -180,42 +303,47 @@ export default function VenueDetailsScreen() {
 
                 {/* Content */}
                 <View style={styles.content}>
-                    {/* Venue Info */}
-                    <Text style={styles.venueName}>{venue.name}</Text>
+                    {/* Venue Header */}
+                    <View style={styles.venueHeader}>
+                        <Text style={styles.venueName}>{venue.name}</Text>
+                        <View style={styles.statusBadge}>
+                            <View style={[styles.statusDot, { backgroundColor: isOpen ? Colors.dark.success : Colors.dark.error }]} />
+                            <Text style={[styles.statusText, { color: isOpen ? Colors.dark.success : Colors.dark.error }]}>
+                                {isOpen ? 'Open Now' : 'Closed'}
+                            </Text>
+                        </View>
+                    </View>
 
                     <View style={styles.addressRow}>
                         <Ionicons name="location" size={16} color={Colors.dark.textSecondary} />
                         <Text style={styles.address}>{venue.address}</Text>
                     </View>
 
-                    {/* Price & Book */}
-                    <Card variant="glass" padding="md" style={styles.priceCard}>
-                        <View style={styles.priceRow}>
-                            <View>
-                                <Text style={styles.priceLabel}>Starting from</Text>
-                                <Text style={styles.priceValue}>
-                                    {minPrice ? `${formatPrice(minPrice)}/hr` : 'Price varies'}
-                                </Text>
-                            </View>
-                            <Button onPress={() => router.push(`/courts/${id}/book`)}>
-                                Book Now
-                            </Button>
+                    {/* Rating Summary */}
+                    {reviews.length > 0 && (
+                        <View style={styles.ratingRow}>
+                            {renderStars(averageRating)}
+                            <Text style={styles.ratingText}>{averageRating.toFixed(1)}</Text>
+                            <Text style={styles.reviewCount}>({reviews.length} reviews)</Text>
                         </View>
-                    </Card>
+                    )}
 
-                    {/* Opening Hours */}
-                    {venue.opening_hours && (
-                        <View style={styles.section}>
-                            <Text style={styles.sectionTitle}>Opening Hours</Text>
-                            <View style={styles.infoRow}>
+                    {/* Operating Hours */}
+                    {openingHours && Array.isArray(openingHours) && openingHours.length > 0 && (
+                        <Card variant="glass" padding="md" style={styles.hoursCard}>
+                            <View style={styles.hoursHeader}>
                                 <Ionicons name="time-outline" size={18} color={Colors.dark.primary} />
-                                <Text style={styles.infoText}>
-                                    {typeof venue.opening_hours === 'string'
-                                        ? venue.opening_hours
-                                        : 'See venue for hours'}
-                                </Text>
+                                <Text style={styles.hoursTitle}>Operating Hours</Text>
                             </View>
-                        </View>
+                            <View style={styles.hoursGrid}>
+                                {(openingHours as Array<{ day: string; hours: string }>).map((item, index) => (
+                                    <View key={index} style={styles.hourRow}>
+                                        <Text style={styles.hourDay}>{item.day}</Text>
+                                        <Text style={styles.hourTime}>{item.hours}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        </Card>
                     )}
 
                     {/* Description */}
@@ -223,6 +351,90 @@ export default function VenueDetailsScreen() {
                         <View style={styles.section}>
                             <Text style={styles.sectionTitle}>About</Text>
                             <Text style={styles.description}>{venue.description}</Text>
+                        </View>
+                    )}
+
+                    {/* Courts List - Enhanced with per-court actions */}
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Available Courts ({activeCourts.length})</Text>
+                        {activeCourts.map((court) => (
+                            <Card key={court.id} variant="default" padding="md" style={styles.courtCard}>
+                                <View style={styles.courtHeader}>
+                                    <View style={styles.courtInfo}>
+                                        <Text style={styles.courtName}>{court.name}</Text>
+                                        {court.description && (
+                                            <Text style={styles.courtDescription}>{court.description}</Text>
+                                        )}
+                                    </View>
+                                    <View style={styles.courtPrice}>
+                                        <Text style={styles.priceValue}>{formatPrice(court.hourly_rate)}</Text>
+                                        <Text style={styles.priceUnit}>/hour</Text>
+                                    </View>
+                                </View>
+
+                                {/* Court badges */}
+                                <View style={styles.courtBadges}>
+                                    {court.surface_type && (
+                                        <View style={styles.badge}>
+                                            <Text style={styles.badgeText}>{court.surface_type}</Text>
+                                        </View>
+                                    )}
+                                    <View style={[styles.badge, court.court_type === 'indoor' ? styles.badgeIndoor : styles.badgeOutdoor]}>
+                                        <Text style={[styles.badgeText, court.court_type === 'indoor' ? styles.badgeTextIndoor : styles.badgeTextOutdoor]}>
+                                            {court.court_type}
+                                        </Text>
+                                    </View>
+                                    {court.capacity && (
+                                        <View style={styles.badge}>
+                                            <Ionicons name="people-outline" size={12} color={Colors.dark.textSecondary} />
+                                            <Text style={styles.badgeText}>{court.capacity} max</Text>
+                                        </View>
+                                    )}
+                                </View>
+
+                                {/* Court actions */}
+                                <View style={styles.courtActions}>
+                                    <TouchableOpacity
+                                        style={styles.actionButtonPrimary}
+                                        onPress={() => router.push(`/courts/${id}/book?court=${court.id}`)}
+                                    >
+                                        <Ionicons name="calendar" size={16} color={Colors.dark.text} />
+                                        <Text style={styles.actionButtonPrimaryText}>Book Now</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </Card>
+                        ))}
+                    </View>
+
+                    {/* Reviews Section */}
+                    {reviews.length > 0 && (
+                        <View style={styles.section}>
+                            <Text style={styles.sectionTitle}>Recent Reviews</Text>
+                            {reviews.map((review) => (
+                                <Card key={review.id} variant="glass" padding="sm" style={styles.reviewCard}>
+                                    <View style={styles.reviewHeader}>
+                                        <Avatar
+                                            source={review.user?.avatar_url}
+                                            name={review.user?.display_name || 'User'}
+                                            size="sm"
+                                        />
+                                        <View style={styles.reviewInfo}>
+                                            <Text style={styles.reviewerName}>
+                                                {review.user?.display_name || 'Anonymous'}
+                                            </Text>
+                                            <View style={styles.reviewMeta}>
+                                                {renderStars(review.overall_rating)}
+                                                <Text style={styles.reviewDate}>
+                                                    {new Date(review.created_at).toLocaleDateString()}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    </View>
+                                    {review.review && (
+                                        <Text style={styles.reviewText}>{review.review}</Text>
+                                    )}
+                                </Card>
+                            ))}
                         </View>
                     )}
 
@@ -241,40 +453,44 @@ export default function VenueDetailsScreen() {
                         </View>
                     )}
 
-                    {/* Courts List */}
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Available Courts</Text>
-                        {venue.courts?.filter(c => c.is_active).map((court) => (
-                            <Card key={court.id} variant="default" padding="md" style={styles.courtCard}>
-                                <View style={styles.courtHeader}>
-                                    <Text style={styles.courtName}>{court.name}</Text>
-                                    <View style={styles.courtTypeBadge}>
-                                        <Text style={styles.courtTypeText}>{court.court_type}</Text>
-                                    </View>
-                                </View>
-                                <Text style={styles.courtPrice}>{formatPrice(court.hourly_rate)}/hr</Text>
-                            </Card>
-                        ))}
-                    </View>
-
                     {/* Contact */}
-                    {(venue.phone || venue.email) && (
+                    {(venue.phone || venue.email || venue.website) && (
                         <View style={styles.section}>
                             <Text style={styles.sectionTitle}>Contact</Text>
                             {venue.phone && (
-                                <TouchableOpacity style={styles.contactRow}>
+                                <TouchableOpacity
+                                    style={styles.contactRow}
+                                    onPress={() => Linking.openURL(`tel:${venue.phone}`)}
+                                >
                                     <Ionicons name="call-outline" size={18} color={Colors.dark.primary} />
                                     <Text style={styles.contactText}>{venue.phone}</Text>
                                 </TouchableOpacity>
                             )}
                             {venue.email && (
-                                <TouchableOpacity style={styles.contactRow}>
+                                <TouchableOpacity
+                                    style={styles.contactRow}
+                                    onPress={() => Linking.openURL(`mailto:${venue.email}`)}
+                                >
                                     <Ionicons name="mail-outline" size={18} color={Colors.dark.primary} />
                                     <Text style={styles.contactText}>{venue.email}</Text>
                                 </TouchableOpacity>
                             )}
+                            {venue.website && (
+                                <TouchableOpacity
+                                    style={styles.contactRow}
+                                    onPress={() => Linking.openURL(venue.website!)}
+                                >
+                                    <Ionicons name="globe-outline" size={18} color={Colors.dark.primary} />
+                                    <Text style={styles.contactText}>
+                                        {venue.website.replace(/^https?:\/\//, '')}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
                     )}
+
+                    {/* Bottom padding */}
+                    <View style={{ height: 40 }} />
                 </View>
             </ScrollView>
         </SafeAreaView>
@@ -357,37 +573,97 @@ const styles = StyleSheet.create({
     content: {
         padding: Spacing.lg,
     },
+    venueHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: Spacing.xs,
+    },
     venueName: {
         ...Typography.h1,
         color: Colors.dark.text,
-        marginBottom: Spacing.xs,
+        flex: 1,
+    },
+    statusBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.dark.surface,
+        paddingHorizontal: Spacing.sm,
+        paddingVertical: 4,
+        borderRadius: Radius.full,
+        gap: 4,
+    },
+    statusDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
+    statusText: {
+        ...Typography.caption,
+        fontWeight: '600',
     },
     addressRow: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: Spacing.xs,
-        marginBottom: Spacing.lg,
+        marginBottom: Spacing.sm,
     },
     address: {
         ...Typography.body,
         color: Colors.dark.textSecondary,
         flex: 1,
     },
-    priceCard: {
-        marginBottom: Spacing.lg,
-    },
-    priceRow: {
+    ratingRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        gap: Spacing.xs,
+        marginBottom: Spacing.lg,
     },
-    priceLabel: {
+    starsRow: {
+        flexDirection: 'row',
+        gap: 2,
+    },
+    ratingText: {
+        ...Typography.body,
+        color: Colors.dark.text,
+        fontWeight: '600',
+    },
+    reviewCount: {
+        ...Typography.bodySmall,
+        color: Colors.dark.textSecondary,
+    },
+    hoursCard: {
+        marginBottom: Spacing.lg,
+    },
+    hoursHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm,
+        marginBottom: Spacing.sm,
+    },
+    hoursTitle: {
+        ...Typography.body,
+        color: Colors.dark.text,
+        fontWeight: '600',
+    },
+    hoursGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+    },
+    hourRow: {
+        width: '50%',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingRight: Spacing.md,
+        paddingVertical: 2,
+    },
+    hourDay: {
         ...Typography.caption,
         color: Colors.dark.textSecondary,
     },
-    priceValue: {
-        ...Typography.h2,
-        color: Colors.dark.primary,
+    hourTime: {
+        ...Typography.caption,
+        color: Colors.dark.text,
     },
     section: {
         marginBottom: Spacing.lg,
@@ -397,19 +673,123 @@ const styles = StyleSheet.create({
         color: Colors.dark.text,
         marginBottom: Spacing.sm,
     },
-    infoRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-    },
-    infoText: {
-        ...Typography.body,
-        color: Colors.dark.text,
-    },
     description: {
         ...Typography.body,
         color: Colors.dark.textSecondary,
         lineHeight: 24,
+    },
+    courtCard: {
+        marginBottom: Spacing.sm,
+    },
+    courtHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: Spacing.sm,
+    },
+    courtInfo: {
+        flex: 1,
+    },
+    courtName: {
+        ...Typography.body,
+        color: Colors.dark.text,
+        fontWeight: '600',
+    },
+    courtDescription: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+        marginTop: 2,
+    },
+    courtPrice: {
+        alignItems: 'flex-end',
+    },
+    priceValue: {
+        ...Typography.h3,
+        color: Colors.dark.primary,
+    },
+    priceUnit: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+    },
+    courtBadges: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: Spacing.xs,
+        marginBottom: Spacing.sm,
+    },
+    badge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.dark.surface,
+        paddingHorizontal: Spacing.sm,
+        paddingVertical: 4,
+        borderRadius: Radius.sm,
+        gap: 4,
+    },
+    badgeText: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+        textTransform: 'capitalize',
+    },
+    badgeIndoor: {
+        backgroundColor: Colors.dark.info + '20',
+    },
+    badgeOutdoor: {
+        backgroundColor: Colors.dark.success + '20',
+    },
+    badgeTextIndoor: {
+        color: Colors.dark.info,
+    },
+    badgeTextOutdoor: {
+        color: Colors.dark.success,
+    },
+    courtActions: {
+        flexDirection: 'row',
+        gap: Spacing.sm,
+    },
+    actionButtonPrimary: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: Colors.dark.primary,
+        paddingVertical: Spacing.sm,
+        borderRadius: Radius.md,
+        gap: Spacing.xs,
+    },
+    actionButtonPrimaryText: {
+        ...Typography.button,
+        color: Colors.dark.text,
+    },
+    reviewCard: {
+        marginBottom: Spacing.sm,
+    },
+    reviewHeader: {
+        flexDirection: 'row',
+        gap: Spacing.sm,
+        marginBottom: Spacing.xs,
+    },
+    reviewInfo: {
+        flex: 1,
+    },
+    reviewerName: {
+        ...Typography.body,
+        color: Colors.dark.text,
+        fontWeight: '500',
+    },
+    reviewMeta: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm,
+        marginTop: 2,
+    },
+    reviewDate: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+    },
+    reviewText: {
+        ...Typography.bodySmall,
+        color: Colors.dark.textSecondary,
+        marginTop: Spacing.xs,
     },
     amenitiesGrid: {
         flexDirection: 'row',
@@ -430,35 +810,6 @@ const styles = StyleSheet.create({
     amenityText: {
         ...Typography.bodySmall,
         color: Colors.dark.text,
-    },
-    courtCard: {
-        marginBottom: Spacing.sm,
-    },
-    courtHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: Spacing.xs,
-    },
-    courtName: {
-        ...Typography.body,
-        color: Colors.dark.text,
-        fontWeight: '600',
-    },
-    courtTypeBadge: {
-        backgroundColor: Colors.dark.primary + '20',
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: 2,
-        borderRadius: Radius.full,
-    },
-    courtTypeText: {
-        ...Typography.caption,
-        color: Colors.dark.primary,
-        fontWeight: '500',
-    },
-    courtPrice: {
-        ...Typography.body,
-        color: Colors.dark.primary,
     },
     contactRow: {
         flexDirection: 'row',

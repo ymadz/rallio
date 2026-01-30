@@ -74,11 +74,11 @@ export default function AnalyticsDashboard() {
       ])
 
       if (summaryResult.success && 'stats' in summaryResult) {
-        setStats(summaryResult.stats)
+        setStats((summaryResult as any).stats)
       }
 
       if (activityResult.success && 'activities' in activityResult) {
-        setActivities(activityResult.activities)
+        setActivities((activityResult as any).activities)
       }
     } catch (error) {
       console.error('Failed to load analytics:', error)

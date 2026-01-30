@@ -59,8 +59,8 @@ export default function GlobalAdminDashboard() {
         throw new Error(activityResult.error)
       }
 
-      setStats(statsResult.stats!)
-      setActivity(activityResult.activity)
+      setStats((statsResult as any).stats!)
+      setActivity((activityResult as any).activity)
     } catch (err: any) {
       setError(err.message || 'Failed to load dashboard')
     } finally {
@@ -73,7 +73,7 @@ export default function GlobalAdminDashboard() {
 
     const channel = supabase
       .channel('admin-dashboard')
-      .on('postgres_changes', 
+      .on('postgres_changes',
         { event: '*', schema: 'public', table: 'profiles' },
         () => loadDashboard()
       )

@@ -96,7 +96,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
   const loadUserDetails = async () => {
     setLoading(true)
     const result = await getUserDetails(userId)
-    
+
     if (result.success) {
       setUser(result.user)
     } else {
@@ -112,7 +112,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
 
   const handleRoleToggle = async (roleName: string, hasRole: boolean) => {
     setActionLoading(true)
-    
+
     const result = hasRole
       ? await removeUserRole(userId, roleName)
       : await assignUserRole(userId, roleName)
@@ -237,7 +237,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
 
   const handleVerifyPlayer = async () => {
     setActionLoading(true)
-    const result = user?.playerStats?.verified_player 
+    const result = user?.playerStats?.verified_player
       ? await unverifyPlayer(userId)
       : await verifyPlayer(userId)
 
@@ -296,14 +296,14 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
   return (
     <>
       {/* Backdrop */}
-      <div 
+      <div
         className="fixed inset-0 bg-black/50 z-50"
         onClick={onClose}
       />
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div 
+        <div
           className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto pointer-events-auto"
           onClick={(e) => e.stopPropagation()}
         >
@@ -349,7 +349,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
 
               {/* Edit Profile Modal */}
               {showEditModal && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]" onClick={() => setShowEditModal(false)}>
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60]" onClick={() => setShowEditModal(false)}>
                   <div className="bg-white rounded-xl w-full max-w-md p-6 m-4" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-between mb-6">
                       <h3 className="text-lg font-semibold">Edit Profile</h3>
@@ -363,7 +363,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                         <input
                           type="text"
                           value={editForm.displayName}
-                          onChange={(e) => setEditForm({...editForm, displayName: e.target.value})}
+                          onChange={(e) => setEditForm({ ...editForm, displayName: e.target.value })}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                         />
                       </div>
@@ -372,7 +372,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                         <input
                           type="tel"
                           value={editForm.phone}
-                          onChange={(e) => setEditForm({...editForm, phone: e.target.value})}
+                          onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                           placeholder="Optional"
                         />
@@ -399,7 +399,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
 
               {/* Edit Player Profile Modal */}
               {showEditPlayerModal && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]" onClick={() => setShowEditPlayerModal(false)}>
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60]" onClick={() => setShowEditPlayerModal(false)}>
                   <div className="bg-white rounded-xl w-full max-w-md p-6 m-4" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-between mb-6">
                       <h3 className="text-lg font-semibold">Edit Player Profile</h3>
@@ -413,7 +413,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                         <input
                           type="date"
                           value={editPlayerForm.birthDate}
-                          onChange={(e) => setEditPlayerForm({...editPlayerForm, birthDate: e.target.value})}
+                          onChange={(e) => setEditPlayerForm({ ...editPlayerForm, birthDate: e.target.value })}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                         />
                       </div>
@@ -421,7 +421,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                         <label className="block text-sm font-medium text-gray-700 mb-2">Gender</label>
                         <select
                           value={editPlayerForm.gender}
-                          onChange={(e) => setEditPlayerForm({...editPlayerForm, gender: e.target.value})}
+                          onChange={(e) => setEditPlayerForm({ ...editPlayerForm, gender: e.target.value })}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                         >
                           <option value="">Select Gender</option>
@@ -438,7 +438,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                           min="1"
                           max="10"
                           value={editPlayerForm.skillLevel}
-                          onChange={(e) => setEditPlayerForm({...editPlayerForm, skillLevel: e.target.value})}
+                          onChange={(e) => setEditPlayerForm({ ...editPlayerForm, skillLevel: e.target.value })}
                           className="w-full"
                         />
                       </div>
@@ -446,7 +446,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                         <label className="block text-sm font-medium text-gray-700 mb-2">Play Style</label>
                         <select
                           value={editPlayerForm.playStyle}
-                          onChange={(e) => setEditPlayerForm({...editPlayerForm, playStyle: e.target.value})}
+                          onChange={(e) => setEditPlayerForm({ ...editPlayerForm, playStyle: e.target.value })}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                         >
                           <option value="">Select Play Style</option>
@@ -461,7 +461,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                         <label className="block text-sm font-medium text-gray-700 mb-2">Bio</label>
                         <textarea
                           value={editPlayerForm.bio}
-                          onChange={(e) => setEditPlayerForm({...editPlayerForm, bio: e.target.value})}
+                          onChange={(e) => setEditPlayerForm({ ...editPlayerForm, bio: e.target.value })}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                           rows={3}
                           placeholder="Tell us about yourself..."
@@ -489,7 +489,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
 
               {/* Reset Password Modal */}
               {showPasswordModal && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]" onClick={() => setShowPasswordModal(false)}>
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60]" onClick={() => setShowPasswordModal(false)}>
                   <div className="bg-white rounded-xl w-full max-w-md p-6 m-4" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-between mb-6">
                       <h3 className="text-lg font-semibold">Reset Password</h3>
@@ -530,7 +530,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
 
               {/* Deactivate User Modal */}
               {showDeactivateModal && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]" onClick={() => setShowDeactivateModal(false)}>
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60]" onClick={() => setShowDeactivateModal(false)}>
                   <div className="bg-white rounded-xl w-full max-w-md p-6 m-4" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-between mb-6">
                       <h3 className="text-lg font-semibold text-red-600">Deactivate User</h3>

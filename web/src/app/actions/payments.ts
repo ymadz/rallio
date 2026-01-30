@@ -13,6 +13,8 @@ type ReservationWithRelations = {
   total_amount: number
   amount_paid: number
   status: string
+  payment_type?: string
+  num_players?: number
   courts: {
     name: string
     venues: {

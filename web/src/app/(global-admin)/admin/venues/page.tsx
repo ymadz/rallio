@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react'
 import { VenueManagementGlobal } from '@/components/global-admin/venue-management-global'
 import { AmenityManagement } from '@/components/global-admin/amenity-management'
 import { PendingVenueApprovals } from '@/components/global-admin/pending-venue-approvals'
+import { PendingCourtApprovals } from '@/components/global-admin/pending-court-approvals'
 import { Building2, Package, Clock } from 'lucide-react'
-import { getAllVenues } from '@/app/actions/global-admin-venue-actions'
+import { getAllVenues, getPendingCourts } from '@/app/actions/global-admin-venue-actions'
 
 export default function VenuesPage() {
   const [activeTab, setActiveTab] = useState<'venues' | 'pending' | 'amenities'>('venues')
@@ -16,10 +17,19 @@ export default function VenuesPage() {
   }, [])
 
   const loadPendingCount = async () => {
-    const result = await getAllVenues({ statusFilter: 'unverified', pageSize: 1 })
-    if (result.success) {
-      setPendingCount(result.total || 0)
+    const [venuesRes, courtsRes] = await Promise.all([
+      getAllVenues({ statusFilter: 'unverified', pageSize: 1 }),
+      getPendingCourts({ pageSize: 1 })
+    ])
+
+    let total = 0
+    if (venuesRes.success && 'total' in venuesRes) {
+      total += (venuesRes.total || 0)
     }
+    if (courtsRes.success && 'total' in courtsRes) {
+      total += (courtsRes.total || 0)
+    }
+    setPendingCount(total)
   }
 
   const handleApprovalComplete = () => {
@@ -33,22 +43,20 @@ export default function VenuesPage() {
         <nav className="flex gap-8">
           <button
             onClick={() => setActiveTab('venues')}
-            className={`inline-flex items-center gap-2 px-1 pb-4 border-b-2 font-medium text-sm transition-colors ${
-              activeTab === 'venues'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
+            className={`inline-flex items-center gap-2 px-1 pb-4 border-b-2 font-medium text-sm transition-colors ${activeTab === 'venues'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
           >
             <Building2 className="w-5 h-5" />
             Venues & Courts
           </button>
           <button
             onClick={() => setActiveTab('pending')}
-            className={`inline-flex items-center gap-2 px-1 pb-4 border-b-2 font-medium text-sm transition-colors ${
-              activeTab === 'pending'
-                ? 'border-yellow-600 text-yellow-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
+            className={`inline-flex items-center gap-2 px-1 pb-4 border-b-2 font-medium text-sm transition-colors ${activeTab === 'pending'
+              ? 'border-yellow-600 text-yellow-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
           >
             <Clock className="w-5 h-5" />
             Pending Approvals
@@ -60,11 +68,10 @@ export default function VenuesPage() {
           </button>
           <button
             onClick={() => setActiveTab('amenities')}
-            className={`inline-flex items-center gap-2 px-1 pb-4 border-b-2 font-medium text-sm transition-colors ${
-              activeTab === 'amenities'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
+            className={`inline-flex items-center gap-2 px-1 pb-4 border-b-2 font-medium text-sm transition-colors ${activeTab === 'amenities'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
           >
             <Package className="w-5 h-5" />
             Amenities
@@ -74,7 +81,12 @@ export default function VenuesPage() {
 
       {/* Content */}
       {activeTab === 'venues' && <VenueManagementGlobal />}
-      {activeTab === 'pending' && <PendingVenueApprovals onApprovalComplete={handleApprovalComplete} />}
+      {activeTab === 'pending' && (
+        <div className="space-y-8">
+          <PendingVenueApprovals onApprovalComplete={handleApprovalComplete} />
+          <PendingCourtApprovals onApprovalComplete={handleApprovalComplete} />
+        </div>
+      )}
       {activeTab === 'amenities' && <AmenityManagement />}
     </div>
   )

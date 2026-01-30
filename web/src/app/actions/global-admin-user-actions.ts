@@ -18,7 +18,7 @@ async function verifyGlobalAdmin() {
     .eq('user_id', user.id)
 
   const isGlobalAdmin = roles?.some((r: any) => r.roles?.name === 'global_admin')
-  
+
   if (!isGlobalAdmin) {
     return { success: false, error: 'Unauthorized: Global admin access required' }
   }
@@ -100,7 +100,7 @@ export async function getAllUsers(options: {
   // Filter by role if needed
   let filteredUsers = usersWithRoles
   if (options.roleFilter && options.roleFilter !== 'all') {
-    filteredUsers = usersWithRoles.filter((user: any) => 
+    filteredUsers = usersWithRoles.filter((user: any) =>
       user.user_roles?.some((ur: any) => ur.roles?.name === options.roleFilter)
     )
   }
@@ -355,21 +355,21 @@ export async function suspendUser(userId: string, reason: string, durationDays: 
     actionType: 'suspend_user',
     targetType: 'user',
     targetId: userId,
-    oldValue: { 
-      is_banned: currentUser?.is_banned, 
+    oldValue: {
+      is_banned: currentUser?.is_banned,
       banned_reason: currentUser?.banned_reason,
       banned_until: currentUser?.banned_until
     },
-    newValue: { 
-      is_banned: true, 
-      banned_reason: reason, 
+    newValue: {
+      is_banned: true,
+      banned_reason: reason,
       banned_until: bannedUntil.toISOString(),
       duration_days: durationDays
     }
   })
 
-  return { 
-    success: true, 
+  return {
+    success: true,
     message: `User suspended for ${durationDays} days`,
     bannedUntil: bannedUntil.toISOString()
   }
@@ -453,7 +453,7 @@ export async function createUser(data: {
 
   // Wait a bit for profile trigger to complete, then update profile
   await new Promise(resolve => setTimeout(resolve, 500))
-  
+
   const { error: profileError } = await serviceClient
     .from('profiles')
     .update({
@@ -471,7 +471,7 @@ export async function createUser(data: {
 
   // Assign roles (default to 'player' if none specified)
   const rolesToAssign = data.roles && data.roles.length > 0 ? data.roles : ['player']
-  
+
   if (rolesToAssign.length > 0) {
     const { data: roles } = await serviceClient
       .from('roles')
@@ -669,9 +669,11 @@ export async function resetUserPassword(userId: string, newPassword: string) {
   const auth = await verifyGlobalAdmin()
   if (!auth.success) return auth
 
-  const supabase = await createClient()
+  // Use service client for admin operations
+  const { createServiceClient } = await import('@/lib/supabase/server')
+  const serviceClient = createServiceClient()
 
-  const { error } = await supabase.auth.admin.updateUserById(userId, {
+  const { error } = await serviceClient.auth.admin.updateUserById(userId, {
     password: newPassword
   })
 

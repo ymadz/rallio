@@ -12,7 +12,7 @@ export interface VenueFilters {
   amenities?: string[]
   category?: string
   courtType?: 'indoor' | 'outdoor' | null
-  minRating?: number
+  rating?: number
   latitude?: number
   longitude?: number
   radiusKm?: number
@@ -124,7 +124,7 @@ export async function getVenues(filters: VenueFilters = {}): Promise<{
   hasMore: boolean
 }> {
   const supabase = createClient()
-  
+
   const {
     searchQuery,
     minPrice = 0,
@@ -132,7 +132,7 @@ export async function getVenues(filters: VenueFilters = {}): Promise<{
     amenities = [],
     category,
     courtType,
-    minRating = 0,
+    rating = 0,
     latitude,
     longitude,
     radiusKm = 50,
@@ -142,6 +142,129 @@ export async function getVenues(filters: VenueFilters = {}): Promise<{
   } = filters
 
   try {
+    // Optimization: Use server-side pagination for specific sort options where possible.
+    // We can do this if:
+    // 1. We are not filtering by rating (calculated property)
+    // 2. We are not sorting by distance (calculated property, unless using searchNearby)
+    // 3. We are not sorting by price or rating (calculated properties)
+    //    (Price sorting is tricky with 1:many courts relationship without a view)
+    //
+    // Currently, we optimize for the default case: sortBy='newest' and no rating filter.
+    const canUseServerSidePagination =
+      sortBy === 'newest' &&
+      rating === 0 &&
+      (!latitude || !longitude);
+
+    if (canUseServerSidePagination) {
+      // --- OPTIMIZED PATH ---
+      let query = supabase
+        .from('venues')
+        .select(`
+        id,
+        name,
+        description,
+        address,
+        city,
+        latitude,
+        longitude,
+        phone,
+        email,
+        website,
+        opening_hours,
+        is_active,
+        is_verified,
+        metadata,
+        created_at,
+        courts!inner (
+          id,
+          name,
+          court_type,
+          hourly_rate,
+          is_active,
+          surface_type,
+          capacity,
+          description,
+          metadata,
+          court_amenities (
+            amenities (
+              id,
+              name,
+              icon
+            )
+          ),
+          images:court_images (
+            id,
+            url,
+            alt_text,
+            is_primary,
+            display_order
+          )
+        )
+      `, { count: 'exact' })
+        .eq('is_active', true)
+        .eq('is_verified', true)
+        .eq('courts.is_active', true)
+
+      // Apply Filters
+      if (searchQuery) {
+        query = query.or(`name.ilike.%${searchQuery}%,address.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`)
+      }
+      if (category) {
+        // Metadata filtering is JSONB, relies on containment or specific key
+        // We'll perform metadata filtering in the query properly if possible, 
+        // or fall back to client side if complex. 
+        // For now, let's assume category is less common or handle it:
+        // query = query.contains('metadata', { category: category })  <-- simplistic
+        // Given complexity, let's Apply SEARCH query filters here but 
+        // if we use inner join on courts, we can filter attributes there.
+      }
+
+      // Court Type Filter
+      if (courtType) {
+        query = query.eq('courts.court_type', courtType)
+      }
+
+      // Price Filter (At least one court must match the range)
+      // Note: This logic means "Venue has a court in this range".
+      // Original logic was "Venue minPrice > filterMax or Venue maxPrice < filterMin",
+      // which effectively means "Venue has overlapping price range".
+      // Simplified optimization:
+      // query = query.gte('courts.hourly_rate', minPrice).lte('courts.hourly_rate', maxPrice)
+
+      // Amenities Filter
+      // PostgREST filtering on nested array is hard. 
+      // STRICT OPTIMIZATION: Only use server pagination if filters are simple.
+      // If amenities are selected, fall back to slow path (safe).
+      const isSimpleFilters = amenities.length === 0 && !category && minPrice === 0 && maxPrice === 10000;
+
+      if (isSimpleFilters) {
+        // Apply Pagination
+        query = query
+          .order('created_at', { ascending: false })
+          .range(offset, offset + limit - 1);
+
+        const { data: rawVenues, error, count } = await query;
+        if (error) throw error;
+
+        if (!rawVenues || rawVenues.length === 0) {
+          return { venues: [], total: count || 0, hasMore: false };
+        }
+
+        // Process ONLY the fetched venues (same processing logic as below)
+        // We need to fetch ratings for THESE venues only.
+        const processedVenues = await processVenuesList(supabase, rawVenues, latitude, longitude);
+
+        return {
+          venues: processedVenues,
+          total: count || 0,
+          hasMore: (offset + limit) < (count || 0)
+        };
+      }
+    }
+
+    // --- ORIGINAL / FALLBACK PATH (Slow) ---
+    // (Kept for complex filters: rating, price, amenities, distance sort)
+
     // Build the query
     let query = supabase
       .from('venues')
@@ -202,78 +325,8 @@ export async function getVenues(filters: VenueFilters = {}): Promise<{
     if (error) throw error
     if (!rawVenues) return { venues: [], total: 0, hasMore: false }
 
-    // Fetch court ratings for all courts included in the result so we can compute
-    // a per-venue average rating. We fetch raw ratings and aggregate in JS.
-    const courtIds: string[] = rawVenues.flatMap((v: any) => (v.courts || []).map((c: any) => c.id)).filter(Boolean)
-    let courtRatings: Array<{ court_id: string; overall_rating: number }> = []
-    if (courtIds.length > 0) {
-      const { data: ratingsData } = await supabase
-        .from('court_ratings')
-        .select('court_id, overall_rating')
-        .in('court_id', courtIds)
-
-      courtRatings = ratingsData || []
-    }
-
-    // Aggregate ratings per court
-    const courtAggregates: Record<string, { sum: number; count: number; avg: number }> = {}
-    for (const r of courtRatings) {
-      if (!courtAggregates[r.court_id]) courtAggregates[r.court_id] = { sum: 0, count: 0, avg: 0 }
-      courtAggregates[r.court_id].sum += Number(r.overall_rating || 0)
-      courtAggregates[r.court_id].count += 1
-    }
-    for (const k of Object.keys(courtAggregates)) {
-      courtAggregates[k].avg = courtAggregates[k].count > 0 ? courtAggregates[k].sum / courtAggregates[k].count : 0
-    }
-
-    // Process and filter venues (attach computed average ratings)
-    let processedVenues: VenueWithDetails[] = rawVenues.map((venue: any) => {
-      const activeCourts = venue.courts.filter((c: any) => c.is_active)
-      
-      // Calculate min/max price from active courts
-      const prices = activeCourts.map((c: any) => c.hourly_rate)
-      const minCourtPrice = prices.length > 0 ? Math.min(...prices) : 0
-      const maxCourtPrice = prices.length > 0 ? Math.max(...prices) : 0
-      
-      // Collect unique amenities across all courts
-      const uniqueAmenities = new Set<string>()
-      activeCourts.forEach((court: any) => {
-        court.court_amenities?.forEach((mapping: any) => {
-          if (mapping.amenities?.name) {
-            uniqueAmenities.add(mapping.amenities.name)
-          }
-        })
-      })
-
-      // Compute per-venue average rating using courtAggregates
-      let venueSum = 0
-      let venueCount = 0
-      activeCourts.forEach((court: any) => {
-        const agg = courtAggregates[court.id]
-        if (agg && agg.count > 0) {
-          venueSum += agg.sum
-          venueCount += agg.count
-        }
-      })
-      const venueAvg = venueCount > 0 ? venueSum / venueCount : undefined
-
-      return {
-        ...venue,
-        courts: activeCourts.map((court: any) => ({
-          ...court,
-          venue_id: venue.id,
-          amenities: court.court_amenities?.map((m: any) => m.amenities).filter(Boolean) || [],
-          images: court.images || [],
-        })),
-        minPrice: minCourtPrice,
-        maxPrice: maxCourtPrice,
-        totalCourts: activeCourts.length,
-        activeCourtCount: activeCourts.length,
-        amenities: Array.from(uniqueAmenities),
-        averageRating: venueAvg,
-        totalReviews: venueCount,
-      }
-    })
+    // Use shared processing function
+    let processedVenues = await processVenuesList(supabase, rawVenues, latitude, longitude);
 
     // Apply client-side filters
     processedVenues = processedVenues.filter(venue => {
@@ -287,7 +340,7 @@ export async function getVenues(filters: VenueFilters = {}): Promise<{
       }
       // Price filter
       if (venue.minPrice > maxPrice || venue.maxPrice < minPrice) return false
-      
+
       // Court type filter
       if (courtType) {
         const hasMatchingType = venue.courts.some(
@@ -295,7 +348,7 @@ export async function getVenues(filters: VenueFilters = {}): Promise<{
         )
         if (!hasMatchingType) return false
       }
-      
+
       // Amenities filter
       if (amenities.length > 0) {
         const hasAllAmenities = amenities.every(amenity =>
@@ -303,27 +356,19 @@ export async function getVenues(filters: VenueFilters = {}): Promise<{
         )
         if (!hasAllAmenities) return false
       }
-      
+
       // Rating filter
-      if (minRating > 0 && (!venue.averageRating || venue.averageRating < minRating)) {
-        return false
+      if (rating > 0) {
+        if (!venue.averageRating || Math.floor(venue.averageRating) !== rating) {
+          return false
+        }
       }
-      
+
       return true
     })
 
-    // Calculate distance if coordinates provided
-    if (latitude && longitude) {
-      processedVenues = processedVenues.map(venue => ({
-        ...venue,
-        distance: calculateDistance(
-          latitude,
-          longitude,
-          venue.latitude,
-          venue.longitude
-        ),
-      }))
-      
+    // Calculate distance filtering if not already done (done in processVenuesList)
+    if (latitude && longitude && radiusKm) {
       // Filter by radius
       processedVenues = processedVenues.filter(
         venue => !venue.distance || venue.distance <= radiusKm
@@ -361,6 +406,93 @@ export async function getVenues(filters: VenueFilters = {}): Promise<{
     console.error('Error fetching venues:', error)
     throw error
   }
+}
+
+/**
+ * Helper to process raw venues, fetch ratings, and aggregate details.
+ */
+async function processVenuesList(supabase: any, rawVenues: any[], latitude?: number, longitude?: number): Promise<VenueWithDetails[]> {
+  const courtIds: string[] = rawVenues.flatMap((v: any) => (v.courts || []).map((c: any) => c.id)).filter(Boolean)
+  let courtRatings: Array<{ court_id: string; overall_rating: number }> = []
+  if (courtIds.length > 0) {
+    const { data: ratingsData } = await supabase
+      .from('court_ratings')
+      .select('court_id, overall_rating')
+      .in('court_id', courtIds)
+
+    courtRatings = ratingsData || []
+  }
+
+  // Aggregate ratings per court
+  const courtAggregates: Record<string, { sum: number; count: number; avg: number }> = {}
+  for (const r of courtRatings) {
+    if (!courtAggregates[r.court_id]) courtAggregates[r.court_id] = { sum: 0, count: 0, avg: 0 }
+    courtAggregates[r.court_id].sum += Number(r.overall_rating || 0)
+    courtAggregates[r.court_id].count += 1
+  }
+  for (const k of Object.keys(courtAggregates)) {
+    courtAggregates[k].avg = courtAggregates[k].count > 0 ? courtAggregates[k].sum / courtAggregates[k].count : 0
+  }
+
+  // Process and filter venues (attach computed average ratings)
+  return rawVenues.map((venue: any) => {
+    const activeCourts = venue.courts.filter((c: any) => c.is_active)
+
+    // Calculate min/max price from active courts
+    const prices = activeCourts.map((c: any) => c.hourly_rate)
+    const minCourtPrice = prices.length > 0 ? Math.min(...prices) : 0
+    const maxCourtPrice = prices.length > 0 ? Math.max(...prices) : 0
+
+    // Collect unique amenities across all courts
+    const uniqueAmenities = new Set<string>()
+    activeCourts.forEach((court: any) => {
+      court.court_amenities?.forEach((mapping: any) => {
+        if (mapping.amenities?.name) {
+          uniqueAmenities.add(mapping.amenities.name)
+        }
+      })
+    })
+
+    // Compute per-venue average rating using courtAggregates
+    let venueSum = 0
+    let venueCount = 0
+    activeCourts.forEach((court: any) => {
+      const agg = courtAggregates[court.id]
+      if (agg && agg.count > 0) {
+        venueSum += agg.sum
+        venueCount += agg.count
+      }
+    })
+    const venueAvg = venueCount > 0 ? venueSum / venueCount : undefined
+
+    let v: VenueWithDetails = {
+      ...venue,
+      courts: activeCourts.map((court: any) => ({
+        ...court,
+        venue_id: venue.id,
+        amenities: court.court_amenities?.map((m: any) => m.amenities).filter(Boolean) || [],
+        images: court.images || [],
+      })),
+      minPrice: minCourtPrice,
+      maxPrice: maxCourtPrice,
+      totalCourts: activeCourts.length,
+      activeCourtCount: activeCourts.length,
+      amenities: Array.from(uniqueAmenities),
+      averageRating: venueAvg,
+      totalReviews: venueCount,
+    }
+
+    // Calculate distance if coordinates provided
+    if (latitude && longitude) {
+      v.distance = calculateDistance(
+        latitude,
+        longitude,
+        venue.latitude,
+        venue.longitude
+      )
+    }
+    return v;
+  })
 }
 
 /**
@@ -438,7 +570,7 @@ export async function getVenueById(
     // Process courts
     const activeCourts = venue.courts.filter(c => c.is_active)
     const prices = activeCourts.map(c => c.hourly_rate)
-    
+
     // Collect unique amenities
     const uniqueAmenities = new Set<string>()
     activeCourts.forEach(court => {
@@ -465,7 +597,7 @@ export async function getVenueById(
     const ratingsData = await Promise.all(
       courtIds.map(id => getCourtRatings(id))
     )
-    
+
     const allRatings = ratingsData.flat()
     const averageRating = allRatings.length > 0
       ? allRatings.reduce((sum, r) => sum + r.overall_rating, 0) / allRatings.length
@@ -642,7 +774,7 @@ export async function getCourtAverageRating(courtId: string): Promise<{
   }
 }> {
   const ratings = await getCourtRatings(courtId)
-  
+
   if (ratings.length === 0) {
     return {
       averageRating: 0,
@@ -697,18 +829,18 @@ export function formatDistance(km: number): string {
  */
 export function isVenueOpen(openingHours: Record<string, { open: string; close: string }> | null): boolean {
   if (!openingHours) return false
-  
+
   const now = new Date()
   const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
   const today = dayNames[now.getDay()]
-  
+
   const todayHours = openingHours[today]
   if (!todayHours) return false
-  
+
   const currentTime = now.getHours() * 100 + now.getMinutes()
   const openTime = parseInt(todayHours.open.replace(':', ''))
   const closeTime = parseInt(todayHours.close.replace(':', ''))
-  
+
   return currentTime >= openTime && currentTime <= closeTime
 }
 
@@ -717,14 +849,14 @@ export function isVenueOpen(openingHours: Record<string, { open: string; close: 
  */
 export function formatOperatingHours(openingHours: Record<string, { open: string; close: string }> | null): string {
   if (!openingHours) return 'Hours not available'
-  
+
   const now = new Date()
   const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
   const today = dayNames[now.getDay()]
-  
+
   const todayHours = openingHours[today]
   if (!todayHours) return 'Closed today'
-  
+
   return `${formatTime(todayHours.open)} - ${formatTime(todayHours.close)}`
 }
 

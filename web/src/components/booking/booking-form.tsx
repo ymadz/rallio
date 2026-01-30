@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Calendar } from '@/components/ui/calendar'
-import { Select } from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -164,17 +164,22 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
 
         {/* Court Selection */}
         <div className="mb-6">
+          <Label className="block mb-2">Select Court</Label>
           <Select
-            label="Select Court"
             value={courtId}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setCourtId(e.target.value)}
+            onValueChange={setCourtId}
             required
           >
-            {courts.map((court) => (
-              <option key={court.id} value={court.id}>
-                {court.name} - ₱{court.hourlyRate}/hour ({court.courtType})
-              </option>
-            ))}
+            <SelectTrigger>
+              <SelectValue placeholder="Select a court" />
+            </SelectTrigger>
+            <SelectContent>
+              {courts.map((court) => (
+                <SelectItem key={court.id} value={court.id}>
+                  {court.name} - ₱{court.hourlyRate}/hour ({court.courtType})
+                </SelectItem>
+              ))}
+            </SelectContent>
           </Select>
         </div>
 
@@ -204,19 +209,23 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
               Duration (hours)
             </Label>
             <Select
-              id="duration"
               value={duration.toString()}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-                setDuration(parseInt(e.target.value))
+              onValueChange={(val) => {
+                setDuration(parseInt(val))
                 setSelectedTime(undefined) // Reset time selection when duration changes
               }}
               required
             >
-              {[1, 2, 3, 4, 5, 6].map((hours) => (
-                <option key={hours} value={hours}>
-                  {hours} {hours === 1 ? 'hour' : 'hours'}
-                </option>
-              ))}
+              <SelectTrigger id="duration">
+                <SelectValue placeholder="Select duration" />
+              </SelectTrigger>
+              <SelectContent>
+                {[1, 2, 3, 4, 5, 6].map((hours) => (
+                  <SelectItem key={hours} value={hours.toString()}>
+                    {hours} {hours === 1 ? 'hour' : 'hours'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
             </Select>
             <p className="text-sm text-gray-600 mt-2">
               Select how many hours you need the court
@@ -336,9 +345,8 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
             <span>₱{totalPrice.toFixed(2)}</span>
           </div>
           {discountAmount !== 0 && (
-            <div className={`flex justify-between items-center font-medium ${
-              discountAmount < 0 ? 'text-orange-600' : 'text-green-600'
-            }`}>
+            <div className={`flex justify-between items-center font-medium ${discountAmount < 0 ? 'text-orange-600' : 'text-green-600'
+              }`}>
               <span>{discountAmount < 0 ? 'Surcharge' : 'Discount'}</span>
               <span>{discountAmount < 0 ? '+' : '-'}₱{Math.abs(discountAmount).toFixed(2)}</span>
             </div>

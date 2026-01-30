@@ -67,7 +67,7 @@ export function VenueDetailsPanel({ venueId, onClose, onRefresh, onEdit }: Venue
   const [venue, setVenue] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
-  
+
   // Court modals
   const [showCreateCourtModal, setShowCreateCourtModal] = useState(false)
   const [showEditCourtModal, setShowEditCourtModal] = useState(false)
@@ -84,9 +84,9 @@ export function VenueDetailsPanel({ venueId, onClose, onRefresh, onEdit }: Venue
     try {
       const result = await getVenueDetails(venueId)
       if (!result.success) {
-        throw new Error(result.error)
+        throw new Error((result as any).error)
       }
-      setVenue(result.venue)
+      setVenue((result as any).venue)
     } catch (error: any) {
       toast.error(error.message || 'Failed to load venue details')
     } finally {
@@ -97,11 +97,11 @@ export function VenueDetailsPanel({ venueId, onClose, onRefresh, onEdit }: Venue
   const handleToggleCourtActive = async (courtId: string, isActive: boolean) => {
     const result = await toggleCourtActive(courtId, !isActive)
     if (result.success) {
-      toast.success(result.message)
+      toast.success((result as any).message)
       loadVenueDetails()
       onRefresh()
     } else {
-      toast.error(result.error)
+      toast.error((result as any).error)
     }
     setOpenDropdown(null)
   }
@@ -109,11 +109,11 @@ export function VenueDetailsPanel({ venueId, onClose, onRefresh, onEdit }: Venue
   const handleToggleCourtVerified = async (courtId: string, isVerified: boolean) => {
     const result = await toggleCourtVerified(courtId, !isVerified)
     if (result.success) {
-      toast.success(result.message)
+      toast.success((result as any).message)
       loadVenueDetails()
       onRefresh()
     } else {
-      toast.error(result.error)
+      toast.error((result as any).error)
     }
     setOpenDropdown(null)
   }
@@ -123,13 +123,13 @@ export function VenueDetailsPanel({ venueId, onClose, onRefresh, onEdit }: Venue
 
     const result = await deleteCourt(courtToDelete)
     if (result.success) {
-      toast.success(result.message)
+      toast.success((result as any).message)
       loadVenueDetails()
       onRefresh()
       setShowDeleteCourtModal(false)
       setCourtToDelete(null)
     } else {
-      toast.error(result.error)
+      toast.error((result as any).error)
     }
   }
 
@@ -188,7 +188,7 @@ export function VenueDetailsPanel({ venueId, onClose, onRefresh, onEdit }: Venue
               </button>
             </div>
           </div>
-          
+
           <div className="p-6 space-y-6">
             {/* Venue Info Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -202,7 +202,7 @@ export function VenueDetailsPanel({ venueId, onClose, onRefresh, onEdit }: Venue
                         <p className="text-sm text-gray-600">{venue.description}</p>
                       </div>
                     )}
-                    
+
                     {venue.address && (
                       <div className="flex items-start gap-3">
                         <MapPin className="w-5 h-5 text-gray-400 mt-0.5" />
@@ -573,7 +573,7 @@ function CourtFormModal({ venueId, court, onClose, onSuccess }: {
   const loadAmenities = async () => {
     const result = await getAllAmenities()
     if (result.success) {
-      setAmenities(result.amenities || [])
+      setAmenities((result as any).amenities || [])
     }
   }
 
@@ -587,10 +587,10 @@ function CourtFormModal({ venueId, court, onClose, onSuccess }: {
         : await createCourt({ ...formData, venue_id: venueId })
 
       if (!result.success) {
-        throw new Error(result.error)
+        throw new Error((result as any).error)
       }
 
-      toast.success(result.message)
+      toast.success((result as any).message)
       onSuccess()
     } catch (error: any) {
       toast.error(error.message || 'Failed to save court')

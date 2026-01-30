@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Users, Star } from 'lucide-react'
 import { PlayerRatingModal } from './player-rating-modal'
-import { getPlayerRatings } from '@/app/actions/rating-actions'
+import { checkExistingRatings } from '@/app/actions/rating-actions'
 
 interface Player {
   id: string
@@ -35,13 +35,13 @@ export function RateOpponentsCard({
   const loadExistingRatings = async () => {
     setIsLoading(true)
     try {
-      const result = await getPlayerRatings({ matchId, raterId: currentUserId })
-      if (result.success && result.ratings) {
-        const rated = new Set(result.ratings.map((r: any) => r.ratee_id))
-        setRatedPlayers(rated)
-        
+      const opponentIds = opponents.map(o => o.id)
+      const result = await checkExistingRatings(matchId, opponentIds)
+      if (result.success && result.alreadyRated) {
+        setRatedPlayers(new Set(result.alreadyRated))
+
         // Check if all opponents are rated
-        if (rated.size === opponents.length) {
+        if (result.alreadyRated.length === opponents.length) {
           onAllRated?.()
         }
       }
@@ -57,7 +57,7 @@ export function RateOpponentsCard({
       const newRated = new Set(ratedPlayers)
       newRated.add(selectedPlayer.id)
       setRatedPlayers(newRated)
-      
+
       // Check if all opponents are now rated
       if (newRated.size === opponents.length) {
         onAllRated?.()
