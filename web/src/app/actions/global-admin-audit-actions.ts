@@ -19,7 +19,7 @@ async function verifyGlobalAdmin() {
     .eq('user_id', user.id)
 
   const isGlobalAdmin = roles?.some((r: any) => r.roles?.name === 'global_admin')
-  
+
   if (!isGlobalAdmin) {
     return { success: false, error: 'Requires global admin role' }
   }
@@ -366,7 +366,7 @@ export async function exportAuditLogs(params: GetAuditLogsParams = {}) {
 
     const csv = [
       headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+      ...rows.map(row => row.map(cell => `"${String(cell || '').replace(/"/g, '""')}"`).join(','))
     ].join('\n')
 
     return {

@@ -478,7 +478,7 @@ export function VenueManagementGlobal() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {venues.map((venue) => (
+                  {venues.map((venue, index) => (
                     <tr key={venue.id} className="hover:bg-gray-50 cursor-pointer">
                       <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                         <input
@@ -536,7 +536,8 @@ export function VenueManagementGlobal() {
                                 className="fixed inset-0 z-10"
                                 onClick={() => setOpenDropdown(null)}
                               />
-                              <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1">
+                              <div className={`absolute right-0 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1 ${index >= venues.length - 2 ? 'bottom-full mb-1' : 'mt-1'
+                                }`}>
                                 <button
                                   onClick={() => {
                                     loadVenueDetails(venue.id)

@@ -191,7 +191,7 @@ export default function SetupProfilePage() {
 
         if (uploadError) {
           console.error('Avatar upload error:', uploadError)
-          // Continue without avatar if upload fails
+          throw new Error('Failed to upload avatar image. Please try again or use a different image.')
         } else {
           const { data: { publicUrl } } = supabase.storage
             .from('avatars')
@@ -566,11 +566,10 @@ export default function SetupProfilePage() {
               <button
                 key={style}
                 onClick={() => togglePlayStyle(style)}
-                className={`w-full p-4 rounded-lg border text-left flex items-center justify-between transition-colors ${
-                  profileData.playStyles.includes(style)
+                className={`w-full p-4 rounded-lg border text-left flex items-center justify-between transition-colors ${profileData.playStyles.includes(style)
                     ? 'border-primary bg-primary/5'
                     : 'border-gray-200 hover:border-primary/50'
-                }`}
+                  }`}
               >
                 <span className="text-gray-900">{style}</span>
                 {profileData.playStyles.includes(style) && (
@@ -636,11 +635,10 @@ export default function SetupProfilePage() {
               <button
                 key={level.value}
                 onClick={() => updateProfile('skillLevel', level.value)}
-                className={`w-full p-4 rounded-lg border text-left transition-colors ${
-                  profileData.skillLevel === level.value
+                className={`w-full p-4 rounded-lg border text-left transition-colors ${profileData.skillLevel === level.value
                     ? 'border-primary bg-primary text-white'
                     : 'border-gray-200 hover:border-primary/50'
-                }`}
+                  }`}
               >
                 <div className="font-medium">{level.label}</div>
                 <div className={`text-sm ${profileData.skillLevel === level.value ? 'text-white/80' : 'text-gray-500'}`}>

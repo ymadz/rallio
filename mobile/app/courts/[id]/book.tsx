@@ -1,15 +1,16 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
     View,
     Text,
     StyleSheet,
-    SafeAreaView,
+
     ScrollView,
     TouchableOpacity,
     ActivityIndicator,
     TextInput,
     Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Typography, Radius } from '@/constants/Colors';
@@ -75,223 +76,176 @@ export default function BookingScreen() {
     const [error, setError] = useState<string | null>(null);
     const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
     const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+    const [recurrenceWeeks, setRecurrenceWeeks] = useState(1);
+    const [isValidatingRecurrence, setIsValidatingRecurrence] = useState(false);
 
     const { setBookingData, setDiscount } = useCheckoutStore();
 
-    // Discount state
-    const [discountResults, setDiscountResults] = useState<{
-        totalDiscount: number;
-        finalPrice: number;
-        discounts: any[];
-    }>({ totalDiscount: 0, finalPrice: 0, discounts: [] });
-    const [isCalculatingDiscount, setIsCalculatingDiscount] = useState(false);
+    // Derived State and Helpers
+    const selectedCourt = React.useMemo(() => courts.find(c => c.id === selectedCourtId), [courts, selectedCourtId]);
 
-    // Calculate discounts when relevant fields change
+    const dateOptions = React.useMemo(() => {
+        const dates = [];
+        for (let i = 0; i < 14; i++) {
+            dates.push(addDays(new Date(), i));
+        }
+        return dates;
+    }, []);
+
+    const formatTime = (time: string | null) => {
+        if (!time) return '';
+        const [hours, minutes] = time.split(':').map(Number);
+        const period = hours >= 12 ? 'PM' : 'AM';
+        const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+        return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+    };
+
+    const getEndTimeStr = (time: string | null) => {
+        if (!time) return '';
+        const [hours, minutes] = time.split(':').map(Number);
+        // Assuming 1 hour slots, returns the end of that slot (e.g. 10:00 -> 11:00)
+        return `${(hours + 1).toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    };
+
+    const duration = useMemo(() => {
+        if (!selectedTime) return 0;
+        if (!endTime) return 1;
+
+        const [startH] = selectedTime.split(':').map(Number);
+        const [endH] = endTime.split(':').map(Number);
+
+        return (endH - startH) + 1;
+    }, [selectedTime, endTime]);
+
+    const totalPrice = (selectedCourt?.hourly_rate || 0) * duration;
+
+    const discountResults = useMemo(() => {
+        return {
+            totalDiscount: 0,
+            discounts: [] as any[], // Typing as any[] to avoid strict shape issues if unused
+            finalPrice: totalPrice
+        };
+    }, [totalPrice]);
+
+    // Fetch Data on Load
     useEffect(() => {
-        const calculateDiscounts = async () => {
-            if (!venue || !selectedCourtId || !selectedDate || !selectedTime) {
-                setDiscountResults({ totalDiscount: 0, finalPrice: 0, discounts: [] });
-                return;
-            }
-
-            // Calculate duration and base price locally for the effect
-            let currentDuration = 1;
-            if (selectedTime) {
-                if (endTime) {
-                    const startHour = parseInt(selectedTime.split(':')[0]);
-                    const endHour = parseInt(endTime.split(':')[0]);
-                    currentDuration = endHour - startHour + 1;
-                }
-            }
-
-            const currentCourt = courts.find(c => c.id === selectedCourtId);
-            const basePrice = currentCourt ? currentCourt.hourly_rate * currentDuration : 0;
-
-            if (basePrice <= 0) return;
-
-            setIsCalculatingDiscount(true);
+        const loadVenueData = async () => {
             try {
-                // Import dynamically to avoid cycle if any, or just use the imported one
-                const { calculateApplicableDiscounts } = require('@/lib/discount-utils');
+                setIsLoading(true);
+                setError(null);
 
-                const result = await calculateApplicableDiscounts({
-                    venueId: venue.id,
-                    startDate: selectedDate.toISOString(),
-                    endDate: selectedDate.toISOString(), // Multi-day logic might need adjustment but usually start=end for single booking
-                    numberOfDays: currentDuration, // Using duration as "days" proxy or ignoring if rule is strictly days. *Correction*: Logic uses days for multi-day. For hourly, we might pass 1 day.
-                    // Wait, existing logic uses numberOfDays for multi_day discount. If we book 1 day, it's 1. 
-                    // If we want to support hourly discounts, the backend logic might need tweaks. 
-                    // But for now, let's pass 1 day as it's a single day booking.
-                    numberOfPlayers: numPlayers,
-                    basePrice: basePrice
-                });
+                // 1. Fetch Venue
+                const { data: venueData, error: venueError } = await supabase
+                    .from('venues')
+                    .select('*')
+                    .eq('id', id)
+                    .single();
 
-                if (result.success) {
-                    setDiscountResults({
-                        totalDiscount: result.totalDiscount,
-                        finalPrice: result.finalPrice,
-                        discounts: result.discounts
-                    });
+                if (venueError) throw venueError;
+                setVenue(venueData);
+
+                // 2. Fetch Courts
+                const { data: courtsData, error: courtsError } = await supabase
+                    .from('courts')
+                    .select('*')
+                    .eq('venue_id', id);
+
+                if (courtsError) throw courtsError;
+                setCourts(courtsData || []);
+
+                if (courtsData && courtsData.length > 0) {
+                    setSelectedCourtId(courtsData[0].id);
                 }
-            } catch (err) {
-                console.error('Error calculating discounts:', err);
+            } catch (err: any) {
+                console.error('Error loading booking data:', err);
+                setError(err.message || 'Failed to load venue details');
             } finally {
-                setIsCalculatingDiscount(false);
+                setIsLoading(false);
             }
         };
 
-        // Debounce slightly
-        const timer = setTimeout(calculateDiscounts, 300);
-        return () => clearTimeout(timer);
-    }, [venue, selectedCourtId, selectedDate, selectedTime, endTime, numPlayers]);
-
-
-
-
-    // Generate next 14 days for date selection
-    const dateOptions = Array.from({ length: 14 }, (_, i) => addDays(startOfDay(new Date()), i));
-
-    useEffect(() => {
-        if (id) fetchVenueAndCourts();
+        if (id) {
+            loadVenueData();
+        }
     }, [id]);
 
+    // Fetch Time Slots when Court or Date Changes
     useEffect(() => {
-        if (selectedCourtId && selectedDate) {
-            fetchTimeSlots();
-        }
-    }, [selectedCourtId, selectedDate]);
+        const fetchAvailability = async () => {
+            if (!selectedCourtId || !selectedDate || !venue) return;
 
-    // Reset selection when date/court changes
-    useEffect(() => {
-        setSelectedTime(null);
-        setEndTime(null);
-    }, [selectedDate, selectedCourtId]);
+            try {
+                setIsLoadingSlots(true);
 
-    const fetchVenueAndCourts = async () => {
-        setIsLoading(true);
-        setError(null);
+                // Get operating hours
+                const hours = getOperatingHours(venue.opening_hours, selectedDate);
+                if (!hours) {
+                    setTimeSlots([]); // Closed
+                    return;
+                }
 
-        try {
-            const { data, error: fetchError } = await supabase
-                .from('venues')
-                .select(`
-                    id, name, address, opening_hours,
-                    courts (id, name, hourly_rate, court_type, capacity)
-                `)
-                .eq('id', id)
-                .single();
+                const { openHour, closeHour } = hours;
 
-            if (fetchError) throw fetchError;
+                // Generate base slots
+                const slots: TimeSlot[] = [];
+                for (let h = openHour; h < closeHour; h++) {
+                    slots.push({
+                        time: `${h.toString().padStart(2, '0')}:00`,
+                        available: true,
+                    });
+                }
 
-            setVenue(data);
-            const activeCourts = (data.courts || []).filter((c: any) => c.hourly_rate > 0);
-            setCourts(activeCourts);
+                // Fetch existing reservations
+                const startOfDayStr = startOfDay(selectedDate).toISOString();
+                const endOfDayStr = startOfDay(addDays(selectedDate, 1)).toISOString();
 
-            // Auto-select first court
-            if (activeCourts.length > 0) {
-                setSelectedCourtId(activeCourts[0].id);
-            }
-        } catch (err: any) {
-            setError(err.message || 'Failed to load venue');
-        } finally {
-            setIsLoading(false);
-        }
-    };
+                const { data: reservations, error: resError } = await supabase
+                    .from('reservations')
+                    .select('start_time, end_time')
+                    .eq('court_id', selectedCourtId)
+                    .gte('start_time', startOfDayStr)
+                    .lt('start_time', endOfDayStr)
+                    .in('status', ['pending', 'confirmed', 'pending_payment', 'paid']);
 
-    const fetchTimeSlots = async () => {
-        if (!selectedCourtId || !selectedDate || !venue) return;
+                if (resError) throw resError;
 
-        setIsLoadingSlots(true);
-        setSelectedTime(null);
-        setEndTime(null);
+                // Mark unavailable slots
+                const updatedSlots = slots.map(slot => {
+                    const slotHour = parseInt(slot.time.split(':')[0]);
 
-        try {
-            // Get operating hours for the selected day
-            const operatingHours = getOperatingHours(venue.opening_hours, selectedDate);
+                    const isBooked = reservations?.some(res => {
+                        const startH = new Date(res.start_time).getHours();
+                        const endH = new Date(res.end_time).getHours();
+                        return slotHour >= startH && slotHour < endH;
+                    });
 
-            if (!operatingHours) {
-                // Venue is closed on this day
-                setTimeSlots([]);
+                    // Also check if past time (if today)
+                    let isPast = false;
+                    if (isToday(selectedDate)) {
+                        const currentHour = new Date().getHours();
+                        if (slotHour <= currentHour) isPast = true;
+                    }
+
+                    return {
+                        ...slot,
+                        available: !isBooked && !isPast,
+                    };
+                });
+
+                setTimeSlots(updatedSlots);
+
+            } catch (err) {
+                console.error('Error fetching slots:', err);
+                // Don't block UI, just empty slots
+            } finally {
                 setIsLoadingSlots(false);
-                return;
             }
+        };
 
-            const { openHour, closeHour } = operatingHours;
+        fetchAvailability();
+    }, [selectedCourtId, selectedDate, venue]);
 
-            // Get existing reservations for the selected date
-            const dateStr = format(selectedDate, 'yyyy-MM-dd');
-            const { data: reservations } = await supabase
-                .from('reservations')
-                .select('start_time, end_time')
-                .eq('court_id', selectedCourtId)
-                .gte('start_time', `${dateStr}T00:00:00`)
-                .lte('start_time', `${dateStr}T23:59:59`)
-                .in('status', ['pending', 'confirmed']);
-
-            // Generate time slots based on operating hours
-            const slots: TimeSlot[] = [];
-            const now = new Date();
-            const court = courts.find(c => c.id === selectedCourtId);
-
-            for (let hour = openHour; hour < closeHour; hour++) {
-                const timeString = `${hour.toString().padStart(2, '0')}:00`;
-                const slotDateTime = new Date(`${dateStr}T${timeString}:00`);
-
-                // Check if slot is in the past
-                const isPast = isBefore(slotDateTime, now);
-
-                // Check if slot conflicts with existing reservation
-                const isBooked = reservations?.some((res) => {
-                    const resStart = new Date(res.start_time).getHours();
-                    const resEnd = new Date(res.end_time).getHours();
-                    return hour >= resStart && hour < resEnd;
-                });
-
-                slots.push({
-                    time: timeString,
-                    available: !isPast && !isBooked,
-                    price: court?.hourly_rate,
-                });
-            }
-
-            setTimeSlots(slots);
-        } catch (err) {
-            console.error('Error fetching time slots:', err);
-        } finally {
-            setIsLoadingSlots(false);
-        }
-    };
-
-    const selectedCourt = courts.find(c => c.id === selectedCourtId);
-
-    // Calculate duration
-    let duration = 0;
-    if (selectedTime) {
-        if (!endTime) {
-            duration = 1;
-        } else {
-            const startHour = parseInt(selectedTime.split(':')[0]);
-            const endHour = parseInt(endTime.split(':')[0]);
-            duration = endHour - startHour + 1;
-        }
-    }
-
-    const totalPrice = selectedCourt ? selectedCourt.hourly_rate * duration : 0;
-
-    const formatTime = (time: string): string => {
-        const [hours] = time.split(':').map(Number);
-        const period = hours >= 12 ? 'PM' : 'AM';
-        const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-        return `${displayHours}:00 ${period}`;
-    };
-
-    const getEndTimeStr = (timeSlot: string): string => {
-        const [hours] = timeSlot.split(':').map(Number);
-        const endHours = hours + 1;
-        return `${endHours.toString().padStart(2, '0')}:00`;
-    };
-
-    const handleContinue = () => {
+    const handleContinue = async () => {
         if (!selectedCourtId || !selectedDate || !selectedTime || !selectedCourt || !venue) {
             Alert.alert('Error', 'Please select a court, date, and time');
             return;
@@ -301,7 +255,7 @@ export default function BookingScreen() {
         const targetEndSlot = endTime || selectedTime;
         const finalEndTime = getEndTimeStr(targetEndSlot);
 
-        // Check if all slots in the selected range are available
+        // Check if all slots in the selected range are available for the PRIMARY date
         const startIndex = timeSlots.findIndex(s => s.time === selectedTime);
         const endIndex = timeSlots.findIndex(s => s.time === targetEndSlot);
 
@@ -317,9 +271,75 @@ export default function BookingScreen() {
             }
         }
 
+        // RECURRENCE VALIDATION
+        if (recurrenceWeeks > 1) {
+            setIsValidatingRecurrence(true);
+            try {
+                // Loop through future weeks
+                for (let i = 1; i < recurrenceWeeks; i++) {
+                    const nextDate = addDays(selectedDate, i * 7);
+                    const nextDateStr = format(nextDate, 'yyyy-MM-dd');
+                    const [startH] = selectedTime.split(':').map(Number);
+                    const [endH] = finalEndTime.split(':').map(Number);
+
+                    // Check availability for this date & time range
+                    // We need to check if there are ANY overlapping reservations
+                    // Time range: startH:00 to endH:00
+
+                    const startISO = `${nextDateStr}T${selectedTime}:00`;
+                    // Note: endH could be 23 or 24 or 00? Logic in getEndTimeStr returns formatted hour.
+                    // If hour is 24, dateStr needs to be next day? 
+                    // To keep simple, let's assume same day logic for now or stick to checking overlap by hours
+
+                    const { data: conflicts } = await supabase
+                        .from('reservations')
+                        .select('id')
+                        .eq('court_id', selectedCourtId)
+                        .in('status', ['pending', 'confirmed', 'pending_payment', 'paid'])
+                        .or(`and(start_time.lte.${nextDateStr}T${selectedTime}:00,end_time.gt.${nextDateStr}T${selectedTime}:00),and(start_time.lt.${nextDateStr}T${finalEndTime}:00,end_time.gte.${nextDateStr}T${finalEndTime}:00)`);
+                    // This OR syntax is tricky. Better to use overlap logic:
+                    // (StartA <= EndB) and (EndA >= StartB)
+
+                    // Let's use a simpler query: get all reservations for that day and check overlap in code
+                    const { data: dailyReservations } = await supabase
+                        .from('reservations')
+                        .select('start_time, end_time')
+                        .eq('court_id', selectedCourtId)
+                        .gte('start_time', `${nextDateStr}T00:00:00`)
+                        .lte('start_time', `${nextDateStr}T23:59:59`)
+                        .in('status', ['pending', 'confirmed', 'pending_payment', 'paid']);
+
+                    const isBooked = dailyReservations?.some((res) => {
+                        const resStart = new Date(res.start_time).getHours();
+                        const resEnd = new Date(res.end_time).getHours();
+                        // Overlap check:
+                        // selected start < resEnd AND selected end > resStart
+                        // Let's use integer hours
+                        const selStart = startH;
+                        const selEnd = endH; // e.g., 20 to 21
+
+                        return selStart < resEnd && selEnd > resStart;
+                    });
+
+                    if (isBooked) {
+                        Alert.alert('Unavailable', `Week ${i + 1} (${format(nextDate, 'MMM d')}) is already booked. Please try a different time or date.`);
+                        setIsValidatingRecurrence(false);
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.error('Validation error', err);
+                Alert.alert('Error', 'Failed to validate recurring dates.');
+                setIsValidatingRecurrence(false);
+                return;
+            }
+            setIsValidatingRecurrence(false);
+        }
+
         // Pass discount info separately
+        // Multiply discount by weeks if applicable
         setDiscount(
-            discountResults.totalDiscount,
+            discountResults.totalDiscount * recurrenceWeeks, // Assuming discount is per session
             discountResults.discounts.length > 0 ? discountResults.discounts[0].type : undefined,
             discountResults.discounts.map((d: any) => d.name).join(', ')
         );
@@ -338,6 +358,7 @@ export default function BookingScreen() {
             duration: duration,
             numPlayers: numPlayers,
             notes: notes.trim() || undefined,
+            recurrenceWeeks: recurrenceWeeks,
         });
 
         // Navigate to checkout
@@ -436,6 +457,35 @@ export default function BookingScreen() {
                             </TouchableOpacity>
                         );
                     })}
+                </ScrollView>
+
+                {/* Repeat Booking Selection */}
+                <Text style={styles.sectionTitle}>Repeat Booking</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
+                    {[1, 4, 8].map((weeks) => (
+                        <TouchableOpacity
+                            key={weeks}
+                            style={[
+                                styles.courtChip, // Re-using chip style for consistency
+                                recurrenceWeeks === weeks && styles.courtChipSelected,
+                                { minWidth: 100 }
+                            ]}
+                            onPress={() => setRecurrenceWeeks(weeks)}
+                        >
+                            <Text style={[
+                                styles.courtChipText,
+                                recurrenceWeeks === weeks && styles.courtChipTextSelected,
+                            ]}>
+                                {weeks === 1 ? "Just Once" : `${weeks} Weeks`}
+                            </Text>
+                            <Text style={[
+                                styles.courtChipPrice,
+                                recurrenceWeeks === weeks && styles.courtChipTextSelected,
+                            ]}>
+                                {weeks === 1 ? "Single" : `Weekly`}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
                 </ScrollView>
 
                 {/* Time Selection */}
@@ -614,9 +664,18 @@ export default function BookingScreen() {
                             </Text>
                         </View>
 
+                        {recurrenceWeeks > 1 && (
+                            <View style={styles.summaryRow}>
+                                <Text style={styles.summaryLabel}>Recurrence</Text>
+                                <Text style={[styles.summaryValue, { color: Colors.dark.primary }]}>
+                                    {recurrenceWeeks} Weeks
+                                </Text>
+                            </View>
+                        )}
+
                         <View style={[styles.summaryRow, styles.totalRow]}>
                             <Text style={styles.totalLabel}>Total</Text>
-                            <Text style={styles.totalValue}>₱{totalPrice.toLocaleString()}</Text>
+                            <Text style={styles.totalValue}>₱{(totalPrice * recurrenceWeeks).toLocaleString()}</Text>
                         </View>
 
                         {discountResults.discounts.length > 0 && (
@@ -627,7 +686,7 @@ export default function BookingScreen() {
                                             styles.summaryLabel,
                                             { color: discount.isIncrease ? Colors.dark.error : Colors.dark.success }
                                         ]}>
-                                            {discount.name}
+                                            {discount.name} (per week)
                                         </Text>
                                         <Text style={[
                                             styles.summaryValue,
@@ -639,7 +698,7 @@ export default function BookingScreen() {
                                 ))}
                                 <View style={[styles.summaryRow, styles.finalPriceRow]}>
                                     <Text style={styles.finalPriceLabel}>Final Price</Text>
-                                    <Text style={styles.finalPriceValue}>₱{discountResults.finalPrice.toLocaleString()}</Text>
+                                    <Text style={styles.finalPriceValue}>₱{(discountResults.finalPrice * recurrenceWeeks).toLocaleString()}</Text>
                                 </View>
                             </View>
                         )}

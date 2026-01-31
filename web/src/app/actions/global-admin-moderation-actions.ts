@@ -15,7 +15,10 @@ async function verifyGlobalAdmin() {
     throw new Error('Not authenticated')
   }
 
-  const { data: roles } = await supabase
+  const { createServiceClient } = await import('@/lib/supabase/service')
+  // Use service client to bypass RLS when checking roles
+  const serviceClient = createServiceClient()
+  const { data: roles } = await serviceClient
     .from('user_roles')
     .select('role:roles(name)')
     .eq('user_id', user.id)
@@ -220,10 +223,10 @@ export async function resolveFlaggedReview(
       // Ban the user who created the review
       const { error: banError } = await supabase
         .from('profiles')
-        .update({ 
+        .update({
           is_banned: true,
           is_active: false,
-          metadata: { 
+          metadata: {
             banned_at: new Date().toISOString(),
             banned_by: user.id,
             ban_reason: notes || 'Content policy violation'

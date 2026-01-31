@@ -3,7 +3,7 @@ import {
     View,
     Text,
     StyleSheet,
-    SafeAreaView,
+
     ScrollView,
     Image,
     TouchableOpacity,
@@ -11,6 +11,7 @@ import {
     Dimensions,
     Linking,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Colors, Spacing, Typography, Radius } from '@/constants/Colors';

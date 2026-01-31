@@ -72,7 +72,8 @@ export function useQueue(courtId: string) {
       const result = await getQueueDetails(courtId)
 
       if (!result.success) {
-        setError(result.error || 'Failed to load queue')
+        // Use the specific error from the server if available
+        setError(result.error || 'Failed to load queue details')
         setQueue(null)
         return
       }

@@ -80,7 +80,12 @@ export async function getQueueDetails(courtId: string) {
       .limit(1)
       .single()
 
-    if (sessionError || !session) {
+    if (sessionError) {
+      console.error('[getQueueDetails] ❌ Database error:', sessionError)
+      return { success: false, error: `Database error: ${sessionError.message}` }
+    }
+
+    if (!session) {
       console.log('[getQueueDetails] ℹ️ No active queue found for court')
       return { success: true, queue: null }
     }
@@ -241,7 +246,7 @@ export async function joinQueue(sessionId: string) {
     console.log('[joinQueue] 🔍 Existing participants:', existingParticipants)
 
     const existingRecord = existingParticipants?.[0]
-    
+
     // If user has an existing record
     if (existingRecord) {
       // If they're still active (haven't left), they're already in queue
@@ -249,11 +254,11 @@ export async function joinQueue(sessionId: string) {
         console.log('[joinQueue] ⚠️ User already in queue (active):', existingRecord.id)
         return { success: false, error: 'You are already in this queue' }
       }
-      
+
       // Check rejoin cooldown (5 minutes)
       const timeSinceLeave = Date.now() - new Date(existingRecord.left_at).getTime()
       const cooldownMs = 5 * 60 * 1000 // 5 minutes
-      
+
       if (timeSinceLeave < cooldownMs) {
         const remainingSeconds = Math.ceil((cooldownMs - timeSinceLeave) / 1000)
         const minutes = Math.floor(remainingSeconds / 60)
@@ -264,7 +269,7 @@ export async function joinQueue(sessionId: string) {
           error: `Please wait ${minutes}m ${seconds}s before rejoining this queue`,
         }
       }
-      
+
       // If they previously left, reactivate their record instead of inserting new
       console.log('[joinQueue] 🔄 Reactivating previous participant record:', existingRecord.id)
       const { data: participant, error: updateError } = await supabase
@@ -304,12 +309,12 @@ export async function joinQueue(sessionId: string) {
 
     if (insertError || !participant) {
       console.error('[joinQueue] ❌ Failed to join queue:', insertError)
-      
+
       // Handle specific error cases
       if (insertError?.code === '23505') {
         return { success: false, error: 'You are already in this queue' }
       }
-      
+
       return { success: false, error: 'Failed to join queue' }
     }
 
@@ -764,9 +769,9 @@ export async function createQueueSession(data: {
       const dayHours = openingHours[dayOfWeek]
 
       if (!dayHours) {
-        return { 
-          success: false, 
-          error: `Venue is closed on ${dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1)}s` 
+        return {
+          success: false,
+          error: `Venue is closed on ${dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1)}s`
         }
       }
 
@@ -785,16 +790,16 @@ export async function createQueueSession(data: {
       const sessionEndMinutes = sessionEndHour * 60 + sessionEndMin
 
       if (sessionStartMinutes < venueOpenMinutes) {
-        return { 
-          success: false, 
-          error: `Session starts before venue opens (${dayHours.open}). Please choose a later start time.` 
+        return {
+          success: false,
+          error: `Session starts before venue opens (${dayHours.open}). Please choose a later start time.`
         }
       }
 
       if (sessionEndMinutes > venueCloseMinutes) {
-        return { 
-          success: false, 
-          error: `Session ends after venue closes (${dayHours.close}). Please choose an earlier end time or shorter duration.` 
+        return {
+          success: false,
+          error: `Session ends after venue closes (${dayHours.close}). Please choose an earlier end time or shorter duration.`
         }
       }
 
@@ -894,10 +899,10 @@ export async function createQueueSession(data: {
 
     if (insertError || !session) {
       console.error('[createQueueSession] ❌ Failed to create session:', insertError)
-      
+
       // Rollback: Delete the reservation if queue session creation fails
       await supabase.from('reservations').delete().eq('id', reservation.id)
-      
+
       return { success: false, error: insertError?.message || 'Failed to create queue session' }
     }
 

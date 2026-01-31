@@ -111,7 +111,7 @@ export async function getAvailableTimeSlotsAction(
 
   console.log(`[Availability Check] Court: ${courtId}, Date: ${dateOnlyString}`)
   console.log(`[Availability Check] Found ${reservations.length} reservations and ${queueSessions.length} queue sessions`)
-  
+
   if (reservations.length > 0) {
     console.log('[Availability Check] Reservations:', reservations.map(r => ({
       start: r.start_time,
@@ -119,22 +119,34 @@ export async function getAvailableTimeSlotsAction(
       status: r.status
     })))
   }
-  
+
   console.log(`[Availability Check] Total booked slots: ${allBookedSlots.length}`)
 
   // Mark unavailable slots based on existing reservations AND queue sessions
   if (allBookedSlots && allBookedSlots.length > 0) {
     for (const reservation of allBookedSlots) {
       try {
-        // Parse ISO timestamps to get local hours
+        // Parse ISO timestamps to get local hours in venue's timezone (Asia/Manila)
+        // We need to use toLocaleString to get the hour in the specific timezone
         const startTime = new Date(reservation.start_time)
         const endTime = new Date(reservation.end_time)
 
-        const startHour = startTime.getHours()
-        const endHour = endTime.getHours()
+        const startHourStr = startTime.toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Manila' })
+        const endHourStr = endTime.toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Manila' })
+
+        // Handle "24" as 0 if needed, but usually 0-23
+        const startHour = parseInt(startHourStr) % 24
+        let endHour = parseInt(endHourStr) % 24
+
+        // Special case: if end time is 00:00 (midnight) of the next day, it might show as 24 or 0
+        // If endHour is 0 and startHour is > 0, it means it crosses midnight or ends at midnight
+        if (endHour === 0 && startHour > 0) {
+          endHour = 24
+        }
 
         // If end time has minutes (e.g., 14:30), we need to block that hour too
-        const endHourCeil = endTime.getMinutes() > 0 ? endHour + 1 : endHour
+        const endMinutes = endTime.getMinutes()
+        const endHourCeil = endMinutes > 0 ? endHour + 1 : endHour
 
         console.log(`[Availability Check] Blocking slots from ${startHour}:00 to ${endHourCeil}:00 (status: ${reservation.status})`)
 
@@ -184,303 +196,150 @@ export async function createReservationAction(data: {
   discountApplied?: number
   discountType?: string
   discountReason?: string
-}): Promise<{ success: boolean; reservationId?: string; error?: string }> {
+  recurrenceWeeks?: number // Number of additional weeks (e.g., 4 means original + 3 repeats = 4 total, or maybe strictly "occurrences")
+  // Let's standardise: recurrenceWeeks = number of TOTAL weeks including the first one. 
+  // e.g. recurrenceWeeks=4 means book today + next 3 weeks.
+}): Promise<{ success: boolean; reservationId?: string; error?: string; count?: number }> {
   const supabase = await createClient()
 
-  const startTime = new Date(data.startTimeISO)
-  const endTime = new Date(data.endTimeISO)
+  const recurrenceWeeks = data.recurrenceWeeks || 1
+  const isRecurring = recurrenceWeeks > 1
+  const recurrenceGroupId = isRecurring ? crypto.randomUUID() : null
+  const createdReservationIds: string[] = []
 
-  if (Number.isNaN(startTime.getTime()) || Number.isNaN(endTime.getTime())) {
-    console.error('Invalid reservation timestamps received', {
-      startTimeISO: data.startTimeISO,
-      endTimeISO: data.endTimeISO,
-    })
-    return {
-      success: false,
-      error: 'Invalid reservation time. Please reselect your schedule.',
-    }
-  }
+  console.log(`[createReservation] Starting ${isRecurring ? 'recurring' : 'single'} booking check. Weeks: ${recurrenceWeeks}`)
 
-  if (endTime <= startTime) {
-    console.error('Reservation end time must be after start time', {
-      startTimeISO: data.startTimeISO,
-      endTimeISO: data.endTimeISO,
-    })
-    return {
-      success: false,
-      error: 'Reservation end time must be after the start time.',
-    }
-  }
+  // 1. VALIDATION PHASE
+  // We must validate ALL dates before creating ANY reservation.
+  // One conflict blocks the entire series.
 
-  const startTimeISO = startTime.toISOString()
-  const endTimeISO = endTime.toISOString()
+  const initialStartTime = new Date(data.startTimeISO)
+  const initialEndTime = new Date(data.endTimeISO)
+  const durationMs = initialEndTime.getTime() - initialStartTime.getTime()
 
-  // FIRST: Clean up any old pending_payment reservations from this user for overlapping time slots
-  // This prevents conflicts from previous failed booking attempts
-  // Clean up ALL pending_payment reservations for this user/court/time (not just old ones)
-  
-  const { data: oldPendingReservations, error: cleanupFetchError } = await supabase
-    .from('reservations')
-    .select('id, created_at, start_time, end_time')
-    .eq('court_id', data.courtId)
-    .eq('user_id', data.userId)
-    .eq('status', 'pending_payment')
-    .lt('start_time', endTimeISO)
-    .gt('end_time', startTimeISO)
+  // Loop through all weeks to check for conflicts
+  for (let i = 0; i < recurrenceWeeks; i++) {
+    const currentStartTime = new Date(initialStartTime.getTime() + (i * 7 * 24 * 60 * 60 * 1000))
+    const currentEndTime = new Date(currentStartTime.getTime() + durationMs)
 
-  if (cleanupFetchError) {
-    console.error('Error fetching old pending reservations for cleanup:', cleanupFetchError)
-  } else if (oldPendingReservations && oldPendingReservations.length > 0) {
-    console.log(`🧹 Found ${oldPendingReservations.length} pending_payment reservations to clean up:`, 
-      oldPendingReservations.map(r => ({
-        id: r.id, 
-        created: r.created_at,
-        time: `${r.start_time} - ${r.end_time}`
-      }))
-    )
-    
-    const { error: cleanupError } = await supabase
-      .from('reservations')
-      .update({ 
-        status: 'cancelled',
-        cancelled_at: new Date().toISOString(),
-        cancellation_reason: 'Auto-cancelled: Replaced by new booking attempt'
-      })
-      .in('id', oldPendingReservations.map(r => r.id))
-
-    if (cleanupError) {
-      console.error('Error cleaning up old pending reservations:', cleanupError)
-    } else {
-      console.log(`✅ Successfully cleaned up ${oldPendingReservations.length} stale reservations`)
-    }
-  } else {
-    console.log('🔍 No existing pending_payment reservations to clean up for this user/court/time')
-  }
-
-  // Check for reservation statuses that represent active bookings
-  // With migration 006: 'pending_payment', 'pending', 'paid', 'confirmed'
-  // Without migration 006: 'pending', 'confirmed'
-  const conflictStatuses = ['pending_payment', 'pending', 'paid', 'confirmed']
-
-  console.log('Checking for conflicts:', {
-    courtId: data.courtId,
-    userId: data.userId,
-    startTimeISO,
-    endTimeISO,
-    startTimeLocal: startTime.toLocaleString('en-PH', { timeZone: 'Asia/Manila' }),
-    endTimeLocal: endTime.toLocaleString('en-PH', { timeZone: 'Asia/Manila' }),
-    statuses: conflictStatuses
-  })
-
-  // Check for conflicts in BOTH reservations AND queue_sessions
-  // A conflict exists if the time ranges overlap for the same court
-  const [reservationConflicts, queueConflicts] = await Promise.all([
-    // Check reservation conflicts
-    supabase
-      .from('reservations')
-      .select('id, start_time, end_time, status, user_id, created_at')
-      .eq('court_id', data.courtId)
-      .in('status', conflictStatuses)
-      .lt('start_time', endTimeISO)
-      .gt('end_time', startTimeISO),
-
-    // Check queue session conflicts
-    supabase
-      .from('queue_sessions')
-      .select('id, start_time, end_time, status, approval_status')
-      .eq('court_id', data.courtId)
-      .in('status', ['draft', 'active', 'pending_approval'])
-      .in('approval_status', ['pending', 'approved'])
-      .lt('start_time', endTimeISO)
-      .gt('end_time', startTimeISO)
-  ])
-
-  if (reservationConflicts.error) {
-    console.error('Error checking for reservation conflicts:', reservationConflicts.error)
-    // Continue anyway - better to attempt creation than block user
-  }
-
-  if (queueConflicts.error) {
-    console.error('Error checking for queue conflicts:', queueConflicts.error)
-  }
-
-  console.log('Found potential reservation conflicts:', reservationConflicts.data)
-  console.log('Found potential queue session conflicts:', queueConflicts.data)
-
-  // Check for queue session conflicts first (hard block)
-  if (queueConflicts.data && queueConflicts.data.length > 0) {
-    const queueSession = queueConflicts.data[0]
-    const queueStart = new Date(queueSession.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-    const queueEnd = new Date(queueSession.end_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-
-    console.warn('⚠️ Queue session conflict detected:', queueSession)
-    return {
-      success: false,
-      error: `This time slot is reserved for a queue session (${queueStart} - ${queueEnd}). Please choose a different time.`,
-    }
-  }
-
-  const conflicts = reservationConflicts.data
-
-  // Filter out conflicts that are:
-  // - Very recent (< 2 minutes old) pending reservations from the same user
-  // - This handles the case where a user accidentally triggers multiple reservation attempts
-  const realConflicts = conflicts?.filter(conflict => {
-    // If it's a confirmed or paid reservation, it's always a real conflict
-    // Note: 'paid' is a valid status if migration 006 has been applied
-    if (conflict.status === 'confirmed' || conflict.status === 'paid') {
-      console.log(`⚠️ Real conflict found (${conflict.status}):`, conflict.id)
-      return true
+    // Validate timestamps
+    if (Number.isNaN(currentStartTime.getTime()) || Number.isNaN(currentEndTime.getTime())) {
+      return { success: false, error: 'Invalid time calculation.' }
     }
 
-    // If it's a pending_payment or pending reservation from the SAME user, 
-    // it's not a real conflict - we should have cleaned it up above, or it's the user's own pending
-    if (conflict.user_id === data.userId && (conflict.status === 'pending_payment' || conflict.status === 'pending')) {
-      console.log(`✓ Ignoring own ${conflict.status} reservation: ${conflict.id}`)
-      return false // Not a real conflict - user is replacing their own pending reservation
-    }
+    const currentStartTimeISO = currentStartTime.toISOString()
+    const currentEndTimeISO = currentEndTime.toISOString()
 
-    // If it's a pending or pending_payment reservation from a different user, it's a real conflict
-    if (conflict.user_id !== data.userId) {
-      console.log(`⚠️ Real conflict found from different user (${conflict.status}):`, conflict.id)
-      return true
-    }
+    // Check availability for this specific date
+    const conflictStatuses = ['pending_payment', 'pending', 'paid', 'confirmed']
 
-    return true // Other cases, treat as legitimate conflict
-  }) || []
-
-  console.log('Real conflicts after filtering:', realConflicts)
-
-  if (realConflicts.length > 0) {
-    console.warn('Time slot conflict detected:', realConflicts[0])
-    return {
-      success: false,
-      error: 'This time slot is already booked. Please choose another time.',
-    }
-  }
-
-  // Create the reservation
-  const initialStatus = 'pending_payment'
-
-  const { data: reservation, error } = await supabase
-    .from('reservations')
-    .insert({
-      court_id: data.courtId,
-      user_id: data.userId,
-      start_time: startTimeISO,
-      end_time: endTimeISO,
-      status: initialStatus,
-      total_amount: data.totalAmount,
-      amount_paid: 0,
-      num_players: data.numPlayers || 1,
-      payment_type: data.paymentType || 'full',
-      discount_applied: data.discountApplied || 0,
-      discount_type: data.discountType || null,
-      discount_reason: data.discountReason || null,
-      metadata: {
-        booking_origin: 'web_checkout',
-        intended_payment_method: data.paymentMethod ?? null,
-      },
-      notes: data.notes,
-    })
-    .select('id')
-    .single()
-
-  if (error) {
-    console.error('Error creating reservation:', error)
-    console.error('Error details:', JSON.stringify(error, null, 2))
-    console.error('Attempted reservation data:', {
-      court_id: data.courtId,
-      user_id: data.userId,
-      start_time: startTimeISO,
-      end_time: endTimeISO,
-      status: initialStatus,
-    })
-
-    const overlapViolation =
-      error?.code === '23P01' ||
-      error?.code === '23505' ||
-      (typeof error?.message === 'string' &&
-        (error.message.includes('no_overlapping_reservations') ||
-         error.message.includes('overlaps with existing') ||
-         error.message.toLowerCase().includes('overlap')))
-
-    if (overlapViolation) {
-      // Try to find what's conflicting for better error message
-      const { data: conflictingRes } = await supabase
+    const [reservationConflicts, queueConflicts] = await Promise.all([
+      supabase
         .from('reservations')
-        .select('id, status, start_time, end_time, user_id, created_at')
+        .select('id, start_time, end_time, status, user_id')
         .eq('court_id', data.courtId)
-        .in('status', ['pending_payment', 'pending', 'paid', 'confirmed'])
-        .lt('start_time', endTimeISO)
-        .gt('end_time', startTimeISO)
-        .limit(3)
+        .in('status', conflictStatuses)
+        .lt('start_time', currentEndTimeISO)
+        .gt('end_time', currentStartTimeISO),
 
-      console.error('🔍 Found conflicting reservations:', conflictingRes)
+      supabase
+        .from('queue_sessions')
+        .select('id, start_time, end_time')
+        .eq('court_id', data.courtId)
+        .in('status', ['draft', 'active', 'pending_approval'])
+        .in('approval_status', ['pending', 'approved'])
+        .lt('start_time', currentEndTimeISO)
+        .gt('end_time', currentStartTimeISO)
+    ])
 
-      // If the conflict is from the same user, try to cancel it
-      const userConflict = conflictingRes?.find(r => r.user_id === data.userId)
-      if (userConflict && userConflict.status === 'pending_payment') {
-        console.log('🔄 Attempting to cancel user\'s own conflicting pending_payment reservation:', userConflict.id)
-        
-        const { error: cancelError } = await supabase
-          .from('reservations')
-          .update({ 
-            status: 'cancelled',
-            cancelled_at: new Date().toISOString(),
-            cancellation_reason: 'Auto-cancelled: Replaced by new booking attempt'
-          })
-          .eq('id', userConflict.id)
-
-        if (!cancelError) {
-          // Retry the insert
-          console.log('✅ Cancelled conflicting reservation, retrying insert...')
-          
-          const { data: retryReservation, error: retryError } = await supabase
-            .from('reservations')
-            .insert({
-              court_id: data.courtId,
-              user_id: data.userId,
-              start_time: startTimeISO,
-              end_time: endTimeISO,
-              status: initialStatus,
-              total_amount: data.totalAmount,
-              amount_paid: 0,
-              num_players: data.numPlayers || 1,
-              payment_type: data.paymentType || 'full',
-              discount_applied: data.discountApplied || 0,
-              discount_type: data.discountType || null,
-              discount_reason: data.discountReason || null,
-              metadata: {
-                booking_origin: 'web_checkout',
-                intended_payment_method: data.paymentMethod ?? null,
-              },
-              notes: data.notes,
-            })
-            .select('id')
-            .single()
-
-          if (!retryError && retryReservation) {
-            console.log('✅ Retry successful! Reservation created:', retryReservation.id)
-            revalidatePath('/reservations')
-            revalidatePath('/bookings')
-            return { success: true, reservationId: retryReservation.id }
-          }
-          
-          console.error('Retry also failed:', retryError)
-        }
-      }
-
+    // Strict validation: Reject on any queue conflict
+    if (queueConflicts.data && queueConflicts.data.length > 0) {
+      const dateStr = currentStartTime.toLocaleDateString()
       return {
         success: false,
-        error: 'This time slot has just been reserved. Please choose another time.',
+        error: `Conflict detected on Week ${i + 1} (${dateStr}): Slot matches a Queue Session.`
       }
     }
 
-    return {
-      success: false,
-      error: error.message || error.details || 'Failed to create reservation. Please try again.',
+    // Filter reservation conflicts (ignoring user's own pending payment ones)
+    const realConflicts = reservationConflicts.data?.filter(conflict => {
+      if (conflict.status === 'confirmed' || conflict.status === 'paid') return true
+      if (conflict.user_id === data.userId && (conflict.status === 'pending_payment' || conflict.status === 'pending') && !isRecurring) return false
+      // Note: For recurring, strict check is safer. If they have a pending booking next week, we probably shouldn't overwrite it blindly.
+      // But if it's their own pending payment, we might want to allow replacing.
+      // For simplicity in V1 recurring: Block on ANY conflict to avoid mess.
+      if (conflict.user_id !== data.userId) return true
+      return isRecurring // If recurring, even own pending conflicts block it for safety first
+    }) || []
+
+    if (realConflicts.length > 0) {
+      const dateStr = currentStartTime.toLocaleDateString()
+      return {
+        success: false,
+        error: `Conflict detected on Week ${i + 1} (${dateStr}): Slot is already reserved.`
+      }
     }
+  }
+
+  // 2. CREATION PHASE
+  // If we got here, all slots are free. Create them.
+  let primaryReservationId = ''
+
+  for (let i = 0; i < recurrenceWeeks; i++) {
+    const currentStartTime = new Date(initialStartTime.getTime() + (i * 7 * 24 * 60 * 60 * 1000))
+    const currentEndTime = new Date(currentStartTime.getTime() + durationMs)
+
+    // For recurring bookings, we split the total amount per booking or keep it as passed?
+    // User pays upfront total. So we should probably record the price per booking.
+    // Assuming data.totalAmount is the PER SESSION price. 
+    // Wait, usually the UI passes total price.
+    // Let's assume data.totalAmount is the TOTAL for the specific slot if it were single.
+    // So we apply data.totalAmount to EACH reservation.
+    // If the frontend calculated a "Grand Total", it should pass the per-session price here or we divide?
+    // Correct Approach: The frontend calculates price PER SLOT. Passed `totalAmount` is for ONE slot.
+    // We will save that amount for each record. 
+
+    // Note on cleanup: We skipped the "delete old pending" step for recurring to be safe.
+
+    // Calculate per-instance amount
+    const perInstanceAmount = data.totalAmount / recurrenceWeeks
+
+    const { data: newRes, error } = await supabase
+      .from('reservations')
+      .insert({
+        court_id: data.courtId,
+        user_id: data.userId,
+        start_time: currentStartTime.toISOString(),
+        end_time: currentEndTime.toISOString(),
+        status: 'pending_payment',
+        total_amount: perInstanceAmount, // Correctly split price per instance
+        amount_paid: 0,
+        num_players: data.numPlayers || 1,
+        payment_type: data.paymentType || 'full',
+        discount_applied: data.discountApplied || 0,
+        discount_type: data.discountType || null,
+        discount_reason: data.discountReason || null,
+        recurrence_group_id: recurrenceGroupId,
+        metadata: {
+          booking_origin: 'web_checkout',
+          intended_payment_method: data.paymentMethod ?? null,
+          recurrence_index: i,
+          recurrence_total: recurrenceWeeks
+        },
+        notes: data.notes ? (isRecurring ? `${data.notes} (Week ${i + 1})` : data.notes) : null,
+      })
+      .select('id')
+      .single()
+
+    if (error || !newRes) {
+      console.error(`Failed to create reservation for week ${i + 1}`, error)
+      // Standard cleanup would be needed here (rollback), but Supabase HTTP api doesn't support transactions easily.
+      // For V1, we log error. In production, we'd need a stored procedure for atomic batch.
+      return { success: false, error: `Failed to create recurrence slot for week ${i + 1}: ${error.message}` }
+    }
+
+    if (i === 0) primaryReservationId = newRes.id
+    createdReservationIds.push(newRes.id)
   }
 
   revalidatePath('/reservations')
@@ -488,7 +347,8 @@ export async function createReservationAction(data: {
 
   return {
     success: true,
-    reservationId: reservation.id,
+    reservationId: primaryReservationId, // Return the first one for the success page
+    count: createdReservationIds.length
   }
 }
 

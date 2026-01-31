@@ -463,6 +463,78 @@ async function markReservationPaidAndConfirmed({
 
   // Then, mark as 'confirmed' to finalize the booking
   console.log('[markReservationPaidAndConfirmed] 📝 Step 2: Marking reservation as CONFIRMED')
+
+  // Check for recurrence group (Bulk Payment Confirmation)
+  const recurrenceGroupId = payment.metadata?.recurrence_group_id
+
+  if (recurrenceGroupId) {
+    console.log('[markReservationPaidAndConfirmed] 🔄 Bulk Confirmation: Found recurrence group:', recurrenceGroupId)
+
+    // 1. Fetch ALL pending reservations in this group
+    const { data: groupReservations, error: groupFetchError } = await supabase
+      .from('reservations')
+      .select('id, status, total_amount, metadata')
+      .eq('recurrence_group_id', recurrenceGroupId)
+      .in('status', ['pending', 'pending_payment', 'paid']) // Include 'paid' just in case
+
+    if (groupFetchError) {
+      console.error('[markReservationPaidAndConfirmed] ❌ Failed to fetch recurrence group:', groupFetchError)
+      // Fallback to single confirmation if group fetch fails
+    } else if (groupReservations && groupReservations.length > 0) {
+      console.log('[markReservationPaidAndConfirmed] 🔄 Confirming group reservations:', groupReservations.length)
+
+      const confirmMetadata = {
+        payment_confirmed_event: {
+          eventId,
+          eventType,
+          confirmedAt: nowISO,
+          payment_id: payment.id,
+          is_bulk_payment: true
+        }
+      }
+
+      // 2. Mark ALL as confirmed and paid
+      // We calculate per-reservation payment amount (assuming even split or full coverage)
+      // Actually, since it's confirmed, we just mark them confirmed.
+
+      const updates = groupReservations.map(res => ({
+        id: res.id,
+        status: 'confirmed',
+        amount_paid: res.total_amount, // Mark as fully paid
+        updated_at: nowISO,
+        metadata: {
+          ...(res.metadata || {}),
+          ...confirmMetadata,
+          payment_status_history: buildStatusHistory(res.metadata, 'confirmed')
+        }
+      }))
+
+      for (const update of updates) {
+        const { error: updateError } = await supabase
+          .from('reservations')
+          .update({
+            status: update.status,
+            amount_paid: update.amount_paid,
+            updated_at: update.updated_at,
+            metadata: update.metadata
+          })
+          .eq('id', update.id)
+
+        if (updateError) {
+          console.error(`[markReservationPaidAndConfirmed] ❌ Failed to confirm group reservation ${update.id}:`, updateError)
+        } else {
+          console.log(`[markReservationPaidAndConfirmed] ✅ Confirmed group reservation ${update.id}`)
+        }
+      }
+
+      // Update the main reservationRecord reference to the confirmed version (for notifications)
+      reservationRecord.status = 'confirmed'
+      return // Exit here as we handled everything
+    }
+  }
+
+  // STANDARD SINGLE CONFIRMATION FALLBACK
+
   const confirmMetadata = {
     ...(reservationRecord.metadata || {}),
     payment_confirmed_event: {
@@ -473,13 +545,6 @@ async function markReservationPaidAndConfirmed({
     },
     payment_status_history: buildStatusHistory(reservationRecord.metadata, 'confirmed'),
   }
-
-  console.log('[markReservationPaidAndConfirmed] Attempting to update status to "confirmed":', {
-    reservationId,
-    currentStatus: reservationRecord.status,
-    targetStatus: 'confirmed',
-    amount: payment.amount,
-  })
 
   const { data: confirmedReservation, error: confirmError } = await supabase
     .from('reservations')
@@ -548,7 +613,7 @@ async function markReservationPaidAndConfirmed({
     if (fullReservation && fullReservation.user_id) {
       const courtData = Array.isArray(fullReservation.courts) ? fullReservation.courts[0] : fullReservation.courts
       const venueData = courtData?.venues ? (Array.isArray(courtData.venues) ? courtData.venues[0] : courtData.venues) : null
-      
+
       const venueName = venueData?.name || 'Venue'
       const courtName = courtData?.name || 'Court'
       const bookingDate = new Date(fullReservation.start_time).toLocaleDateString('en-US', {
@@ -1124,16 +1189,16 @@ async function handleRefundEvent(data: any, eventType: string) {
   })
 
   const supabase = createServiceClient()
-  
+
   const refundId = data?.id
   const paymentId = data?.attributes?.payment_id
   const rallioRefundId = data?.attributes?.metadata?.rallio_refund_id
   const amount = data?.attributes?.amount
   const status = data?.attributes?.status
-  
+
   // Find the refund record in our database
   let refundRecord: any = null
-  
+
   // First try by Rallio refund ID from metadata
   if (rallioRefundId) {
     const { data: found } = await supabase
@@ -1143,7 +1208,7 @@ async function handleRefundEvent(data: any, eventType: string) {
       .single()
     refundRecord = found
   }
-  
+
   // Then try by external ID
   if (!refundRecord && refundId) {
     const { data: found } = await supabase
@@ -1153,7 +1218,7 @@ async function handleRefundEvent(data: any, eventType: string) {
       .single()
     refundRecord = found
   }
-  
+
   // Finally try by PayMongo payment ID
   if (!refundRecord && paymentId) {
     const { data: found } = await supabase
@@ -1166,20 +1231,20 @@ async function handleRefundEvent(data: any, eventType: string) {
       .single()
     refundRecord = found
   }
-  
+
   if (!refundRecord) {
     console.error('[handleRefundEvent] ❌ Refund record not found in database')
     return
   }
-  
+
   console.log('[handleRefundEvent] ✅ Found refund record:', {
     id: refundRecord.id,
     currentStatus: refundRecord.status,
     reservationId: refundRecord.reservation_id,
   })
-  
+
   const processedAt = new Date().toISOString()
-  
+
   if (eventType === 'refund.succeeded') {
     // Update refund record as succeeded
     await supabase
@@ -1197,11 +1262,11 @@ async function handleRefundEvent(data: any, eventType: string) {
         }
       })
       .eq('id', refundRecord.id)
-    
+
     // Update reservation status to refunded
     const reservationRecord = normalizeReservation(refundRecord.reservations)
     const reservationMetadata = reservationRecord?.metadata || {}
-    
+
     await supabase
       .from('reservations')
       .update({
@@ -1214,7 +1279,7 @@ async function handleRefundEvent(data: any, eventType: string) {
         }
       })
       .eq('id', refundRecord.reservation_id)
-    
+
     // Create notification for user
     const { createNotification } = await import('@/lib/notifications')
     await createNotification({
@@ -1228,9 +1293,9 @@ async function handleRefundEvent(data: any, eventType: string) {
         amount: amount,
       },
     })
-    
+
     console.log('[handleRefundEvent] ✅ Refund succeeded:', refundRecord.id)
-    
+
   } else if (eventType === 'refund.failed') {
     // Update refund record as failed
     await supabase
@@ -1252,7 +1317,7 @@ async function handleRefundEvent(data: any, eventType: string) {
         }
       })
       .eq('id', refundRecord.id)
-    
+
     // Create notification for user about failed refund
     const { createNotification } = await import('@/lib/notifications')
     await createNotification({
@@ -1266,10 +1331,10 @@ async function handleRefundEvent(data: any, eventType: string) {
         error: 'Payment provider could not process the refund',
       },
     })
-    
+
     console.log('[handleRefundEvent] ❌ Refund failed:', refundRecord.id)
   }
-  
+
   try {
     revalidatePath('/reservations')
     revalidatePath('/bookings')

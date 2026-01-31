@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createQueueSession } from '@/app/actions/queue-actions'
-import { getCourtAvailabilityTimes } from '@/app/actions/court-admin-availability-actions'
+import { getAvailableTimeSlotsAction, type TimeSlot } from '@/app/actions/reservations'
 import { createClient } from '@/lib/supabase/client'
 import { Calendar, Clock, Users, DollarSign, Settings, Loader2, ArrowLeft, CheckCircle, Info, TrendingUp, Target } from 'lucide-react'
 import Link from 'next/link'
+import { SessionTimePicker } from './session-time-picker'
 
 interface Venue {
   id: string
@@ -25,7 +26,7 @@ interface Court {
 export function CreateSessionForm() {
   const router = useRouter()
   const supabase = createClient()
-  
+
   // Form state
   const [courtId, setCourtId] = useState('')
   const [startDate, setStartDate] = useState('')
@@ -40,35 +41,18 @@ export function CreateSessionForm() {
   // UI state
   const [venues, setVenues] = useState<Venue[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingSlots, setIsLoadingSlots] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [courtAvailability, setCourtAvailability] = useState<any>(null)
-  const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([])
+  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
 
-  // Generate hourly time options (6 AM to 11 PM) - will be filtered by court availability
-  const allTimeOptions = Array.from({ length: 18 }, (_, i) => {
-    const hour = i + 6 // Start from 6 AM
-    return `${hour.toString().padStart(2, '0')}:00`
-  })
-
-  const timeOptions = availableTimeSlots.length > 0 ? availableTimeSlots : allTimeOptions
-
-  // Load venues and courts
+  // Load venues and courts on mount
   useEffect(() => {
     loadVenuesAndCourts()
-    
+
     // Set default date to today
     const now = new Date()
     setStartDate(now.toISOString().split('T')[0])
-    
-    // Set default time to next hour
-    const currentHour = now.getHours()
-    const nextHour = currentHour + 1
-    if (nextHour >= 6 && nextHour <= 23) {
-      setStartTime(`${nextHour.toString().padStart(2, '0')}:00`)
-    } else {
-      setStartTime('10:00') // Default to 10 AM if outside range
-    }
   }, [])
 
   const loadVenuesAndCourts = async () => {
@@ -94,8 +78,6 @@ export function CreateSessionForm() {
         .order('name')
 
       if (venuesError) throw venuesError
-
-      console.log('🔍 [CreateSession] Loaded venues:', venuesData)
       setVenues(venuesData || [])
     } catch (err: any) {
       setError(err.message || 'Failed to load venues')
@@ -104,66 +86,28 @@ export function CreateSessionForm() {
     }
   }
 
-  const loadCourtAvailability = async () => {
-    try {
-      const result = await getCourtAvailabilityTimes(courtId)
-      
-      if (!result.success) {
-        console.warn('Failed to load court availability:', result.error)
-        setAvailableTimeSlots(allTimeOptions) // Fallback to all times
-        return
-      }
-
-      setCourtAvailability(result)
-      
-      // If we have opening hours, filter time slots based on selected date
-      if (result.openingHours && startDate) {
-        const date = new Date(startDate)
-        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
-        const dayName = dayNames[date.getDay()]
-        const dayHours = result.openingHours[dayName]
-        
-        if (!dayHours || !dayHours.open) {
-          // Venue is closed on this day
-          setAvailableTimeSlots([])
-          setError(`${result.venueName} is closed on ${dayName}s`)
-          return
-        }
-
-        // Parse opening and closing times
-        const [openHour] = dayHours.open.split(':').map(Number)
-        const [closeHour] = dayHours.close.split(':').map(Number)
-        
-        // Generate available time slots within opening hours
-        const slots: string[] = []
-        for (let hour = openHour; hour < closeHour; hour++) {
-          slots.push(`${hour.toString().padStart(2, '0')}:00`)
-        }
-        
-        setAvailableTimeSlots(slots)
-        
-        // Reset time if current selection is outside available hours
-        if (startTime && !slots.includes(startTime)) {
-          if (slots.length > 0) {
-            setStartTime(slots[0])
-          } else {
-            setStartTime('')
-          }
-        }
-        
-        // Clear error if date is valid
-        if (error?.includes('closed')) {
-          setError(null)
-        }
-      } else {
-        setAvailableTimeSlots(allTimeOptions)
-      }
-      
-    } catch (err: any) {
-      console.error('Error loading court availability:', err)
-      setAvailableTimeSlots(allTimeOptions) // Fallback
+  // Load time slots when court or date changes
+  useEffect(() => {
+    if (!courtId || !startDate) {
+      setTimeSlots([])
+      return
     }
-  }
+
+    const loadSlots = async () => {
+      setIsLoadingSlots(true)
+      try {
+        const slots = await getAvailableTimeSlotsAction(courtId, startDate)
+        setTimeSlots(slots)
+      } catch (err) {
+        console.error('Error loading time slots:', err)
+        setError('Failed to load available time slots')
+      } finally {
+        setIsLoadingSlots(false)
+      }
+    }
+
+    loadSlots()
+  }, [courtId, startDate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -171,15 +115,14 @@ export function CreateSessionForm() {
     setIsSubmitting(true)
 
     try {
+      if (!courtId) throw new Error('Please select a court')
+      if (!startTime) throw new Error('Please select a start time')
+      if (!startDate) throw new Error('Please select a date')
+
       // Combine date and time
       const startDateTime = new Date(`${startDate}T${startTime}`)
       const endDateTime = new Date(startDateTime)
       endDateTime.setHours(endDateTime.getHours() + duration)
-
-      // Validate
-      if (!courtId) {
-        throw new Error('Please select a court')
-      }
 
       if (startDateTime < new Date()) {
         throw new Error('Start time cannot be in the past')
@@ -227,8 +170,8 @@ export function CreateSessionForm() {
   const selectedCourt = venues
     .flatMap(v => v.courts || [])
     .find(c => c.id === courtId)
-  
-  const selectedVenue = venues.find(v => 
+
+  const selectedVenue = venues.find(v =>
     v.courts?.some(c => c.id === courtId)
   )
 
@@ -237,486 +180,381 @@ export function CreateSessionForm() {
   const estimatedRevenue = maxPlayers * estimatedGamesPerPlayer * costPerGame
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Main Form */}
-      <div className="lg:col-span-2 space-y-6">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Error Alert */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start gap-2">
-              <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {/* Info Banner */}
-          <div className="bg-gradient-to-r from-primary/10 to-blue-50 border border-primary/20 rounded-xl p-4">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-                <Info className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-1">Queue System Overview</h4>
-                <p className="text-sm text-gray-700 leading-relaxed">
-                  Create a walk-in session where players can join, play multiple games with automatic rotation, 
-                  and pay based on games played. You'll manage match assignments and keep games flowing smoothly.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Court Selection */}
-          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-            <Calendar className="w-5 h-5 text-blue-600" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-gray-900">Court Selection</h3>
-            <p className="text-sm text-gray-600">Choose the venue and court</p>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Select Court <span className="text-red-500">*</span>
-          </label>
-          <select
-            value={courtId}
-            onChange={(e) => setCourtId(e.target.value)}
-            required
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-          >
-            <option value="">Choose a court...</option>
-            {venues.map((venue) => (
-              <optgroup key={venue.id} label={venue.name}>
-                {venue.courts?.map((court: Court) => (
-                  <option key={court.id} value={court.id}>
-                    {court.name}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-          </div>
-          </div>
-
-          {/* Schedule */}
-          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                <Clock className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">Schedule</h3>
-                <p className="text-sm text-gray-600">Set the session date and time</p>
-              </div>
-            </div>
-
-            {courtAvailability && availableTimeSlots.length === 0 && (
-              <div className="mb-4 bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg flex items-start gap-2">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main Form */}
+        <div className="lg:col-span-2 space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Error Alert */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start gap-2">
                 <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-medium">Venue Closed</p>
-                  <p className="text-sm">The selected venue is closed on this date. Please choose a different date.</p>
-                </div>
+                <span>{error}</span>
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Date <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              required
-              min={new Date().toISOString().split('T')[0]}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Start Time <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
-              required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-            >
-              <option value="">Select time</option>
-              {timeOptions.map((time) => {
-                const hour = parseInt(time.split(':')[0])
-                const period = hour >= 12 ? 'PM' : 'AM'
-                const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour
-                return (
-                  <option key={time} value={time}>
-                    {displayHour}:00 {period}
-                  </option>
-                )
-              })}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Duration (hours) <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={duration}
-              onChange={(e) => setDuration(Number(e.target.value))}
-              required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-            >
-              <option value={1}>1 hour</option>
-              <option value={2}>2 hours</option>
-              <option value={3}>3 hours</option>
-              <option value={4}>4 hours</option>
-              <option value={5}>5 hours</option>
-              <option value={6}>6 hours</option>
-            </select>
+            {/* Info Banner */}
+            <div className="bg-gradient-to-r from-primary/10 to-blue-50 border border-primary/20 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Info className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-1">Queue System Overview</h4>
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    Create a walk-in session where players can join, play multiple games with automatic rotation,
+                    and pay based on games played. You'll manage match assignments and keep games flowing smoothly.
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Game Settings */}
-          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                <Settings className="w-5 h-5 text-purple-600" />
+            {/* Court Selection */}
+            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <Calendar className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Court Selection</h3>
+                  <p className="text-sm text-gray-600">Choose the venue and court</p>
+                </div>
               </div>
+
               <div>
-                <h3 className="font-semibold text-gray-900">Game Settings</h3>
-                <p className="text-sm text-gray-600">Configure game format and mode</p>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Court <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={courtId}
+                  onChange={(e) => setCourtId(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                >
+                  <option value="">Choose a court...</option>
+                  {venues.map((venue) => (
+                    <optgroup key={venue.id} label={venue.name}>
+                      {venue.courts?.map((court: Court) => (
+                        <option key={court.id} value={court.id}>
+                          {court.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
               </div>
             </div>
 
-            <div className="space-y-4">
-          {/* Mode */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Session Mode <span className="text-red-500">*</span>
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setMode('casual')}
-                className={`p-4 border-2 rounded-lg text-left transition-all ${
-                  mode === 'casual'
-                    ? 'border-primary bg-primary/5'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <div className="font-semibold text-gray-900 mb-1">Casual</div>
-                <div className="text-xs text-gray-600">Just for fun, no ranking impact</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode('competitive')}
-                className={`p-4 border-2 rounded-lg text-left transition-all ${
-                  mode === 'competitive'
-                    ? 'border-primary bg-primary/5'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <div className="font-semibold text-gray-900 mb-1">Competitive</div>
-                <div className="text-xs text-gray-600">Affects player ELO ratings</div>
-              </button>
-            </div>
-          </div>
+            {/* Schedule */}
+            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                  <Clock className="w-5 h-5 text-green-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Schedule</h3>
+                  <p className="text-sm text-gray-600">Set the session date and time</p>
+                </div>
+              </div>
 
-          {/* Game Format */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Game Format <span className="text-red-500">*</span>
-            </label>
-            <div className="grid grid-cols-3 gap-3">
-              <button
-                type="button"
-                onClick={() => setGameFormat('singles')}
-                className={`p-4 border-2 rounded-lg text-center transition-all ${
-                  gameFormat === 'singles'
-                    ? 'border-primary bg-primary/5'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <div className="font-semibold text-gray-900 mb-1">Singles</div>
-                <div className="text-xs text-gray-600">2 players per match</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setGameFormat('doubles')}
-                className={`p-4 border-2 rounded-lg text-center transition-all ${
-                  gameFormat === 'doubles'
-                    ? 'border-primary bg-primary/5'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <div className="font-semibold text-gray-900 mb-1">Doubles</div>
-                <div className="text-xs text-gray-600">4 players per match</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setGameFormat('mixed')}
-                className={`p-4 border-2 rounded-lg text-center transition-all ${
-                  gameFormat === 'mixed'
-                    ? 'border-primary bg-primary/5'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <div className="font-semibold text-gray-900 mb-1">Mixed</div>
-                <div className="text-xs text-gray-600">Alternating</div>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Date <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      required
+                      min={new Date().toISOString().split('T')[0]}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    />
+                  </div>
 
-      {/* Capacity & Pricing */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-            <Users className="w-5 h-5 text-orange-600" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-gray-900">Capacity & Pricing</h3>
-            <p className="text-sm text-gray-600">Set player limits and pricing</p>
-          </div>
-        </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Duration (hours) <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={duration}
+                      onChange={(e) => setDuration(Number(e.target.value))}
+                      required
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    >
+                      {[1, 2, 3, 4, 5, 6].map(h => (
+                        <option key={h} value={h}>{h} {h === 1 ? 'hour' : 'hours'}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Max Players <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="range"
-              min="4"
-              max="20"
-              step="2"
-              value={maxPlayers}
-              onChange={(e) => setMaxPlayers(Number(e.target.value))}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
-            />
-            <div className="flex items-center justify-between mt-2">
-              <span className="text-sm text-gray-600">4 players</span>
-              <span className="text-lg font-bold text-primary">{maxPlayers} players</span>
-              <span className="text-sm text-gray-600">20 players</span>
-            </div>
-          </div>
+                {/* Time Picker List */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Select Start Time {duration > 1 && <span className="text-primary">({duration}-hour session)</span>} <span className="text-red-500">*</span>
+                  </label>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Cost Per Game (₱) <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="number"
-                value={costPerGame}
-                onChange={(e) => setCostPerGame(Number(e.target.value))}
-                required
-                min="0"
-                step="10"
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-              />
-            </div>
-            <p className="text-xs text-gray-500 mt-1">
-              Players pay based on games played
-            </p>
+                  {isLoadingSlots ? (
+                    <div className="flex items-center justify-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+                      <div className="flex flex-col items-center gap-2">
+                        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                        <span className="text-sm text-gray-500">Checking court availability...</span>
+                      </div>
+                    </div>
+                  ) : courtId && startDate ? (
+                    <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200">
+                      <SessionTimePicker
+                        slots={timeSlots}
+                        selectedTime={startTime}
+                        duration={duration}
+                        onSelectTime={setStartTime}
+                      />
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300 text-gray-500">
+                      <Clock className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">Select a court and date to see available times</p>
+                    </div>
+                  )}
+                  <p className="text-[10px] text-gray-400 mt-2 italic px-1">
+                    * Grayed out slots represent existing reservations on this court.
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Visibility */}
-          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isPublic}
-                onChange={(e) => setIsPublic(e.target.checked)}
-                className="w-5 h-5 text-primary border-gray-300 rounded focus:ring-primary"
-              />
-              <div>
-                <div className="font-medium text-gray-900">Public Session</div>
-                <div className="text-sm text-gray-600">Allow anyone to join this queue</div>
+            {/* Game Settings */}
+            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <Settings className="w-5 h-5 text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Game Settings</h3>
+                  <p className="text-sm text-gray-600">Configure game format and mode</p>
+                </div>
               </div>
-            </label>
-          </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-3 pt-6 border-t border-gray-200">
-            <Link
-              href="/queue-master"
-              className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-            >
-              <ArrowLeft className="w-4 h-4 inline mr-2" />
-              Cancel
-            </Link>
-            <button
-              type="submit"
-              disabled={isSubmitting || !courtId}
-              className="flex-1 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Creating Session...
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="w-5 h-5" />
-                  Create Session
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* Sidebar Summary */}
-      <div className="lg:col-span-1">
-        <div className="sticky top-6 space-y-4">
-          {/* Session Summary Card */}
-          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-            <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <Target className="w-5 h-5 text-primary" />
-              Session Summary
-            </h3>
-            
-            {!courtId ? (
-              <div className="text-center py-8 text-gray-400">
-                <Calendar className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">Select a court to see summary</p>
-              </div>
-            ) : (
               <div className="space-y-4">
-                {/* Court Info */}
                 <div>
-                  <p className="text-xs text-gray-500 mb-1">COURT</p>
-                  <p className="font-medium text-gray-900">{selectedCourt?.name}</p>
-                  <p className="text-sm text-gray-600">{selectedVenue?.name}</p>
-                </div>
-
-                {/* Schedule */}
-                <div className="pt-4 border-t border-gray-100">
-                  <p className="text-xs text-gray-500 mb-2">SCHEDULE</p>
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Calendar className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-900">
-                        {startDate ? new Date(startDate).toLocaleDateString('en-US', { 
-                          month: 'short', 
-                          day: 'numeric',
-                          year: 'numeric'
-                        }) : 'Select date'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Clock className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-900">
-                        {startTime ? (() => {
-                          const hour = parseInt(startTime.split(':')[0])
-                          const period = hour >= 12 ? 'PM' : 'AM'
-                          const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour
-                          return `${displayHour}:00 ${period}`
-                        })() : '--:--'} - {duration}h duration
-                      </span>
-                    </div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Session Mode <span className="text-red-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setMode('casual')}
+                      className={`p-4 border-2 rounded-lg text-left transition-all ${mode === 'casual'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                    >
+                      <div className="font-semibold text-gray-900 mb-1">Casual</div>
+                      <div className="text-xs text-gray-600">Just for fun, no ranking impact</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMode('competitive')}
+                      className={`p-4 border-2 rounded-lg text-left transition-all ${mode === 'competitive'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                    >
+                      <div className="font-semibold text-gray-900 mb-1">Competitive</div>
+                      <div className="text-xs text-gray-600">Affects player ELO ratings</div>
+                    </button>
                   </div>
                 </div>
 
-                {/* Game Settings */}
-                <div className="pt-4 border-t border-gray-100">
-                  <p className="text-xs text-gray-500 mb-2">GAME FORMAT</p>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="px-3 py-1 bg-primary/10 text-primary text-xs font-medium rounded-full capitalize">
-                      {mode}
-                    </span>
-                    <span className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-full capitalize">
-                      {gameFormat}
-                    </span>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Game Format <span className="text-red-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {['singles', 'doubles', 'mixed'].map((format) => (
+                      <button
+                        key={format}
+                        type="button"
+                        onClick={() => setGameFormat(format as any)}
+                        className={`p-4 border-2 rounded-lg text-center transition-all ${gameFormat === format
+                          ? 'border-primary bg-primary/5'
+                          : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                      >
+                        <div className="font-semibold text-gray-900 mb-1 capitalize">{format}</div>
+                        <div className="text-xs text-gray-600">
+                          {format === 'singles' ? '2 players' : '4 players'}
+                        </div>
+                      </button>
+                    ))}
                   </div>
-                  <p className="text-sm text-gray-600">
-                    {gameFormat === 'singles' ? '2' : '4'} players per match
-                  </p>
-                </div>
-
-                {/* Capacity */}
-                <div className="pt-4 border-t border-gray-100">
-                  <p className="text-xs text-gray-500 mb-2">CAPACITY</p>
-                  <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4 text-gray-400" />
-                    <span className="text-lg font-bold text-gray-900">{maxPlayers}</span>
-                    <span className="text-sm text-gray-600">max players</span>
-                  </div>
-                </div>
-
-                {/* Pricing */}
-                <div className="pt-4 border-t border-gray-100">
-                  <p className="text-xs text-gray-500 mb-2">PRICING</p>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-2xl font-bold text-gray-900">₱{costPerGame}</span>
-                    <span className="text-sm text-gray-600">per game</span>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {isPublic ? 'Public session' : 'Private session'}
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Estimated Revenue Card */}
-          {courtId && costPerGame > 0 && (
-            <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
-                  <TrendingUp className="w-4 h-4 text-white" />
-                </div>
-                <h4 className="font-semibold text-gray-900">Estimated Revenue</h4>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-bold text-green-700">₱{estimatedRevenue.toLocaleString()}</span>
-                </div>
-                <p className="text-xs text-gray-600 leading-relaxed">
-                  Based on {maxPlayers} players × ~{estimatedGamesPerPlayer} games each × ₱{costPerGame}/game
-                </p>
-                <div className="pt-3 mt-3 border-t border-green-200">
-                  <p className="text-xs text-gray-700">
-                    <span className="font-medium">Note:</span> Actual revenue depends on games played. This is an estimate.
-                  </p>
                 </div>
               </div>
             </div>
-          )}
 
-          {/* Quick Tips */}
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-            <h4 className="font-semibold text-gray-900 mb-2 text-sm">💡 Queue Master Tips</h4>
-            <ul className="space-y-1.5 text-xs text-gray-700">
-              <li className="flex items-start gap-2">
-                <span className="text-blue-600 mt-0.5">•</span>
-                <span>Set max players based on court availability</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-600 mt-0.5">•</span>
-                <span>Casual mode for fun, competitive affects ratings</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-600 mt-0.5">•</span>
-                <span>Players pay only for games they actually play</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-600 mt-0.5">•</span>
-                <span>You'll manually create matches from waiting players</span>
-              </li>
-            </ul>
+            {/* Capacity & Pricing */}
+            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                  <Users className="w-5 h-5 text-orange-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Capacity & Pricing</h3>
+                  <p className="text-sm text-gray-600">Set player limits and pricing</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Max Players <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="range"
+                    min="4"
+                    max="20"
+                    step="2"
+                    value={maxPlayers}
+                    onChange={(e) => setMaxPlayers(Number(e.target.value))}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                  />
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-sm text-gray-600">4 players</span>
+                    <span className="text-lg font-bold text-primary">{maxPlayers} players</span>
+                    <span className="text-sm text-gray-600">20 players</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Cost Per Game (₱) <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="number"
+                      value={costPerGame}
+                      onChange={(e) => setCostPerGame(Number(e.target.value))}
+                      required
+                      min="0"
+                      step="10"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Visibility */}
+            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isPublic}
+                  onChange={(e) => setIsPublic(e.target.checked)}
+                  className="w-5 h-5 text-primary border-gray-300 rounded focus:ring-primary"
+                />
+                <div>
+                  <div className="font-medium text-gray-900">Public Session</div>
+                  <div className="text-sm text-gray-600">Allow anyone to join this queue</div>
+                </div>
+              </label>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-3 pt-6 border-t border-gray-200">
+              <Link
+                href="/queue-master"
+                className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+              >
+                <ArrowLeft className="w-4 h-4 inline mr-2" />
+                Cancel
+              </Link>
+              <button
+                type="submit"
+                disabled={isSubmitting || !courtId || !startTime}
+                className="flex-1 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Creating Session...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-5 h-5" />
+                    Create Session
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Sidebar Summary */}
+        <div className="lg:col-span-1">
+          <div className="sticky top-6 space-y-4">
+            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <Target className="w-5 h-5 text-primary" />
+                Session Summary
+              </h3>
+
+              {!courtId ? (
+                <div className="text-center py-8 text-gray-400">
+                  <Calendar className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">Select a court to see summary</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">COURT</p>
+                    <p className="font-medium text-gray-900">{selectedCourt?.name}</p>
+                    <p className="text-sm text-gray-600">{selectedVenue?.name}</p>
+                  </div>
+
+                  <div className="pt-4 border-t border-gray-100">
+                    <p className="text-xs text-gray-500 mb-2">SCHEDULE</p>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2 text-sm text-gray-900">
+                        <Calendar className="w-4 h-4 text-gray-400" />
+                        {startDate}
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-gray-900">
+                        <Clock className="w-4 h-4 text-gray-400" />
+                        {startTime || '--:--'} ({duration}h)
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-gray-100">
+                    <p className="text-xs text-gray-500 mb-2">MODE & FORMAT</p>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-bold uppercase rounded">{mode}</span>
+                      <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold uppercase rounded">{gameFormat}</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-gray-100">
+                    <p className="text-xs text-gray-500 mb-1">PRICING</p>
+                    <p className="text-lg font-bold text-gray-900">₱{costPerGame} <span className="text-xs font-normal text-gray-500">/ game</span></p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {courtId && costPerGame > 0 && (
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <TrendingUp className="w-4 h-4 text-green-600" />
+                  <h4 className="font-semibold text-gray-900">Estimated Revenue</h4>
+                </div>
+                <p className="text-3xl font-bold text-green-700">₱{estimatedRevenue.toLocaleString()}</p>
+                <p className="text-[10px] text-gray-600 mt-2">Based on {maxPlayers} players × ~{estimatedGamesPerPlayer} games</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

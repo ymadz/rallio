@@ -3,13 +3,14 @@ import {
     View,
     Text,
     StyleSheet,
-    SafeAreaView,
+
     ScrollView,
     TouchableOpacity,
     ActivityIndicator,
     Alert,
     Linking,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Typography, Radius } from '@/constants/Colors';
@@ -89,59 +90,121 @@ export default function CheckoutScreen() {
             const bookingDate = new Date(bookingData.date);
             const [startHour] = bookingData.startTime.split(':').map(Number);
             const [endHour] = bookingData.endTime.split(':').map(Number);
+            const recurrenceWeeks = bookingData.recurrenceWeeks || 1;
 
-            const startTime = new Date(bookingDate);
-            startTime.setHours(startHour, 0, 0, 0);
+            // Safe UUID generator for React Native
+            const generateUUID = () => {
+                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+                    const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+            };
 
-            const endTime = new Date(bookingDate);
-            endTime.setHours(endHour, 0, 0, 0);
+            const recurrenceGroupId = recurrenceWeeks > 1 ? generateUUID() : null;
 
-            // Create the reservation
-            const { data: reservation, error: reservationError } = await supabase
-                .from('reservations')
-                .insert({
+            const reservationsToInsert = [];
+
+            for (let i = 0; i < recurrenceWeeks; i++) {
+                // Calculate date for this iteration
+                const currentDate = new Date(bookingDate);
+                currentDate.setDate(currentDate.getDate() + (i * 7));
+
+                const startTime = new Date(currentDate);
+                startTime.setHours(startHour, 0, 0, 0);
+
+                const endTime = new Date(currentDate);
+                endTime.setHours(endHour, 0, 0, 0);
+
+                // For PayMongo/Payment: The Total Amount is usually for the WHOLE series. 
+                // But we store 'total_amount' per reservation? 
+                // Web implementation stores passed `totalAmount` PER RECORD.
+                // Wait, Web implementation: "total_amount: data.totalAmount, // Price for this specific instance"
+                // So mobile should calculate per-instance price.
+                // The `total` variable from `getTotalAmount()` is the GRAND TOTAL (includes all weeks).
+                // We need per-session total.
+
+                const splitTotal = total / recurrenceWeeks;
+
+                reservationsToInsert.push({
                     court_id: bookingData.courtId,
                     user_id: user?.id,
                     start_time: startTime.toISOString(),
                     end_time: endTime.toISOString(),
-                    total_amount: total,
+                    total_amount: splitTotal, // Store per-session price
                     num_players: bookingData.numPlayers,
-                    status: paymentMethod === 'cash' ? 'pending' : 'pending',
-                    payment_method: paymentMethod,
-                    notes: bookingData.notes,
-                })
-                .select()
-                .single();
+                    status: paymentMethod === 'cash' ? 'pending' : 'pending_payment', // Use pending_payment for e-wallet
+                    payment_type: 'full',
+                    notes: bookingData.notes ? (recurrenceWeeks > 1 ? `${bookingData.notes} (Week ${i + 1})` : bookingData.notes) : null,
+                    recurrence_group_id: recurrenceGroupId,
+                    metadata: {
+                        payment_method: paymentMethod,
+                        booking_origin: 'mobile'
+                    }
+                });
+            }
+
+            // Batch insert
+            const { data: reservations, error: reservationError } = await supabase
+                .from('reservations')
+                .insert(reservationsToInsert)
+                .select();
 
             if (reservationError) throw reservationError;
 
+            // For single booking reference, we use the first reservation ID
+            const primaryReservationId = reservations[0].id;
+
             // Generate booking reference
             const bookingRef = `RLL-${Date.now().toString().slice(-8)}`;
-            setBookingReference(bookingRef, reservation.id);
+            setBookingReference(bookingRef, primaryReservationId);
+
 
             if (paymentMethod === 'e-wallet') {
-                // Create PayMongo checkout session
-                const { data: payment, error: paymentError } = await supabase
-                    .functions.invoke('create-checkout', {
-                        body: {
-                            reservationId: reservation.id,
-                            amount: total,
-                            description: `Court booking at ${bookingData.venueName}`,
-                            successUrl: 'rallio://checkout/success',
-                            cancelUrl: 'rallio://checkout/cancel',
-                        },
-                    });
+                // Create PayMongo checkout using Next.js API
+                // We use process.env.EXPO_PUBLIC_API_URL or fallback to localhost
+                // NOTE: For Expo Go on Android, localhost is 10.0.2.2. On iOS, it's localhost.
+                // UPDATED: Using explicit local IP for physical device testing
+                const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.254.163:3000';
+                console.log('Mobile Checkout: Using API URL:', apiUrl);
 
-                if (paymentError) {
-                    console.log('Payment API not available, simulating success');
-                    // For now, simulate success if PayMongo edge function doesn't exist
-                    setStep('success');
-                    return;
+                const { data: { session } } = await supabase.auth.getSession();
+
+                if (!session?.access_token) {
+                    console.error('Mobile Checkout: No authorized session found!');
+                    throw new Error('User not authenticated (No session)');
                 }
+
+                console.log('Mobile Checkout: Has session?', !!session);
+                // console.log('Mobile Checkout: Token:', session.access_token); 
+
+                const response = await fetch(`${apiUrl}/api/mobile/create-checkout`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${session.access_token}`
+                    },
+                    body: JSON.stringify({
+                        reservationId: primaryReservationId,
+                        amount: total, // Grand total
+                        description: `Court booking at ${bookingData.venueName} (${recurrenceWeeks > 1 ? `${recurrenceWeeks} Weeks` : 'Single'})`,
+                        successUrl: 'rallio://checkout/success',
+                        cancelUrl: 'rallio://checkout/cancel',
+                        recurrenceGroupId: recurrenceGroupId,
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Payment initialization failed');
+                }
+
+                const payment = await response.json();
 
                 if (payment?.checkoutUrl) {
                     // Open PayMongo checkout in browser
                     await Linking.openURL(payment.checkoutUrl);
+                } else {
+                    throw new Error('No checkout URL returned');
                 }
             }
 
@@ -332,12 +395,12 @@ export default function CheckoutScreen() {
                     </View>
                 </TouchableOpacity>
 
-                {/* Price Breakdown */}
                 <Text style={styles.sectionTitle}>Price Details</Text>
                 <Card variant="default" padding="md">
                     <View style={styles.priceRow}>
                         <Text style={styles.priceLabel}>
                             ₱{bookingData.hourlyRate} × {bookingData.duration} hr
+                            {bookingData.recurrenceWeeks && bookingData.recurrenceWeeks > 1 ? ` × ${bookingData.recurrenceWeeks} wks` : ''}
                         </Text>
                         <Text style={styles.priceValue}>₱{subtotal.toLocaleString()}</Text>
                     </View>

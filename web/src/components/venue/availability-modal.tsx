@@ -8,6 +8,14 @@ import 'react-day-picker/dist/style.css'
 import { useCheckoutStore } from '@/stores/checkout-store'
 import { getAvailableTimeSlotsAction } from '@/app/actions/reservations'
 import { cn } from '@/lib/utils'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 interface TimeSlot {
   time: string
@@ -39,6 +47,7 @@ export function AvailabilityModal({
   const router = useRouter()
   const { setBookingData } = useCheckoutStore()
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+  const [recurrenceWeeks, setRecurrenceWeeks] = useState<number>(1)
 
   // Selection state
   const [startSlot, setStartSlot] = useState<TimeSlot | null>(null)
@@ -59,7 +68,7 @@ export function AvailabilityModal({
       setEndSlot(null)
 
       try {
-        const slots = await getAvailableTimeSlotsAction(courtId, selectedDate.toISOString())
+        const slots = await getAvailableTimeSlotsAction(courtId, format(selectedDate, 'yyyy-MM-dd'))
         setTimeSlots(slots)
       } catch (error) {
         console.error('Error fetching time slots:', error)
@@ -175,6 +184,7 @@ export function AvailabilityModal({
           endTime: endTime,
           hourlyRate,
           capacity,
+          recurrenceWeeks,
         })
 
         // Navigate to checkout page
@@ -208,7 +218,7 @@ export function AvailabilityModal({
   if (!isOpen) return null
 
   const duration = getDuration()
-  const totalPrice = (startSlot?.price || hourlyRate) * duration
+  const totalPrice = (startSlot?.price || hourlyRate) * duration * recurrenceWeeks
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -272,6 +282,41 @@ export function AvailabilityModal({
                       <span className="text-gray-600">Selected</span>
                     </div>
                   </div>
+                </div>
+
+                {/* Recurrence Selection */}
+                <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <Label className="text-sm font-semibold text-gray-900">Repeat Booking</Label>
+                  </div>
+
+                  <Select
+                    value={recurrenceWeeks.toString()}
+                    onValueChange={(val) => setRecurrenceWeeks(parseInt(val))}
+                  >
+                    <SelectTrigger className="w-full bg-white border-gray-300">
+                      <SelectValue placeholder="Do not repeat" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">Just Once (No repeat)</SelectItem>
+                      <SelectItem value="4">Repeat for 4 weeks</SelectItem>
+                      <SelectItem value="8">Repeat for 8 weeks</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {recurrenceWeeks > 1 && (
+                    <div className="mt-2 text-xs text-blue-700 bg-blue-50 px-2 py-1.5 rounded flex items-start gap-1.5 border border-blue-100">
+                      <span className="mt-0.5">ℹ️</span>
+                      <span>
+                        Booking will be created for <strong>{recurrenceWeeks} consecutive weeks</strong> at this time.
+                        <br />
+                        Total price includes all sessions.
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -375,7 +420,10 @@ export function AvailabilityModal({
                   <p className="text-gray-600">
                     {formatTime(startSlot.time)} - {formatTime(getEndTime())}
                   </p>
-                  <p className="text-lg font-bold text-primary mt-1">₱{totalPrice.toLocaleString()}</p>
+                  <p className="text-lg font-bold text-primary mt-1">
+                    ₱{totalPrice.toLocaleString()}
+                    {recurrenceWeeks > 1 && <span className="text-xs font-normal text-gray-500 ml-1">({recurrenceWeeks} weeks)</span>}
+                  </p>
                 </div>
               )}
             </div>

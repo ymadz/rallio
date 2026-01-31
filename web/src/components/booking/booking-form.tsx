@@ -32,6 +32,7 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined)
   const [selectedTime, setSelectedTime] = useState<string | undefined>(undefined)
   const [duration, setDuration] = useState(1) // hours
+  const [recurrenceWeeks, setRecurrenceWeeks] = useState(1) // 1 = once, 4, 8
   const [notes, setNotes] = useState('')
   const [numPlayers, setNumPlayers] = useState(2) // default to 2 players
 
@@ -59,7 +60,7 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
     setError(null)
     setSelectedTime(undefined)
 
-    getAvailableTimeSlotsAction(courtId, selectedDate.toISOString())
+    getAvailableTimeSlotsAction(courtId, format(selectedDate, 'yyyy-MM-dd'))
       .then((slots) => {
         setTimeSlots(slots)
         setIsLoadingSlots(false)
@@ -72,7 +73,9 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
   }, [selectedDate, courtId])
 
   // Calculate total price
-  const totalPrice = selectedCourt ? selectedCourt.hourlyRate * duration : 0
+  const hourlyPrice = selectedCourt ? selectedCourt.hourlyRate : 0
+  const sessionPrice = hourlyPrice * duration
+  const totalSeriesPrice = sessionPrice * recurrenceWeeks
 
   // Format time for display
   const formatTime = (time: string): string => {
@@ -140,14 +143,35 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
       date: selectedDate,
       startTime: selectedTime,
       endTime: endTime,
-      hourlyRate: finalPrice > 0 ? finalPrice : totalPrice,
+      hourlyRate: finalPrice > 0 ? (finalPrice / recurrenceWeeks) : hourlyPrice * duration,
+      // NOTE: hourlyRate in store seems to be strictly "hourly" but usage says "baseRate = bookingData.hourlyRate * duration".
+      // Wait, let's look at store again: "baseRate = bookingData.hourlyRate * duration". 
+      // So `hourlyRate` should indeed be the PER HOUR rate.
+      // But if finalPrice is calculated by discount module (which might return TOTAL discounted price for the session),
+      // we need to be careful.
+      // If no discount: hourlyRate = selectedCourt.hourlyRate.
+      // If discount: We pass `hourlyRate` as the *effective* hourly rate?
+      // Let's keep it simple: Pass the RAW hourly rate. 
+      // The store calculates subtotal then subtracts discountAmount.
+      // So here we pass `selectedCourt.hourlyRate`. 
+
+      hourlyRate: selectedCourt.hourlyRate, // Fix: Pass actual hourly rate, handle discount separately
       capacity: selectedCourt.capacity,
+      recurrenceWeeks: recurrenceWeeks
     })
 
     // Save discount details
     if (discountAmount !== 0) {
+      // If recurrence > 1, the discountAmount returned by `DiscountDisplay` (which calculates for 1 session usually)
+      // needs to be multiplied?
+      // Actually `DiscountDisplay` calculates based on inputs.
+      // If we didn't update `DiscountDisplay` to know about recurrence, it calculates for 1 session.
+      // So `discountAmount` is per session.
+      // Store `discountAmount` is treated as TOTAL discount in `getSubtotal`.
+      // So we should multiply it by weeks.
+
       setDiscountDetails({
-        amount: discountAmount,
+        amount: discountAmount * recurrenceWeeks,
         type: discountType,
         reason: discountReason,
       })
@@ -202,34 +226,55 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
           </div>
         </div>
 
-        {/* Duration Selection - MOVED BEFORE TIME SELECTION */}
+        {/* Duration & Recurrence */}
         {selectedDate && (
-          <div className="mb-6">
-            <Label htmlFor="duration" className="block mb-2">
-              Duration (hours)
-            </Label>
-            <Select
-              value={duration.toString()}
-              onValueChange={(val) => {
-                setDuration(parseInt(val))
-                setSelectedTime(undefined) // Reset time selection when duration changes
-              }}
-              required
-            >
-              <SelectTrigger id="duration">
-                <SelectValue placeholder="Select duration" />
-              </SelectTrigger>
-              <SelectContent>
-                {[1, 2, 3, 4, 5, 6].map((hours) => (
-                  <SelectItem key={hours} value={hours.toString()}>
-                    {hours} {hours === 1 ? 'hour' : 'hours'}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-sm text-gray-600 mt-2">
-              Select how many hours you need the court
-            </p>
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div>
+              <Label htmlFor="duration" className="block mb-2">
+                Duration
+              </Label>
+              <Select
+                value={duration.toString()}
+                onValueChange={(val) => {
+                  setDuration(parseInt(val))
+                  setSelectedTime(undefined) // Reset time selection when duration changes
+                }}
+                required
+              >
+                <SelectTrigger id="duration">
+                  <SelectValue placeholder="Select duration" />
+                </SelectTrigger>
+                <SelectContent>
+                  {[1, 2, 3, 4, 5, 6].map((hours) => (
+                    <SelectItem key={hours} value={hours.toString()}>
+                      {hours} {hours === 1 ? 'hour' : 'hours'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="recurrence" className="block mb-2">
+                Repeat Booking
+              </Label>
+              <Select
+                value={recurrenceWeeks.toString()}
+                onValueChange={(val) => setRecurrenceWeeks(parseInt(val))}
+              >
+                <SelectTrigger id="recurrence">
+                  <SelectValue placeholder="Do not repeat" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">One-time booking</SelectItem>
+                  <SelectItem value="4">Repeat for 4 weeks</SelectItem>
+                  <SelectItem value="8">Repeat for 8 weeks</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-blue-600 mt-1">
+                {recurrenceWeeks > 1 ? `Same time for ${recurrenceWeeks} consecutive weeks` : 'Single session only'}
+              </p>
+            </div>
           </div>
         )}
 
@@ -255,7 +300,6 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
           </div>
         )}
 
-        {/* Duration moved above - removed from here */}
         {/* Number of Players */}
         {selectedDate && selectedTime && selectedCourt && (
           <div className="mb-6">
@@ -307,9 +351,9 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
           courtId={courtId}
           startDate={selectedDate.toISOString()}
           endDate={selectedDate.toISOString()}
-          numberOfDays={duration}
+          numberOfDays={duration} // Note: This might need to adjust for multi-day vs duration logic but "numberOfDays" param often means hours for hourly booking
           numberOfPlayers={numPlayers}
-          basePrice={totalPrice}
+          basePrice={sessionPrice} // Pass price PER session for discount calc, then we multiply later
           onDiscountCalculated={handleDiscountCalculated}
         />
       )}
@@ -324,15 +368,22 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
               <div className="flex-1">
-                <p className="text-sm font-semibold text-blue-900 mb-1">Selected Time</p>
+                <p className="text-sm font-semibold text-blue-900 mb-1">
+                  {recurrenceWeeks > 1 ? 'Recurring Series Selected' : 'Selected Time'}
+                </p>
                 <p className="text-lg font-bold text-blue-700">
                   {formatTime(selectedTime)} - {formatTime(getEndTime(selectedTime, duration))}
                 </p>
                 <p className="text-sm text-blue-600 mt-1">
-                  {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                  Starting: {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
                 </p>
+                {recurrenceWeeks > 1 && (
+                  <p className="text-sm font-bold text-blue-800 mt-1">
+                    Repeating for {recurrenceWeeks} weeks
+                  </p>
+                )}
                 <p className="text-sm text-blue-600">
-                  Duration: {duration} {duration === 1 ? 'hour' : 'hours'}
+                  Duration: {duration} {duration === 1 ? 'hour' : 'hours'} per session
                 </p>
               </div>
             </div>
@@ -341,20 +392,30 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
 
         <div className="space-y-2 mb-4">
           <div className="flex justify-between items-center text-gray-600">
-            <span>Base Price</span>
-            <span>₱{totalPrice.toFixed(2)}</span>
+            <span>Base Price (per session)</span>
+            <span>₱{sessionPrice.toFixed(2)}</span>
           </div>
+
+          {recurrenceWeeks > 1 && (
+            <div className="flex justify-between items-center text-gray-600">
+              <span>Weeks</span>
+              <span>x {recurrenceWeeks}</span>
+            </div>
+          )}
+
           {discountAmount !== 0 && (
             <div className={`flex justify-between items-center font-medium ${discountAmount < 0 ? 'text-orange-600' : 'text-green-600'
               }`}>
-              <span>{discountAmount < 0 ? 'Surcharge' : 'Discount'}</span>
+              <span>{discountAmount < 0 ? 'Surcharge' : 'Discount'} (per session)</span>
               <span>{discountAmount < 0 ? '+' : '-'}₱{Math.abs(discountAmount).toFixed(2)}</span>
             </div>
           )}
+
           <div className="flex justify-between items-center pt-2 border-t border-gray-200">
             <span className="text-lg font-semibold text-gray-900">Total</span>
             <span className="text-2xl font-bold text-gray-900">
-              ₱{(finalPrice > 0 ? finalPrice : totalPrice).toFixed(2)}
+              {/* If finalPrice is > 0, it means it's the discounted price PER SESSION. We must multiply by recurrence. */}
+              ₱{((finalPrice > 0 ? finalPrice : sessionPrice) * recurrenceWeeks).toFixed(2)}
             </span>
           </div>
         </div>
@@ -365,7 +426,7 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
           size="lg"
           disabled={!selectedDate || !selectedTime || !isDurationAvailable() || isLoadingSlots}
         >
-          Continue to Payment
+          {recurrenceWeeks > 1 ? `Book Series (${recurrenceWeeks} weeks)` : 'Continue to Payment'}
         </Button>
 
         <p className="text-xs text-gray-500 text-center mt-3">

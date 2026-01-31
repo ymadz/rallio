@@ -11,11 +11,15 @@ async function verifyGlobalAdmin() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
+  const { createServiceClient } = await import('@/lib/supabase/service')
+
   if (!user) {
     throw new Error('Not authenticated')
   }
 
-  const { data: roles } = await supabase
+  // Use service client to bypass RLS when checking roles
+  const serviceClient = createServiceClient()
+  const { data: roles } = await serviceClient
     .from('user_roles')
     .select('role:roles(name)')
     .eq('user_id', user.id)

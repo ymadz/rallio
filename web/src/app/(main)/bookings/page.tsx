@@ -33,6 +33,8 @@ async function getUpcomingBookings(userId: string) {
       payment_type,
       notes,
       created_at,
+      recurrence_group_id,
+      metadata,
       courts (
         id,
         name,

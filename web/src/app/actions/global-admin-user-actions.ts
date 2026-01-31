@@ -1,7 +1,9 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { logAdminAction } from './global-admin-actions'
+import { revalidatePath } from 'next/cache'
 
 // Helper to verify global admin role
 async function verifyGlobalAdmin() {
@@ -314,6 +316,9 @@ export async function banUser(userId: string, reason: string) {
     newValue: { is_banned: true, banned_reason: reason, permanent: true }
   })
 
+  revalidatePath('/admin/users')
+  revalidatePath('/admin/moderation')
+
   return { success: true, message: 'User banned successfully' }
 }
 
@@ -367,6 +372,9 @@ export async function suspendUser(userId: string, reason: string, durationDays: 
       duration_days: durationDays
     }
   })
+
+  revalidatePath('/admin/users')
+  revalidatePath('/admin/moderation')
 
   return {
     success: true,
@@ -540,6 +548,7 @@ export async function updateUserProfile(userId: string, data: {
     newValue: data
   })
 
+  revalidatePath('/admin/users')
   return { success: true, message: 'User profile updated successfully' }
 }
 
@@ -669,8 +678,7 @@ export async function resetUserPassword(userId: string, newPassword: string) {
   const auth = await verifyGlobalAdmin()
   if (!auth.success) return auth
 
-  // Use service client for admin operations
-  const { createServiceClient } = await import('@/lib/supabase/server')
+  // Use service client for admin operations - import from service file which uses service key
   const serviceClient = createServiceClient()
 
   const { error } = await serviceClient.auth.admin.updateUserById(userId, {

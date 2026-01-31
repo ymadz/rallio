@@ -53,6 +53,11 @@ export function BookingSummaryCard() {
           <p className="text-sm text-gray-600">
             {formatTime(bookingData.startTime)} - {formatTime(bookingData.endTime)}
           </p>
+          {bookingData.recurrenceWeeks && bookingData.recurrenceWeeks > 1 && (
+            <div className="mt-1 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+              Recurring: {bookingData.recurrenceWeeks} Weeks
+            </div>
+          )}
         </div>
 
         {isSplitPayment && (

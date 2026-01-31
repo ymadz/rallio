@@ -5,12 +5,12 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
-import { 
-  LayoutDashboard, 
-  Calendar, 
-  Users, 
-  BarChart3, 
-  Settings, 
+import {
+  LayoutDashboard,
+  Calendar,
+  Users,
+  BarChart3,
+  Settings,
   LogOut,
   User,
   ArrowLeft,
@@ -47,17 +47,14 @@ export function QueueMasterSidebar({ user }: QueueMasterSidebarProps) {
     <>
       {/* Desktop Sidebar */}
       <aside
-        className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-20 bg-gradient-to-b from-primary to-primary/90 z-40"
+        className={cn(
+          "hidden md:flex md:flex-col md:fixed md:inset-y-0 bg-gradient-to-b from-primary to-primary/90 z-40 transition-all duration-300 shadow-xl",
+          isExpanded ? "w-64" : "w-20"
+        )}
         onMouseEnter={() => setIsExpanded(true)}
         onMouseLeave={() => setIsExpanded(false)}
       >
-        {/* Expanded overlay */}
-        <div
-          className={cn(
-            "absolute inset-y-0 left-0 bg-gradient-to-b from-primary to-primary/90 shadow-lg transition-all duration-300 flex flex-col",
-            isExpanded ? "w-64" : "w-20"
-          )}
-        >
+        <div className="flex flex-col h-full overflow-hidden">
           {/* Logo */}
           <div className="px-4 py-6 flex justify-center">
             <Link href="/queue-master" className="flex items-center gap-2">

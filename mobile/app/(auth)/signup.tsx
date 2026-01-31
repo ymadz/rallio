@@ -3,13 +3,14 @@ import {
     View,
     Text,
     StyleSheet,
-    SafeAreaView,
+
     KeyboardAvoidingView,
     Platform,
     ScrollView,
     TouchableOpacity,
     Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, router } from 'expo-router';
 import { Colors, Spacing, Typography } from '@/constants/Colors';
 import { Button, Input, Card } from '@/components/ui';

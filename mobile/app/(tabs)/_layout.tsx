@@ -19,7 +19,7 @@ export default function TabLayout() {
       <Tabs.Screen name="bookings" />
       <Tabs.Screen name="profile" />
       {/* Hide the template tabs */}
-      <Tabs.Screen name="two" options={{ href: null }} />
+
     </Tabs>
   );
 }

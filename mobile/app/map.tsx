@@ -3,12 +3,13 @@ import {
     View,
     Text,
     StyleSheet,
-    SafeAreaView,
+
     TouchableOpacity,
     ActivityIndicator,
     Dimensions,
     Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import MapView, { Marker, Region, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';

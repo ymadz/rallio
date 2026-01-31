@@ -97,7 +97,7 @@ export default async function MatchesPage({
                   ? 'Join a queue session to start playing and tracking your matches'
                   : `You haven't recorded any ${filter} yet. Keep playing!`}
               </p>
-              {filter !== 'all' && (
+              {filter !== 'all' && stats && stats.totalGames > 0 && (
                 <a
                   href="/matches"
                   className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary hover:text-primary/80"

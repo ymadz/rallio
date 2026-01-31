@@ -60,7 +60,7 @@ export function PaymentProcessing() {
 
       // Validate all required booking data fields
       if (!bookingData.courtId || !bookingData.venueId || !bookingData.date ||
-          !bookingData.startTime || !bookingData.endTime) {
+        !bookingData.startTime || !bookingData.endTime) {
         console.error('Payment initialization error: Missing required booking data fields', bookingData)
         setError('Invalid booking data. Please go back and select a time slot again.')
         setLoading(false)
@@ -129,6 +129,7 @@ export function PaymentProcessing() {
           discountApplied: Math.abs(discountAmount),
           discountType,
           discountReason,
+          recurrenceWeeks: bookingData.recurrenceWeeks,
         })
 
         if (!reservationResult.success || !reservationResult.reservationId) {
@@ -185,9 +186,9 @@ export function PaymentProcessing() {
 
         // Auto-retry for transient errors (not user-facing errors like "already booked" or PayMongo config errors)
         const isTransientError = !errorMessage.includes('already booked') &&
-                                !errorMessage.includes('Invalid booking data') &&
-                                !errorMessage.includes('currently unavailable') &&
-                                !errorMessage.includes('Pay with Cash')
+          !errorMessage.includes('Invalid booking data') &&
+          !errorMessage.includes('currently unavailable') &&
+          !errorMessage.includes('Pay with Cash')
 
         if (isTransientError && retryAttempts.current < MAX_RETRIES) {
           retryAttempts.current += 1
@@ -573,13 +574,12 @@ export function PaymentProcessing() {
         {playerPayments.map((payment) => (
           <div
             key={payment.playerNumber}
-            className={`bg-white border-2 rounded-xl p-6 transition-all ${
-              payment.status === 'paid'
+            className={`bg-white border-2 rounded-xl p-6 transition-all ${payment.status === 'paid'
                 ? 'border-green-500 bg-green-50/50'
                 : payment.status === 'pending'
-                ? 'border-gray-200'
-                : 'border-red-500 bg-red-50/50'
-            }`}
+                  ? 'border-gray-200'
+                  : 'border-red-500 bg-red-50/50'
+              }`}
           >
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-3">

@@ -15,6 +15,7 @@ type ReservationWithRelations = {
   status: string
   payment_type?: string
   num_players?: number
+  recurrence_group_id?: string | null
   courts: {
     name: string
     venues: {
@@ -112,23 +113,44 @@ export async function initiatePaymentAction(
     // Build description with optional chaining for safety
     const venueName = reservation.courts?.venues?.name ?? 'Court Reservation'
     const courtName = reservation.courts?.name ?? 'Court'
-    const description = `${venueName} - ${courtName}`
+    let description = `${venueName} - ${courtName}`
+
+    // Check for recurrence group to handle bulk payment
+    let amountToCharge = reservation.total_amount
+    let recurrenceGroupId = reservation.recurrence_group_id
+
+    if (recurrenceGroupId) {
+      // Fetch all reservations in this group
+      const { data: groupReservations } = await supabase
+        .from('reservations')
+        .select('total_amount, status')
+        .eq('recurrence_group_id', recurrenceGroupId)
+        .in('status', ['pending', 'pending_payment'])
+
+      if (groupReservations && groupReservations.length > 0) {
+        // Sum up the total amount for all pending reservations in the group
+        amountToCharge = groupReservations.reduce((sum, res) => sum + (res.total_amount || 0), 0)
+        description += ` (Recurring: ${groupReservations.length} sessions)`
+        console.log('[initiatePaymentAction] 🔄 Detected recurring group:', {
+          groupId: recurrenceGroupId,
+          count: groupReservations.length,
+          totalBulkAmount: amountToCharge
+        })
+      }
+    }
+
+    console.log('[initiatePaymentAction] 💰 Payment calculation:', {
+      paymentType: reservation.payment_type,
+      singleAmount: reservation.total_amount,
+      numPlayers: reservation.num_players,
+      amountToCharge,
+      isBulk: !!recurrenceGroupId
+    })
 
     // Generate success/failed URLs
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
     const successUrl = `${baseUrl}/checkout/success?reservation=${reservationId}`
     const failedUrl = `${baseUrl}/checkout/failed?reservation=${reservationId}`
-
-    // NOTE: Split payment feature disabled - always charge full amount
-    // TODO: Implement proper multi-player payment flow with unique payment links
-    const amountToCharge = reservation.total_amount
-
-    console.log('[initiatePaymentAction] 💰 Payment calculation:', {
-      paymentType: reservation.payment_type,
-      totalAmount: reservation.total_amount,
-      numPlayers: reservation.num_players,
-      amountToCharge,
-    })
 
     let checkoutUrl: string
     let sourceId: string
@@ -231,6 +253,7 @@ export async function initiatePaymentAction(
         payment_type: reservation.payment_type || 'full',
         player_count: reservation.num_players || 1,
         is_split_payment: reservation.payment_type === 'split',
+        recurrence_group_id: recurrenceGroupId,
       },
     }
     console.log('[initiatePaymentAction] Payment data:', paymentData)

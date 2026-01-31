@@ -301,51 +301,46 @@ export function ReservationManagement() {
       <div className="bg-white border border-gray-200 rounded-xl p-2 mb-6 inline-flex gap-2 overflow-x-auto">
         <button
           onClick={() => setStatusFilter('all')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
-            statusFilter === 'all'
+          className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${statusFilter === 'all'
               ? 'bg-primary text-white shadow-sm'
               : 'text-gray-600 hover:bg-gray-100'
-          }`}
+            }`}
         >
           All ({statusCounts.all})
         </button>
         <button
           onClick={() => setStatusFilter('pending')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
-            statusFilter === 'pending'
+          className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${statusFilter === 'pending'
               ? 'bg-amber-500 text-white shadow-sm'
               : 'text-gray-600 hover:bg-gray-100'
-          }`}
+            }`}
         >
           Pending ({statusCounts.pending})
         </button>
         <button
           onClick={() => setStatusFilter('confirmed')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
-            statusFilter === 'confirmed'
+          className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${statusFilter === 'confirmed'
               ? 'bg-emerald-500 text-white shadow-sm'
               : 'text-gray-600 hover:bg-gray-100'
-          }`}
+            }`}
         >
           Confirmed ({statusCounts.confirmed})
         </button>
         <button
           onClick={() => setStatusFilter('completed')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
-            statusFilter === 'completed'
+          className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${statusFilter === 'completed'
               ? 'bg-blue-500 text-white shadow-sm'
               : 'text-gray-600 hover:bg-gray-100'
-          }`}
+            }`}
         >
           Completed ({statusCounts.completed})
         </button>
         <button
           onClick={() => setStatusFilter('cancelled')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
-            statusFilter === 'cancelled'
+          className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${statusFilter === 'cancelled'
               ? 'bg-rose-500 text-white shadow-sm'
               : 'text-gray-600 hover:bg-gray-100'
-          }`}
+            }`}
         >
           Cancelled ({statusCounts.cancelled})
         </button>
@@ -446,6 +441,12 @@ export function ReservationManagement() {
                           {reservation.metadata?.is_queue_session_reservation && (
                             <span className="px-2 py-1 text-xs font-medium rounded-full bg-purple-50 text-purple-700">
                               Queue
+                            </span>
+                          )}
+                          {reservation.metadata?.recurrence_total > 1 && (
+                            <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-50 text-blue-700 flex items-center gap-1">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                              Recurring
                             </span>
                           )}
                         </div>

@@ -39,6 +39,12 @@ interface Booking {
     payment_method: string
     amount: number
   }>
+  recurrence_group_id?: string | null
+  metadata?: {
+    recurrence_total?: number
+    recurrence_index?: number
+    [key: string]: any
+  }
 }
 
 interface BookingsListProps {
@@ -55,11 +61,11 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
 
   const handleResumePayment = async (booking: Booking) => {
     setResumingPaymentId(booking.id)
-    
+
     try {
       const { initiatePaymentAction } = await import('@/app/actions/payments')
       const result = await initiatePaymentAction(booking.id, 'gcash')
-      
+
       if (result.success && result.checkoutUrl) {
         window.location.href = result.checkoutUrl
       } else {
@@ -95,11 +101,11 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     if (booking.status === 'confirmed' || booking.status === 'paid') {
       return { label: 'Paid', color: 'green', needsPayment: false }
     }
-    
+
     // Check payment records
     const payment = booking.payments?.[0]
     if (!payment) return { label: 'Payment Pending', color: 'yellow', needsPayment: true }
-    
+
     switch (payment.status) {
       case 'completed':
         return { label: 'Paid', color: 'green', needsPayment: false }
@@ -128,7 +134,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
   const filteredBookings = bookings.filter((booking) => {
     const startTime = new Date(booking.start_time)
     const now = new Date()
-    
+
     if (filter === 'today') {
       return format(startTime, 'yyyy-MM-dd') === format(now, 'yyyy-MM-dd')
     }
@@ -155,9 +161,8 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
 
     return (
       <span
-        className={`px-3 py-1.5 rounded-full text-xs font-bold shadow-lg ${
-          styles[status] || 'bg-gray-500 text-white'
-        }`}
+        className={`px-3 py-1.5 rounded-full text-xs font-bold shadow-lg ${styles[status] || 'bg-gray-500 text-white'
+          }`}
       >
         {readable}
       </span>
@@ -179,11 +184,10 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
           <button
             key={tab.value}
             onClick={() => setFilter(tab.value as any)}
-            className={`px-4 py-3 font-medium text-sm border-b-2 transition-all ${
-              filter === tab.value
-                ? 'border-primary text-primary'
-                : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
-            }`}
+            className={`px-4 py-3 font-medium text-sm border-b-2 transition-all ${filter === tab.value
+              ? 'border-primary text-primary'
+              : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+              }`}
           >
             {tab.label}
           </button>
@@ -304,6 +308,12 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                   </div>
                   <div className="absolute top-3 right-3 flex gap-2">
                     {bookingStatusBadge(booking.status)}
+                    {booking.metadata?.recurrence_total && booking.metadata.recurrence_total > 1 && (
+                      <span className="px-3 py-1.5 rounded-full text-xs font-bold shadow-lg bg-purple-100 text-purple-800 border border-purple-200 flex items-center gap-1">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                        Week {typeof booking.metadata.recurrence_index === 'number' ? booking.metadata.recurrence_index + 1 : '?'}/{booking.metadata.recurrence_total}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -350,11 +360,10 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                     </div>
                     <div>
                       <p className="text-gray-500 mb-1">Payment</p>
-                      <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-bold shadow-sm ${
-                        paymentStatus.color === 'green' ? 'bg-green-500 text-white' :
+                      <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-bold shadow-sm ${paymentStatus.color === 'green' ? 'bg-green-500 text-white' :
                         paymentStatus.color === 'yellow' ? 'bg-yellow-500 text-gray-900' :
-                        'bg-red-500 text-white'
-                      }`}>
+                          'bg-red-500 text-white'
+                        }`}>
                         {paymentStatus.label}
                       </span>
                     </div>
@@ -379,7 +388,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                       bookingDate={booking.start_time}
                       bookingStatus={booking.status}
                     />
-                    
+
                     {/* Refund Button for Paid/Confirmed Bookings */}
                     {['paid', 'confirmed'].includes(booking.status) && booking.amount_paid > 0 && (
                       <RefundRequestButton
@@ -393,11 +402,11 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                         }}
                       />
                     )}
-                    
+
                     {/* Continue Payment Button for Pending Payments */}
                     {paymentStatus.needsPayment && (
-                      <Button 
-                        className="w-full bg-primary hover:bg-primary/90" 
+                      <Button
+                        className="w-full bg-primary hover:bg-primary/90"
                         size="sm"
                         onClick={() => handleResumePayment(booking)}
                         disabled={resumingPaymentId === booking.id}
@@ -417,7 +426,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                         )}
                       </Button>
                     )}
-                    
+
                     <div className="flex gap-2">
                       <Link href={`/courts/${booking.courts.venues.id}`} className="flex-1">
                         <Button variant="outline" className="w-full" size="sm">

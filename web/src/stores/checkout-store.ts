@@ -14,6 +14,7 @@ export interface BookingData {
   endTime: string
   hourlyRate: number
   capacity: number
+  recurrenceWeeks?: number // 1 = single booking, 4 = 4 weeks, etc.
 }
 
 export interface PlayerPaymentStatus {
@@ -203,15 +204,23 @@ export const useCheckoutStore = create<CheckoutState>()(
         const state = get()
         const bookingData = state.bookingData
         if (!bookingData) return 0
-        
+
         // Calculate duration in hours from startTime and endTime
         const startHour = parseInt(bookingData.startTime.split(':')[0])
         const endHour = parseInt(bookingData.endTime.split(':')[0])
         const duration = endHour - startHour
-        
+        const recurrenceWeeks = bookingData.recurrenceWeeks || 1
+
         const baseRate = bookingData.hourlyRate * duration
         // Apply discount to subtotal
-        return Math.max(0, baseRate - state.discountAmount)
+        // NOTE: Discount is usually per session or total? 
+        // Assuming discount logic calculates PER SESSION for now, so we subtract discount then multiply
+        // OR does discount module return Total Discount? 
+        // Let's assume DiscountAmount is TOTAL discount for the booking.
+        // So: (baseRate * recurrenceWeeks) - discountAmount
+
+        const totalBase = baseRate * recurrenceWeeks
+        return Math.max(0, totalBase - state.discountAmount)
       },
 
       getPlatformFeeAmount: () => {

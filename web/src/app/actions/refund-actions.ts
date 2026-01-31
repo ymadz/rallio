@@ -374,12 +374,15 @@ export async function adminProcessRefundAction(
       return { success: false, error: 'Not authenticated' }
     }
 
-    // Verify user is admin or court admin
-    const { data: roles } = await supabase
+    // Verify user is admin or court admin - use service client to bypass RLS
+    const { createServiceClient } = await import('@/lib/supabase/service')
+    const serviceClient = createServiceClient()
+
+    const { data: roles } = await serviceClient
       .from('user_roles')
-      .select('role')
+      .select('role:roles(name)')
       .eq('user_id', user.id)
-      .in('role', ['global_admin', 'court_admin'])
+      .in('role.name', ['global_admin', 'court_admin'])
 
     if (!roles || roles.length === 0) {
       return { success: false, error: 'Not authorized to process refunds' }
@@ -500,12 +503,15 @@ export async function adminGetRefundsAction(options?: {
       return { success: false, error: 'Not authenticated' }
     }
 
-    // Verify user is admin
-    const { data: roles } = await supabase
+    // Verify user is admin - use service client to bypass RLS
+    const { createServiceClient } = await import('@/lib/supabase/service')
+    const serviceClient = createServiceClient()
+
+    const { data: roles } = await serviceClient
       .from('user_roles')
-      .select('role')
+      .select('role:roles(name)')
       .eq('user_id', user.id)
-      .eq('role', 'global_admin')
+      .eq('role.name', 'global_admin')
 
     if (!roles || roles.length === 0) {
       return { success: false, error: 'Not authorized' }
