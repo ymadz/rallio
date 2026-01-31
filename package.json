@@ -8,12 +8,12 @@
     "web"
   ],
   "scripts": {
-    "dev": "next dev",
-    "dev:3001": "next dev -p 3001",
-    "dev:3002": "next dev -p 3002",
+    "dev": "npm run dev:web",
     "dev:web": "npm run dev --workspace=web",
     "dev:mobile": "cd mobile && npm run start",
+    "build": "npm run build:web",
     "build:web": "npm run build --workspace=web",
+    "vercel-build": "npm run build:web",
     "lint": "eslint .",
     "lint:web": "npm run lint --workspace=web",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
