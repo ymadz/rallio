@@ -32,7 +32,7 @@
     "leaflet": "^1.9.4",
     "leaflet.markercluster": "^1.5.3",
     "lucide-react": "^0.554.0",
-    "next": "15.1.6",
+    "next": "^16.1.6",
     "qrcode.react": "^4.2.0",
     "react": "18.3.1",
     "react-chartjs-2": "^5.3.1",
@@ -53,7 +53,7 @@
     "@types/react": "18.3.18",
     "@types/react-dom": "18.3.5",
     "eslint": "^9",
-    "eslint-config-next": "15.1.6",
+    "eslint-config-next": "^16.1.6",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
