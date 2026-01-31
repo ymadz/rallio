@@ -81,14 +81,19 @@ export async function POST(req: Request) {
         }
 
         // 3. Create PayMongo Payload
-        // For now, defaulting to GCash as 'e-wallet'
-        // In future, we can accept 'paymentMethodType' param to switch to 'paymaya' etc.
 
-        // Note: The params for createGCashCheckout are amount (in pesos), description, etc.
-        // amountToCharge is in PESOS if it came from the DB (e.g. 1500.00).
+        // Construct Bridge URL
+        // We use the 'host' header to ensure valid redirect even if env var is missing/localhost
+        const host = req.headers.get('host') || 'localhost:3000';
+        const protocol = host.includes('localhost') || host.includes('192.168.') ? 'http' : 'https';
+        const baseUrl = `${protocol}://${host}`;
 
-        // Use fallback URLs if not provided, ensuring they point to the main App URL
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        // Create Bridge URLs
+        // PayMongo will redirect here -> We then deep link to app
+        const bridgeSuccessUrl = `${baseUrl}/mobile-payment/callback?status=success`;
+        const bridgeFailedUrl = `${baseUrl}/mobile-payment/callback?status=failed`;
+
+        console.log('[MobileAPI] Bridge URLs:', { bridgeSuccessUrl, bridgeFailedUrl });
 
         // PayMongo requires metadata values to be strings.
         // We must sanitize 'recurrenceGroupId' which might be null.
@@ -108,8 +113,8 @@ export async function POST(req: Request) {
         const result = await createGCashCheckout({
             amount: amountToCharge,
             description: finalDescription,
-            successUrl: successUrl || `${appUrl}/mobile/checkout/success`,
-            failedUrl: cancelUrl || `${appUrl}/mobile/checkout/failed`,
+            successUrl: bridgeSuccessUrl,
+            failedUrl: bridgeFailedUrl,
             metadata: metadata
         })
 
