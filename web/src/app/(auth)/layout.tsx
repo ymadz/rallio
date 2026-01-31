@@ -1,4 +1,6 @@
 import Link from 'next/link'
+import Image from 'next/image'
+import logo from '@/assets/logo.png'
 
 export default function AuthLayout({
   children,
@@ -20,10 +22,12 @@ export default function AuthLayout({
         <div className="relative z-10 flex flex-col items-center justify-center w-full p-12">
           {/* Logo */}
           <div className="mb-8">
-            <img
-              src="/logo.png"
+            <Image
+              src={logo}
               alt="Rallio"
               className="w-20 h-20 brightness-0 invert"
+              width={80}
+              height={80}
             />
           </div>
 
@@ -61,10 +65,12 @@ export default function AuthLayout({
         {/* Mobile logo */}
         <div className="lg:hidden bg-rallio-gradient p-6 flex items-center justify-center">
           <Link href="/" className="flex items-center gap-3">
-            <img
-              src="/logo.png"
+            <Image
+              src={logo}
               alt="Rallio"
               className="w-10 h-10"
+              width={40}
+              height={40}
             />
             <span className="text-xl font-bold text-white">Rallio</span>
           </Link>
