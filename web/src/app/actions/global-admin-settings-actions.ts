@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
 import { logAdminAction } from './global-admin-actions'
 
@@ -70,7 +71,11 @@ export async function getAllPlatformSettings() {
  */
 export async function getPublicSettings(settingKey?: string) {
   try {
-    const supabase = await createClient()
+    // specialized client for static generation - no cookies required
+    const supabase = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
 
     if (settingKey) {
       const { data, error } = await supabase
