@@ -46,6 +46,8 @@ export interface VenueWithDetails {
   distance?: number // in kilometers
   averageRating?: number
   totalReviews?: number
+  category?: string
+  location?: string
 }
 
 export interface CourtWithDetails {
@@ -480,6 +482,8 @@ async function processVenuesList(supabase: any, rawVenues: any[], latitude?: num
       amenities: Array.from(uniqueAmenities),
       averageRating: venueAvg,
       totalReviews: venueCount,
+      category: venue.metadata?.category,
+      location: venue.city || venue.address,
     }
 
     // Calculate distance if coordinates provided
@@ -619,6 +623,8 @@ export async function getVenueById(
       distance,
       averageRating,
       totalReviews: allRatings.length,
+      category: venue.metadata?.category,
+      location: venue.city || venue.address,
     }
   } catch (error) {
     console.error('Error fetching venue:', error)

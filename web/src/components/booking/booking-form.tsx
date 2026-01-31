@@ -143,7 +143,7 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
       date: selectedDate,
       startTime: selectedTime,
       endTime: endTime,
-      hourlyRate: finalPrice > 0 ? (finalPrice / recurrenceWeeks) : hourlyPrice * duration,
+
       // NOTE: hourlyRate in store seems to be strictly "hourly" but usage says "baseRate = bookingData.hourlyRate * duration".
       // Wait, let's look at store again: "baseRate = bookingData.hourlyRate * duration". 
       // So `hourlyRate` should indeed be the PER HOUR rate.

@@ -109,9 +109,9 @@ export default function CourtsPage() {
         let totalCount = 0;
 
         for (const court of venue.courts) {
-          const { averageRating, totalRatings } = await getCourtAverageRating(court.id);
-          totalRating += averageRating * totalRatings;
-          totalCount += totalRatings;
+          const { averageRating, totalReviews } = await getCourtAverageRating(court.id);
+          totalRating += averageRating * totalReviews;
+          totalCount += totalReviews;
         }
 
         ratingsMap[venue.id] = {
@@ -201,8 +201,8 @@ export default function CourtsPage() {
               <button
                 onClick={() => setShowFilters(!showFilters)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg border whitespace-nowrap transition-colors ${showFilters
-                    ? 'bg-primary text-white border-primary'
-                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                   }`}
               >
                 <svg
@@ -232,8 +232,8 @@ export default function CourtsPage() {
                 onClick={getUserLocation}
                 disabled={locationLoading}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg border whitespace-nowrap transition-colors ${userLocation
-                    ? 'bg-green-50 text-green-700 border-green-200'
-                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                  ? 'bg-green-50 text-green-700 border-green-200'
+                  : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                   }`}
               >
                 {locationLoading ? (
@@ -307,8 +307,8 @@ export default function CourtsPage() {
                           setCourtType(courtType === type ? null : (type as 'indoor' | 'outdoor'))
                         }
                         className={`px-3 py-1.5 rounded-full text-sm capitalize border ${courtType === type
-                            ? 'bg-primary/10 border-primary text-primary'
-                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                          ? 'bg-primary/10 border-primary text-primary'
+                          : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
                           }`}
                       >
                         {type}
@@ -325,8 +325,8 @@ export default function CourtsPage() {
                         key={rating}
                         onClick={() => setMinRating(minRating === rating ? 0 : rating)}
                         className={`px-3 py-1.5 rounded-full text-sm border flex items-center gap-1 ${minRating === rating
-                            ? 'bg-yellow-50 border-yellow-400 text-yellow-700'
-                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                          ? 'bg-yellow-50 border-yellow-400 text-yellow-700'
+                          : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
                           }`}
                       >
                         <span>{rating}+</span>
@@ -350,8 +350,8 @@ export default function CourtsPage() {
                         key={amenity}
                         onClick={() => toggleAmenity(amenity)}
                         className={`px-2 py-1 rounded text-xs border ${selectedAmenities.includes(amenity)
-                            ? 'bg-primary/10 border-primary text-primary'
-                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                          ? 'bg-primary/10 border-primary text-primary'
+                          : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
                           }`}
                       >
                         {amenity}
