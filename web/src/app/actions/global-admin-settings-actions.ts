@@ -86,7 +86,7 @@ export async function getPublicSettings(settingKey?: string) {
         .select('setting_key, setting_value, updated_at')
         .eq('is_public', true)
         .eq('setting_key', settingKey)
-        .single()
+        .maybeSingle()
 
       if (error) throw error
       return { success: true, data }
