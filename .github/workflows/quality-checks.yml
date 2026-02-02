@@ -1,0 +1,49 @@
+name: Quality Checks
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  web-quality:
+    name: Web - Quality & Build
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./web
+
+    steps:
+      - name: 🚨 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: './web/package-lock.json'
+
+      - name: 📦 Install Dependencies
+        run: npm ci
+
+      - name: 🔍 Type Check (TypeScript)
+        # Check for type errors without emitting files
+        run: npx tsc --noEmit
+
+      - name: 💅 Lint Check
+        # Check for code style issues
+        run: npm run lint
+
+      - name: 🏗️ Verify Build
+        # Ensure the project actually builds
+        run: npm run build
+        env:
+          # These are needed for the build to pass if you reference them at build time.
+          # We use dummy values for CI build verification to avoid exposing real secrets.
+          # If your build explicitly validates them, you might need to add them to Repo Secrets.
+          NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "dummy-key"
+          NEXT_PUBLIC_APP_URL: "http://localhost:3000"
