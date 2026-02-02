@@ -144,12 +144,19 @@ export default function CheckoutScreen() {
             }
 
             // Batch insert
+            // Add logs for debugging
+            console.log('Mobile Checkout: Creating reservation in Supabase...');
             const { data: reservations, error: reservationError } = await supabase
                 .from('reservations')
                 .insert(reservationsToInsert)
                 .select();
 
-            if (reservationError) throw reservationError;
+            if (reservationError) {
+                console.error('Mobile Checkout: Reservation insert error:', reservationError);
+                throw reservationError;
+            }
+
+            console.log('Mobile Checkout: Reservation created:', reservations?.[0]?.id);
 
             // For single booking reference, we use the first reservation ID
             const primaryReservationId = reservations[0].id;
@@ -175,8 +182,8 @@ export default function CheckoutScreen() {
                 }
 
                 console.log('Mobile Checkout: Has session?', !!session);
-                // console.log('Mobile Checkout: Token:', session.access_token); 
 
+                console.log('Mobile Checkout: Fetching checkout URL...');
                 const response = await fetch(`${apiUrl}/api/mobile/create-checkout`, {
                     method: 'POST',
                     headers: {
@@ -193,16 +200,29 @@ export default function CheckoutScreen() {
                     })
                 });
 
+                console.log('Mobile Checkout: Fetch response status:', response.status);
+
                 if (!response.ok) {
                     const errorData = await response.json();
+                    console.error('Mobile Checkout: API Error:', errorData);
                     throw new Error(errorData.error || 'Payment initialization failed');
                 }
 
                 const payment = await response.json();
+                console.log('Mobile Checkout: Payment data received:', payment);
 
                 if (payment?.checkoutUrl) {
                     // Open PayMongo checkout in browser
-                    await Linking.openURL(payment.checkoutUrl);
+                    console.log('Mobile Checkout: Opening URL:', payment.checkoutUrl);
+                    const supported = await Linking.canOpenURL(payment.checkoutUrl);
+                    if (supported) {
+                        await Linking.openURL(payment.checkoutUrl);
+                    } else {
+                        console.error("Mobile Checkout: Can't open URL:", payment.checkoutUrl);
+                        // Fallback or error?
+                        // Try opening anyway as canOpenURL sometimes returns false on Android for some schemes
+                        await Linking.openURL(payment.checkoutUrl);
+                    }
                 } else {
                     throw new Error('No checkout URL returned');
                 }

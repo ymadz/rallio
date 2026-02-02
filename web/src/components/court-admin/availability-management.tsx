@@ -78,7 +78,7 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
         getBlockedDates(venueId),
         getVenueCourts(venueId)
       ])
-      
+
       if (availResult.success) {
         // If venue has opening hours set, use those
         if (availResult.openingHours && typeof availResult.openingHours === 'object' && !Array.isArray(availResult.openingHours)) {
@@ -223,11 +223,10 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
         <div className="bg-white border border-gray-200 rounded-xl p-2 mb-6 inline-flex gap-2">
           <button
             onClick={() => setActiveTab('schedule')}
-            className={`px-6 py-2 rounded-lg font-medium transition-colors ${
-              activeTab === 'schedule'
+            className={`px-6 py-2 rounded-lg font-medium transition-colors ${activeTab === 'schedule'
                 ? 'bg-blue-600 text-white shadow-sm'
                 : 'text-gray-600 hover:bg-gray-100'
-            }`}
+              }`}
           >
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4" />
@@ -236,11 +235,10 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
           </button>
           <button
             onClick={() => setActiveTab('blocked')}
-            className={`px-6 py-2 rounded-lg font-medium transition-colors ${
-              activeTab === 'blocked'
+            className={`px-6 py-2 rounded-lg font-medium transition-colors ${activeTab === 'blocked'
                 ? 'bg-blue-600 text-white shadow-sm'
                 : 'text-gray-600 hover:bg-gray-100'
-            }`}
+              }`}
           >
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4" />
@@ -270,7 +268,7 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
           <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
               <h2 className="text-xl font-bold text-gray-900">Weekly Schedule</h2>
-              <button 
+              <button
                 onClick={() => setShowHoursModal(true)}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
@@ -329,7 +327,7 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <button 
+                            <button
                               onClick={() => setShowHoursModal(true)}
                               className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                             >
@@ -378,44 +376,44 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
             /* Blocked Dates List */
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {blockedDates.map((blocked) => (
-              <div
-                key={blocked.id}
-                className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium capitalize ${getTypeColor(blocked.block_type || blocked.type)}`}>
-                    {blocked.block_type || blocked.type}
-                  </span>
-                  <button 
-                    onClick={() => handleDeleteBlock(blocked.id)}
-                    className="p-1 hover:bg-gray-100 rounded transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4 text-red-600" />
-                  </button>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Building2 className="w-4 h-4 text-gray-400" />
-                    <span className="font-medium text-gray-900">{blocked.court_name || blocked.courtName || 'All Courts'}</span>
-                  </div>
-
-                  <div className="flex items-center gap-2 text-sm">
-                    <Calendar className="w-4 h-4 text-gray-400" />
-                    <span className="text-gray-700">
-                      {new Date(blocked.start_date || blocked.date).toLocaleDateString('en-US', {
-                        month: 'long',
-                        day: 'numeric',
-                        year: 'numeric'
-                      })}
+                <div
+                  key={blocked.id}
+                  className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium capitalize ${getTypeColor(blocked.block_type || blocked.type)}`}>
+                      {blocked.block_type || blocked.type}
                     </span>
+                    <button
+                      onClick={() => handleDeleteBlock(blocked.id)}
+                      className="p-1 hover:bg-gray-100 rounded transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4 text-red-600" />
+                    </button>
                   </div>
 
-                  <div className="pt-2 border-t border-gray-200">
-                    <p className="text-sm text-gray-600">{blocked.reason}</p>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Building2 className="w-4 h-4 text-gray-400" />
+                      <span className="font-medium text-gray-900">{blocked.court_name || blocked.courtName || 'All Courts'}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-sm">
+                      <Calendar className="w-4 h-4 text-gray-400" />
+                      <span className="text-gray-700">
+                        {new Date(blocked.start_date || blocked.date).toLocaleDateString('en-US', {
+                          month: 'long',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
+                      </span>
+                    </div>
+
+                    <div className="pt-2 border-t border-gray-200">
+                      <p className="text-sm text-gray-600">{blocked.reason}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
               ))}
             </div>
           )}
@@ -437,6 +435,49 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
             </div>
 
             <div className="space-y-4 max-h-96 overflow-y-auto">
+              <div className="flex gap-2 mb-4 bg-gray-50 p-3 rounded-lg">
+                <span className="text-sm font-medium text-gray-700 flex items-center">Quick Actions:</span>
+                <button
+                  onClick={() => {
+                    const monday = operatingHours['monday'];
+                    const newHours = { ...operatingHours };
+                    Object.keys(newHours).forEach(day => {
+                      newHours[day] = { ...monday };
+                    });
+                    setOperatingHours(newHours);
+                  }}
+                  className="text-xs bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-100"
+                >
+                  Copy Mon to All
+                </button>
+                <button
+                  onClick={() => {
+                    const monday = operatingHours['monday'];
+                    const newHours = { ...operatingHours };
+                    ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].forEach(day => {
+                      newHours[day] = { ...monday };
+                    });
+                    setOperatingHours(newHours);
+                  }}
+                  className="text-xs bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-100"
+                >
+                  Weekdays
+                </button>
+                <button
+                  onClick={() => {
+                    const saturday = operatingHours['saturday'];
+                    const newHours = { ...operatingHours };
+                    ['saturday', 'sunday'].forEach(day => {
+                      newHours[day] = { ...saturday };
+                    });
+                    setOperatingHours(newHours);
+                  }}
+                  className="text-xs bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-100"
+                >
+                  Weekends
+                </button>
+              </div>
+
               {Object.keys(operatingHours).map(day => (
                 <div key={day} className="flex items-center gap-4 pb-3 border-b">
                   <input

@@ -158,9 +158,8 @@ export function ProfileEditClient({ profile, player }: ProfileEditClientProps) {
       <div className="max-w-3xl mx-auto p-6">
         <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-6 space-y-6">
           {message && (
-            <div className={`p-4 rounded-lg ${
-              message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'
-            }`}>
+            <div className={`p-4 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'
+              }`}>
               {message.text}
             </div>
           )}
@@ -284,6 +283,15 @@ export function ProfileEditClient({ profile, player }: ProfileEditClientProps) {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Skill Level: {formData.skillLevel}/10
+                  <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${formData.skillLevel <= 3 ? 'bg-green-100 text-green-800' :
+                      formData.skillLevel <= 6 ? 'bg-blue-100 text-blue-800' :
+                        formData.skillLevel <= 8 ? 'bg-amber-100 text-amber-800' :
+                          'bg-purple-100 text-purple-800'
+                    }`}>
+                    {formData.skillLevel <= 3 ? 'Beginner' :
+                      formData.skillLevel <= 6 ? 'Intermediate' :
+                        formData.skillLevel <= 8 ? 'Advanced' : 'Elite'}
+                  </span>
                 </label>
                 <input
                   type="range"
@@ -291,12 +299,15 @@ export function ProfileEditClient({ profile, player }: ProfileEditClientProps) {
                   max="10"
                   value={formData.skillLevel}
                   onChange={(e) => handleInputChange('skillLevel', parseInt(e.target.value))}
-                  className="w-full"
+                  className="w-full accent-primary h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                 />
-                <div className="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>Beginner</span>
-                  <span>Elite</span>
+                <div className="flex justify-between text-xs text-gray-500 mt-1 px-1">
+                  <span>1</span>
+                  <span>10</span>
                 </div>
+                <p className="text-xs text-gray-400 mt-2">
+                  This will help match you with players of similar skill level.
+                </p>
               </div>
 
               <div>
@@ -307,11 +318,10 @@ export function ProfileEditClient({ profile, player }: ProfileEditClientProps) {
                       key={style}
                       type="button"
                       onClick={() => handlePlayStyleToggle(style)}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        formData.playStyles.includes(style)
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${formData.playStyles.includes(style)
                           ? 'bg-primary text-white'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
+                        }`}
                     >
                       {style}
                     </button>

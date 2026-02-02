@@ -311,7 +311,9 @@ export async function createReservationAction(data: {
         user_id: data.userId,
         start_time: currentStartTime.toISOString(),
         end_time: currentEndTime.toISOString(),
-        status: 'pending_payment',
+        // For cash recurring, we auto-confirm them as "Reserved" but unpaid. 
+        // Normal flow is 'pending_payment', but for cash-on-day bulk, we treat it as a confirmed reservation that needs payment later.
+        status: (data.paymentMethod === 'cash' && isRecurring) ? 'confirmed' : 'pending_payment',
         total_amount: perInstanceAmount, // Correctly split price per instance
         amount_paid: 0,
         num_players: data.numPlayers || 1,
