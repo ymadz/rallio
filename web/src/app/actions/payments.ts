@@ -559,6 +559,49 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
       }
     }
 
+    // BULK/RECURRING PAYMENT HANDLING
+    // Check if this is part of a recurrence group and confirm the rest
+    const recurrenceGroupId = payment.metadata?.recurrence_group_id
+    if (recurrenceGroupId) {
+      console.log('🔄 Bulk Payment detected in processChargeableSourceAction:', recurrenceGroupId)
+
+      // Fetch all other pending reservations in this group
+      const { data: groupReservations, error: groupFetchError } = await supabase
+        .from('reservations')
+        .select('id, total_amount')
+        .eq('recurrence_group_id', recurrenceGroupId)
+        .neq('id', payment.reservation_id) // Exclude the one we just updated
+        .in('status', ['pending', 'pending_payment'])
+
+      if (groupFetchError) {
+        console.error('❌ Failed to fetch recurrence group for bulk update:', groupFetchError)
+      } else if (groupReservations && groupReservations.length > 0) {
+        console.log(`🔄 Confirming ${groupReservations.length} additional recurring reservations...`)
+
+        // Confirm all of them
+        // We set amount_paid = total_amount for them because the SINGLE payment record covers the WHOLE group.
+        // Logic: The payment record tracks the TOTAL paid. The reservations track their individual "paid" status.
+        // Usually, `amount_paid` on reservation matches the logic. 
+        // If we split the payment amount access them? 
+        // In the webhook logic, we set `amount_paid: res.total_amount` for each.
+
+        for (const res of groupReservations) {
+          const { error: bulkUpdateError } = await supabase
+            .from('reservations')
+            .update({
+              status: 'confirmed',
+              amount_paid: res.total_amount, // Mark fully paid
+            })
+            .eq('id', res.id)
+
+          if (bulkUpdateError) {
+            console.error(`❌ Failed to confirm recurring reservation ${res.id}:`, bulkUpdateError)
+          }
+        }
+        console.log('✅ Bulk confirmation complete')
+      }
+    }
+
     console.log('✅ Payment and reservation updated successfully')
     console.log('Payment ID:', payment.id)
     console.log('Reservation ID:', payment.reservation_id)
