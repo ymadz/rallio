@@ -48,6 +48,7 @@ export interface VenueWithDetails {
   totalReviews?: number
   category?: string
   location?: string
+  image_url?: string | null
 }
 
 export interface CourtWithDetails {
@@ -177,6 +178,7 @@ export async function getVenues(filters: VenueFilters = {}): Promise<{
         is_verified,
         metadata,
         created_at,
+        image_url,
         courts!inner (
           id,
           name,
@@ -286,6 +288,7 @@ export async function getVenues(filters: VenueFilters = {}): Promise<{
         is_verified,
         metadata,
         created_at,
+        image_url,
         courts (
           id,
           name,
@@ -528,6 +531,7 @@ export async function getVenueById(
         is_verified,
         metadata,
         created_at,
+        image_url,
         courts (
           id,
           name,

@@ -5,6 +5,7 @@ import { X, Loader2, Phone, Mail, Globe } from 'lucide-react'
 import { updateVenue } from '@/app/actions/court-admin-actions'
 import { useRouter } from 'next/navigation'
 import { AddressAutocomplete } from '@/components/ui/address-autocomplete'
+import { VenuePhotoUpload } from './venue-photo-upload'
 
 interface VenueEditModalProps {
   venue: {
@@ -18,6 +19,7 @@ interface VenueEditModalProps {
     website?: string
     latitude?: number
     longitude?: number
+    image_url?: string
   }
   isOpen: boolean
   onClose: () => void
@@ -37,7 +39,8 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
     email: '',
     website: '',
     latitude: '',
-    longitude: ''
+    longitude: '',
+    image_url: ''
   })
 
   // Reset form when venue changes
@@ -52,7 +55,8 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
         email: venue.email || '',
         website: venue.website || '',
         latitude: venue.latitude?.toString() || '',
-        longitude: venue.longitude?.toString() || ''
+        longitude: venue.longitude?.toString() || '',
+        image_url: venue.image_url || ''
       })
     }
   }, [venue])
@@ -70,7 +74,8 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
         city: formData.city || null,
         phone: formData.phone || null,
         email: formData.email || null,
-        website: formData.website || null
+        website: formData.website || null,
+        image_url: formData.image_url || null
       }
 
       // Only add coordinates if provided
@@ -102,11 +107,11 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div 
+      <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       />
-      
+
       {/* Modal */}
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
         {/* Header */}
@@ -127,6 +132,13 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
               {error}
             </div>
           )}
+
+          {/* Cover Image Upload */}
+          <VenuePhotoUpload
+            venueId={venue.id}
+            currentImage={formData.image_url}
+            onImageChange={(url) => setFormData(prev => ({ ...prev, image_url: url || '' }))}
+          />
 
           {/* Venue Name */}
           <div>

@@ -491,9 +491,19 @@ export default function CourtsPage() {
                     {/* Venue Image */}
                     <div className="h-28 md:h-44 bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center relative overflow-hidden">
                       {(() => {
-                        // Find first court with an image
-                        const coverImage = venue.courts.find(c => c.images && c.images.length > 0)?.images[0]?.url
+                        // Priority 1: Venue Cover Image
+                        if (venue.image_url) {
+                          return (
+                            <img
+                              src={venue.image_url}
+                              alt={venue.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                          )
+                        }
 
+                        // Priority 2: Primary Court Image
+                        const coverImage = venue.courts.find(c => c.images && c.images.length > 0)?.images[0]?.url
                         if (coverImage) {
                           return (
                             <img
@@ -504,6 +514,7 @@ export default function CourtsPage() {
                           )
                         }
 
+                        // Priority 3: Placeholder
                         return (
                           <div className="w-full h-full flex items-center justify-center bg-gray-100">
                             <svg className="w-8 h-8 md:w-12 md:h-12 text-primary/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -90,6 +90,28 @@ export async function getQueueDetails(courtId: string) {
       return { success: true, queue: null }
     }
 
+    // AUTO-CLOSE CHECK: If session is past end_time, close it automatically
+    if (new Date(session.end_time) < new Date()) {
+      console.log('[getQueueDetails] 🕒 Session expired, auto-closing:', session.id)
+
+      // Update DB to close the session
+      const { error: closeError } = await supabase
+        .from('queue_sessions')
+        .update({ status: 'closed' })
+        .eq('id', session.id)
+
+      if (closeError) {
+        console.error('[getQueueDetails] ❌ Failed to auto-close session:', closeError)
+      } else {
+        // Revalidate to ensure UI updates immediately
+        revalidatePath(`/queue/${courtId}`)
+        revalidatePath('/queue')
+      }
+
+      // Return null effectively removing it from view
+      return { success: true, queue: null }
+    }
+
     // Get all participants in this session
     const { data: participants, error: participantsError } = await supabase
       .from('queue_participants')

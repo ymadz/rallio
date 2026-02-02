@@ -35,6 +35,7 @@ const LocationPicker = dynamic(
   }
 )
 
+import { VenuePhotoUpload } from '@/components/court-admin/venue-photo-upload'
 import { AddressAutocomplete } from '@/components/ui/address-autocomplete'
 
 interface Venue {
@@ -65,7 +66,8 @@ export function VenueList() {
     email: '',
     website: '',
     latitude: '',
-    longitude: ''
+    longitude: '',
+    image_url: ''
   })
   const [showMapPicker, setShowMapPicker] = useState(false)
 
@@ -107,7 +109,8 @@ export function VenueList() {
         city: formData.city || 'Zamboanga City',
         phone: formData.phone || undefined,
         email: formData.email || undefined,
-        website: formData.website || undefined
+        website: formData.website || undefined,
+        image_url: formData.image_url || undefined
       }
 
       // Add coordinates if provided
@@ -132,7 +135,8 @@ export function VenueList() {
         email: '',
         website: '',
         latitude: '',
-        longitude: ''
+        longitude: '',
+        image_url: ''
       })
       setShowCreateModal(false)
       // Reload venues
@@ -402,6 +406,13 @@ export function VenueList() {
 
             {/* Modal Form */}
             <form onSubmit={handleCreateVenue} className="p-8 space-y-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+              {/* Cover Image Upload */}
+              <VenuePhotoUpload
+                venueId="new-venue"
+                currentImage={formData.image_url}
+                onImageChange={(url) => setFormData({ ...formData, image_url: url || '' })}
+              />
+
               {/* Venue Name */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">

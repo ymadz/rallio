@@ -20,10 +20,10 @@ export default async function QueuePage({ params }: QueuePageProps) {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header with Breadcrumbs */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+      <header className="bg-white border-b border-gray-200">
         <div className="container mx-auto px-4 max-w-4xl">
           <div className="flex items-center gap-3 h-16">
-            <Link 
+            <Link
               href="/queue"
               className="p-2 -ml-2 hover:bg-gray-100 rounded-lg transition-colors"
               aria-label="Back to queue dashboard"
