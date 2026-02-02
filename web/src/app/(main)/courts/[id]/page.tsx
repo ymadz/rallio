@@ -28,6 +28,7 @@ async function getVenueByIdServer(venueId: string) {
       is_verified,
       metadata,
       created_at,
+      image_url,
       courts (
         id,
         name,
@@ -77,6 +78,7 @@ async function getVenueByIdServer(venueId: string) {
 
   return {
     ...venue,
+    image_url: venue.image_url,
     courts: processedCourts,
   }
 }
@@ -146,10 +148,17 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
     }
   })
 
-  // Use court images if available, otherwise use placeholder
-  const venueImages = allCourtImages.length > 0 ? allCourtImages : [
-    'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?q=80&w=2070',
-  ]
+  // Mix venue image + court images
+  const venueImages = []
+  if (venue.image_url) {
+    venueImages.push(venue.image_url)
+  }
+  venueImages.push(...allCourtImages)
+
+  // Fallback if absolutely no images
+  if (venueImages.length === 0) {
+    venueImages.push('https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?q=80&w=2070')
+  }
 
   return (
     <div className="min-h-screen bg-white">
