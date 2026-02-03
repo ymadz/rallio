@@ -4,13 +4,15 @@ import { format } from 'date-fns'
 import Link from 'next/link'
 import { PrintButton } from '@/components/shared/print-button'
 
-export default async function BookingReceiptPage({ params }: { params: { id: string } }) {
+export default async function BookingReceiptPage({ params }: { params: Promise<{ id: string }> }) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
         redirect('/login')
     }
+
+    const { id } = await params
 
     // Fetch booking details
     const { data: booking, error } = await supabase
@@ -33,7 +35,7 @@ export default async function BookingReceiptPage({ params }: { params: { id: str
         created_at
       )
     `)
-        .eq('id', params.id)
+        .eq('id', id)
         .single()
 
     if (error || !booking) {
