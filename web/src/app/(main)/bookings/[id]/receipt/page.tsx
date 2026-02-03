@@ -21,6 +21,7 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
       *,
       courts (
         name,
+        hourly_rate,
         venues (
           name,
           address,
