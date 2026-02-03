@@ -139,6 +139,13 @@ export default function PaymentSuccessPage() {
               Find More Courts
             </Button>
           </Link>
+          {reservationId && (
+            <Link href={`/bookings/${reservationId}/receipt`} className="block">
+              <Button variant="outline" className="w-full">
+                View Receipt
+              </Button>
+            </Link>
+          )}
         </div>
 
         {reservationId && (
@@ -147,6 +154,6 @@ export default function PaymentSuccessPage() {
           </p>
         )}
       </div>
-    </div>
+    </div >
   )
 }
