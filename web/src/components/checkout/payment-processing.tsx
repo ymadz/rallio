@@ -130,6 +130,7 @@ export function PaymentProcessing() {
           discountType,
           discountReason,
           recurrenceWeeks: bookingData.recurrenceWeeks,
+          selectedDays: bookingData.selectedDays,
         })
 
         if (!reservationResult.success || !reservationResult.reservationId) {
@@ -575,10 +576,10 @@ export function PaymentProcessing() {
           <div
             key={payment.playerNumber}
             className={`bg-white border-2 rounded-xl p-6 transition-all ${payment.status === 'paid'
-                ? 'border-green-500 bg-green-50/50'
-                : payment.status === 'pending'
-                  ? 'border-gray-200'
-                  : 'border-red-500 bg-red-50/50'
+              ? 'border-green-500 bg-green-50/50'
+              : payment.status === 'pending'
+                ? 'border-gray-200'
+                : 'border-red-500 bg-red-50/50'
               }`}
           >
             <div className="flex items-start justify-between mb-4">

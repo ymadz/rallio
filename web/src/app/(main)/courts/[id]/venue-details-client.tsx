@@ -20,9 +20,13 @@ interface VenueDetailsClientProps {
   courts: Court[]
   venueId: string
   venueName: string
+  discounts?: {
+    rules: any[]
+    holidays: any[]
+  }
 }
 
-export function VenueDetailsClient({ courts, venueId, venueName }: VenueDetailsClientProps) {
+export function VenueDetailsClient({ courts, venueId, venueName, discounts }: VenueDetailsClientProps) {
   const [selectedCourt, setSelectedCourt] = useState<Court | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
@@ -56,11 +60,10 @@ export function VenueDetailsClient({ courts, venueId, venueName }: VenueDetailsC
                     <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded capitalize">
                       {court.surface_type}
                     </span>
-                    <span className={`text-xs px-2 py-1 rounded ${
-                      court.court_type === 'indoor'
-                        ? 'bg-blue-50 text-blue-600'
-                        : 'bg-green-50 text-green-600'
-                    }`}>
+                    <span className={`text-xs px-2 py-1 rounded ${court.court_type === 'indoor'
+                      ? 'bg-blue-50 text-blue-600'
+                      : 'bg-green-50 text-green-600'
+                      }`}>
                       {court.court_type}
                     </span>
                     <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
@@ -108,6 +111,23 @@ export function VenueDetailsClient({ courts, venueId, venueName }: VenueDetailsC
           ))}
         </div>
       </div>
+
+      {/* Availability Modal */}
+      {selectedCourt && (
+        <AvailabilityModal
+          isOpen={isModalOpen}
+          onClose={() => {
+            setIsModalOpen(false)
+            setSelectedCourt(null)
+          }}
+          courtId={selectedCourt.id}
+          courtName={selectedCourt.name}
+          hourlyRate={selectedCourt.hourly_rate}
+          venueId={venueId}
+          venueName={venueName}
+          capacity={selectedCourt.capacity}
+        />
+      )}
 
       {/* Availability Modal */}
       {selectedCourt && (

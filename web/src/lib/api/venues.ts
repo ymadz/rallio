@@ -49,6 +49,8 @@ export interface VenueWithDetails {
   category?: string
   location?: string
   image_url?: string | null
+  activeDiscountCount?: number
+  hasActiveDiscounts?: boolean
 }
 
 export interface CourtWithDetails {
@@ -428,6 +430,35 @@ async function processVenuesList(supabase: any, rawVenues: any[], latitude?: num
     courtRatings = ratingsData || []
   }
 
+
+  // Fetch active discounts (bulk fetch for better performance)
+  // We can't easily join in the main query because discount_rules is not directly related to courts but venues
+  // and we are already doing complex joins. A separate query is safer.
+  let activeDiscountMap: Record<string, number> = {}
+  if (rawVenues.length > 0) {
+    const venueIds = rawVenues.map(v => v.id)
+
+    // Count active discount rules per venue
+    const { data: rules } = await supabase
+      .from('discount_rules')
+      .select('venue_id')
+      .in('venue_id', venueIds)
+      .eq('is_active', true)
+
+    // Count active holiday pricing per venue
+    const { data: holidays } = await supabase
+      .from('holiday_pricing')
+      .select('venue_id')
+      .in('venue_id', venueIds)
+      .eq('is_active', true)
+
+    venueIds.forEach(id => {
+      const ruleCount = rules?.filter((r: any) => r.venue_id === id).length || 0
+      const holidayCount = holidays?.filter((h: any) => h.venue_id === id).length || 0
+      activeDiscountMap[id] = ruleCount + holidayCount
+    })
+  }
+
   // Aggregate ratings per court
   const courtAggregates: Record<string, { sum: number; count: number; avg: number }> = {}
   for (const r of courtRatings) {
@@ -487,6 +518,8 @@ async function processVenuesList(supabase: any, rawVenues: any[], latitude?: num
       totalReviews: venueCount,
       category: venue.metadata?.category,
       location: venue.city || venue.address,
+      activeDiscountCount: activeDiscountMap[venue.id] || 0,
+      hasActiveDiscounts: (activeDiscountMap[venue.id] || 0) > 0,
     }
 
     // Calculate distance if coordinates provided
@@ -600,6 +633,22 @@ export async function getVenueById(
       )
     }
 
+    // Get active discounts count
+    const [rulesResult, holidayResult] = await Promise.all([
+      supabase
+        .from('discount_rules')
+        .select('*', { count: 'exact', head: true })
+        .eq('venue_id', venueId)
+        .eq('is_active', true),
+      supabase
+        .from('holiday_pricing')
+        .select('*', { count: 'exact', head: true })
+        .eq('venue_id', venueId)
+        .eq('is_active', true)
+    ])
+
+    const activeDiscountCount = (rulesResult.count || 0) + (holidayResult.count || 0)
+
     // Get average rating for the venue (average of all court ratings)
     const courtIds = activeCourts.map(c => c.id)
     const ratingsData = await Promise.all(
@@ -629,6 +678,8 @@ export async function getVenueById(
       totalReviews: allRatings.length,
       category: venue.metadata?.category,
       location: venue.city || venue.address,
+      activeDiscountCount,
+      hasActiveDiscounts: activeDiscountCount > 0,
     }
   } catch (error) {
     console.error('Error fetching venue:', error)

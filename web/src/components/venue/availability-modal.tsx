@@ -6,7 +6,8 @@ import { DayPicker } from 'react-day-picker'
 import { format } from 'date-fns'
 import 'react-day-picker/dist/style.css'
 import { useCheckoutStore } from '@/stores/checkout-store'
-import { getAvailableTimeSlotsAction } from '@/app/actions/reservations'
+import { getAvailableTimeSlotsAction, validateBookingAvailabilityAction } from '@/app/actions/reservations'
+import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
 import { cn } from '@/lib/utils'
 import { Label } from '@/components/ui/label'
 import {
@@ -32,6 +33,10 @@ interface AvailabilityModalProps {
   venueId: string
   venueName: string
   capacity: number
+  discounts?: {
+    rules: any[]
+    holidays: any[]
+  }
 }
 
 export function AvailabilityModal({
@@ -45,9 +50,23 @@ export function AvailabilityModal({
   capacity
 }: AvailabilityModalProps) {
   const router = useRouter()
-  const { setBookingData } = useCheckoutStore()
+  const { setBookingData, setDiscountDetails, setDiscount } = useCheckoutStore()
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [recurrenceWeeks, setRecurrenceWeeks] = useState<number>(1)
+  const [selectedDays, setSelectedDays] = useState<number[]>([]) // [0-6] for Sun-Sat
+
+  // Validation state
+  const [validationState, setValidationState] = useState<{
+    valid: boolean
+    validating: boolean
+    error?: string
+    conflictDate?: string
+  }>({ valid: true, validating: false })
+
+  // Reset selected days when date changes
+  useEffect(() => {
+    setSelectedDays([selectedDate.getDay()])
+  }, [selectedDate])
 
   // Selection state
   const [startSlot, setStartSlot] = useState<TimeSlot | null>(null)
@@ -56,6 +75,15 @@ export function AvailabilityModal({
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
   const [loading, setLoading] = useState(false)
   const [isBooking, setIsBooking] = useState(false)
+
+  // Pricing state
+  const [calculatedPrice, setCalculatedPrice] = useState<{
+    original: number
+    final: number
+    discount: number
+    appliedDiscountName?: string
+  } | null>(null)
+  const [isCalculatingPrice, setIsCalculatingPrice] = useState(false)
 
   // Fetch available time slots for the selected date
   useEffect(() => {
@@ -81,14 +109,7 @@ export function AvailabilityModal({
     fetchTimeSlots()
   }, [selectedDate, courtId, isOpen])
 
-  const formatTime = (time: string) => {
-    const [hours, minutes] = time.split(':').map(Number)
-    const period = hours >= 12 ? 'PM' : 'AM'
-    const displayHours = hours % 12 || 12
-    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`
-  }
-
-  // Calculate duration based on start and end slots
+  // Helpers needed for effects
   const getDuration = (): number => {
     if (!startSlot) return 0
     if (!endSlot) return 1 // Single slot selected means 1 hour
@@ -109,6 +130,125 @@ export function AvailabilityModal({
     const [hours, minutes] = targetSlot.time.split(':').map(Number)
     const endHour = hours + 1
     return `${endHour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
+  }
+
+  // Calculate pricing whenever slots or recurrence changes
+  useEffect(() => {
+    async function calculatePrice() {
+      if (!startSlot) {
+        setCalculatedPrice(null)
+        return
+      }
+
+      setIsCalculatingPrice(true)
+      const duration = getDuration()
+      const endTime = getEndTime() // "HH:MM"
+
+      // Basic base price calculation
+      const numSessionsPerWeek = selectedDays.length
+      const basePrice = (startSlot.price || hourlyRate) * duration * recurrenceWeeks * numSessionsPerWeek
+
+      try {
+        // Construct ISO strings for start/end
+        const dateStr = format(selectedDate, 'yyyy-MM-dd')
+        const startDateTime = `${dateStr}T${startSlot.time}:00`
+        const endDateTime = `${dateStr}T${endTime}:00`
+
+        const result = await calculateApplicableDiscounts({
+          venueId,
+          courtId,
+          startDate: startDateTime,
+          endDate: endDateTime,
+          numberOfDays: recurrenceWeeks,
+          numberOfPlayers: 1,
+          basePrice
+        })
+
+        if (result.success) {
+          const discountName = result.discounts.length > 0 ? result.discounts[0].name : 'Seasonal Offer'
+
+          setCalculatedPrice({
+            original: basePrice,
+            final: result.finalPrice,
+            discount: result.totalDiscount,
+            appliedDiscountName: discountName
+          })
+        } else {
+          setCalculatedPrice({
+            original: basePrice,
+            final: basePrice,
+            discount: 0
+          })
+        }
+      } catch (err) {
+        console.error("Price calc error", err)
+        setCalculatedPrice({
+          original: basePrice,
+          final: basePrice,
+          discount: 0
+        })
+      } finally {
+        setIsCalculatingPrice(false)
+      }
+    }
+
+    calculatePrice()
+  }, [startSlot, endSlot, recurrenceWeeks, selectedDate, courtId, venueId, hourlyRate, selectedDays])
+
+  // Validate recurring availability
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout
+
+    async function validateRecurring() {
+      if (!startSlot || (!recurrenceWeeks && selectedDays.length <= 1)) {
+        setValidationState({ valid: true, validating: false })
+        return
+      }
+
+      setValidationState(prev => ({ ...prev, validating: true, valid: true, error: undefined }))
+
+      const endTime = getEndTime()
+
+      try {
+        const dateStr = format(selectedDate, 'yyyy-MM-dd')
+        const startDateTime = `${dateStr}T${startSlot.time}:00`
+        const endDateTime = `${dateStr}T${endTime}:00`
+
+        const result = await validateBookingAvailabilityAction({
+          courtId,
+          startTimeISO: startDateTime,
+          endTimeISO: endDateTime,
+          recurrenceWeeks,
+          selectedDays
+        })
+
+        if (!result.available) {
+          setValidationState({
+            valid: false,
+            validating: false,
+            error: result.error,
+            conflictDate: result.conflictDate
+          })
+        } else {
+          setValidationState({ valid: true, validating: false })
+        }
+      } catch (err) {
+        console.error("Validation error", err)
+        setValidationState({ valid: false, validating: false, error: "Validation failed." })
+      }
+    }
+
+    // Debounce validation
+    timeoutId = setTimeout(validateRecurring, 500)
+
+    return () => clearTimeout(timeoutId)
+  }, [startSlot, endSlot, recurrenceWeeks, selectedDays, selectedDate, courtId])
+
+  const formatTime = (time: string) => {
+    const [hours, minutes] = time.split(':').map(Number)
+    const period = hours >= 12 ? 'PM' : 'AM'
+    const displayHours = hours % 12 || 12
+    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`
   }
 
   const getNextHour = (time: string) => {
@@ -166,7 +306,7 @@ export function AvailabilityModal({
   }
 
   const handleBook = () => {
-    if (startSlot && !isBooking) {
+    if (startSlot && !isBooking && validationState.valid) {
       setIsBooking(true)
 
       try {
@@ -185,7 +325,19 @@ export function AvailabilityModal({
           hourlyRate,
           capacity,
           recurrenceWeeks,
+          selectedDays,
         })
+
+        // Set discount details if calculated
+        if (calculatedPrice) {
+          setDiscountDetails({
+            amount: calculatedPrice.discount,
+            type: undefined,
+            reason: calculatedPrice.discount > 0 ? 'Discount applied' : 'Surcharge applied'
+          })
+        } else {
+          setDiscount(0)
+        }
 
         // Navigate to checkout page
         router.push('/checkout')
@@ -218,7 +370,6 @@ export function AvailabilityModal({
   if (!isOpen) return null
 
   const duration = getDuration()
-  const totalPrice = (startSlot?.price || hourlyRate) * duration * recurrenceWeeks
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -301,9 +452,10 @@ export function AvailabilityModal({
                       <SelectValue placeholder="Do not repeat" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="1">Just Once (No repeat)</SelectItem>
-                      <SelectItem value="4">Repeat for 4 weeks</SelectItem>
-                      <SelectItem value="8">Repeat for 8 weeks</SelectItem>
+                      <SelectItem value="1">1 Week (One-time)</SelectItem>
+                      <SelectItem value="2">2 Weeks</SelectItem>
+                      <SelectItem value="3">3 Weeks</SelectItem>
+                      <SelectItem value="4">4 Weeks</SelectItem>
                     </SelectContent>
                   </Select>
 
@@ -318,6 +470,48 @@ export function AvailabilityModal({
                     </div>
                   )}
                 </div>
+
+                {/* Multi-Day Selection */}
+                {recurrenceWeeks >= 1 && (
+                  <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xl">📅</span>
+                      <Label className="text-sm font-semibold text-gray-900">Include Days</Label>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, index) => {
+                        const isPrimaryDay = index === selectedDate.getDay()
+                        const isSelected = selectedDays.includes(index)
+
+                        return (
+                          <button
+                            key={day}
+                            disabled={isPrimaryDay} // Keep primary day always selected/disabled
+                            onClick={() => {
+                              if (isSelected) {
+                                setSelectedDays(prev => prev.filter(d => d !== index))
+                              } else {
+                                setSelectedDays(prev => [...prev, index].sort())
+                              }
+                            }}
+                            className={cn(
+                              "px-3 py-1.5 rounded text-xs font-medium border transition-colors",
+                              isSelected
+                                ? "bg-primary text-white border-primary"
+                                : "bg-white text-gray-700 border-gray-300 hover:border-primary/50",
+                              isPrimaryDay && "opacity-60 cursor-not-allowed"
+                            )}
+                          >
+                            {day}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Select additional days to book at the same time slot.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Time Slots */}
@@ -413,6 +607,39 @@ export function AvailabilityModal({
             <div>
               {startSlot && (
                 <div className="text-sm">
+                  {/* Validation Error Display */}
+                  {!validationState.valid && validationState.error && (
+                    <div className="mb-2 bg-red-50 border border-red-200 rounded-lg p-2 text-sm flex items-start gap-2 max-w-sm animate-pulse">
+                      <span className="text-red-500 mt-0.5">⚠️</span>
+                      <div className="flex-1">
+                        <p className="font-semibold text-red-800 text-xs uppercase tracking-wide">Cannot Book</p>
+                        <p className="text-red-700 font-medium leading-tight">{validationState.error}</p>
+                      </div>
+                    </div>
+                  )}
+                  {/* Validation Loading */}
+                  {validationState.validating && (
+                    <div className="mb-2 text-xs text-blue-600 flex items-center gap-1.5">
+                      <div className="animate-spin rounded-full h-3 w-3 border-2 border-blue-600 border-t-transparent" />
+                      Checking availability...
+                    </div>
+                  )}
+
+                  {calculatedPrice && calculatedPrice.discount !== 0 && (
+                    <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium mb-2 ${calculatedPrice.discount > 0
+                      ? 'bg-green-100 text-green-700 border border-green-200'
+                      : 'bg-orange-100 text-orange-700 border border-orange-200'
+                      }`}>
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={
+                          calculatedPrice.discount > 0
+                            ? "M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+                            : "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        } />
+                      </svg>
+                      {calculatedPrice.discount > 0 ? 'Discount Applied:' : 'Surcharge Applied:'} {calculatedPrice.appliedDiscountName}
+                    </div>
+                  )}
                   <p className="text-gray-600">
                     <span className="font-medium text-gray-900">Selected:</span>{' '}
                     {format(selectedDate, 'MMM d, yyyy')}
@@ -420,9 +647,23 @@ export function AvailabilityModal({
                   <p className="text-gray-600">
                     {formatTime(startSlot.time)} - {formatTime(getEndTime())}
                   </p>
-                  <p className="text-lg font-bold text-primary mt-1">
-                    ₱{totalPrice.toLocaleString()}
+                  <p className="text-lg font-bold text-primary mt-1 flex items-center gap-2">
+                    {isCalculatingPrice ? (
+                      <span className="text-sm font-normal text-gray-400">Calculating...</span>
+                    ) : calculatedPrice ? (
+                      <>
+                        <span>₱{calculatedPrice.final.toLocaleString()}</span>
+                        {calculatedPrice.discount !== 0 && (
+                          <span className={`text-xs font-normal ${calculatedPrice.discount > 0 ? 'text-green-600' : 'text-orange-600'}`}>
+                            ({calculatedPrice.discount > 0 ? '-' : '+'}₱{Math.abs(calculatedPrice.discount).toLocaleString()})
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span>₱{((startSlot.price || hourlyRate) * duration * recurrenceWeeks * selectedDays.length).toLocaleString()}</span>
+                    )}
                     {recurrenceWeeks > 1 && <span className="text-xs font-normal text-gray-500 ml-1">({recurrenceWeeks} weeks)</span>}
+                    {selectedDays.length > 1 && <span className="text-xs font-normal text-gray-500 ml-1">({selectedDays.length} days/week)</span>}
                   </p>
                 </div>
               )}
@@ -437,18 +678,15 @@ export function AvailabilityModal({
               </button>
               <button
                 onClick={handleBook}
-                disabled={!startSlot || isBooking}
+                disabled={!startSlot || isBooking || !validationState.valid || validationState.validating}
                 className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                {isBooking && (
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                )}
                 {isBooking ? 'Processing...' : `Book (${duration} hr${duration > 1 ? 's' : ''})`}
               </button>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </div >
   )
 }

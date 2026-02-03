@@ -15,6 +15,7 @@ export interface BookingData {
   hourlyRate: number
   capacity: number
   recurrenceWeeks?: number // 1 = single booking, 4 = 4 weeks, etc.
+  selectedDays?: number[] // Array of day indices (0-6) for multi-day booking
 }
 
 export interface PlayerPaymentStatus {
@@ -210,16 +211,12 @@ export const useCheckoutStore = create<CheckoutState>()(
         const endHour = parseInt(bookingData.endTime.split(':')[0])
         const duration = endHour - startHour
         const recurrenceWeeks = bookingData.recurrenceWeeks || 1
+        const numSessionsPerWeek = bookingData.selectedDays?.length || 1
 
         const baseRate = bookingData.hourlyRate * duration
-        // Apply discount to subtotal
-        // NOTE: Discount is usually per session or total? 
-        // Assuming discount logic calculates PER SESSION for now, so we subtract discount then multiply
-        // OR does discount module return Total Discount? 
-        // Let's assume DiscountAmount is TOTAL discount for the booking.
-        // So: (baseRate * recurrenceWeeks) - discountAmount
 
-        const totalBase = baseRate * recurrenceWeeks
+        // Calculate total base price based on duration, recurrence weeks, and sessions per week
+        const totalBase = baseRate * recurrenceWeeks * numSessionsPerWeek
         return Math.max(0, totalBase - state.discountAmount)
       },
 

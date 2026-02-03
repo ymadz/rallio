@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 import { ReviewsSection } from '@/components/venue/reviews-section'
 import { VenueDetailsClient } from './venue-details-client'
 import { ImageGallery } from '@/components/venue/image-gallery'
+import { DiscountIndicator } from '@/components/venue/discount-indicator'
 
 // Server-side venue fetch
 async function getVenueByIdServer(venueId: string) {
@@ -61,6 +62,23 @@ async function getVenueByIdServer(venueId: string) {
     .eq('is_verified', true)
     .single()
 
+  // Fetch active discount rules and holiday pricing
+  const { data: discountRules } = await supabase
+    .from('discount_rules')
+    .select('*')
+    .eq('venue_id', venueId)
+    .eq('is_active', true)
+    .order('priority', { ascending: false })
+
+  const { data: holidayPricing } = await supabase
+    .from('holiday_pricing')
+    .select('*')
+    .eq('venue_id', venueId)
+    .eq('is_active', true)
+    .gte('end_date', new Date().toISOString()) // Only future/current holidays
+
+  const activeDiscountCount = (discountRules?.length || 0) + (holidayPricing?.length || 0)
+
   if (error || !venue) {
     console.error('🔍 [getVenueByIdServer] Error:', error)
     return null
@@ -80,6 +98,9 @@ async function getVenueByIdServer(venueId: string) {
     ...venue,
     image_url: venue.image_url,
     courts: processedCourts,
+    hasActiveDiscounts: activeDiscountCount > 0,
+    discountRules,
+    holidayPricing
   }
 }
 
@@ -182,7 +203,13 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
           <div className="lg:col-span-2">
             {/* Title and Address */}
             <div className="mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">{venue.name}</h2>
+              <div className="flex items-center gap-3">
+                <h2 className="text-2xl font-bold text-gray-900">{venue.name}</h2>
+                <DiscountIndicator discounts={{
+                  rules: venue.discountRules || [],
+                  holidays: venue.holidayPricing || []
+                }} />
+              </div>
               <p className="text-gray-500 mt-1">{venue.address}</p>
               <p className="text-sm text-gray-400 mt-1">
                 {activeCourts.length} {activeCourts.length === 1 ? 'court' : 'courts'} available
@@ -204,6 +231,10 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
               courts={activeCourts}
               venueId={venue.id}
               venueName={venue.name}
+              discounts={{
+                rules: venue.discountRules || [],
+                holidays: venue.holidayPricing || []
+              }}
             />
 
             {/* Reviews Section */}

@@ -266,10 +266,10 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
                   <SelectValue placeholder="Do not repeat" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1">One-time booking</SelectItem>
-                  <SelectItem value="2">Repeat for 2 weeks</SelectItem>
-                  <SelectItem value="3">Repeat for 3 weeks</SelectItem>
-                  <SelectItem value="4">Repeat for 4 weeks</SelectItem>
+                  <SelectItem value="1">1 Week (One-time)</SelectItem>
+                  <SelectItem value="2">2 Weeks</SelectItem>
+                  <SelectItem value="3">3 Weeks</SelectItem>
+                  <SelectItem value="4">4 Weeks</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-blue-600 mt-1">

@@ -179,58 +179,68 @@ export async function getAvailableTimeSlotsAction(
 
   return allSlots
 }
-
 /**
- * Server Action: Create a new reservation
+ * Server Action: Validate if a booking series is available without creating it
  */
-export async function createReservationAction(data: {
+export async function validateBookingAvailabilityAction(data: {
   courtId: string
-  userId: string
   startTimeISO: string
   endTimeISO: string
-  totalAmount: number
-  numPlayers?: number
-  paymentType?: 'full' | 'split'
-  paymentMethod?: 'cash' | 'e-wallet'
-  notes?: string
-  discountApplied?: number
-  discountType?: string
-  discountReason?: string
-  recurrenceWeeks?: number // Number of additional weeks (e.g., 4 means original + 3 repeats = 4 total, or maybe strictly "occurrences")
-  // Let's standardise: recurrenceWeeks = number of TOTAL weeks including the first one. 
-  // e.g. recurrenceWeeks=4 means book today + next 3 weeks.
-}): Promise<{ success: boolean; reservationId?: string; error?: string; count?: number }> {
+  recurrenceWeeks?: number
+  selectedDays?: number[]
+}): Promise<{ available: boolean; conflictDate?: string; error?: string }> {
   const supabase = await createClient()
 
+  // Grab the current user for checking own conflicts if needed, but for availability check
+  // usually any active booking blocks it, UNLESS it's the user's OWN pending one they are replacing?
+  // But searching for own conflicts requires auth.
+  // Let's get getUser.
+  const { data: { user } } = await supabase.auth.getUser()
+  const userId = user?.id
+
   const recurrenceWeeks = data.recurrenceWeeks || 1
-  const isRecurring = recurrenceWeeks > 1
-  const recurrenceGroupId = isRecurring ? crypto.randomUUID() : null
-  const createdReservationIds: string[] = []
-
-  console.log(`[createReservation] Starting ${isRecurring ? 'recurring' : 'single'} booking check. Weeks: ${recurrenceWeeks}`)
-
-  // 1. VALIDATION PHASE
-  // We must validate ALL dates before creating ANY reservation.
-  // One conflict blocks the entire series.
+  const selectedDays = data.selectedDays || []
 
   const initialStartTime = new Date(data.startTimeISO)
   const initialEndTime = new Date(data.endTimeISO)
+
+  if (selectedDays.length === 0) {
+    selectedDays.push(initialStartTime.getDay())
+  }
+
+  const isRecurring = recurrenceWeeks > 1 || selectedDays.length > 1
+
+  // Ensure initialStartTime is valid
+  if (Number.isNaN(initialStartTime.getTime())) {
+    return { available: false, error: 'Invalid start time.' }
+  }
+
   const durationMs = initialEndTime.getTime() - initialStartTime.getTime()
+  const startDayIndex = initialStartTime.getDay() // 0-6
 
-  // Loop through all weeks to check for conflicts
+  // 1. GENERATE PHASE
+  const targetSlots: { start: Date; end: Date; weekIndex: number }[] = []
+
   for (let i = 0; i < recurrenceWeeks; i++) {
-    const currentStartTime = new Date(initialStartTime.getTime() + (i * 7 * 24 * 60 * 60 * 1000))
-    const currentEndTime = new Date(currentStartTime.getTime() + durationMs)
+    const weekBaseTime = initialStartTime.getTime() + (i * 7 * 24 * 60 * 60 * 1000)
+    for (const dayIndex of selectedDays) {
+      const dayOffset = dayIndex - startDayIndex
+      const slotStartTime = new Date(weekBaseTime + (dayOffset * 24 * 60 * 60 * 1000))
+      const slotEndTime = new Date(slotStartTime.getTime() + durationMs)
 
-    // Validate timestamps
-    if (Number.isNaN(currentStartTime.getTime()) || Number.isNaN(currentEndTime.getTime())) {
-      return { success: false, error: 'Invalid time calculation.' }
+      if (slotStartTime.getTime() < initialStartTime.getTime()) {
+        continue
+      }
+      targetSlots.push({ start: slotStartTime, end: slotEndTime, weekIndex: i })
     }
+  }
 
-    const currentStartTimeISO = currentStartTime.toISOString()
-    const currentEndTimeISO = currentEndTime.toISOString()
+  if (targetSlots.length === 0) return { available: false, error: 'No slots generated.' }
 
-    // Check availability for this specific date
+  // 2. VALIDATION PHASE
+  for (const slot of targetSlots) {
+    const currentStartTimeISO = slot.start.toISOString()
+    const currentEndTimeISO = slot.end.toISOString()
     const conflictStatuses = ['pending_payment', 'pending', 'paid', 'confirmed']
 
     const [reservationConflicts, queueConflicts] = await Promise.all([
@@ -252,73 +262,213 @@ export async function createReservationAction(data: {
         .gt('end_time', currentStartTimeISO)
     ])
 
-    // Strict validation: Reject on any queue conflict
     if (queueConflicts.data && queueConflicts.data.length > 0) {
-      const dateStr = currentStartTime.toLocaleDateString()
-      return {
-        success: false,
-        error: `Conflict detected on Week ${i + 1} (${dateStr}): Slot matches a Queue Session.`
-      }
+      const dateStr = slot.start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+      return { available: false, conflictDate: dateStr, error: `Queue Session conflict on ${dateStr}` }
     }
 
-    // Filter reservation conflicts (ignoring user's own pending payment ones)
     const realConflicts = reservationConflicts.data?.filter(conflict => {
       if (conflict.status === 'confirmed' || conflict.status === 'paid') return true
-      if (conflict.user_id === data.userId && (conflict.status === 'pending_payment' || conflict.status === 'pending') && !isRecurring) return false
-      // Note: For recurring, strict check is safer. If they have a pending booking next week, we probably shouldn't overwrite it blindly.
-      // But if it's their own pending payment, we might want to allow replacing.
-      // For simplicity in V1 recurring: Block on ANY conflict to avoid mess.
-      if (conflict.user_id !== data.userId) return true
-      return isRecurring // If recurring, even own pending conflicts block it for safety first
+      // If it's my own pending booking and I'm doing a recurring booking, treat as conflict?
+      // User request says "handle gracefully".
+      // If I am replacing my own single booking with a recurring one, maybe I should allow it?
+      // But preventing it is safer.
+      if (userId && conflict.user_id === userId && (conflict.status === 'pending_payment' || conflict.status === 'pending') && !isRecurring) return false
+      if (userId && conflict.user_id !== userId) return true
+      if (!userId) return true // If no user, everything is conflict
+      return isRecurring
     }) || []
 
     if (realConflicts.length > 0) {
-      const dateStr = currentStartTime.toLocaleDateString()
+      const dateStr = slot.start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+      return { available: false, conflictDate: dateStr, error: `Already reserved on ${dateStr}` }
+    }
+  }
+
+  return { available: true }
+}
+
+/**
+ * Server Action: Create a new reservation
+ */
+export async function createReservationAction(data: {
+  courtId: string
+  userId: string
+  startTimeISO: string
+  endTimeISO: string
+  totalAmount: number
+  numPlayers?: number
+  paymentType?: 'full' | 'split'
+  paymentMethod?: 'cash' | 'e-wallet'
+  notes?: string
+  discountApplied?: number
+  discountType?: string
+  discountReason?: string
+  recurrenceWeeks?: number
+  selectedDays?: number[] // Array of day indices (0-6)
+}): Promise<{ success: boolean; reservationId?: string; error?: string; count?: number }> {
+  const supabase = await createClient()
+
+  const recurrenceWeeks = data.recurrenceWeeks || 1
+  const selectedDays = data.selectedDays || []
+
+  // If no specific days selected, default to the start date's day (standard recurrence)
+  const initialStartTime = new Date(data.startTimeISO)
+  const initialEndTime = new Date(data.endTimeISO)
+
+  if (selectedDays.length === 0) {
+    selectedDays.push(initialStartTime.getDay())
+  }
+
+  const isRecurring = recurrenceWeeks > 1 || selectedDays.length > 1
+  const recurrenceGroupId = isRecurring ? crypto.randomUUID() : null
+  const createdReservationIds: string[] = []
+
+  // Ensure initialStartTime is valid
+  if (Number.isNaN(initialStartTime.getTime())) {
+    return { success: false, error: 'Invalid start time.' }
+  }
+
+  const durationMs = initialEndTime.getTime() - initialStartTime.getTime()
+  const startDayIndex = initialStartTime.getDay() // 0-6
+
+  console.log(`[createReservation] Starting ${isRecurring ? 'recurring' : 'single'} booking check. Weeks: ${recurrenceWeeks}, Days: ${selectedDays.join(',')}`)
+
+  // 1. GENERATE PHASE
+  // Generate all intended slots to book
+  const targetSlots: { start: Date; end: Date; weekIndex: number }[] = []
+
+  for (let i = 0; i < recurrenceWeeks; i++) {
+    // The "base" date for this week's iteration (aligned with the initial start date)
+    const weekBaseTime = initialStartTime.getTime() + (i * 7 * 24 * 60 * 60 * 1000)
+
+    for (const dayIndex of selectedDays) {
+      // Calculate offset from the original start day
+      // e.g. Start is Wed (3). Target is Mon (1). Offset = -2 days.
+      const dayOffset = dayIndex - startDayIndex
+
+      const slotStartTime = new Date(weekBaseTime + (dayOffset * 24 * 60 * 60 * 1000))
+      const slotEndTime = new Date(slotStartTime.getTime() + durationMs)
+
+      // Skip past dates (e.g., missed days in the first week)
+      // We allow a small buffer (e.g. 1 min) to avoid equality issues, but >= should be fine.
+      // Actually strictly, if it's the SAME time as initial, we allow it.
+      if (slotStartTime.getTime() < initialStartTime.getTime()) {
+        continue
+      }
+
+      targetSlots.push({
+        start: slotStartTime,
+        end: slotEndTime,
+        weekIndex: i
+      })
+    }
+  }
+
+  if (targetSlots.length === 0) {
+    return { success: false, error: 'No valid future slots generated.' }
+  }
+
+  // 2. VALIDATION PHASE
+  // Check conflicts for ALL slots
+  for (const slot of targetSlots) {
+    const currentStartTimeISO = slot.start.toISOString()
+    const currentEndTimeISO = slot.end.toISOString()
+
+    const conflictStatuses = ['pending_payment', 'pending', 'paid', 'confirmed']
+
+    const [reservationConflicts, queueConflicts] = await Promise.all([
+      supabase
+        .from('reservations')
+        .select('id, start_time, end_time, status, user_id')
+        .eq('court_id', data.courtId)
+        .in('status', conflictStatuses)
+        .lt('start_time', currentEndTimeISO)
+        .gt('end_time', currentStartTimeISO),
+
+      supabase
+        .from('queue_sessions')
+        .select('id, start_time, end_time')
+        .eq('court_id', data.courtId)
+        .in('status', ['draft', 'active', 'pending_approval'])
+        .in('approval_status', ['pending', 'approved'])
+        .lt('start_time', currentEndTimeISO)
+        .gt('end_time', currentStartTimeISO)
+    ])
+
+    // Strict validation: Reject on queue conflict
+    if (queueConflicts.data && queueConflicts.data.length > 0) {
+      const dateStr = slot.start.toLocaleDateString()
       return {
         success: false,
-        error: `Conflict detected on Week ${i + 1} (${dateStr}): Slot is already reserved.`
+        error: `Conflict on ${dateStr}: Slot matches a Queue Session.`
+      }
+    }
+
+    // Filter reservation conflicts
+    const realConflicts = reservationConflicts.data?.filter(conflict => {
+      if (conflict.status === 'confirmed' || conflict.status === 'paid') return true
+      if (conflict.user_id === data.userId && (conflict.status === 'pending_payment' || conflict.status === 'pending') && !isRecurring) return false
+      if (conflict.user_id !== data.userId) return true
+      return isRecurring // If recurring, even own pending conflicts block it
+    }) || []
+
+    if (realConflicts.length > 0) {
+      const dateStr = slot.start.toLocaleDateString()
+      return {
+        success: false,
+        error: `Conflict on ${dateStr}: Slot is already reserved.`
       }
     }
   }
 
-  // 2. CREATION PHASE
-  // If we got here, all slots are free. Create them.
+  // 3. CREATION PHASE
   let primaryReservationId = ''
 
-  for (let i = 0; i < recurrenceWeeks; i++) {
-    const currentStartTime = new Date(initialStartTime.getTime() + (i * 7 * 24 * 60 * 60 * 1000))
-    const currentEndTime = new Date(currentStartTime.getTime() + durationMs)
+  // Calculate price per slot
+  // Note: data.totalAmount is passed as the price for ONE single slot (from frontend calc)
+  // Wait. Frontend calculates: (hourlyRate * duration * recurrenceWeeks * numSessionsPerWeek).
+  // So data.totalAmount IS THE GRAND TOTAL.
+  // My previous assumption in reservations.ts was that it passed PER SESSION. 
+  // Let's re-read AvailabilityModal. 
+  // `const totalPrice = (startSlot?.price || hourlyRate) * duration * recurrenceWeeks` (OLD)
+  // NEW: `const basePrice = ... * recurrenceWeeks * numSessionsPerWeek`.
+  // `setBookingData({ ... hourlyRate: ... })`
+  // `getSubtotal` in Store uses `hourlyRate * duration * recurrenceWeeks`. 
+  // Does Store know about `selectedDays`? No, I added `selectedDays` logic in Modal but `getSubtotal` in Store MIGHT BE WRONG now.
 
-    // For recurring bookings, we split the total amount per booking or keep it as passed?
-    // User pays upfront total. So we should probably record the price per booking.
-    // Assuming data.totalAmount is the PER SESSION price. 
-    // Wait, usually the UI passes total price.
-    // Let's assume data.totalAmount is the TOTAL for the specific slot if it were single.
-    // So we apply data.totalAmount to EACH reservation.
-    // If the frontend calculated a "Grand Total", it should pass the per-session price here or we divide?
-    // Correct Approach: The frontend calculates price PER SLOT. Passed `totalAmount` is for ONE slot.
-    // We will save that amount for each record. 
+  // CHECK STORE:
+  // getSubtotal: `const totalBase = baseRate * recurrenceWeeks`.
+  // It does NOT account for `selectedDays.length`.
+  // So the `totalAmount` passed here (from store.getTotalAmount) might be UNDER-calculated if I didn't update Store.getSubtotal.
 
-    // Note on cleanup: We skipped the "delete old pending" step for recurring to be safe.
+  // CRITICAL: I need to update `getSubtotal` in `checkout-store.ts` as well!
+  // Assuming I WILL update it, data.totalAmount will be the GRAND TOTAL.
+  // So `perInstanceAmount = data.totalAmount / targetSlots.length`.
 
-    // Calculate per-instance amount
-    const perInstanceAmount = data.totalAmount / recurrenceWeeks
+  const perInstanceAmount = data.totalAmount / targetSlots.length
+
+  for (let i = 0; i < targetSlots.length; i++) {
+    const slot = targetSlots[i]
+
+    // Determine status
+    // For cash recurring, we auto-confirm them as "Reserved" but unpaid.
+    // However, if we book multiple days in 1 week (single recurrence), is it "Recurring"? Yes.
+    const status = (data.paymentMethod === 'cash' && isRecurring) ? 'confirmed' : 'pending_payment'
 
     const { data: newRes, error } = await supabase
       .from('reservations')
       .insert({
         court_id: data.courtId,
         user_id: data.userId,
-        start_time: currentStartTime.toISOString(),
-        end_time: currentEndTime.toISOString(),
-        // For cash recurring, we auto-confirm them as "Reserved" but unpaid. 
-        // Normal flow is 'pending_payment', but for cash-on-day bulk, we treat it as a confirmed reservation that needs payment later.
-        status: (data.paymentMethod === 'cash' && isRecurring) ? 'confirmed' : 'pending_payment',
-        total_amount: perInstanceAmount, // Correctly split price per instance
+        start_time: slot.start.toISOString(),
+        end_time: slot.end.toISOString(),
+        status: status,
+        total_amount: perInstanceAmount,
         amount_paid: 0,
         num_players: data.numPlayers || 1,
         payment_type: data.paymentType || 'full',
-        discount_applied: data.discountApplied || 0,
+        discount_applied: data.discountApplied ? (data.discountApplied / targetSlots.length) : 0, // Split discount too
         discount_type: data.discountType || null,
         discount_reason: data.discountReason || null,
         recurrence_group_id: recurrenceGroupId,
@@ -326,18 +476,16 @@ export async function createReservationAction(data: {
           booking_origin: 'web_checkout',
           intended_payment_method: data.paymentMethod ?? null,
           recurrence_index: i,
-          recurrence_total: recurrenceWeeks
+          recurrence_total: targetSlots.length
         },
-        notes: data.notes ? (isRecurring ? `${data.notes} (Week ${i + 1})` : data.notes) : null,
+        notes: data.notes ? (isRecurring ? `${data.notes} (Seq ${i + 1})` : data.notes) : null,
       })
       .select('id')
       .single()
 
     if (error || !newRes) {
-      console.error(`Failed to create reservation for week ${i + 1}`, error)
-      // Standard cleanup would be needed here (rollback), but Supabase HTTP api doesn't support transactions easily.
-      // For V1, we log error. In production, we'd need a stored procedure for atomic batch.
-      return { success: false, error: `Failed to create recurrence slot for week ${i + 1}: ${error.message}` }
+      console.error(`Failed to create reservation for slot ${i}`, error)
+      return { success: false, error: `Failed to create slot ${i + 1}: ${error.message}` }
     }
 
     if (i === 0) primaryReservationId = newRes.id
@@ -349,7 +497,7 @@ export async function createReservationAction(data: {
 
   return {
     success: true,
-    reservationId: primaryReservationId, // Return the first one for the success page
+    reservationId: primaryReservationId,
     count: createdReservationIds.length
   }
 }

@@ -23,6 +23,7 @@ export default function CheckoutPage() {
     setCurrentStep,
     resetCheckout,
     getSubtotal,
+    discountAmount,
   } = useCheckoutStore()
 
   // Redirect if no booking data
@@ -163,6 +164,16 @@ export default function CheckoutPage() {
                       <span className="text-gray-600">Hourly Rate:</span>
                       <span className="font-medium text-gray-900">₱{bookingData.hourlyRate.toFixed(2)}</span>
                     </div>
+                    {discountAmount !== 0 && (
+                      <div className="flex justify-between py-3 border-b border-gray-100">
+                        <span className={discountAmount < 0 ? 'text-orange-600' : 'text-green-600'}>
+                          {discountAmount < 0 ? 'Surcharge' : 'Discount'}:
+                        </span>
+                        <span className={`font-medium ${discountAmount < 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                          {discountAmount < 0 ? '+' : '-'}₱{Math.abs(discountAmount).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between py-3">
                       <span className="text-gray-600">Booking Fee:</span>
                       <span className="font-medium text-gray-900">₱{totalBookingFee.toFixed(2)}</span>
@@ -214,6 +225,16 @@ export default function CheckoutPage() {
                       <span className="text-gray-600">Hourly Rate:</span>
                       <span className="font-medium text-gray-900">₱{bookingData.hourlyRate.toFixed(2)}</span>
                     </div>
+                    {discountAmount !== 0 && (
+                      <div className="flex justify-between py-3 border-b border-gray-100">
+                        <span className={discountAmount < 0 ? 'text-orange-600' : 'text-green-600'}>
+                          {discountAmount < 0 ? 'Surcharge' : 'Discount'}:
+                        </span>
+                        <span className={`font-medium ${discountAmount < 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                          {discountAmount < 0 ? '+' : '-'}₱{Math.abs(discountAmount).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between py-3">
                       <span className="text-gray-600">Booking Fee:</span>
                       <span className="font-medium text-gray-900">₱{totalBookingFee.toFixed(2)}</span>
