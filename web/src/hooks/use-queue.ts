@@ -8,6 +8,7 @@ import {
   leaveQueue as leaveQueueAction,
   getMyQueues as getMyQueuesAction,
   getNearbyQueues as getNearbyQueuesAction,
+  getMyQueueHistory,
 } from '@/app/actions/queue-actions'
 
 export interface QueuePlayer {
@@ -332,6 +333,37 @@ export function useMyQueues() {
   }, [])
 
   return { queues, isLoading }
+}
+
+/**
+ * Hook to fetch user's queue history
+ */
+export function useMyQueueHistory() {
+  const [history, setHistory] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchHistory() {
+      try {
+        const { success, history: data, error } = await getMyQueueHistory()
+        if (success && data) {
+          setHistory(data)
+        } else {
+          console.error('Error fetching history:', error)
+          setHistory([])
+        }
+      } catch (err) {
+        console.error('Error fetching history:', err)
+        setHistory([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchHistory()
+  }, [])
+
+  return { history, isLoading }
 }
 
 /**

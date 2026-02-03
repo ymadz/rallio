@@ -246,107 +246,32 @@ export async function joinQueue(sessionId: string) {
       return { success: false, error: 'Queue is not accepting new players' }
     }
 
-    // Check if queue is full
-    const { count: currentCount } = await supabase
-      .from('queue_participants')
-      .select('*', { count: 'exact', head: true })
-      .eq('queue_session_id', sessionId)
-      .is('left_at', null)
+    // Call the centralized RPC function
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('join_queue', {
+      p_session_id: sessionId,
+      p_user_id: user.id
+    })
 
-    if (currentCount && currentCount >= session.max_players) {
-      return { success: false, error: 'Queue is full' }
-    }
-
-    // Check if user has any record in this queue (due to UNIQUE constraint on session_id + user_id)
-    const { data: existingParticipants } = await supabase
-      .from('queue_participants')
-      .select('*')
-      .eq('queue_session_id', sessionId)
-      .eq('user_id', user.id)
-      .order('left_at', { ascending: false, nullsFirst: true })
-
-    console.log('[joinQueue] 🔍 Existing participants:', existingParticipants)
-
-    const existingRecord = existingParticipants?.[0]
-
-    // If user has an existing record
-    if (existingRecord) {
-      // If they're still active (haven't left), they're already in queue
-      if (!existingRecord.left_at) {
-        console.log('[joinQueue] ⚠️ User already in queue (active):', existingRecord.id)
-        return { success: false, error: 'You are already in this queue' }
-      }
-
-      // Check rejoin cooldown (5 minutes)
-      const timeSinceLeave = Date.now() - new Date(existingRecord.left_at).getTime()
-      const cooldownMs = 5 * 60 * 1000 // 5 minutes
-
-      if (timeSinceLeave < cooldownMs) {
-        const remainingSeconds = Math.ceil((cooldownMs - timeSinceLeave) / 1000)
-        const minutes = Math.floor(remainingSeconds / 60)
-        const seconds = remainingSeconds % 60
-        console.log('[joinQueue] ⏳ Cooldown active:', { timeSinceLeave, remainingSeconds })
-        return {
-          success: false,
-          error: `Please wait ${minutes}m ${seconds}s before rejoining this queue`,
-        }
-      }
-
-      // If they previously left, reactivate their record instead of inserting new
-      console.log('[joinQueue] 🔄 Reactivating previous participant record:', existingRecord.id)
-      const { data: participant, error: updateError } = await supabase
-        .from('queue_participants')
-        .update({
-          left_at: null,
-          status: 'waiting',
-          joined_at: new Date().toISOString(),
-        })
-        .eq('id', existingRecord.id)
-        .select()
-        .single()
-
-      if (updateError || !participant) {
-        console.error('[joinQueue] ❌ Failed to reactivate participant:', updateError)
-        return { success: false, error: 'Failed to rejoin queue' }
-      }
-
-      console.log('[joinQueue] ✅ Successfully rejoined queue')
-      revalidatePath(`/queue/${session.courts.id}`)
-      revalidatePath('/queue')
-      return { success: true, participant }
-    }
-
-    // No existing record, create new participant
-    const { data: participant, error: insertError } = await supabase
-      .from('queue_participants')
-      .insert({
-        queue_session_id: sessionId,
-        user_id: user.id,
-        status: 'waiting',
-        payment_status: 'unpaid',
-        amount_owed: 0,
-      })
-      .select()
-      .single()
-
-    if (insertError || !participant) {
-      console.error('[joinQueue] ❌ Failed to join queue:', insertError)
-
-      // Handle specific error cases
-      if (insertError?.code === '23505') {
-        return { success: false, error: 'You are already in this queue' }
-      }
-
+    if (rpcError) {
+      console.error('[joinQueue] ❌ RPC Error:', rpcError)
       return { success: false, error: 'Failed to join queue' }
     }
 
-    console.log('[joinQueue] ✅ Successfully joined queue')
+    if (!rpcResult.success) {
+      console.warn('[joinQueue] ⚠️ Join rejected by RPC:', rpcResult.error)
+      return { success: false, error: rpcResult.error }
+    }
+
+    console.log('[joinQueue] ✅ Successfully joined/rejoined queue via RPC:', rpcResult.action)
 
     // Revalidate queue pages
     revalidatePath(`/queue/${session.courts.id}`)
     revalidatePath('/queue')
 
-    return { success: true, participant }
+    return {
+      success: true,
+      participant: { id: rpcResult.participant_id } // Return minimal info needed
+    }
   } catch (error: any) {
     console.error('[joinQueue] ❌ Error:', error)
     return { success: false, error: error.message || 'Failed to join queue' }
@@ -480,6 +405,7 @@ export async function getMyQueues() {
       .eq('user_id', user.id)
       .is('left_at', null)
       .in('queue_sessions.status', ['open', 'active'])
+      .gt('queue_sessions.end_time', new Date().toISOString()) // Filter out expired sessions
       .order('joined_at', { ascending: false })
 
     if (participationsError) {
@@ -535,6 +461,85 @@ export async function getMyQueues() {
 }
 
 /**
+ * Get user's queue history (past sessions)
+ */
+export async function getMyQueueHistory() {
+  console.log('[getMyQueueHistory] 🔍 Fetching queue history')
+
+  try {
+    const supabase = await createClient()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'User not authenticated' }
+    }
+
+    // Get all past queue participations
+    // We consider it "history" if:
+    // 1. Session is closed/cancelled OR
+    // 2. Session is past end_time OR
+    // 3. User has 'left' status
+    const { data: participations, error: participationsError } = await supabase
+      .from('queue_participants')
+      .select(`
+        *,
+        queue_sessions!inner (
+          *,
+          courts (
+            id,
+            name,
+            venues (
+              id,
+              name
+            )
+          )
+        )
+      `)
+      .eq('user_id', user.id)
+      .or('status.eq.left,queue_sessions.status.in.(closed,cancelled),queue_sessions.end_time.lt.now()')
+      .order('joined_at', { ascending: false })
+      .limit(50) // Limit to last 50 for now
+
+    if (participationsError) {
+      console.error('[getMyQueueHistory] ❌ Failed to fetch history:', participationsError)
+      return { success: false, error: 'Failed to fetch history' }
+    }
+
+    const history = (participations || []).map((p: any) => {
+      const costPerGame = parseFloat(p.queue_sessions.cost_per_game || '0')
+      const gamesPlayed = p.games_played || 0
+      const totalCost = costPerGame * gamesPlayed
+
+      return {
+        id: p.queue_session_id,
+        courtId: p.queue_sessions.court_id,
+        courtName: p.queue_sessions.courts?.name || 'Unknown Court',
+        venueName: p.queue_sessions.courts?.venues?.name || 'Unknown Venue',
+        status: p.queue_sessions.status, // might be 'active' if user just left
+        date: p.queue_sessions.start_time,
+        joinedAt: p.joined_at,
+        leftAt: p.left_at,
+        gamesPlayed,
+        gamesWon: p.games_won || 0,
+        totalCost,
+        paymentStatus: p.payment_status,
+        userStatus: p.status, // 'left' or 'waiting'/'playing' if session closed
+      }
+    })
+
+    console.log('[getMyQueueHistory] ✅ Fetched history items:', history.length)
+
+    return { success: true, history }
+  } catch (error: any) {
+    console.error('[getMyQueueHistory] ❌ Error:', error)
+    return { success: false, error: error.message || 'Failed to fetch queue history' }
+  }
+}
+
+/**
  * Get nearby active queue sessions
  */
 export async function getNearbyQueues(latitude?: number, longitude?: number) {
@@ -562,6 +567,7 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
       .in('status', ['open', 'active'])
       .eq('is_public', true)
       .eq('approval_status', 'approved') // CRITICAL: Only show approved sessions
+      .gt('end_time', new Date().toISOString()) // Filter out expired sessions
       .order('start_time', { ascending: true })
       .limit(20)
 

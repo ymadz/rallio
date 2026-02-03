@@ -241,6 +241,12 @@ export default function QueueScreen() {
             {/* Header */}
             <View style={styles.header}>
                 <Text style={styles.title}>Join Queue</Text>
+                <TouchableOpacity
+                    style={styles.historyButton}
+                    onPress={() => router.push('/queue/history')}
+                >
+                    <MaterialCommunityIcons name="history" size={24} color={Colors.dark.text} />
+                </TouchableOpacity>
             </View>
 
             {/* Content */}
@@ -294,11 +300,19 @@ const styles = StyleSheet.create({
         ...Typography.h1,
         color: Colors.dark.text,
     },
-    subtitle: {
+    headerSubtitle: {
         ...Typography.bodySmall,
         color: Colors.dark.textSecondary,
-        marginTop: 2,
     },
+    historyButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: Colors.dark.surface,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    tabContainer: {},
 
     listContent: {
         padding: Spacing.lg,

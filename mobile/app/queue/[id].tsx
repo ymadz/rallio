@@ -207,66 +207,25 @@ export default function QueueDetailScreen() {
 
         setIsJoining(true);
         try {
-            // Check for existing record (including left ones for cooldown)
-            const { data: existing } = await supabase
-                .from('queue_participants')
-                .select('id, left_at')
-                .eq('queue_session_id', session.id)
-                .eq('user_id', user.id)
-                .order('left_at', { ascending: false, nullsFirst: true })
-                .limit(1)
-                .maybeSingle();
+            const { data, error } = await supabase.rpc('join_queue', {
+                p_session_id: session.id,
+                p_user_id: user.id
+            });
 
-            if (existing && !existing.left_at) {
-                Alert.alert('Already in Queue', 'You are already in this queue.');
+            if (error) throw error;
+
+            if (data && !data.success) {
+                Alert.alert('Cannot Join', data.error);
                 return;
             }
 
-            // Check cooldown (5 minutes after leaving)
-            if (existing?.left_at) {
-                const leftAt = new Date(existing.left_at);
-                const cooldownEnd = new Date(leftAt.getTime() + 5 * 60 * 1000);
-                const now = new Date();
-
-                if (now < cooldownEnd) {
-                    const remaining = Math.ceil((cooldownEnd.getTime() - now.getTime()) / 1000);
-                    const mins = Math.floor(remaining / 60);
-                    const secs = remaining % 60;
-                    Alert.alert('Cooldown', `Please wait ${mins}m ${secs}s before rejoining.`);
-                    return;
-                }
-
-                // Reactivate existing record
-                const { error: updateError } = await supabase
-                    .from('queue_participants')
-                    .update({
-                        left_at: null,
-                        status: 'waiting',
-                        joined_at: new Date().toISOString(),
-                    })
-                    .eq('id', existing.id);
-
-                if (updateError) throw updateError;
-            } else {
-                // Insert new participant
-                const { error: insertError } = await supabase
-                    .from('queue_participants')
-                    .insert({
-                        queue_session_id: session.id,
-                        user_id: user.id,
-                        status: 'waiting',
-                        payment_status: 'unpaid',
-                        amount_owed: 0,
-                        games_played: 0,
-                        games_won: 0,
-                    });
-
-                if (insertError) throw insertError;
-            }
-
-            Alert.alert('Joined!', 'You have joined the queue.');
+            Alert.alert(
+                data?.action === 'reactivated' ? 'Welcome Back!' : 'Joined!',
+                'You have successfully joined the queue.'
+            );
             fetchSession();
         } catch (err: any) {
+            console.error('Join queue error:', err);
             Alert.alert('Error', err.message || 'Failed to join queue');
         } finally {
             setIsJoining(false);
