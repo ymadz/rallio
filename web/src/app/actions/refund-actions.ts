@@ -87,15 +87,66 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
       }
     }
 
-    // Get successful payments for this reservation
-    const { data: payments, error: paymentsError } = await supabase
+    // DEBUG: Get ALL payments for this reservation to see what's going on
+    const { data: allPayments } = await supabase
       .from('payments')
       .select('*')
       .eq('reservation_id', params.reservationId)
-      .eq('status', 'paid')
+
+    console.log('🔍 [requestRefundAction] DEBUG: All payments for reservation:', {
+      reservationId: params.reservationId,
+      count: allPayments?.length,
+      statuses: allPayments?.map(p => p.status),
+      ids: allPayments?.map(p => p.id)
+    })
+
+    // Get successful payments for this reservation
+    let { data: payments, error: paymentsError } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('reservation_id', params.reservationId)
+      .in('status', ['paid', 'completed'])
+
+    // FALLBACK: If no direct payments, check for recurring group payments
+    if ((!payments || payments.length === 0) && reservation.recurrence_group_id) {
+      console.log('🔍 [requestRefundAction] No direct payment found, checking recurrence group:', reservation.recurrence_group_id)
+
+      const { data: groupPayments, error: groupError } = await supabase
+        .from('payments')
+        .select('*')
+        .contains('metadata', { recurrence_group_id: reservation.recurrence_group_id })
+        .in('status', ['paid', 'completed'])
+
+      if (groupPayments && groupPayments.length > 0) {
+        console.log('✅ [requestRefundAction] Found group payment:', groupPayments[0].id)
+        payments = groupPayments
+        paymentsError = groupError
+      }
+    }
+
+    if (paymentsError || !payments || payments.length === 0) {
+      // FALLBACK: If no direct payments, check for recurring group payments
+      if (reservation.recurrence_group_id) {
+        console.log('🔍 [requestRefundAction] No direct payment found, checking recurrence group:', reservation.recurrence_group_id)
+
+        const { data: groupPayments, error: groupError } = await supabase
+          .from('payments')
+          .select('*')
+          .contains('metadata', { recurrence_group_id: reservation.recurrence_group_id })
+          .in('status', ['paid', 'completed'])
+
+        if (groupPayments && groupPayments.length > 0) {
+          console.log('✅ [requestRefundAction] Found group payment:', groupPayments[0].id)
+          payments = groupPayments
+          // Clear error since we found a payment
+          paymentsError = null
+        }
+      }
+    }
 
     if (paymentsError || !payments || payments.length === 0) {
       console.error('❌ [requestRefundAction] No paid payments found:', paymentsError)
+      console.error('❌ [requestRefundAction] Payments found (any status):', allPayments)
       return { success: false, error: 'No payments found to refund' }
     }
 
@@ -130,15 +181,18 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
     const paymentToRefund = payments[0]
 
     // Verify we have the PayMongo payment ID
-    if (!paymentToRefund.external_payment_id && !paymentToRefund.metadata?.payment_id) {
-      console.error('❌ [requestRefundAction] No PayMongo payment ID found')
+    if (!paymentToRefund.external_id && !paymentToRefund.metadata?.paymongo_payment?.id) {
+      console.error('❌ [requestRefundAction] No PayMongo payment ID found', paymentToRefund)
       return {
         success: false,
         error: 'Payment provider reference not found. Please contact support.'
       }
     }
 
-    const paymongoPaymentId = paymentToRefund.external_payment_id || paymentToRefund.metadata?.payment_id
+    const paymongoPaymentId = paymentToRefund.external_id || paymentToRefund.metadata?.paymongo_payment?.id
+
+    // For bulk payments, ensure we don't refund more than the reservation amount
+    const actualRefundAmount = Math.min(refundableAmount, reservation.amount_paid)
 
     // Create refund record form in database first
     const { data: refundRecord, error: insertError } = await supabase
@@ -147,7 +201,7 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
         payment_id: paymentToRefund.id,
         reservation_id: params.reservationId,
         user_id: user.id,
-        amount: refundableAmount,
+        amount: Math.round(actualRefundAmount * 100), // Store in centavos
         currency: 'PHP',
         status: 'pending',
         payment_external_id: paymongoPaymentId,
@@ -156,6 +210,7 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
         metadata: {
           requested_at: new Date().toISOString(),
           original_payment_amount: paymentToRefund.amount,
+          is_bulk_partial_refund: !!reservation.recurrence_group_id
         }
       })
       .select()
@@ -174,66 +229,15 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
 
     console.log('✅ [requestRefundAction] Refund record created:', refundRecord.id)
 
-    // Process refund through PayMongo
-    try {
-      const paymongoRefund = await createRefund({
-        payment_id: paymongoPaymentId,
-        amount: refundableAmount, // Amount is already in centavos from payments table
-        reason: params.reasonCode || 'requested_by_customer',
-        notes: params.reason,
-        metadata: {
-          rallio_refund_id: refundRecord.id,
-          reservation_id: params.reservationId,
-          user_id: user.id,
-        }
-      })
+    // Do NOT process refund through PayMongo immediately.
+    // Refund requests must be approved by an admin.
 
-      // Update refund record with PayMongo reference
-      await supabase
-        .from('refunds')
-        .update({
-          external_id: paymongoRefund.id,
-          status: paymongoRefund.attributes.status === 'succeeded' ? 'succeeded' : 'processing',
-          processed_at: paymongoRefund.attributes.status === 'succeeded' ? new Date().toISOString() : null,
-        })
-        .eq('id', refundRecord.id)
+    revalidatePath('/bookings')
+    revalidatePath(`/bookings/${params.reservationId}`)
 
-      // If refund succeeded immediately, update reservation
-      if (paymongoRefund.attributes.status === 'succeeded') {
-        await handleSuccessfulRefund(refundRecord.id, params.reservationId, user.id)
-      }
-
-      revalidatePath('/bookings')
-      revalidatePath(`/bookings/${params.reservationId}`)
-
-      return {
-        success: true,
-        refundId: refundRecord.id
-      }
-
-    } catch (paymongoError: any) {
-      console.error('❌ [requestRefundAction] PayMongo refund failed:', paymongoError)
-
-      // Update refund record as failed
-      await supabase
-        .from('refunds')
-        .update({
-          status: 'failed',
-          error_message: paymongoError.message || 'PayMongo refund request failed',
-          error_code: 'paymongo_error',
-        })
-        .eq('id', refundRecord.id)
-
-      // Revert reservation status
-      await supabase
-        .from('reservations')
-        .update({ status: 'paid' }) // Assume paid since we verified it earlier
-        .eq('id', params.reservationId)
-
-      return {
-        success: false,
-        error: paymongoError.message || 'Failed to process refund with payment provider'
-      }
+    return {
+      success: true,
+      refundId: refundRecord.id
     }
 
   } catch (error: any) {
