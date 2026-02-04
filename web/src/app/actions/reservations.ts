@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { format } from 'date-fns'
 import { revalidatePath } from 'next/cache'
 import { createNotification, NotificationTemplates } from '@/lib/notifications'
@@ -18,7 +19,9 @@ export async function getAvailableTimeSlotsAction(
   courtId: string,
   dateString: string
 ): Promise<TimeSlot[]> {
-  const supabase = await createClient()
+  // Use Service Client to bypass RLS and ensure we see ALL bookings
+  const supabase = await createClient() // Keep for court fetching (unlikely RLS protected for read) but better to use service for ALL availability checks
+  const adminDb = createServiceClient()
   const date = new Date(dateString)
 
   // Get the court details to know hourly rate and venue operating hours
@@ -81,22 +84,22 @@ export async function getAvailableTimeSlotsAction(
   console.log(`[Availability Check] Date range: ${startOfDayLocal} to ${endOfDayLocal}`)
 
   const [reservationsResult, queueSessionsResult] = await Promise.all([
-    // Get reservations
-    supabase
+    // Get reservations - use overlap logic
+    adminDb
       .from('reservations')
       .select('start_time, end_time, status')
       .eq('court_id', courtId)
-      .gte('start_time', startOfDayLocal)
-      .lte('start_time', endOfDayLocal)
+      .lt('start_time', endOfDayLocal) // Starts before the end of the query window
+      .gt('end_time', startOfDayLocal) // Ends after the start of the query window
       .in('status', activeStatuses),
 
     // Get queue sessions
-    supabase
+    adminDb
       .from('queue_sessions')
       .select('start_time, end_time, status, approval_status')
       .eq('court_id', courtId)
-      .gte('start_time', startOfDayLocal)
-      .lte('start_time', endOfDayLocal)
+      .lt('start_time', endOfDayLocal)
+      .gt('end_time', startOfDayLocal)
       .in('status', ['draft', 'active', 'pending_approval'])
       .in('approval_status', ['pending', 'approved'])
   ])
@@ -204,6 +207,9 @@ export async function validateBookingAvailabilityAction(data: {
   const { data: { user } } = await supabase.auth.getUser()
   const userId = user?.id
 
+  // Use Service Client for availability checks
+  const adminDb = createServiceClient()
+
   const recurrenceWeeks = data.recurrenceWeeks || 1
   const selectedDays = data.selectedDays || []
 
@@ -266,7 +272,7 @@ export async function validateBookingAvailabilityAction(data: {
     const conflictStatuses = ['pending_payment', 'pending', 'paid', 'confirmed', 'pending_refund']
 
     const [reservationConflicts, queueConflicts] = await Promise.all([
-      supabase
+      adminDb
         .from('reservations')
         .select('id, start_time, end_time, status, user_id')
         .eq('court_id', data.courtId)
@@ -274,7 +280,7 @@ export async function validateBookingAvailabilityAction(data: {
         .lt('start_time', currentEndTimeISO)
         .gt('end_time', currentStartTimeISO),
 
-      supabase
+      adminDb
         .from('queue_sessions')
         .select('id, start_time, end_time')
         .eq('court_id', data.courtId)
@@ -412,8 +418,14 @@ export async function createReservationAction(data: {
 
     const conflictStatuses = ['pending_payment', 'pending', 'paid', 'confirmed', 'pending_refund']
 
+    // Use adminDb if available, but createReservationAction is authenticated so maybe standard client is fine?
+    // Actually, for validation step inside creation (Step 2), we should also use adminDb to be ensuring no double bookings.
+    // However, createReservationAction generally assumes the user has passed the initial check.
+    // BUT, let's be safe.
+    const adminDb = createServiceClient()
+
     const [reservationConflicts, queueConflicts] = await Promise.all([
-      supabase
+      adminDb
         .from('reservations')
         .select('id, start_time, end_time, status, user_id')
         .eq('court_id', data.courtId)
@@ -421,7 +433,7 @@ export async function createReservationAction(data: {
         .lt('start_time', currentEndTimeISO)
         .gt('end_time', currentStartTimeISO),
 
-      supabase
+      adminDb
         .from('queue_sessions')
         .select('id, start_time, end_time')
         .eq('court_id', data.courtId)
