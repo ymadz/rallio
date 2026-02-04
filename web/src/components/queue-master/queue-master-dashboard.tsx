@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getMyQueueMasterSessions } from '@/app/actions/queue-actions'
+import { getMyQueueMasterSessions, getQueueMasterStats } from '@/app/actions/queue-actions'
 import { Plus, Calendar, TrendingUp, DollarSign, Users, Clock, PlayCircle, CheckCircle, XCircle, Loader2, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 
@@ -17,49 +17,62 @@ interface SessionData {
   costPerGame: number
   startTime: Date
   endTime: Date
+  createdAt: Date
   mode: string
   gameFormat: string
   participants: any[]
 }
 
+interface DashboardStats {
+  totalSessions: number
+  totalRevenue: number
+  averagePlayers: number
+  activeSessions: number
+}
+
 export function QueueMasterDashboard() {
   const [sessions, setSessions] = useState<SessionData[]>([])
+  const [stats, setStats] = useState<DashboardStats>({
+    totalSessions: 0,
+    totalRevenue: 0,
+    averagePlayers: 0,
+    activeSessions: 0
+  })
   const [filter, setFilter] = useState<SessionStatus>('active')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    loadSessions()
+    loadDashboard()
   }, [filter])
 
-  const loadSessions = async () => {
+  const loadDashboard = async () => {
     setIsLoading(true)
     setError(null)
     try {
-      const result = await getMyQueueMasterSessions({ status: filter })
-      if (result.success && result.sessions) {
-        setSessions(result.sessions)
+      // Load sessions and stats in parallel
+      const [sessionsResult, statsResult] = await Promise.all([
+        getMyQueueMasterSessions({ status: filter }),
+        // Only fetch stats once or every time? Fetching every time ensures sync, 
+        // but arguably stats shouldn't change just by changing filter. 
+        // However, we need to load them initially.
+        getQueueMasterStats()
+      ])
+
+      if (sessionsResult.success && sessionsResult.sessions) {
+        setSessions(sessionsResult.sessions)
       } else {
-        setError(result.error || 'Failed to load sessions')
+        setError(sessionsResult.error || 'Failed to load sessions')
+      }
+
+      if (statsResult.success && statsResult.stats) {
+        setStats(statsResult.stats)
       }
     } catch (err) {
       setError('An unexpected error occurred')
     } finally {
       setIsLoading(false)
     }
-  }
-
-  // Calculate stats from all sessions
-  const stats = {
-    totalSessions: sessions.length,
-    totalRevenue: sessions.reduce((sum, s) => {
-      const revenue = s.participants.reduce((pSum, p) => pSum + (p.amountOwed || 0), 0)
-      return sum + revenue
-    }, 0),
-    averagePlayers: sessions.length > 0 
-      ? Math.round(sessions.reduce((sum, s) => sum + s.currentPlayers, 0) / sessions.length) 
-      : 0,
-    activeSessions: sessions.filter(s => ['active', 'open'].includes(s.status)).length,
   }
 
   const getStatusColor = (status: string) => {
@@ -104,44 +117,52 @@ export function QueueMasterDashboard() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl p-6 shadow-lg">
+        {/* Total Sessions - Blue/Cyan theme */}
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-              <Calendar className="w-6 h-6" />
+            <div className="w-12 h-12 bg-cyan-50 rounded-full flex items-center justify-center">
+              <Calendar className="w-6 h-6 text-cyan-600" />
             </div>
-            <span className="text-2xl font-bold">{stats.totalSessions}</span>
+            <span className="text-3xl font-bold text-gray-900">{stats.totalSessions}</span>
           </div>
-          <p className="text-blue-100 text-sm font-medium">Total Sessions</p>
+          <p className="text-gray-700 text-sm font-medium">Total Sessions</p>
+          <p className="text-gray-500 text-xs mt-1">Lifetime sessions</p>
         </div>
 
-        <div className="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-xl p-6 shadow-lg">
+        {/* Active Sessions - Orange theme (distinct from green revenue) */}
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-              <DollarSign className="w-6 h-6" />
+            <div className="w-12 h-12 bg-orange-50 rounded-full flex items-center justify-center">
+              <TrendingUp className="w-6 h-6 text-orange-600" />
             </div>
-            <span className="text-2xl font-bold">₱{stats.totalRevenue.toFixed(0)}</span>
+            <span className="text-3xl font-bold text-gray-900">{stats.activeSessions}</span>
           </div>
-          <p className="text-green-100 text-sm font-medium">Total Revenue</p>
+          <p className="text-gray-700 text-sm font-medium">Active Now</p>
+          <p className="text-gray-500 text-xs mt-1">Open/Active queues</p>
         </div>
 
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-xl p-6 shadow-lg">
+        {/* Average Players - Violet theme */}
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-              <Users className="w-6 h-6" />
+            <div className="w-12 h-12 bg-violet-50 rounded-full flex items-center justify-center">
+              <Users className="w-6 h-6 text-violet-600" />
             </div>
-            <span className="text-2xl font-bold">{stats.averagePlayers}</span>
+            <span className="text-3xl font-bold text-gray-900">{stats.averagePlayers}</span>
           </div>
-          <p className="text-purple-100 text-sm font-medium">Avg Players/Session</p>
+          <p className="text-gray-700 text-sm font-medium">Avg Players</p>
+          <p className="text-gray-500 text-xs mt-1">Per session</p>
         </div>
 
-        <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-xl p-6 shadow-lg">
+        {/* Total Revenue - Emerald theme */}
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-              <TrendingUp className="w-6 h-6" />
+            <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center">
+              <DollarSign className="w-6 h-6 text-emerald-600" />
             </div>
-            <span className="text-2xl font-bold">{stats.activeSessions}</span>
+            <span className="text-3xl font-bold text-gray-900">₱{stats.totalRevenue.toFixed(0)}</span>
           </div>
-          <p className="text-orange-100 text-sm font-medium">Active Now</p>
+          <p className="text-gray-700 text-sm font-medium">Total Revenue</p>
+          <p className="text-gray-500 text-xs mt-1">Accumulated earnings</p>
         </div>
       </div>
 
@@ -149,31 +170,28 @@ export function QueueMasterDashboard() {
       <div className="bg-white border border-gray-200 rounded-xl p-2 mb-6 inline-flex gap-2">
         <button
           onClick={() => setFilter('active')}
-          className={`px-6 py-2 rounded-lg font-medium transition-colors ${
-            filter === 'active'
-              ? 'bg-primary text-white shadow-sm'
-              : 'text-gray-600 hover:bg-gray-100'
-          }`}
+          className={`px-6 py-2 rounded-lg font-medium transition-colors ${filter === 'active'
+            ? 'bg-primary text-white shadow-sm'
+            : 'text-gray-600 hover:bg-gray-100'
+            }`}
         >
           Active ({sessions.filter(s => ['active', 'open'].includes(s.status)).length})
         </button>
         <button
           onClick={() => setFilter('upcoming')}
-          className={`px-6 py-2 rounded-lg font-medium transition-colors ${
-            filter === 'upcoming'
-              ? 'bg-primary text-white shadow-sm'
-              : 'text-gray-600 hover:bg-gray-100'
-          }`}
+          className={`px-6 py-2 rounded-lg font-medium transition-colors ${filter === 'upcoming'
+            ? 'bg-primary text-white shadow-sm'
+            : 'text-gray-600 hover:bg-gray-100'
+            }`}
         >
           Upcoming
         </button>
         <button
           onClick={() => setFilter('past')}
-          className={`px-6 py-2 rounded-lg font-medium transition-colors ${
-            filter === 'past'
-              ? 'bg-primary text-white shadow-sm'
-              : 'text-gray-600 hover:bg-gray-100'
-          }`}
+          className={`px-6 py-2 rounded-lg font-medium transition-colors ${filter === 'past'
+            ? 'bg-primary text-white shadow-sm'
+            : 'text-gray-600 hover:bg-gray-100'
+            }`}
         >
           Past
         </button>
@@ -197,7 +215,7 @@ export function QueueMasterDashboard() {
             <h3 className="font-semibold text-gray-900 mb-2">Failed to Load Sessions</h3>
             <p className="text-sm text-gray-500 mb-4">{error}</p>
             <button
-              onClick={loadSessions}
+              onClick={loadDashboard}
               className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
             >
               Try Again
@@ -277,12 +295,17 @@ export function QueueMasterDashboard() {
                     <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
                     <span className="capitalize">{session.mode}</span>
                   </div>
-                  <div className="text-gray-500">
-                    {new Date(session.startTime).toLocaleTimeString('en-US', { 
-                      hour: 'numeric', 
-                      minute: '2-digit',
-                      hour12: true 
-                    })}
+                  <div className="text-right">
+                    <div className="text-gray-900 font-medium">
+                      {Math.ceil((new Date(session.endTime).getTime() - new Date(session.startTime).getTime()) / (1000 * 60 * 60))}h Duration
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      Created {new Date(session.createdAt).toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                      })}
+                    </div>
                   </div>
                 </div>
 

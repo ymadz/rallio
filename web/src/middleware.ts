@@ -1,21 +1,12 @@
-  import type { NextRequest } from 'next/server';
-import { updateSession } from './lib/supabase/middleware';
+import { updateSession } from './lib/supabase/middleware'
+import type { NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  // Delegates to the Supabase session updater which returns a NextResponse
-  return await updateSession(request);
+  return await updateSession(request)
 }
 
 export const config = {
-  // Run middleware for protected routes; adjust as needed
   matcher: [
-    '/dashboard/:path*',
-    '/profile/:path*',
-    '/courts/:path*',
-    '/queues/:path*',
-    '/home/:path*',
-    '/bookings/:path*',
-    '/admin/:path*',
-    '/(global-admin)/:path*',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
-};
+}

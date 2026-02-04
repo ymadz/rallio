@@ -45,7 +45,9 @@ export async function updateSession(request: NextRequest) {
           const bannedUntil = new Date(profile.banned_until);
           if (bannedUntil > new Date()) {
             // Still suspended, redirect to login
-            return NextResponse.redirect(new URL('/login?error=suspended', request.url));
+            if (!request.nextUrl.pathname.startsWith('/login')) {
+              return NextResponse.redirect(new URL('/login?error=suspended', request.url));
+            }
           }
         } else {
           // Permanently banned

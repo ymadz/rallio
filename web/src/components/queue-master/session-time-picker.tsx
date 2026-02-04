@@ -28,16 +28,13 @@ export function SessionTimePicker({
 }: SessionTimePickerProps) {
 
     // Helper to format time from 24h to 12h format
-    const formatTimeRange = (startTimeStr: string) => {
+    const formatSlotTime = (startTimeStr: string) => {
         const [hours, minutes] = startTimeStr.split(':').map(Number)
         const startPeriod = hours >= 12 ? 'PM' : 'AM'
         const startHour = hours % 12 || 12
 
-        const endHoursRaw = hours + duration
-        const endPeriod = endHoursRaw >= 12 ? 'PM' : 'AM'
-        const endHour = endHoursRaw % 12 || 12
-
-        return `${startHour}:${minutes.toString().padStart(2, '0')} ${startPeriod} - ${endHour}:${minutes.toString().padStart(2, '0')} ${endPeriod}`
+        // We just show Start Time here because the end time depends on selection
+        return `${startHour}:${minutes.toString().padStart(2, '0')} ${startPeriod}`
     }
 
     // Helper to check if a range starting at 'time' is fully available
@@ -63,8 +60,26 @@ export function SessionTimePicker({
     return (
         <div className={cn("space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar", className)}>
             {slots.map((slot) => {
-                const isSelected = selectedTime === slot.time
-                const available = isRangeAvailable(slot.time)
+                // Calculate logic for range highlighting
+                const slotHour = parseInt(slot.time.split(':')[0])
+                let isInRange = false
+                let isStart = false
+
+                if (selectedTime) {
+                    const startHour = parseInt(selectedTime.split(':')[0])
+                    const endHour = startHour + duration
+
+                    if (slotHour === startHour) isStart = true
+                    if (slotHour >= startHour && slotHour < endHour) isInRange = true
+                }
+
+                // Check availability
+                // For the start slot, we check the FULL duration
+                // For other slots, we just show their individual availability?
+                // Actually, if we are in "selection mode", the user might click a later slot.
+                // The `isRangeAvailable` helper checks if a duration starts from this slot.
+                // But visually we want to show if this specific slot is available.
+                const available = slot.available
                 const canSelect = available && !disabled
 
                 return (
@@ -75,7 +90,7 @@ export function SessionTimePicker({
                         onClick={() => onSelectTime(slot.time)}
                         className={cn(
                             "w-full flex items-center justify-between p-4 rounded-xl border transition-all duration-200 group text-left",
-                            isSelected
+                            isInRange
                                 ? "bg-primary/5 border-primary shadow-sm ring-1 ring-primary/20"
                                 : canSelect
                                     ? "bg-white border-gray-200 hover:border-primary/50 hover:bg-gray-50"
@@ -86,27 +101,32 @@ export function SessionTimePicker({
                             {/* Radio-style Circular Indicator */}
                             <div className={cn(
                                 "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
-                                isSelected
+                                isInRange
                                     ? "border-primary bg-white"
                                     : canSelect
                                         ? "border-gray-300 group-hover:border-primary"
                                         : "border-gray-200 bg-gray-50"
                             )}>
-                                {isSelected && (
-                                    <div className="w-3 h-3 rounded-full bg-primary" />
+                                {isInRange && (
+                                    <div className={cn("w-3 h-3 rounded-full bg-primary", !isStart && "opacity-50")} />
                                 )}
                             </div>
 
                             <div>
                                 <div className={cn(
                                     "font-semibold text-sm",
-                                    isSelected ? "text-primary" : canSelect ? "text-gray-900" : "text-gray-400"
+                                    isInRange ? "text-primary" : canSelect ? "text-gray-900" : "text-gray-400"
                                 )}>
-                                    {formatTimeRange(slot.time)}
+                                    {formatSlotTime(slot.time)}
                                 </div>
                                 {!available && (
                                     <div className="text-[11px] text-gray-400 font-medium mt-0.5">
                                         Reserved
+                                    </div>
+                                )}
+                                {isStart && duration > 1 && (
+                                    <div className="text-[11px] text-primary font-medium mt-0.5">
+                                        Starts here • {duration} hours
                                     </div>
                                 )}
                             </div>
@@ -115,7 +135,7 @@ export function SessionTimePicker({
                         {slot.price !== undefined && (
                             <div className={cn(
                                 "font-bold text-sm",
-                                isSelected ? "text-primary" : canSelect ? "text-gray-900" : "text-gray-400"
+                                isInRange ? "text-primary" : canSelect ? "text-gray-900" : "text-gray-400"
                             )}>
                                 ₱{slot.price}
                             </div>
