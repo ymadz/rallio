@@ -246,8 +246,17 @@ export default function QueueDetailScreen() {
                 [
                     { text: 'Cancel', style: 'cancel' },
                     {
-                        text: 'I Have Paid',
-                        onPress: () => confirmLeave(),
+                        text: 'Pay Now',
+                        onPress: () => {
+                            router.push({
+                                pathname: '/queue/pay',
+                                params: {
+                                    amount: amountOwed.toString(),
+                                    sessionId: session.id,
+                                    description: `Queue Payment for ${session.courts?.name}`
+                                }
+                            });
+                        }
                     },
                 ]
             );

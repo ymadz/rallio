@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { format } from 'date-fns'
 import { revalidatePath } from 'next/cache'
-import { createNotification, NotificationTemplates } from '@/lib/notifications'
+import { createReservation } from '@/lib/services/reservations'
 
 export interface TimeSlot {
   time: string
@@ -220,8 +220,6 @@ export async function validateBookingAvailabilityAction(data: {
     selectedDays.push(initialStartTime.getDay())
   }
 
-  const isRecurring = recurrenceWeeks > 1 || selectedDays.length > 1
-
   // Ensure initialStartTime is valid
   if (Number.isNaN(initialStartTime.getTime())) {
     return { available: false, error: 'Invalid start time.' }
@@ -304,7 +302,7 @@ export async function validateBookingAvailabilityAction(data: {
       if (userId && conflict.user_id === userId && (conflict.status === 'pending_payment' || conflict.status === 'pending') && !isRecurring) return false
       if (userId && conflict.user_id !== userId) return true
       if (!userId) return true // If no user, everything is conflict
-      return isRecurring
+      return isRecurring // Recurrence blocks everything to be safe
     }) || []
 
     if (realConflicts.length > 0) {
@@ -337,220 +335,15 @@ export async function createReservationAction(data: {
 }): Promise<{ success: boolean; reservationId?: string; error?: string; count?: number }> {
   const supabase = await createClient()
 
-  const recurrenceWeeks = data.recurrenceWeeks || 1
-  const selectedDays = data.selectedDays || []
+  // Use the shared service
+  const result = await createReservation(supabase, data)
 
-  // If no specific days selected, default to the start date's day (standard recurrence)
-  const initialStartTime = new Date(data.startTimeISO)
-  const initialEndTime = new Date(data.endTimeISO)
-
-  if (selectedDays.length === 0) {
-    selectedDays.push(initialStartTime.getDay())
+  if (result.success) {
+    revalidatePath('/reservations')
+    revalidatePath('/bookings')
   }
 
-  const isRecurring = recurrenceWeeks > 1 || selectedDays.length > 1
-  const recurrenceGroupId = isRecurring ? crypto.randomUUID() : null
-  const createdReservationIds: string[] = []
-
-  // Ensure initialStartTime is valid
-  if (Number.isNaN(initialStartTime.getTime())) {
-    return { success: false, error: 'Invalid start time.' }
-  }
-
-  const durationMs = initialEndTime.getTime() - initialStartTime.getTime()
-  const startDayIndex = initialStartTime.getDay() // 0-6
-
-  console.log(`[createReservation] Starting ${isRecurring ? 'recurring' : 'single'} booking check. Weeks: ${recurrenceWeeks}, Days: ${selectedDays.join(',')}`)
-
-  // 1. GENERATE PHASE
-  // Generate all intended slots to book
-  // Deduplicate and sort selected days to prevent duplicate slots
-  const uniqueSelectedDays = Array.from(new Set(selectedDays)).sort((a, b) => a - b)
-  const targetSlots: { start: Date; end: Date; weekIndex: number }[] = []
-
-  for (let i = 0; i < recurrenceWeeks; i++) {
-    // The "base" date for this week's iteration (aligned with the initial start date)
-    const weekBaseTime = initialStartTime.getTime() + (i * 7 * 24 * 60 * 60 * 1000)
-
-    for (const dayIndex of uniqueSelectedDays) {
-      // Calculate offset from the original start day
-      // e.g. Start is Wed (3). Target is Mon (1). Offset = -2 days.
-      const dayOffset = dayIndex - startDayIndex
-
-      const slotStartTime = new Date(weekBaseTime + (dayOffset * 24 * 60 * 60 * 1000))
-      const slotEndTime = new Date(slotStartTime.getTime() + durationMs)
-
-      // Skip past dates (e.g., missed days in the first week)
-      // We allow a small buffer (e.g. 1 min) to avoid equality issues, but >= should be fine.
-      // Actually strictly, if it's the SAME time as initial, we allow it.
-      if (slotStartTime.getTime() < initialStartTime.getTime()) {
-        continue
-      }
-
-      targetSlots.push({
-        start: slotStartTime,
-        end: slotEndTime,
-        weekIndex: i
-      })
-    }
-  }
-
-  if (targetSlots.length === 0) {
-    return { success: false, error: 'No valid future slots generated.' }
-  }
-
-  // Check for internal overlaps
-  targetSlots.sort((a, b) => a.start.getTime() - b.start.getTime())
-  for (let i = 0; i < targetSlots.length - 1; i++) {
-    const current = targetSlots[i]
-    const next = targetSlots[i + 1]
-
-    if (current.end.getTime() > next.start.getTime()) {
-      return { success: false, error: 'Booking Request Invalid: Generated slots overlap with each other.' }
-    }
-  }
-
-  // 2. VALIDATION PHASE
-  // Check conflicts for ALL slots
-  for (const slot of targetSlots) {
-    const currentStartTimeISO = slot.start.toISOString()
-    const currentEndTimeISO = slot.end.toISOString()
-
-    const conflictStatuses = ['pending_payment', 'pending', 'paid', 'confirmed', 'pending_refund']
-
-    // Use adminDb if available, but createReservationAction is authenticated so maybe standard client is fine?
-    // Actually, for validation step inside creation (Step 2), we should also use adminDb to be ensuring no double bookings.
-    // However, createReservationAction generally assumes the user has passed the initial check.
-    // BUT, let's be safe.
-    const adminDb = createServiceClient()
-
-    const [reservationConflicts, queueConflicts] = await Promise.all([
-      adminDb
-        .from('reservations')
-        .select('id, start_time, end_time, status, user_id')
-        .eq('court_id', data.courtId)
-        .in('status', conflictStatuses)
-        .lt('start_time', currentEndTimeISO)
-        .gt('end_time', currentStartTimeISO),
-
-      adminDb
-        .from('queue_sessions')
-        .select('id, start_time, end_time')
-        .eq('court_id', data.courtId)
-        .in('status', ['draft', 'active', 'pending_approval'])
-        .in('approval_status', ['pending', 'approved'])
-        .lt('start_time', currentEndTimeISO)
-        .gt('end_time', currentStartTimeISO)
-    ])
-
-    // Strict validation: Reject on queue conflict
-    if (queueConflicts.data && queueConflicts.data.length > 0) {
-      const dateStr = slot.start.toLocaleDateString()
-      return {
-        success: false,
-        error: `Conflict on ${dateStr}: Slot matches a Queue Session.`
-      }
-    }
-
-    // Filter reservation conflicts
-    const realConflicts = reservationConflicts.data?.filter(conflict => {
-      if (conflict.status === 'confirmed' || conflict.status === 'paid') return true
-      if (conflict.user_id === data.userId && (conflict.status === 'pending_payment' || conflict.status === 'pending') && !isRecurring) return false
-      if (conflict.user_id !== data.userId) return true
-      return isRecurring // If recurring, even own pending conflicts block it
-    }) || []
-
-    if (realConflicts.length > 0) {
-      const dateStr = slot.start.toLocaleDateString()
-      return {
-        success: false,
-        error: `Conflict on ${dateStr}: Slot is already reserved.`
-      }
-    }
-  }
-
-  // 3. CREATION PHASE
-  let primaryReservationId = ''
-
-  // Calculate price per slot
-  // Note: data.totalAmount is passed as the price for ONE single slot (from frontend calc)
-  // Wait. Frontend calculates: (hourlyRate * duration * recurrenceWeeks * numSessionsPerWeek).
-  // So data.totalAmount IS THE GRAND TOTAL.
-  // My previous assumption in reservations.ts was that it passed PER SESSION. 
-  // Let's re-read AvailabilityModal. 
-  // `const totalPrice = (startSlot?.price || hourlyRate) * duration * recurrenceWeeks` (OLD)
-  // NEW: `const basePrice = ... * recurrenceWeeks * numSessionsPerWeek`.
-  // `setBookingData({ ... hourlyRate: ... })`
-  // `getSubtotal` in Store uses `hourlyRate * duration * recurrenceWeeks`. 
-  // Does Store know about `selectedDays`? No, I added `selectedDays` logic in Modal but `getSubtotal` in Store MIGHT BE WRONG now.
-
-  // CHECK STORE:
-  // getSubtotal: `const totalBase = baseRate * recurrenceWeeks`.
-  // It does NOT account for `selectedDays.length`.
-  // So the `totalAmount` passed here (from store.getTotalAmount) might be UNDER-calculated if I didn't update Store.getSubtotal.
-
-  // CRITICAL: I need to update `getSubtotal` in `checkout-store.ts` as well!
-  // Assuming I WILL update it, data.totalAmount will be the GRAND TOTAL.
-  // So `perInstanceAmount = data.totalAmount / targetSlots.length`.
-
-  const perInstanceAmount = data.totalAmount / targetSlots.length
-
-  for (let i = 0; i < targetSlots.length; i++) {
-    const slot = targetSlots[i]
-
-    // Determine status
-    // For cash recurring, we auto-confirm them as "Reserved" but unpaid.
-    // However, if we book multiple days in 1 week (single recurrence), is it "Recurring"? Yes.
-    const status = (data.paymentMethod === 'cash' && isRecurring) ? 'confirmed' : 'pending_payment'
-
-    const { data: newRes, error } = await supabase
-      .from('reservations')
-      .insert({
-        court_id: data.courtId,
-        user_id: data.userId,
-        start_time: slot.start.toISOString(),
-        end_time: slot.end.toISOString(),
-        status: status,
-        total_amount: perInstanceAmount,
-        amount_paid: 0,
-        num_players: data.numPlayers || 1,
-        payment_type: data.paymentType || 'full',
-        discount_applied: data.discountApplied ? (data.discountApplied / targetSlots.length) : 0, // Split discount too
-        discount_type: data.discountType || null,
-        discount_reason: data.discountReason || null,
-        recurrence_group_id: recurrenceGroupId,
-        metadata: {
-          booking_origin: 'web_checkout',
-          intended_payment_method: data.paymentMethod ?? null,
-          recurrence_index: i,
-          recurrence_total: targetSlots.length,
-          // Add week-specific metadata for proper display
-          week_index: slot.weekIndex,
-          weeks_total: recurrenceWeeks,
-          days_per_week: uniqueSelectedDays.length
-        },
-        notes: data.notes ? (isRecurring ? `${data.notes} (Seq ${i + 1})` : data.notes) : null,
-      })
-      .select('id')
-      .single()
-
-    if (error || !newRes) {
-      console.error(`Failed to create reservation for slot ${i}`, error)
-      return { success: false, error: `Failed to create slot ${i + 1}: ${error.message}` }
-    }
-
-    if (i === 0) primaryReservationId = newRes.id
-    createdReservationIds.push(newRes.id)
-  }
-
-  revalidatePath('/reservations')
-  revalidatePath('/bookings')
-
-  return {
-    success: true,
-    reservationId: primaryReservationId,
-    count: createdReservationIds.length
-  }
+  return result
 }
 
 /**

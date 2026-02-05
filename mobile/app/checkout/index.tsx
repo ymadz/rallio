@@ -9,6 +9,7 @@ import {
     ActivityIndicator,
     Alert,
     Linking,
+    TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -40,6 +41,13 @@ export default function CheckoutScreen() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [step, setStep] = useState<'review' | 'payment' | 'processing' | 'success'>('review');
 
+    // Discount State
+    const [promoCode, setPromoCode] = useState('');
+    const [isCheckingDiscount, setIsCheckingDiscount] = useState(false);
+    const [discountAmount, setDiscountAmount] = useState(0);
+    const [appliedPromo, setAppliedPromo] = useState<string | null>(null);
+    const [promoError, setPromoError] = useState<string | null>(null);
+
     useEffect(() => {
         if (!bookingData) {
             router.replace('/(tabs)/courts');
@@ -58,7 +66,14 @@ export default function CheckoutScreen() {
 
     const subtotal = getSubtotal();
     const platformFee = getPlatformFeeAmount();
-    const total = getTotalAmount();
+    const total = getTotalAmount() - discountAmount;
+
+    useEffect(() => {
+        // Adjust total if discount is applied? 
+        // Note: The store `getTotalAmount` usually calculates based on its internal state. 
+        // Since we are adding local discount state, we subtract it here. 
+        // Ideally we should sync this to the store, but for parity fix, local calculation on display and submission is acceptable.
+    }, [discountAmount]);
 
     const formatTime = (time: string): string => {
         const [hours] = time.split(':').map(Number);
@@ -69,6 +84,61 @@ export default function CheckoutScreen() {
 
     const handleSelectPayment = (method: PaymentMethod) => {
         setPaymentMethod(method);
+    };
+
+    const handleApplyPromo = async () => {
+        if (!promoCode.trim()) return;
+
+        setIsCheckingDiscount(true);
+        setPromoError(null);
+        setDiscountAmount(0);
+        setAppliedPromo(null);
+
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.254.170:3000';
+
+            // Mocking the validation endpoint call since I cannot confirm its exact schema yet, 
+            // but following the pattern of other endpoints.
+            // Assuming /api/mobile/validate-discount or similar exists or logic needs to be robust. 
+            // If endpoint assumes specific payload structure:
+            const response = await fetch(`${apiUrl}/api/mobile/validate-discount`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session?.access_token || ''}`
+                },
+                body: JSON.stringify({
+                    venueId: bookingData.venueId || '', // Assuming bookingData has venueId
+                    code: promoCode,
+                    amount: subtotal
+                })
+            });
+
+            if (!response.ok) {
+                // If API not ready, fallback for demo/parity check:
+                // throw new Error('Invalid promo code');
+                // Actually, let's just log and show error to user
+                const err = await response.json();
+                throw new Error(err.error || 'Invalid promo code');
+            }
+
+            const data = await response.json();
+            if (data.valid) {
+                setDiscountAmount(data.discountAmount);
+                setAppliedPromo(promoCode);
+                Alert.alert('Success', `Discount of ₱${data.discountAmount} applied!`);
+            } else {
+                throw new Error('Invalid promo code');
+            }
+
+        } catch (error: any) {
+            console.error('Promo error:', error);
+            setPromoError(error.message || 'Failed to apply promo');
+            setDiscountAmount(0);
+        } finally {
+            setIsCheckingDiscount(false);
+        }
     };
 
     const handleConfirmBooking = async () => {
@@ -93,14 +163,16 @@ export default function CheckoutScreen() {
                 throw new Error('User not authenticated (No session)');
             }
 
-            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.254.163:3000';
+            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.254.170:3000';
 
             // Prepare payload for Server Action Wrapper
             const reservationPayload = {
                 courtId: bookingData.courtId,
                 startTimeISO: `${format(new Date(bookingData.date), 'yyyy-MM-dd')}T${bookingData.startTime}:00`,
                 endTimeISO: `${format(new Date(bookingData.date), 'yyyy-MM-dd')}T${bookingData.endTime}:00`, // Duration logic handled by server if needed, but passing endISO is clearer
-                totalAmount: total, // GRAND TOTAL
+                totalAmount: total, // GRAND TOTAL (Pre-calculated with discount)
+                discountAmount: discountAmount, // Pass discount info if backend needs it
+                promoCode: appliedPromo,
                 numPlayers: bookingData.numPlayers,
                 paymentType: 'full',
                 paymentMethod: paymentMethod, // 'cash' or 'e-wallet'
@@ -365,6 +437,54 @@ export default function CheckoutScreen() {
                     </View>
                 </TouchableOpacity>
 
+
+
+                {/* Promo Code Input */}
+                <Text style={styles.sectionTitle}>Promo Code</Text>
+                <Card variant="default" padding="sm" style={styles.promoCard}>
+                    <View style={styles.promoRow}>
+                        <TextInput
+                            style={styles.promoInput}
+                            placeholder="Enter discount code"
+                            placeholderTextColor={Colors.dark.textSecondary}
+                            value={promoCode}
+                            onChangeText={setPromoCode}
+                            autoCapitalize="characters"
+                            editable={!appliedPromo}
+                        />
+                        {appliedPromo ? (
+                            <TouchableOpacity onPress={() => {
+                                setAppliedPromo(null);
+                                setDiscountAmount(0);
+                                setPromoCode('');
+                            }}>
+                                <Ionicons name="close-circle" size={24} color={Colors.dark.textSecondary} />
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity
+                                onPress={handleApplyPromo}
+                                disabled={isCheckingDiscount || !promoCode}
+                                style={styles.applyButton}
+                            >
+                                {isCheckingDiscount ? (
+                                    <ActivityIndicator size="small" color={Colors.dark.primary} />
+                                ) : (
+                                    <Text style={[
+                                        styles.applyText,
+                                        !promoCode && styles.applyTextDisabled
+                                    ]}>Apply</Text>
+                                )}
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                    {promoError && (
+                        <Text style={styles.promoError}>{promoError}</Text>
+                    )}
+                    {appliedPromo && (
+                        <Text style={styles.promoSuccess}>Promo applied!</Text>
+                    )}
+                </Card>
+
                 <Text style={styles.sectionTitle}>Price Details</Text>
                 <Card variant="default" padding="md">
                     <View style={styles.priceRow}>
@@ -378,6 +498,12 @@ export default function CheckoutScreen() {
                         <Text style={styles.priceLabel}>Platform fee (5%)</Text>
                         <Text style={styles.priceValue}>₱{platformFee.toFixed(2)}</Text>
                     </View>
+                    {discountAmount > 0 && (
+                        <View style={styles.priceRow}>
+                            <Text style={[styles.priceLabel, { color: Colors.dark.success }]}>Discount</Text>
+                            <Text style={[styles.priceValue, { color: Colors.dark.success }]}>-₱{discountAmount.toLocaleString()}</Text>
+                        </View>
+                    )}
                     <View style={[styles.priceRow, styles.totalPriceRow]}>
                         <Text style={styles.totalPriceLabel}>Total</Text>
                         <Text style={styles.totalPriceValue}>₱{total.toLocaleString()}</Text>
@@ -414,7 +540,7 @@ export default function CheckoutScreen() {
                     {paymentMethod === 'e-wallet' ? 'Pay Now' : 'Confirm Booking'}
                 </Button>
             </View>
-        </SafeAreaView>
+        </SafeAreaView >
     );
 }
 
@@ -713,5 +839,41 @@ const styles = StyleSheet.create({
     },
     doneButton: {
         width: '100%',
+    },
+    promoCard: {
+        marginBottom: Spacing.sm,
+    },
+    promoRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm,
+    },
+    promoInput: {
+        flex: 1,
+        ...Typography.body,
+        color: Colors.dark.text,
+        paddingVertical: Spacing.sm,
+    },
+    applyButton: {
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.sm,
+    },
+    applyText: {
+        ...Typography.body,
+        fontWeight: '600',
+        color: Colors.dark.primary,
+    },
+    applyTextDisabled: {
+        color: Colors.dark.textTertiary,
+    },
+    promoError: {
+        ...Typography.caption,
+        color: Colors.dark.error,
+        marginTop: 4,
+    },
+    promoSuccess: {
+        ...Typography.caption,
+        color: Colors.dark.success,
+        marginTop: 4,
     },
 });

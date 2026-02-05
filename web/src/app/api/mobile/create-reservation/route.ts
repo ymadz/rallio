@@ -1,10 +1,24 @@
+
 import { NextRequest, NextResponse } from 'next/server'
-import { createReservationAction } from '@/app/actions/reservations'
-import { createClient } from '@/lib/supabase/server'
+import { createReservation } from '@/lib/services/reservations'
+import { createClient } from '@supabase/supabase-js'
 
 export async function POST(request: NextRequest) {
     try {
-        const supabase = await createClient()
+        const authHeader = request.headers.get('Authorization')
+
+        if (!authHeader) {
+            return NextResponse.json({ success: false, error: 'Missing Authorization header' }, { status: 401 })
+        }
+
+        // Initialize Supabase client with the Authorization header
+        const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            {
+                global: { headers: { Authorization: authHeader } }
+            }
+        )
 
         // Verify authentication
         const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -26,13 +40,13 @@ export async function POST(request: NextRequest) {
             selectedDays
         } = body
 
-        // Call the shared server action
-        const result = await createReservationAction({
+        // Call the shared service
+        const result = await createReservation(supabase, {
             courtId,
             userId: user.id,
             startTimeISO,
             endTimeISO,
-            totalAmount,         // Note: Ensure mobile passes the GRAND TOTAL as expected by the action
+            totalAmount,
             numPlayers,
             paymentType,
             paymentMethod,

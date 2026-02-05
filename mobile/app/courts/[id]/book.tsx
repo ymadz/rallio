@@ -283,7 +283,7 @@ export default function BookingScreen() {
         setIsValidatingRecurrence(true);
         try {
             // Use the centralized API validation
-            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.254.163:3000';
+            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.254.170:3000';
             const dateStr = format(selectedDate, 'yyyy-MM-dd');
             const startISO = `${dateStr}T${selectedTime}:00`;
             // Calculate end ISO properly for the validation check
