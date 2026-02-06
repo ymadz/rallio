@@ -63,7 +63,7 @@ export default function ProfileScreen() {
     };
 
     const getSkillLabel = (level: number | null | undefined) => {
-        if (!level) return 'Not set';
+        if (!level) return 'Unranked';
         if (level <= 2) return 'Beginner';
         if (level <= 4) return 'Intermediate';
         if (level <= 6) return 'Advanced';
@@ -150,9 +150,10 @@ export default function ProfileScreen() {
                         </View>
                         <View style={styles.statDivider} />
                         <View style={styles.statItem}>
-                            <Text style={styles.statValue}>{player?.rating || 1500}</Text>
-                            <Text style={styles.statLabel}>ELO</Text>
+                            <Text style={styles.statValue}>{player?.rating || '-'}</Text>
+                            <Text style={styles.statLabel}>Rating</Text>
                         </View>
+
                     </View>
                 </Card>
 

@@ -140,7 +140,7 @@ export default function HomeScreen() {
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{player?.rating || 1500}</Text>
+              <Text style={styles.statValue}>{player?.rating || '-'}</Text>
               <Text style={styles.statLabel}>Rating</Text>
             </View>
           </View>

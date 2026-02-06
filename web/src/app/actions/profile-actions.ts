@@ -115,7 +115,7 @@ export async function updatePlayerProfile(data: {
           gender: data.gender,
           skill_level: data.skillLevel,
           play_style: data.playStyle,
-          rating: data.rating || 1500, // Default to 1500 if seeded rating not provided
+          rating: data.rating, // Allow null for unranked
         })
         .select()
 

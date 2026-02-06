@@ -30,7 +30,8 @@ export default async function ProfilePage() {
   const playStyles = player?.play_style?.split(',').filter(Boolean) || []
 
   // Map skill level to tier
-  const getSkillTier = (level: number) => {
+  const getSkillTier = (level: number | null) => {
+    if (!level) return 'UNRANKED'
     if (level <= 3) return 'BEGINNER'
     if (level <= 6) return 'INTERMEDIATE'
     if (level <= 8) return 'ADVANCED'
@@ -138,20 +139,34 @@ export default async function ProfilePage() {
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm text-gray-600">Skill Level</span>
-                    <span className="text-sm font-bold text-gray-900">{player?.skill_level || 1}/10</span>
+                    <span className="text-sm font-bold text-gray-900">
+                      {player?.skill_level ? `${player.skill_level}/10` : 'Unranked'}
+                    </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-primary h-2 rounded-full transition-all"
-                      style={{ width: `${((player?.skill_level || 1) / 10) * 100}%` }}
+                    <div
+                      className={`h-2 rounded-full transition-all ${!player?.skill_level ? 'bg-gray-300' : 'bg-primary'}`}
+                      style={{ width: `${player?.skill_level ? (player.skill_level / 10) * 100 : 0}%` }}
                     />
                   </div>
                 </div>
                 <div className="pt-2">
-                  <span className="inline-block px-3 py-1.5 bg-amber-100 text-amber-800 text-xs font-medium rounded-full">
-                    {getSkillTier(player?.skill_level || 1)}
-                  </span>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-600">ELO Rating</span>
+                    <span className="text-sm font-bold text-gray-900">{player?.rating || '-'}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${!player?.skill_level ? 'bg-gray-100 text-gray-600' :
+                      player.skill_level <= 3 ? 'bg-green-100 text-green-800' :
+                        player.skill_level <= 6 ? 'bg-blue-100 text-blue-800' :
+                          player.skill_level <= 8 ? 'bg-amber-100 text-amber-800' :
+                            'bg-purple-100 text-purple-800'
+                      }`}>
+                      {getSkillTier(player?.skill_level || null)}
+                    </span>
+                  </div>
                 </div>
+
                 {player?.average_rating && (
                   <div className="pt-2 border-t border-gray-100">
                     <div className="flex items-center gap-1">
@@ -259,6 +274,6 @@ export default async function ProfilePage() {
           </div>
         </div>
       </div>
-    </div>
+    </div >
   )
 }
