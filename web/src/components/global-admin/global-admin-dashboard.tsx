@@ -12,8 +12,7 @@ import {
   TrendingUp,
   TrendingDown,
   Loader2,
-  Clock,
-  CheckCircle
+  Clock
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
@@ -95,7 +94,7 @@ export default function GlobalAdminDashboard() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
       </div>
     )
   }
@@ -110,7 +109,7 @@ export default function GlobalAdminDashboard() {
             <p className="text-sm text-red-700">{error || 'Failed to load data'}</p>
             <button
               onClick={loadDashboard}
-              className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
             >
               Try Again
             </button>
@@ -129,115 +128,106 @@ export default function GlobalAdminDashboard() {
       </div>
 
       {/* Stats Grid */}
+      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Total Users */}
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl p-6 shadow-lg">
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-              <Users className="w-6 h-6" />
+            <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
+              <Users className="w-6 h-6 text-blue-600" />
             </div>
-            <div className="flex items-center gap-1 text-sm font-medium">
+            <div className="flex items-center gap-1 text-sm font-medium text-gray-600">
               {stats.userGrowthPercent >= 0 ? (
                 <>
-                  <TrendingUp className="w-4 h-4" />
-                  <span>+{stats.userGrowthPercent}%</span>
+                  <TrendingUp className="w-4 h-4 text-green-600" />
+                  <span className="text-green-600">+{stats.userGrowthPercent}%</span>
                 </>
               ) : (
                 <>
-                  <TrendingDown className="w-4 h-4" />
-                  <span>{stats.userGrowthPercent}%</span>
+                  <TrendingDown className="w-4 h-4 text-red-600" />
+                  <span className="text-red-600">{stats.userGrowthPercent}%</span>
                 </>
               )}
             </div>
           </div>
-          <div className="space-y-1">
-            <p className="text-3xl font-bold">{stats.totalUsers.toLocaleString()}</p>
-            <p className="text-blue-100 text-sm">Total Users</p>
-            <p className="text-xs text-blue-200">+{stats.newUsers30Days} in last 30 days</p>
-          </div>
+          <p className="text-3xl font-bold text-gray-900">{stats.totalUsers.toLocaleString()}</p>
+          <p className="text-gray-700 text-sm font-medium">Total Users</p>
+          <p className="text-gray-500 text-xs mt-1">+{stats.newUsers30Days} in last 30 days</p>
         </div>
 
         {/* Total Venues */}
-        <div className="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-xl p-6 shadow-lg">
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-              <Building2 className="w-6 h-6" />
+            <div className="w-12 h-12 bg-emerald-50 rounded-lg flex items-center justify-center">
+              <Building2 className="w-6 h-6 text-emerald-600" />
             </div>
             {stats.pendingVenues > 0 && (
               <Link
                 href="/admin/venues"
-                className="text-xs bg-yellow-400 text-yellow-900 px-2 py-1 rounded-full font-medium hover:bg-yellow-300"
+                className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full font-medium hover:bg-amber-200"
               >
                 {stats.pendingVenues} pending
               </Link>
             )}
           </div>
-          <div className="space-y-1">
-            <p className="text-3xl font-bold">{stats.totalVenues}</p>
-            <p className="text-green-100 text-sm">Total Venues</p>
-            <p className="text-xs text-green-200">{stats.activeVenues} active</p>
-          </div>
+          <p className="text-3xl font-bold text-gray-900">{stats.totalVenues}</p>
+          <p className="text-gray-700 text-sm font-medium">Total Venues</p>
+          <p className="text-gray-500 text-xs mt-1">{stats.activeVenues} active</p>
         </div>
 
         {/* Monthly Revenue */}
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-xl p-6 shadow-lg">
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-              <DollarSign className="w-6 h-6" />
+            <div className="w-12 h-12 bg-purple-50 rounded-lg flex items-center justify-center">
+              <DollarSign className="w-6 h-6 text-purple-600" />
             </div>
           </div>
-          <div className="space-y-1">
-            <p className="text-3xl font-bold">₱{stats.monthlyRevenue.toLocaleString()}</p>
-            <p className="text-purple-100 text-sm">Monthly Revenue</p>
-            <p className="text-xs text-purple-200">Last 30 days</p>
-          </div>
+          <p className="text-3xl font-bold text-gray-900">₱{stats.monthlyRevenue.toLocaleString()}</p>
+          <p className="text-gray-700 text-sm font-medium">Monthly Revenue</p>
+          <p className="text-gray-500 text-xs mt-1">Last 30 days</p>
         </div>
 
         {/* Active Queue Sessions */}
-        <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-xl p-6 shadow-lg">
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-              <Activity className="w-6 h-6" />
+            <div className="w-12 h-12 bg-orange-50 rounded-lg flex items-center justify-center">
+              <Activity className="w-6 h-6 text-orange-600" />
             </div>
           </div>
-          <div className="space-y-1">
-            <p className="text-3xl font-bold">{stats.activeQueueSessions}</p>
-            <p className="text-orange-100 text-sm">Active Queue Sessions</p>
-            <p className="text-xs text-orange-200">Currently running</p>
-          </div>
+          <p className="text-3xl font-bold text-gray-900">{stats.activeQueueSessions}</p>
+          <p className="text-gray-700 text-sm font-medium">Active Queue Sessions</p>
+          <p className="text-gray-500 text-xs mt-1">Currently running</p>
         </div>
 
         {/* Platform Rating */}
-        <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 text-white rounded-xl p-6 shadow-lg">
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-              <Star className="w-6 h-6" />
+            <div className="w-12 h-12 bg-yellow-50 rounded-lg flex items-center justify-center">
+              <Star className="w-6 h-6 text-yellow-600" />
             </div>
           </div>
-          <div className="space-y-1">
-            <p className="text-3xl font-bold">{stats.platformRating.toFixed(1)}</p>
-            <p className="text-yellow-100 text-sm">Platform Rating</p>
-            <p className="text-xs text-yellow-200">Average across all venues</p>
-          </div>
+          <p className="text-3xl font-bold text-gray-900">{stats.platformRating.toFixed(1)}</p>
+          <p className="text-gray-700 text-sm font-medium">Platform Rating</p>
+          <p className="text-gray-500 text-xs mt-1">Average across all venues</p>
         </div>
 
         {/* Pending Approvals */}
-        <div className="bg-gradient-to-br from-pink-500 to-pink-600 text-white rounded-xl p-6 shadow-lg">
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-              <Clock className="w-6 h-6" />
+            <div className="w-12 h-12 bg-pink-50 rounded-lg flex items-center justify-center">
+              <Clock className="w-6 h-6 text-pink-600" />
             </div>
           </div>
-          <div className="space-y-1">
-            <p className="text-3xl font-bold">{stats.pendingVenues}</p>
-            <p className="text-pink-100 text-sm">Pending Approvals</p>
+          <p className="text-3xl font-bold text-gray-900">{stats.pendingVenues}</p>
+          <p className="text-gray-700 text-sm font-medium">Pending Approvals</p>
+          <p className="text-xs mt-1">
             <Link
               href="/admin/venues"
-              className="text-xs text-pink-200 hover:text-white underline"
+              className="text-pink-600 hover:text-pink-700 font-medium"
             >
               Review now →
             </Link>
-          </div>
+          </p>
         </div>
       </div>
 

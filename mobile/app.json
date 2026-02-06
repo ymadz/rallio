@@ -46,6 +46,12 @@
         "projectId": "1eff5939-b031-4ce2-9e0f-a8f3a03fcb18"
       }
     },
-    "owner": "ymadz"
+    "owner": "ymadz",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/1eff5939-b031-4ce2-9e0f-a8f3a03fcb18"
+    }
   }
 }
