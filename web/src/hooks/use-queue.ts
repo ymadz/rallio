@@ -36,6 +36,8 @@ export interface QueueSession {
   estimatedWaitTime: number // in minutes
   maxPlayers: number
   currentPlayers: number
+  startTime: Date  // Added startTime
+  endTime: Date // Added endTime
   userGamesPlayed?: number // Games played by current user
   userAmountOwed?: number // Amount owed by current user
   currentMatch?: {
@@ -112,6 +114,8 @@ export function useQueue(courtId: string) {
         estimatedWaitTime: queueData.estimatedWaitTime,
         maxPlayers: queueData.maxPlayers,
         currentPlayers: queueData.currentPlayers,
+        startTime: queueData.startTime,
+        endTime: queueData.endTime,
       }
 
       setQueue(transformedQueue)
@@ -290,6 +294,8 @@ export function useMyQueues() {
         estimatedWaitTime: q.estimatedWaitTime,
         maxPlayers: q.maxPlayers,
         currentPlayers: q.currentPlayers,
+        startTime: q.startTime,
+        endTime: q.endTime,
       }))
 
       setQueues(transformedQueues)
@@ -398,6 +404,8 @@ export function useNearbyQueues(latitude?: number, longitude?: number) {
         estimatedWaitTime: q.estimatedWaitTime,
         maxPlayers: q.maxPlayers,
         currentPlayers: q.currentPlayers,
+        startTime: q.startTime,
+        endTime: q.endTime,
       }))
 
       setQueues(transformedQueues)

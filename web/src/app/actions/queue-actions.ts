@@ -449,6 +449,8 @@ export async function getMyQueues() {
           currentPlayers: count || 0,
           userGamesPlayed: p.games_played || 0,
           userAmountOwed: parseFloat(p.amount_owed || '0'),
+          startTime: new Date(p.queue_sessions.start_time),
+          endTime: new Date(p.queue_sessions.end_time),
         }
       })
     )
@@ -597,6 +599,8 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
         estimatedWaitTime,
         maxPlayers: session.max_players,
         currentPlayers,
+        startTime: new Date(session.start_time),
+        endTime: new Date(session.end_time),
       }
     })
 

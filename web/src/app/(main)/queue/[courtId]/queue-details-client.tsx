@@ -10,11 +10,12 @@ import { QueuePositionTracker } from '@/components/queue/queue-position-tracker'
 import { PaymentSummaryWidget } from '@/components/queue/payment-summary-widget'
 import { MatchHistoryViewer } from '@/components/queue/match-history-viewer'
 
-import { Users, Clock, Activity, Loader2, AlertCircle, Trophy } from 'lucide-react'
+import { Users, Clock, Activity, Loader2, AlertCircle, Trophy, Calendar } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { differenceInSeconds, subHours, isBefore, format } from 'date-fns'
 
 interface QueueDetailsClientProps {
   courtId: string
@@ -27,6 +28,37 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
   const [isLeaving, setIsLeaving] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [participant, setParticipant] = useState<any>(null)
+
+  const [timeUntilOpen, setTimeUntilOpen] = useState<number | null>(null)
+
+  // Timer effect
+  useEffect(() => {
+    if (!queue?.startTime) return
+
+    const updateTimer = () => {
+      const startTime = new Date(queue.startTime)
+      const openTime = subHours(startTime, 2)
+      const now = new Date()
+
+      if (isBefore(now, openTime)) {
+        const diff = differenceInSeconds(openTime, now)
+        setTimeUntilOpen(diff)
+      } else {
+        setTimeUntilOpen(0)
+      }
+    }
+
+    updateTimer()
+    const interval = setInterval(updateTimer, 1000)
+    return () => clearInterval(interval)
+  }, [queue?.startTime])
+
+  const formatTime = (seconds: number) => {
+    const h = Math.floor(seconds / 3600)
+    const m = Math.floor((seconds % 3600) / 60)
+    const s = seconds % 60
+    return `${h}h ${m}m ${s}s`
+  }
 
   const [showMatchHistory, setShowMatchHistory] = useState(false)
   const [paymentRequiredInfo, setPaymentRequiredInfo] = useState<{
@@ -171,7 +203,13 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                   #{queue.id.slice(0, 8)}
                 </span>
               </div>
-              <p className="text-gray-600 text-sm">{queue.venueName}</p>
+              <p className="text-gray-600 text-sm mb-2">{queue.venueName}</p>
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <Calendar className="w-4 h-4" />
+                <span>
+                  {format(new Date(queue.startTime), 'EEEE, MMM d')} • {format(new Date(queue.startTime), 'h:mm a')} - {queue.endTime ? format(new Date(queue.endTime), 'h:mm a') : '...'}
+                </span>
+              </div>
             </div>
             <QueueStatusBadge status={queue.status} size="md" />
           </div>
@@ -326,48 +364,73 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
         </div>
 
         {/* Join/Leave Queue Form */}
+
+
+        {/* Join/Leave Queue Form */}
         {!isUserInQueue ? (
           <div className="bg-white border border-gray-200 rounded-xl p-6">
             <h3 className="font-semibold text-gray-900 mb-3">Join Queue</h3>
-            <div className="space-y-3 mb-6">
-              <div className="flex items-start gap-2 text-sm text-gray-600">
-                <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span>You will be notified when it&apos;s your turn</span>
+
+            {timeUntilOpen !== null && timeUntilOpen > 0 ? (
+              <div className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                  <Clock className="w-8 h-8 text-blue-500 mx-auto mb-2" />
+                  <h4 className="font-semibold text-blue-900 mb-1">Queue Opens Soon</h4>
+                  <p className="text-sm text-blue-700 mb-3">
+                    Joining opens 2 hours before the session starts.
+                  </p>
+                  <div className="text-2xl font-bold text-blue-600 font-mono">
+                    {formatTime(timeUntilOpen)}
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 text-sm text-gray-500">
+                  <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                  <span>You can join this queue starting at {format(subHours(new Date(queue.startTime), 2), 'h:mm a')}</span>
+                </div>
               </div>
-              <div className="flex items-start gap-2 text-sm text-gray-600">
-                <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span>Cancel anytime without penalty</span>
-              </div>
-              <div className="flex items-start gap-2 text-sm text-gray-600">
-                <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span>Estimated wait: ~{queue.estimatedWaitTime} minutes</span>
-              </div>
-            </div>
-            <button
-              onClick={handleJoinQueue}
-              disabled={isJoining || queue.players.length >= queue.maxPlayers}
-              className="w-full bg-primary text-white py-3.5 rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {isJoining ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Joining...</span>
-                </>
-              ) : queue.players.length >= queue.maxPlayers ? (
-                <span>Queue Full</span>
-              ) : (
-                <>
-                  <Users className="w-5 h-5" />
-                  <span>Join Queue</span>
-                </>
-              )}
-            </button>
+            ) : (
+              <>
+                <div className="space-y-3 mb-6">
+                  <div className="flex items-start gap-2 text-sm text-gray-600">
+                    <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>You will be notified when it&apos;s your turn</span>
+                  </div>
+                  <div className="flex items-start gap-2 text-sm text-gray-600">
+                    <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Cancel anytime without penalty</span>
+                  </div>
+                  <div className="flex items-start gap-2 text-sm text-gray-600">
+                    <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Estimated wait: ~{queue.estimatedWaitTime} minutes</span>
+                  </div>
+                </div>
+                <button
+                  onClick={handleJoinQueue}
+                  disabled={isJoining || queue.players.length >= queue.maxPlayers}
+                  className="w-full bg-primary text-white py-3.5 rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isJoining ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Joining...</span>
+                    </>
+                  ) : queue.players.length >= queue.maxPlayers ? (
+                    <span>Queue Full</span>
+                  ) : (
+                    <>
+                      <Users className="w-5 h-5" />
+                      <span>Join Queue</span>
+                    </>
+                  )}
+                </button>
+              </>
+            )}
           </div>
         ) : (
           <div className="bg-white border border-gray-200 rounded-xl p-6">
