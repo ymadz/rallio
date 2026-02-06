@@ -11,6 +11,14 @@ import StepPlayerInfo from '@/components/onboarding/StepPlayerInfo';
 import StepPlayStyles from '@/components/onboarding/StepPlayStyles';
 import StepSkillLevel from '@/components/onboarding/StepSkillLevel';
 
+// Map Skill Level to Starting ELO
+const INITIAL_ELO_MAP: Record<number, number> = {
+    1: 1200, // Beginner
+    4: 1500, // Intermediate
+    7: 1800, // Advanced
+    10: 2100 // Expert
+};
+
 type Step = 'intro' | 'details' | 'player-info' | 'play-styles' | 'skill-level';
 
 export default function SetupProfilePage() {
@@ -99,25 +107,17 @@ export default function SetupProfilePage() {
 
             if (profileError) throw profileError;
 
-            // Update Player
+            // Update Player with ELO Seed
+            const startingElo = INITIAL_ELO_MAP[formData.skillLevel] || 1500;
+
             const { error: playerError } = await supabase
                 .from('players')
                 .update({
                     skill_level: formData.skillLevel,
                     play_style: formData.playStyles.join(','),
-                    // birth_date and gender might need to be added to players table or profiles table schema in DB if not exists
-                    // Assuming they exist or mapped accordingly. 
-                    // Based on web code: birthDate and gender are passed to updatePlayerProfile server action.
-                    // Checking implementation plan, I need to ensure these columns exist or where they go.
-                    // Web: updatePlayerProfile({ birthDate, gender, skillLevel, playStyle })
-                    // I'll assume they are on 'players' based on typical schema, or I might need to check schema.
-                    // Re-checking web code: 
-                    /*
-                     const playerResult = await updatePlayerProfile({
-                        birthDate: profileData.birthDate ...
-                        gender: profileData.gender ...
-                     })
-                    */
+                    rating: startingElo, // Seeding ELO
+                    birth_date: formData.birthDate ? formData.birthDate.toISOString() : null,
+                    gender: formData.gender,
                 })
                 .eq('user_id', user.id);
 

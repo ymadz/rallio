@@ -95,11 +95,16 @@ function RootLayoutNav() {
       router.replace('/(tabs)');
     } else if (user && !isLoading) {
       // Check for incomplete profile
+      // Check for incomplete profile
       const { profile } = useAuthStore.getState();
+      // If profile exists but is not completed, enforce onboarding
       if (profile && !profile.profile_completed) {
         const isOnboarding = segments[0] === '(onboarding)';
         if (!isOnboarding) {
-          router.replace('/(onboarding)/setup-profile');
+          // Use timeout to ensure navigation is ready and prevent loops
+          setTimeout(() => {
+            router.replace('/(onboarding)/setup-profile');
+          }, 100);
         }
       }
 

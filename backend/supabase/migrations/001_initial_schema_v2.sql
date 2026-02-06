@@ -91,7 +91,7 @@ CREATE TABLE players (
   gender varchar(10),
   skill_level smallint CHECK (skill_level BETWEEN 1 AND 10),
   play_style varchar(50),
-  rating numeric(6,2) DEFAULT 1500,
+  rating numeric(6,2) DEFAULT NULL,
   total_games_played int DEFAULT 0,
   total_wins int DEFAULT 0,
   total_losses int DEFAULT 0,

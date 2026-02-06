@@ -75,6 +75,7 @@ export async function updatePlayerProfile(data: {
   gender?: string
   skillLevel?: number
   playStyle?: string
+  rating?: number // Seeded ELO
 }) {
   try {
     const supabase = await createClient()
@@ -114,6 +115,7 @@ export async function updatePlayerProfile(data: {
           gender: data.gender,
           skill_level: data.skillLevel,
           play_style: data.playStyle,
+          rating: data.rating || 1500, // Default to 1500 if seeded rating not provided
         })
         .select()
 

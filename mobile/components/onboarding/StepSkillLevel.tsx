@@ -12,10 +12,10 @@ interface StepSkillLevelProps {
 }
 
 const SKILL_LEVELS = [
-    { value: 1, label: 'Beginner', description: 'Just starting out' },
-    { value: 4, label: 'Intermediate', description: 'Comfortable with basics' },
-    { value: 7, label: 'Advanced', description: 'Strong competitive player' },
-    { value: 10, label: 'Elite', description: 'Tournament level' },
+    { value: 1, label: 'Beginner', description: 'Just starting out (ELO 1200)' },
+    { value: 4, label: 'Intermediate', description: 'Comfortable with basics (ELO 1500)' },
+    { value: 7, label: 'Advanced', description: 'Strong competitive player (ELO 1800)' },
+    { value: 10, label: 'Expert', description: 'Tournament level (ELO 2100)' },
 ];
 
 export default function StepSkillLevel({ skillLevel, onSelectLevel, onSubmit, onBack, isLoading }: StepSkillLevelProps) {
@@ -27,7 +27,7 @@ export default function StepSkillLevel({ skillLevel, onSelectLevel, onSubmit, on
                     <Text style={styles.backText}>Back</Text>
                 </TouchableOpacity>
                 <Text style={styles.title}>Confirm Your Skill Level</Text>
-                <Text style={styles.subtitle}>Select a skill tier to help us find the right opponents and courts for you.</Text>
+                <Text style={styles.subtitle}>Select your starting tier. This determines your initial matchmaking rating and can only be changed by match performance.</Text>
             </View>
 
             <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
@@ -54,6 +54,13 @@ export default function StepSkillLevel({ skillLevel, onSelectLevel, onSubmit, on
                         </TouchableOpacity>
                     );
                 })}
+
+                <View style={styles.warningContainer}>
+                    <Ionicons name="information-circle-outline" size={20} color={Colors.dark.textSecondary} />
+                    <Text style={styles.warningText}>
+                        To modify this later, you will need to contact a Global Admin with proof of skill.
+                    </Text>
+                </View>
             </ScrollView>
 
             <TouchableOpacity
@@ -63,7 +70,7 @@ export default function StepSkillLevel({ skillLevel, onSelectLevel, onSubmit, on
                 activeOpacity={0.8}
             >
                 <Text style={styles.buttonText}>
-                    {isLoading ? 'Saving...' : 'Complete Setup'}
+                    {isLoading ? 'Setting Up...' : 'Confirm & Finish'}
                 </Text>
             </TouchableOpacity>
         </View>
@@ -144,5 +151,21 @@ const styles = StyleSheet.create({
     buttonText: {
         ...Typography.button,
         color: Colors.dark.text,
+    },
+    warningContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.dark.surface,
+        padding: Spacing.md,
+        borderRadius: Radius.md,
+        marginTop: Spacing.md,
+        gap: Spacing.sm,
+        borderWidth: 1,
+        borderColor: Colors.dark.border,
+    },
+    warningText: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+        flex: 1,
     },
 });

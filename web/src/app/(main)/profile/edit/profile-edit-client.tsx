@@ -23,6 +23,13 @@ const PLAY_STYLES = [
   'Net-Play Specialist',
 ]
 
+const SKILL_LEVELS_DISPLAY = {
+  1: { label: 'Beginner', description: 'ELO 1200 - 1499' },
+  4: { label: 'Intermediate', description: 'ELO 1500 - 1799' },
+  7: { label: 'Advanced', description: 'ELO 1800 - 2099' },
+  10: { label: 'Expert', description: 'ELO 2100+' },
+}
+
 export function ProfileEditClient({ profile, player }: ProfileEditClientProps) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -281,51 +288,56 @@ export function ProfileEditClient({ profile, player }: ProfileEditClientProps) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Skill Level: {formData.skillLevel}/10
-                  <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${formData.skillLevel <= 3 ? 'bg-green-100 text-green-800' :
-                      formData.skillLevel <= 6 ? 'bg-blue-100 text-blue-800' :
-                        formData.skillLevel <= 8 ? 'bg-amber-100 text-amber-800' :
-                          'bg-purple-100 text-purple-800'
-                    }`}>
-                    {formData.skillLevel <= 3 ? 'Beginner' :
-                      formData.skillLevel <= 6 ? 'Intermediate' :
-                        formData.skillLevel <= 8 ? 'Advanced' : 'Elite'}
-                  </span>
-                </label>
-                <input
-                  type="range"
-                  min="1"
-                  max="10"
-                  value={formData.skillLevel}
-                  onChange={(e) => handleInputChange('skillLevel', parseInt(e.target.value))}
-                  className="w-full accent-primary h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                />
-                <div className="flex justify-between text-xs text-gray-500 mt-1 px-1">
-                  <span>1</span>
-                  <span>10</span>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Skill Level (Read-Only)
+                  </label>
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <h4 className="font-semibold text-gray-900">
+                          {SKILL_LEVELS_DISPLAY[formData.skillLevel as keyof typeof SKILL_LEVELS_DISPLAY]?.label || 'Unranked'}
+                        </h4>
+                        <p className="text-sm text-gray-500">
+                          {SKILL_LEVELS_DISPLAY[formData.skillLevel as keyof typeof SKILL_LEVELS_DISPLAY]?.description || `${player?.rating || 0} ELO`}
+                        </p>
+                      </div>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${formData.skillLevel <= 3 ? 'bg-green-100 text-green-800' :
+                        formData.skillLevel <= 6 ? 'bg-blue-100 text-blue-800' :
+                          formData.skillLevel <= 8 ? 'bg-amber-100 text-amber-800' :
+                            'bg-purple-100 text-purple-800'
+                        }`}>
+                        Level {formData.skillLevel}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 pt-3 border-t border-gray-200">
+                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                      <span className="text-xs text-gray-500 italic">
+                        Determined by match performance
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-xs text-gray-400 mt-2">
-                  This will help match you with players of similar skill level.
-                </p>
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Play Styles</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {PLAY_STYLES.map((style) => (
-                    <button
-                      key={style}
-                      type="button"
-                      onClick={() => handlePlayStyleToggle(style)}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${formData.playStyles.includes(style)
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Play Styles</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {PLAY_STYLES.map((style) => (
+                      <button
+                        key={style}
+                        type="button"
+                        onClick={() => handlePlayStyleToggle(style)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${formData.playStyles.includes(style)
                           ? 'bg-primary text-white'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                    >
-                      {style}
-                    </button>
-                  ))}
+                          }`}
+                      >
+                        {style}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>

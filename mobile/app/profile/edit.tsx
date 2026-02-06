@@ -19,13 +19,12 @@ import { Card, Button, Avatar } from '@/components/ui';
 import { useAuthStore } from '@/store/auth-store';
 import { supabase } from '@/lib/supabase';
 
-const SKILL_LEVELS = [
-    { value: 1, label: 'Beginner', description: 'Just starting out' },
-    { value: 3, label: 'Recreational', description: 'Play for fun occasionally' },
-    { value: 5, label: 'Intermediate', description: 'Solid fundamentals' },
-    { value: 7, label: 'Advanced', description: 'Competitive player' },
-    { value: 9, label: 'Expert', description: 'Tournament level' },
-];
+const SKILL_LEVELS_DISPLAY = {
+    1: { label: 'Beginner', description: 'ELO 1200 - 1499' },
+    4: { label: 'Intermediate', description: 'ELO 1500 - 1799' },
+    7: { label: 'Advanced', description: 'ELO 1800 - 2099' },
+    10: { label: 'Expert', description: 'ELO 2100+' },
+};
 
 const PLAY_STYLES = ['Singles', 'Doubles', 'Mixed Doubles', 'All'];
 
@@ -63,7 +62,6 @@ export default function EditProfileScreen() {
             const { error: playerError } = await supabase
                 .from('players')
                 .update({
-                    skill_level: skillLevel,
                     preferred_play_style: preferredStyle,
                     updated_at: new Date().toISOString(),
                 })
@@ -177,26 +175,22 @@ export default function EditProfileScreen() {
                         <Text style={styles.sectionTitle}>Player Settings</Text>
 
                         {/* Skill Level */}
-                        <Text style={styles.inputLabel}>Skill Level</Text>
-                        <View style={styles.skillGrid}>
-                            {SKILL_LEVELS.map((level) => (
-                                <TouchableOpacity
-                                    key={level.value}
-                                    style={[
-                                        styles.skillOption,
-                                        skillLevel === level.value && styles.skillOptionSelected
-                                    ]}
-                                    onPress={() => setSkillLevel(level.value)}
-                                >
-                                    <Text style={[
-                                        styles.skillLabel,
-                                        skillLevel === level.value && styles.skillLabelSelected
-                                    ]}>
-                                        {level.label}
-                                    </Text>
-                                    <Text style={styles.skillDescription}>{level.description}</Text>
-                                </TouchableOpacity>
-                            ))}
+                        <Text style={styles.inputLabel}>Skill Level (Read-Only)</Text>
+                        <View style={styles.readOnlySkillContainer}>
+                            <View style={styles.readOnlySkillContent}>
+                                <Text style={styles.readOnlySkillLabel}>
+                                    {SKILL_LEVELS_DISPLAY[player?.skill_level as keyof typeof SKILL_LEVELS_DISPLAY]?.label || 'Unranked'}
+                                </Text>
+                                <Text style={styles.readOnlySkillDescription}>
+                                    {SKILL_LEVELS_DISPLAY[player?.skill_level as keyof typeof SKILL_LEVELS_DISPLAY]?.description || `${player?.rating} ELO`}
+                                </Text>
+                            </View>
+                            <View style={styles.readOnlySkillInfo}>
+                                <Ionicons name="lock-closed" size={16} color={Colors.dark.textSecondary} />
+                                <Text style={styles.readOnlySkillInfoText}>
+                                    Determined by match performance
+                                </Text>
+                            </View>
                         </View>
 
                         {/* Preferred Play Style */}
@@ -369,5 +363,37 @@ const styles = StyleSheet.create({
     bottomSection: {
         padding: Spacing.lg,
         paddingBottom: Spacing.xl,
+    },
+    readOnlySkillContainer: {
+        backgroundColor: Colors.dark.surface,
+        borderWidth: 1,
+        borderColor: Colors.dark.border,
+        borderRadius: Radius.md,
+        padding: Spacing.md,
+    },
+    readOnlySkillContent: {
+        marginBottom: Spacing.sm,
+    },
+    readOnlySkillLabel: {
+        ...Typography.h4,
+        color: Colors.dark.text,
+        marginBottom: 2,
+    },
+    readOnlySkillDescription: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+    },
+    readOnlySkillInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingTop: Spacing.sm,
+        borderTopWidth: 1,
+        borderTopColor: Colors.dark.border,
+    },
+    readOnlySkillInfoText: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+        fontStyle: 'italic',
     },
 });

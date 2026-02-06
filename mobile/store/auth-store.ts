@@ -94,6 +94,8 @@ export const useAuthStore = create<AuthStore>()(
                             user: session.user,
                             isLoading: true,
                         });
+
+                        // Always fetch profile to ensure we have the latest state (including profile_completed)
                         await get().fetchProfile();
                     }
 

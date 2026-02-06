@@ -34,11 +34,19 @@ const PLAY_STYLES = [
 ]
 
 const SKILL_LEVELS = [
-  { value: 1, label: 'Beginner', description: 'Just starting out' },
-  { value: 4, label: 'Intermediate', description: 'Comfortable with basics' },
-  { value: 7, label: 'Advanced', description: 'Strong competitive player' },
-  { value: 10, label: 'Elite', description: 'Tournament level' },
+  { value: 1, label: 'Beginner', description: 'Just starting out (ELO 1200)' },
+  { value: 4, label: 'Intermediate', description: 'Comfortable with basics (ELO 1500)' },
+  { value: 7, label: 'Advanced', description: 'Strong competitive player (ELO 1800)' },
+  { value: 10, label: 'Expert', description: 'Tournament level (ELO 2100)' },
 ]
+
+// Map Skill Level to Starting ELO
+const INITIAL_ELO_MAP: Record<number, number> = {
+  1: 1200,
+  4: 1500,
+  7: 1800,
+  10: 2100
+}
 
 export default function SetupProfilePage() {
   const router = useRouter()
@@ -214,10 +222,13 @@ export default function SetupProfilePage() {
       }
 
       // Update player profile using server action
+      const startingElo = INITIAL_ELO_MAP[profileData.skillLevel] || 1500
+
       const playerResult = await updatePlayerProfile({
         birthDate: profileData.birthDate ? new Date(profileData.birthDate) : undefined,
         gender: profileData.gender || undefined,
         skillLevel: profileData.skillLevel || 5,
+        rating: startingElo, // Seeding ELO
         playStyle: profileData.playStyles.join(','),
       })
 
@@ -603,7 +614,7 @@ export default function SetupProfilePage() {
             Confirm Your Skill Level
           </h1>
           <p className="text-gray-500 text-sm mb-6">
-            Select a skill tier to help us find the right opponents and courts for you.
+            Select your starting tier. This determines your initial matchmaking rating and can only be changed by match performance.
           </p>
 
           {error && (
@@ -628,6 +639,18 @@ export default function SetupProfilePage() {
                 </div>
               </button>
             ))}
+
+          </div>
+
+          <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg flex gap-3 text-left">
+            <div className="text-gray-400 mt-0.5">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+              </svg>
+            </div>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              To modify this later, you will need to contact a Global Admin with proof of skill.
+            </p>
           </div>
 
           <button

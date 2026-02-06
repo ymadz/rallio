@@ -71,6 +71,30 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Complete Profile Reminder */}
+        {!profile?.profile_completed && (
+          <Card variant="filled" padding="md" style={styles.reminderCard}>
+            <View style={styles.reminderHeader}>
+              <View style={styles.reminderIconWrapper}>
+                <Ionicons name="person-outline" size={20} color="white" />
+              </View>
+              <Text style={styles.reminderTitle}>Complete Your Profile</Text>
+
+            </View>
+            <Text style={styles.reminderText}>
+              Set up your player profile to get matched with the right courts and players based on your skill level and preferences.
+            </Text>
+            <TouchableOpacity
+              style={styles.reminderButton}
+              onPress={() => router.push('/(onboarding)/setup-profile')}
+              activeOpacity={0.9}
+            >
+              <Text style={styles.reminderButtonText}>Complete Setup</Text>
+              <Ionicons name="chevron-forward" size={16} color={Colors.dark.primary} />
+            </TouchableOpacity>
+          </Card>
+        )}
+
         {/* Quick Actions */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.quickActions}>
@@ -391,5 +415,51 @@ const styles = StyleSheet.create({
   nearbyCourts: {
     ...Typography.bodySmall,
     color: Colors.dark.textSecondary,
+  },
+  reminderCard: {
+    backgroundColor: '#1E9E88', // Green teal color from screenshot
+    marginBottom: Spacing.xl,
+    borderRadius: Radius.lg,
+  },
+  reminderHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+  },
+  reminderIconWrapper: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.sm,
+  },
+  reminderTitle: {
+    ...Typography.h4,
+    color: 'white',
+    flex: 1,
+    fontWeight: '700',
+  },
+  reminderText: {
+    ...Typography.bodySmall,
+    color: 'rgba(255,255,255,0.9)',
+    marginBottom: Spacing.md,
+    lineHeight: 18,
+  },
+  reminderButton: {
+    backgroundColor: 'white',
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: Radius.md,
+    gap: 4,
+  },
+  reminderButtonText: {
+    ...Typography.caption,
+    color: '#1E9E88', // Match card bg
+    fontWeight: '600',
   },
 });
