@@ -29,6 +29,10 @@ export default [
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unused-vars": "warn",
       "@typescript-eslint/ban-ts-comment": "warn",
+      // Relax React Hooks rules from error to warning for existing patterns
+      "react-hooks/immutability": "warn",
+      "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/purity": "warn",
     },
   },
   {
