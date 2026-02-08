@@ -33,7 +33,11 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Install dependencies
+      - name: Install root dependencies
+        working-directory: .
+        run: npm ci
+
+      - name: Install mobile dependencies
         run: npm ci
 
       - name: Publish update
