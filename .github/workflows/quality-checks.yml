@@ -23,7 +23,7 @@ jobs:
           cache-dependency-path: './package-lock.json'
 
       - name: 📦 Install Dependencies
-        run: npm ci
+        run: npm install
 
       - name: 🔍 Type Check (TypeScript)
         # Check for type errors without emitting files
