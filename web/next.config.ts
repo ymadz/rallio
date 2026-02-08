@@ -6,10 +6,6 @@ const nextConfig = {
   // Output to root .next directory for Vercel
   distDir: '../.next',
 
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-
   images: {
     remotePatterns: [
       {

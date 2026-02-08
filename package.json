@@ -14,7 +14,7 @@
     "build": "npm run build:web",
     "build:web": "npm run build --workspace=web",
     "vercel-build": "npm run build:web",
-    "lint": "eslint .",
+    "lint": "npm run lint --workspace=web",
     "lint:web": "npm run lint --workspace=web",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
@@ -29,9 +29,5 @@
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "overrides": {
-    "react": "19.1.0",
-    "react-dom": "19.1.0"
   }
 }
