@@ -1,12 +1,27 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import logo from '@/assets/logo.png'
+import { getPublicSettings } from '@/app/actions/global-admin-settings-actions'
+import { TermsPrivacyModal } from '@/components/auth/terms-privacy-modal'
+import { DEFAULT_PRIVACY_POLICY, DEFAULT_TERMS_AND_CONDITIONS } from '@/lib/legal-content'
 
-export default function AuthLayout({
+export default async function AuthLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  // Fetch terms and privacy content
+  const termsResult = await getPublicSettings('terms_and_conditions')
+  const privacyResult = await getPublicSettings('privacy_policy')
+
+  const termsContent = termsResult.success && termsResult.data && (termsResult.data as any).setting_value?.content
+    ? (termsResult.data as any).setting_value.content 
+    : DEFAULT_TERMS_AND_CONDITIONS
+    
+  const privacyContent = privacyResult.success && privacyResult.data && (privacyResult.data as any).setting_value?.content
+    ? (privacyResult.data as any).setting_value.content 
+    : DEFAULT_PRIVACY_POLICY
+
   return (
     <div className="min-h-screen flex">
       {/* Left side - Branding */}
@@ -85,16 +100,10 @@ export default function AuthLayout({
 
         {/* Footer */}
         <div className="p-6 text-center text-sm text-muted-foreground">
-          <p>
-            By continuing, you agree to Rallio's{' '}
-            <Link href="/terms" className="underline hover:text-foreground">
-              Terms of Service
-            </Link>{' '}
-            and{' '}
-            <Link href="/privacy" className="underline hover:text-foreground">
-              Privacy Policy
-            </Link>
-          </p>
+          <TermsPrivacyModal 
+            termsContent={termsContent} 
+            privacyContent={privacyContent} 
+          />
         </div>
       </div>
     </div>
