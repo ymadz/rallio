@@ -12,10 +12,6 @@ export default function VenuesPage() {
   const [activeTab, setActiveTab] = useState<'venues' | 'pending' | 'amenities'>('venues')
   const [pendingCount, setPendingCount] = useState(0)
 
-  useEffect(() => {
-    loadPendingCount()
-  }, [])
-
   const loadPendingCount = async () => {
     const [venuesRes, courtsRes] = await Promise.all([
       getAllVenues({ statusFilter: 'unverified', pageSize: 1 }),
@@ -31,6 +27,10 @@ export default function VenuesPage() {
     }
     setPendingCount(total)
   }
+
+  useEffect(() => {
+    loadPendingCount()
+  }, [])
 
   const handleApprovalComplete = () => {
     loadPendingCount()
