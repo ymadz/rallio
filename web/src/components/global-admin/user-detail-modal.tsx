@@ -71,28 +71,6 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
   })
   const { toast } = useToast()
 
-  useEffect(() => {
-    loadUserDetails()
-  }, [userId])
-
-  useEffect(() => {
-    if (user) {
-      setEditForm({
-        displayName: user.display_name || '',
-        phone: user.phone || ''
-      })
-      if (user.playerStats) {
-        setEditPlayerForm({
-          birthDate: user.playerStats.birth_date || '',
-          gender: user.playerStats.gender || '',
-          skillLevel: user.playerStats.skill_level?.toString() || '',
-          playStyle: user.playerStats.play_style || '',
-          bio: user.playerStats.bio || ''
-        })
-      }
-    }
-  }, [user])
-
   const loadUserDetails = async () => {
     setLoading(true)
     const result = await getUserDetails(userId)
@@ -109,6 +87,10 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
     }
     setLoading(false)
   }
+
+  useEffect(() => {
+    loadUserDetails()
+  }, [userId])
 
   const handleRoleToggle = async (roleName: string, hasRole: boolean) => {
     setActionLoading(true)

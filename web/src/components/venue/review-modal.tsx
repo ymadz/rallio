@@ -26,12 +26,6 @@ export function ReviewModal({
   const [reason, setReason] = useState<string>('')
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    if (isOpen) {
-      checkEligibility()
-    }
-  }, [isOpen, courtId])
-
   const checkEligibility = async () => {
     setIsLoading(true)
     const result = await canUserReviewCourt(courtId)
@@ -39,6 +33,12 @@ export function ReviewModal({
     setReason(result.reason || '')
     setIsLoading(false)
   }
+
+  useEffect(() => {
+    if (isOpen) {
+      checkEligibility()
+    }
+  }, [isOpen, courtId])
 
   const handleSuccess = () => {
     onSuccess?.()

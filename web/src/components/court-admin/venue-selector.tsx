@@ -29,6 +29,17 @@ export function VenueSelector({
   const [loading, setLoading] = useState(true)
   const [selectedVenueId, setSelectedVenueId] = useState<string>(currentVenueId || '')
 
+  const handleVenueChange = (venueId: string) => {
+    setSelectedVenueId(venueId)
+
+    if (venueId) {
+      // Get current path or use redirectPath
+      const currentPath = redirectPath || window.location.pathname
+      const newUrl = `${currentPath}?venueId=${venueId}`
+      router.push(newUrl)
+    }
+  }
+
   useEffect(() => {
     async function loadVenues() {
       const result = await getMyVenues()
@@ -47,17 +58,6 @@ export function VenueSelector({
 
     loadVenues()
   }, [])
-
-  const handleVenueChange = (venueId: string) => {
-    setSelectedVenueId(venueId)
-
-    if (venueId) {
-      // Get current path or use redirectPath
-      const currentPath = redirectPath || window.location.pathname
-      const newUrl = `${currentPath}?venueId=${venueId}`
-      router.push(newUrl)
-    }
-  }
 
   if (loading) {
     return (
