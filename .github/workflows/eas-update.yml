@@ -12,9 +12,6 @@ jobs:
   update:
     name: EAS Update
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./mobile 
 
     steps:
       - name: Check for repo
@@ -25,7 +22,7 @@ jobs:
         with:
           node-version: 20.x
           cache: npm
-          cache-dependency-path: mobile/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Setup Expo
         uses: expo/expo-github-action@v8
@@ -34,11 +31,12 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Install root dependencies
-        working-directory: .
         run: npm ci
 
       - name: Install mobile dependencies
+        working-directory: ./mobile
         run: npm ci
 
       - name: Publish update
+        working-directory: ./mobile
         run: eas update --auto
