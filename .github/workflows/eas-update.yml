@@ -1,6 +1,7 @@
 name: EAS Update
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main

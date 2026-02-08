@@ -11,10 +11,6 @@ jobs:
     name: Web - Quality & Build
     runs-on: ubuntu-latest
     
-    defaults:
-      run:
-        working-directory: ./web
-
     steps:
       - name: 🚨 Checkout Code
         uses: actions/checkout@v4
@@ -31,15 +27,15 @@ jobs:
 
       - name: 🔍 Type Check (TypeScript)
         # Check for type errors without emitting files
-        run: npx tsc --noEmit
+        run: npx tsc --noEmit --project web/tsconfig.json
 
       - name: 💅 Lint Check
         # Check for code style issues
-        run: npm run lint
+        run: npm run lint --workspace=web
 
       - name: 🏗️ Verify Build
         # Ensure the project actually builds
-        run: npm run build
+        run: npm run build --workspace=web
         env:
           # These are needed for the build to pass if you reference them at build time.
           # We use dummy values for CI build verification to avoid exposing real secrets.
