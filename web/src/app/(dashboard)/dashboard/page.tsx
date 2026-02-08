@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import Link from 'next/link'
 
 export const metadata = {
   title: 'Dashboard | Rallio',
@@ -23,7 +24,7 @@ export default async function DashboardPage() {
 
       {/* Quick actions */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8">
-        <a
+        <Link
           href="/courts"
           className="p-6 border rounded-lg hover:border-primary hover:shadow-sm transition-all"
         >
@@ -36,9 +37,9 @@ export default async function DashboardPage() {
           <p className="text-sm text-muted-foreground">
             Discover badminton courts near you
           </p>
-        </a>
+        </Link>
 
-        <a
+        <Link
           href="/reservations"
           className="p-6 border rounded-lg hover:border-primary hover:shadow-sm transition-all"
         >
@@ -51,9 +52,9 @@ export default async function DashboardPage() {
           <p className="text-sm text-muted-foreground">
             View your upcoming bookings
           </p>
-        </a>
+        </Link>
 
-        <a
+        <Link
           href="/profile"
           className="p-6 border rounded-lg hover:border-primary hover:shadow-sm transition-all"
         >
@@ -66,7 +67,7 @@ export default async function DashboardPage() {
           <p className="text-sm text-muted-foreground">
             Manage your player profile
           </p>
-        </a>
+        </Link>
       </div>
 
       {/* Stats placeholder */}

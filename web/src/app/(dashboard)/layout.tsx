@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 
 export default async function DashboardLayout({
   children,
@@ -38,18 +39,18 @@ export default async function DashboardLayout({
           </div>
 
           <nav className="hidden md:flex items-center gap-6">
-            <a href="/dashboard" className="text-sm font-medium hover:text-primary">
+            <Link href="/dashboard" className="text-sm font-medium hover:text-primary">
               Dashboard
-            </a>
-            <a href="/courts" className="text-sm font-medium text-muted-foreground hover:text-primary">
+            </Link>
+            <Link href="/courts" className="text-sm font-medium text-muted-foreground hover:text-primary">
               Courts
-            </a>
-            <a href="/reservations" className="text-sm font-medium text-muted-foreground hover:text-primary">
+            </Link>
+            <Link href="/reservations" className="text-sm font-medium text-muted-foreground hover:text-primary">
               Reservations
-            </a>
-            <a href="/profile" className="text-sm font-medium text-muted-foreground hover:text-primary">
+            </Link>
+            <Link href="/profile" className="text-sm font-medium text-muted-foreground hover:text-primary">
               Profile
-            </a>
+            </Link>
           </nav>
 
           <div className="flex items-center gap-4">
