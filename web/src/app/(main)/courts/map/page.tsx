@@ -59,15 +59,6 @@ export default function MapViewPage() {
   const [minRating, setMinRating] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
 
-  useEffect(() => {
-    fetchVenues()
-  }, [])
-
-  // Apply filters when filter state changes
-  useEffect(() => {
-    applyFilters()
-  }, [allVenues, priceRange, selectedAmenities, minRating, searchQuery])
-
   const fetchVenues = async () => {
     setLoading(true)
     try {
@@ -191,6 +182,15 @@ export default function MapViewPage() {
 
     setVenues(filtered)
   }
+
+  useEffect(() => {
+    fetchVenues()
+  }, [])
+
+  // Apply filters when filter state changes
+  useEffect(() => {
+    applyFilters()
+  }, [allVenues, priceRange, selectedAmenities, minRating, searchQuery])
 
   const handleClearFilters = () => {
     setPriceRange([100, 1000])
