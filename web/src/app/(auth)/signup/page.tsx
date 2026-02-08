@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -9,6 +9,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert } from '@/components/ui/alert'
 import { PhoneInput, validatePhilippinePhone } from '@/components/ui/phone-input'
+import { getPublicSettings } from '@/app/actions/global-admin-settings-actions'
+import { LegalContentDialog } from '@/components/auth/legal-content-dialog'
+import { DEFAULT_PRIVACY_POLICY, DEFAULT_TERMS_AND_CONDITIONS } from '@/lib/legal-content'
 
 type SignupStep = 'details' | 'phone'
 
@@ -30,6 +33,50 @@ export default function SignupPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+
+  // Legal modal state
+  const [legalModal, setLegalModal] = useState<{ open: boolean; type: 'terms' | 'privacy' }>({
+    open: false,
+    type: 'terms',
+  })
+  const [legalContent, setLegalContent] = useState<{ terms: string; privacy: string }>({
+    terms: '',
+    privacy: '',
+  })
+  
+  // Fetch legal content on mount
+  useEffect(() => {
+    const fetchContent = async () => {
+      try {
+        const [termsRes, privacyRes] = await Promise.all([
+          getPublicSettings('terms_and_conditions'),
+          getPublicSettings('privacy_policy')
+        ])
+        
+        setLegalContent({
+          terms: termsRes.success && termsRes.data && (termsRes.data as any).setting_value?.content 
+            ? (termsRes.data as any).setting_value.content 
+            : DEFAULT_TERMS_AND_CONDITIONS,
+          privacy: privacyRes.success && privacyRes.data && (privacyRes.data as any).setting_value?.content 
+            ? (privacyRes.data as any).setting_value.content 
+            : DEFAULT_PRIVACY_POLICY,
+        })
+      } catch (err) {
+        console.error('Failed to fetch legal content', err)
+        // Set defaults on error
+        setLegalContent({
+          terms: DEFAULT_TERMS_AND_CONDITIONS,
+          privacy: DEFAULT_PRIVACY_POLICY,
+        })
+      }
+    }
+    fetchContent()
+  }, [])
+
+  const openLegalModal = (e: React.MouseEvent, type: 'terms' | 'privacy') => {
+    e.preventDefault() // Prevent label click propagation
+    setLegalModal({ open: true, type })
+  }
 
   const [formData, setFormData] = useState<SignupData>({
     firstName: '',
@@ -376,13 +423,21 @@ export default function SignupPage() {
           />
           <Label htmlFor="terms" className="text-sm font-normal leading-snug">
             I've read and agree with the{' '}
-            <Link href="/terms" className="text-primary hover:underline">
+            <button 
+              type="button" 
+              onClick={(e) => openLegalModal(e, 'terms')}
+              className="text-primary hover:underline hover:text-primary/90 inline-block font-normal p-0 h-auto"
+            >
               Terms and Conditions
-            </Link>{' '}
+            </button>{' '}
             and the{' '}
-            <Link href="/privacy" className="text-primary hover:underline">
+            <button 
+              type="button" 
+              onClick={(e) => openLegalModal(e, 'privacy')}
+              className="text-primary hover:underline hover:text-primary/90 inline-block font-normal p-0 h-auto"
+            >
               Privacy Policy
-            </Link>
+            </button>
           </Label>
         </div>
 
@@ -443,6 +498,13 @@ export default function SignupPage() {
           Sign in
         </Link>
       </div>
+
+      <LegalContentDialog
+        open={legalModal.open}
+        onOpenChange={(open) => setLegalModal(prev => ({ ...prev, open }))}
+        type={legalModal.type}
+        content={legalModal.type === 'terms' ? legalContent.terms : legalContent.privacy}
+      />
     </div>
   )
 }
