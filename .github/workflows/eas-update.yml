@@ -39,4 +39,4 @@ jobs:
 
       - name: Publish update
         working-directory: ./mobile
-        run: eas update --auto
+        run: eas update --auto --platform ios,android
