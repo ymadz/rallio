@@ -137,7 +137,7 @@ export function SidebarNav({ user }: SidebarNavProps) {
               <Link
                 href="/admin"
                 className={cn(
-                  'flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors bg-red-50 text-red-600 hover:bg-red-100',
+                  'flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors bg-primary/10 text-primary hover:bg-primary/20',
                   isExpanded ? '' : 'justify-center'
                 )}
                 title={!isExpanded ? 'Global Admin' : undefined}
@@ -154,7 +154,7 @@ export function SidebarNav({ user }: SidebarNavProps) {
               <Link
                 href="/court-admin"
                 className={cn(
-                  'flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors bg-blue-50 text-blue-600 hover:bg-blue-100',
+                  'flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors bg-primary/10 text-primary hover:bg-primary/20',
                   isExpanded ? '' : 'justify-center'
                 )}
                 title={!isExpanded ? 'Court Admin' : undefined}
@@ -171,7 +171,7 @@ export function SidebarNav({ user }: SidebarNavProps) {
               <Link
                 href="/queue-master"
                 className={cn(
-                  'flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors bg-primary/5 text-primary hover:bg-primary/10',
+                  'flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors bg-primary/10 text-primary hover:bg-primary/20',
                   isExpanded ? '' : 'justify-center'
                 )}
                 title={!isExpanded ? 'Queue Master' : undefined}

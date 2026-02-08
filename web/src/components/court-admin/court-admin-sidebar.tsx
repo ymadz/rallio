@@ -82,7 +82,7 @@ export function CourtAdminSidebar({ user, venues }: CourtAdminSidebarProps) {
                   <span className="text-xl font-bold text-primary tracking-wider whitespace-nowrap">
                     Rallio
                   </span>
-                  <span className="text-xs font-medium text-blue-600 uppercase tracking-wider">
+                  <span className="text-[10px] font-bold text-white bg-primary px-2 py-0.5 rounded-md w-fit uppercase tracking-wider">
                     Court Admin
                   </span>
                 </div>

@@ -74,7 +74,7 @@ export function QueueMasterSidebar({ user }: QueueMasterSidebarProps) {
                   <span className="text-xl font-bold text-primary tracking-wider whitespace-nowrap">
                     Rallio
                   </span>
-                  <span className="text-xs font-medium text-primary uppercase tracking-wider">
+                  <span className="text-[10px] font-bold text-white bg-primary px-2 py-0.5 rounded-md w-fit uppercase tracking-wider">
                     Queue Master
                   </span>
                 </div>
