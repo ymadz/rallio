@@ -55,14 +55,14 @@ export function CourtAdminSidebar({ user, venues }: CourtAdminSidebarProps) {
     <>
       {/* Desktop Sidebar */}
       <aside
-        className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-20 bg-gradient-to-b from-blue-600 to-blue-700 border-r border-blue-800 z-40"
+        className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-20 bg-white border-r border-gray-200 z-40"
         onMouseEnter={() => setIsExpanded(true)}
         onMouseLeave={() => setIsExpanded(false)}
       >
         {/* Expanded overlay */}
         <div
           className={cn(
-            "absolute inset-y-0 left-0 bg-gradient-to-b from-blue-600 to-blue-700 border-r border-blue-800 shadow-2xl transition-all duration-300 flex flex-col",
+            "absolute inset-y-0 left-0 bg-white border-r border-gray-200 shadow-lg transition-all duration-300 flex flex-col",
             isExpanded ? "w-64" : "w-20"
           )}
         >
@@ -72,12 +72,20 @@ export function CourtAdminSidebar({ user, venues }: CourtAdminSidebarProps) {
               <img
                 src="/logo.png"
                 alt="Rallio"
-                className="w-10 h-10 flex-shrink-0 brightness-0 invert"
+                className="w-10 h-10 flex-shrink-0"
+                style={{
+                  filter: 'brightness(0) saturate(100%) invert(42%) sepia(93%) saturate(352%) hue-rotate(131deg) brightness(92%) contrast(92%)'
+                }}
               />
               {isExpanded && (
-                <span className="text-xl font-bold text-white tracking-wider whitespace-nowrap">
-                  Rallio
-                </span>
+                <div className="flex flex-col">
+                  <span className="text-xl font-bold text-primary tracking-wider whitespace-nowrap">
+                    Rallio
+                  </span>
+                  <span className="text-xs font-medium text-blue-600 uppercase tracking-wider">
+                    Court Admin
+                  </span>
+                </div>
               )}
             </Link>
           </div>
@@ -98,8 +106,8 @@ export function CourtAdminSidebar({ user, venues }: CourtAdminSidebarProps) {
                     'flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors',
                     isExpanded ? '' : 'justify-center',
                     isActive
-                      ? 'bg-white/20 text-white'
-                      : 'text-white/80 hover:bg-white/10 hover:text-white'
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                   )}
                   title={!isExpanded ? item.label : undefined}
                 >
@@ -113,12 +121,12 @@ export function CourtAdminSidebar({ user, venues }: CourtAdminSidebarProps) {
           </nav>
 
           {/* Bottom Actions */}
-          <div className="px-3 py-4 border-t border-white/20 space-y-1">
+          <div className="px-3 py-4 border-t border-gray-200 space-y-1">
             {/* Back to Home */}
             <Link
               href="/"
               className={cn(
-                'flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors bg-white/5 text-white/90 hover:bg-white/10',
+                'flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors text-gray-600 hover:bg-gray-100 hover:text-gray-900',
                 isExpanded ? '' : 'justify-center'
               )}
               title={!isExpanded ? 'Back to Home' : undefined}
@@ -131,7 +139,7 @@ export function CourtAdminSidebar({ user, venues }: CourtAdminSidebarProps) {
             <Link
               href="/settings"
               className={cn(
-                'flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white transition-colors',
+                'flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors',
                 isExpanded ? '' : 'justify-center'
               )}
               title={!isExpanded ? 'Settings' : undefined}
@@ -144,7 +152,7 @@ export function CourtAdminSidebar({ user, venues }: CourtAdminSidebarProps) {
             <button
               onClick={handleSignOut}
               className={cn(
-                'flex items-center gap-3 px-3 py-3 w-full rounded-lg text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white transition-colors',
+                'flex items-center gap-3 px-3 py-3 w-full rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors',
                 isExpanded ? '' : 'justify-center'
               )}
               title={!isExpanded ? 'Logout' : undefined}
@@ -157,7 +165,7 @@ export function CourtAdminSidebar({ user, venues }: CourtAdminSidebarProps) {
       </aside>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-gradient-to-r from-blue-600 to-blue-700 border-t border-blue-800 z-50">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">
         <div className="flex items-center justify-around h-16 px-2">
           {navItems.slice(0, 5).map((item) => {
             const Icon = item.icon
@@ -170,7 +178,7 @@ export function CourtAdminSidebar({ user, venues }: CourtAdminSidebarProps) {
                 href={item.href}
                 className={cn(
                   'flex flex-col items-center gap-1 px-2 py-2 rounded-lg transition-colors',
-                  isActive ? 'text-white' : 'text-white/70 hover:text-white'
+                  isActive ? 'text-primary' : 'text-gray-500 hover:text-gray-700'
                 )}
               >
                 <Icon className="w-5 h-5" />
