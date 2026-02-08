@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { CourtAdminSidebar } from '@/components/court-admin/court-admin-sidebar'
 import { NotificationBell } from '@/components/notifications/notification-bell'
+import { UserNav } from '@/components/layout/user-nav'
 
 export default async function CourtAdminRootLayout({
   children,
@@ -44,8 +45,15 @@ export default async function CourtAdminRootLayout({
   // Get profile data
   const { data: profile } = await supabase
     .from('profiles')
-    .select('display_name, avatar_url')
+    .select('display_name, avatar_url, first_name, last_name, phone')
     .eq('id', user.id)
+    .single()
+
+  // Get player data for bio/gender/birthdate
+  const { data: player } = await supabase
+    .from('players')
+    .select('bio, birth_date, gender')
+    .eq('user_id', user.id)
     .single()
 
   return (
@@ -61,15 +69,27 @@ export default async function CourtAdminRootLayout({
 
       {/* Main content area - offset for collapsed sidebar on desktop */}
       <div className="md:pl-20">
-        {/* Header with notifications */}
-        <header className="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              {/* Breadcrumb or title can go here */}
-            </div>
-            <div className="flex items-center gap-4">
-              <NotificationBell />
-            </div>
+        <header className="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Court Administration</h2>
+            <p className="text-sm text-gray-600">Manage courts and reservations</p>
+          </div>
+          <div className="flex items-center gap-4">
+            <NotificationBell />
+            <UserNav
+              user={{
+                email: user.email || '',
+                id: user.id,
+                avatarUrl: profile?.avatar_url,
+                displayName: profile?.display_name,
+                firstName: profile?.first_name,
+                lastName: profile?.last_name,
+                phone: profile?.phone,
+                bio: player?.bio,
+                birthDate: player?.birth_date,
+                gender: player?.gender,
+              }}
+            />
           </div>
         </header>
 

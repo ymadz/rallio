@@ -64,4 +64,5 @@ export default async function MySessionsPage() {
     const sessions = await getMySessions()
 
     return <MySessionsClient initialSessions={sessions} />
+    // return <div>My Sessions Debug</div>
 }
