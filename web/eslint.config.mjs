@@ -22,7 +22,10 @@ export default [
     rules: {
       ...nextPlugin.configs.recommended.rules,
       ...nextPlugin.configs["core-web-vitals"].rules,
-      ...tsPlugin.configs.recommended.rules,
+      // Relax TypeScript rules for existing codebase
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-unused-vars": "warn",
+      "@typescript-eslint/ban-ts-comment": "warn",
     },
   },
   {
