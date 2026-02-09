@@ -1,9 +1,23 @@
 'use client'
 
 import { format } from 'date-fns'
-import { useCheckoutStore } from '@/stores/checkout-store'
+import { useCheckoutStore, CheckoutStep } from '@/stores/checkout-store'
 
-export function BookingSummaryCard() {
+interface BookingSummaryCardProps {
+  onContinue?: () => void
+  onBack?: () => void
+  canContinue?: boolean
+  currentStep?: CheckoutStep
+  showButtons?: boolean
+}
+
+export function BookingSummaryCard({
+  onContinue,
+  onBack,
+  canContinue = true,
+  currentStep = 'details',
+  showButtons = false,
+}: BookingSummaryCardProps) {
   const {
     bookingData,
     isSplitPayment,
@@ -148,6 +162,27 @@ export function BookingSummaryCard() {
           </p>
         )}
       </div>
+
+      {/* Navigation Buttons */}
+      {showButtons && currentStep !== 'processing' && currentStep !== 'confirmation' && (
+        <div className="pt-4 mt-4 border-t border-gray-200 flex flex-col gap-3">
+          <button
+            onClick={onContinue}
+            disabled={!canContinue}
+            className="w-full px-6 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Continue
+          </button>
+          {currentStep !== 'details' && (
+            <button
+              onClick={onBack}
+              className="w-full px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+            >
+              Back
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

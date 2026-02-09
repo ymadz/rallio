@@ -353,29 +353,16 @@ export default function CheckoutPage() {
 
           {/* Right Column - Summary */}
           <div className="lg:col-span-1">
-            <BookingSummaryCard />
+            <BookingSummaryCard
+              onContinue={handleContinue}
+              onBack={handleBack}
+              canContinue={canContinue()}
+              currentStep={currentStep}
+              showButtons={true}
+            />
           </div>
         </div>
 
-        {/* Footer Actions */}
-        {currentStep !== 'processing' && currentStep !== 'confirmation' && (
-          <div className="mt-8 flex items-center justify-between max-w-5xl">
-            <button
-              onClick={handleBack}
-              disabled={currentStep === 'details'}
-              className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Back
-            </button>
-            <button
-              onClick={handleContinue}
-              disabled={!canContinue()}
-              className="px-8 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Continue
-            </button>
-          </div>
-        )}
       </div>
     </div>
   )
