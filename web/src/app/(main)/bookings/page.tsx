@@ -82,16 +82,12 @@ export default async function BookingsPage() {
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <header className="px-6 py-6 flex items-center justify-between border-b border-gray-100">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">My Bookings</h1>
-          <p className="text-gray-500 mt-1">Upcoming court reservations and schedules</p>
+      <div className="px-6 py-4">
+        <div className="bg-primary/10 px-4 py-2 rounded-lg inline-flex items-center gap-2">
+          <p className="text-xs text-primary font-medium">Active Bookings:</p>
+          <p className="text-base font-bold text-primary">{bookings.length}</p>
         </div>
-        <div className="bg-primary/10 px-4 py-2 rounded-lg">
-          <p className="text-xs text-primary font-medium">Active Bookings</p>
-          <p className="text-2xl font-bold text-primary">{bookings.length}</p>
-        </div>
-      </header>
+      </div>
 
       {/* Main Content */}
       <div className="p-6">

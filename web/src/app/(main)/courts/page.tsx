@@ -171,14 +171,11 @@ export default function CourtsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
+      <header className="bg-white border-b border-gray-200 sticky top-[81px] z-10 shadow-sm">
         <div className="container mx-auto px-4 pt-4 pb-3 md:pt-4 md:pb-4">
           <div className="flex items-center justify-between mb-3 md:mb-0">
             {/* Mobile Title */}
-            <div className="md:hidden">
-              <h1 className="text-xl font-bold text-gray-900">Courts</h1>
-              <p className="text-sm text-gray-500">Find and book courts</p>
-            </div>
+
 
             {/* Desktop: Search Bar inline */}
             <div className="hidden md:flex flex-1 max-w-md relative mr-4">

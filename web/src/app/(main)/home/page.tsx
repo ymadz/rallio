@@ -60,7 +60,7 @@ export default async function HomePage() {
     .eq('user_id', user?.id)
     .single()
 
-  const firstName = userProfile?.display_name?.split(' ')[0] || 'Player'
+
 
   // Logic: Check if critical fields are actually filled.
   // We ignore profile_completed flag for the banner display because users might have skipped it.
@@ -73,32 +73,7 @@ export default async function HomePage() {
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <header className="px-6 py-6 flex items-center justify-between border-b border-gray-100">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            Welcome back, {firstName}!
-          </h1>
-          <p className="text-gray-500 mt-1">Ready to hit the court?</p>
-        </div>
-        <div className="flex items-center gap-4">
-          {/* Notification */}
-          <button className="p-2 hover:bg-gray-100 rounded-full transition-colors relative">
-            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-            </svg>
-          </button>
-          {/* Avatar */}
-          <Link href="/profile" className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center overflow-hidden">
-            {userProfile?.avatar_url ? (
-              <img src={userProfile.avatar_url} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <span className="text-sm font-medium text-orange-600">
-                {firstName.charAt(0).toUpperCase()}
-              </span>
-            )}
-          </Link>
-        </div>
-      </header>
+
 
       {/* Main Content */}
       <div className="p-6">

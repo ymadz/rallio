@@ -8,6 +8,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { cancelReservationAction } from '@/app/actions/reservations'
 import { BookingReviewButton } from '@/components/venue/booking-review-button'
 import { RefundRequestButton } from '@/components/reservations/refund-request-button'
+import { useServerTime } from '@/hooks/use-server-time'
 import Link from 'next/link'
 import Image from 'next/image'
 
@@ -52,6 +53,7 @@ interface BookingsListProps {
 }
 
 export function BookingsList({ initialBookings }: BookingsListProps) {
+  const { date: serverDate } = useServerTime()
   const [bookings, setBookings] = useState(initialBookings)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [resumingPaymentId, setResumingPaymentId] = useState<string | null>(null)
@@ -82,7 +84,8 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
 
   const handleCancelBooking = async (booking: Booking) => {
     const isPaid = ['paid', 'confirmed'].includes(booking.status) && booking.amount_paid > 0
-    const hoursUntilStart = (new Date(booking.start_time).getTime() - Date.now()) / (1000 * 60 * 60)
+    const nowTime = serverDate ? serverDate.getTime() : Date.now()
+    const hoursUntilStart = (new Date(booking.start_time).getTime() - nowTime) / (1000 * 60 * 60)
     const isWithin24Hours = hoursUntilStart < 24
 
     // Different confirmation messages based on status
@@ -192,12 +195,14 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
 
   const canCancelBooking = (booking: Booking): boolean => {
     const startTime = new Date(booking.start_time)
-    const hoursUntilStart = differenceInHours(startTime, new Date())
+    const now = serverDate || new Date()
+    const hoursUntilStart = differenceInHours(startTime, now)
     return activeStatuses.includes(booking.status) && hoursUntilStart > 24
   }
 
   const getTimeRemaining = (startTime: string) => {
-    const hours = differenceInHours(new Date(startTime), new Date())
+    const now = serverDate || new Date()
+    const hours = differenceInHours(new Date(startTime), now)
     if (hours < 24) return `${hours}h remaining`
     const days = Math.floor(hours / 24)
     return `${days} day${days > 1 ? 's' : ''}`
@@ -205,7 +210,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
 
   const filteredBookings = bookings.filter((booking) => {
     const startTime = new Date(booking.start_time)
-    const now = new Date()
+    const now = serverDate || new Date()
 
     if (activeTab === 'upcoming') {
       // Upcoming: Future ACTIVE bookings
