@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCheckoutStore } from '@/stores/checkout-store'
 import { CheckoutStepper } from '@/components/checkout/checkout-stepper'
@@ -10,9 +10,11 @@ import { PaymentMethodSelector } from '@/components/checkout/payment-method-sele
 import { CancellationPolicy } from '@/components/checkout/cancellation-policy'
 import { PaymentProcessing } from '@/components/checkout/payment-processing'
 import { BookingConfirmation } from '@/components/checkout/booking-confirmation'
+import { CancelBookingModal } from '@/components/checkout/cancel-booking-modal'
 
 export default function CheckoutPage() {
   const router = useRouter()
+  const [showCancelModal, setShowCancelModal] = useState(false)
   const {
     bookingData,
     currentStep,
@@ -48,10 +50,12 @@ export default function CheckoutPage() {
   const totalBookingFee = getSubtotal() // This now includes duration
 
   const handleCancel = () => {
-    if (confirm('Are you sure you want to cancel this booking?')) {
-      resetCheckout()
-      router.push(`/courts/${bookingData.venueId}`)
-    }
+    setShowCancelModal(true)
+  }
+
+  const handleConfirmCancel = () => {
+    resetCheckout()
+    router.push(`/courts/${bookingData.venueId}`)
   }
 
   const handleContinue = () => {
@@ -93,16 +97,16 @@ export default function CheckoutPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">Checkout</h1>
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-4">
           <button
             onClick={handleCancel}
             className="text-gray-600 hover:text-gray-900 transition-colors"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
+          <h1 className="text-2xl font-bold text-gray-900">Checkout</h1>
         </div>
       </div>
 
@@ -364,6 +368,13 @@ export default function CheckoutPage() {
         </div>
 
       </div>
+
+      {/* Cancel Booking Modal */}
+      <CancelBookingModal
+        isOpen={showCancelModal}
+        onClose={() => setShowCancelModal(false)}
+        onConfirm={handleConfirmCancel}
+      />
     </div>
   )
 }
