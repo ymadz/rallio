@@ -4,6 +4,7 @@ import { QueueStatusBadge } from './queue-status-badge'
 import { Users, Clock, MapPin, ChevronRight, Calendar, Timer } from 'lucide-react'
 import { subHours, isBefore, format, differenceInSeconds } from 'date-fns'
 import { useEffect, useState } from 'react'
+import { useServerTime } from '@/hooks/use-server-time'
 
 interface QueueCardProps {
   queue: QueueSession
@@ -11,6 +12,7 @@ interface QueueCardProps {
 }
 
 export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
+  const { date: serverDate } = useServerTime()
   const isUserInQueue = queue.userPosition !== null
   const startTime = queue.startTime ? new Date(queue.startTime) : new Date()
   const endTime = queue.endTime ? new Date(queue.endTime) : (queue.startTime ? new Date(new Date(queue.startTime).getTime() + 2 * 60 * 60 * 1000) : new Date())
@@ -20,7 +22,7 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      const now = new Date()
+      const now = serverDate || new Date()
       if (isBefore(now, openTime)) {
         setTimeUntilOpen(differenceInSeconds(openTime, now))
         setIsJoinable(false)
@@ -31,7 +33,7 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
     }, 1000)
 
     // Initial check
-    const now = new Date()
+    const now = serverDate || new Date()
     if (isBefore(now, openTime)) {
       setTimeUntilOpen(differenceInSeconds(openTime, now))
       setIsJoinable(false)
@@ -41,7 +43,7 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
     }
 
     return () => clearInterval(timer)
-  }, [queue.startTime])
+  }, [queue.startTime, serverDate])
 
   const formatTimeToken = (val: number) => val.toString().padStart(2, '0')
   const formatCountdown = (seconds: number) => {

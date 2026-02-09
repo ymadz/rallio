@@ -5,6 +5,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
 import { checkRateLimit, createRateLimitConfig } from '@/lib/rate-limiter'
 import { createBulkNotifications, NotificationTemplates } from '@/lib/notifications'
+import { getServerNow } from '@/lib/time-server'
 
 /**
  * Queue Management Server Actions
@@ -92,7 +93,8 @@ export async function getQueueDetails(courtId: string) {
     }
 
     // AUTO-CLOSE CHECK: If session is past end_time, close it automatically
-    if (new Date(session.end_time) < new Date()) {
+    const now = await getServerNow()
+    if (new Date(session.end_time) < now) {
       console.log('[getQueueDetails] 🕒 Session expired, auto-closing:', session.id)
 
       // Update DB to close the session
@@ -339,10 +341,11 @@ export async function leaveQueue(sessionId: string) {
     }
 
     // Mark as left
+    const now = await getServerNow()
     const { error: updateError } = await supabase
       .from('queue_participants')
       .update({
-        left_at: new Date().toISOString(),
+        left_at: now.toISOString(),
         status: 'left',
       })
       .eq('id', participant.id)
@@ -407,7 +410,7 @@ export async function getMyQueues() {
       .eq('user_id', user.id)
       .is('left_at', null)
       .in('queue_sessions.status', ['open', 'active'])
-      .gt('queue_sessions.end_time', new Date().toISOString()) // Filter out expired sessions
+      .gt('queue_sessions.end_time', (await getServerNow()).toISOString()) // Filter out expired sessions
       .order('joined_at', { ascending: false })
 
     if (participationsError) {
@@ -503,7 +506,9 @@ export async function getMyQueueHistory() {
         )
       `)
       .eq('user_id', user.id)
-      .or('status.eq.left,queue_sessions.status.in.(closed,cancelled),queue_sessions.end_time.lt.now()')
+      .eq('user_id', user.id)
+      .or(`status.eq.left,queue_sessions.status.in.(closed,cancelled),queue_sessions.end_time.lt.${(await getServerNow()).toISOString()}`)
+      .order('joined_at', { ascending: false })
       .order('joined_at', { ascending: false })
       .limit(50) // Limit to last 50 for now
 
@@ -571,7 +576,7 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
       .in('status', ['open', 'active'])
       .eq('is_public', true)
       .eq('approval_status', 'approved') // CRITICAL: Only show approved sessions
-      .gt('end_time', new Date().toISOString()) // Filter out expired sessions
+      .gt('end_time', (await getServerNow()).toISOString()) // Filter out expired sessions
       .order('start_time', { ascending: true })
       .limit(20)
 
@@ -706,7 +711,9 @@ export async function getQueueMasterHistory() {
         )
       `)
       .eq('organizer_id', user.id)
-      .or('status.in.(closed,cancelled),end_time.lt.now()')
+      .eq('organizer_id', user.id)
+      .or(`status.in.(closed,cancelled),end_time.lt.${(await getServerNow()).toISOString()}`)
+      .order('start_time', { ascending: false })
       .order('start_time', { ascending: false })
 
     if (error) throw error

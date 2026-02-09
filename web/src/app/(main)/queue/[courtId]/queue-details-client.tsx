@@ -16,6 +16,7 @@ import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { differenceInSeconds, subHours, isBefore, format } from 'date-fns'
+import { useServerTime } from '@/hooks/use-server-time'
 
 interface QueueDetailsClientProps {
   courtId: string
@@ -24,6 +25,7 @@ interface QueueDetailsClientProps {
 export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
   const router = useRouter()
   const { queue, isLoading, error, joinQueue, leaveQueue, refreshQueue } = useQueue(courtId)
+  const { date: serverDate } = useServerTime()
   const [isJoining, setIsJoining] = useState(false)
   const [isLeaving, setIsLeaving] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
@@ -38,7 +40,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
     const updateTimer = () => {
       const startTime = new Date(queue.startTime)
       const openTime = subHours(startTime, 2)
-      const now = new Date()
+      const now = serverDate || new Date()
 
       if (isBefore(now, openTime)) {
         const diff = differenceInSeconds(openTime, now)
@@ -51,7 +53,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
     updateTimer()
     const interval = setInterval(updateTimer, 1000)
     return () => clearInterval(interval)
-  }, [queue?.startTime])
+  }, [queue?.startTime, serverDate])
 
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600)
