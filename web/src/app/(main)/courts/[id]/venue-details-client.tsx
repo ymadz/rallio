@@ -61,7 +61,7 @@ export function VenueDetailsClient({ courts, venueId, venueName, discounts }: Ve
                       {court.surface_type}
                     </span>
                     <span className={`text-xs px-2 py-1 rounded ${court.court_type === 'indoor'
-                      ? 'bg-blue-50 text-blue-600'
+                      ? 'bg-primary/10 text-primary'
                       : 'bg-green-50 text-green-600'
                       }`}>
                       {court.court_type}
