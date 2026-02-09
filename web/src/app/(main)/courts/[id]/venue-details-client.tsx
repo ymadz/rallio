@@ -78,7 +78,7 @@ export function VenueDetailsClient({ courts, venueId, venueName, discounts }: Ve
               </div>
 
               {/* Court Actions */}
-              <div className="mt-4 grid grid-cols-3 gap-2">
+              <div className="mt-4 grid grid-cols-2 gap-2">
                 <button
                   onClick={() => handleViewAvailability(court)}
                   className="bg-primary text-white text-center py-2.5 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
@@ -87,15 +87,6 @@ export function VenueDetailsClient({ courts, venueId, venueName, discounts }: Ve
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                   View Schedule
-                </button>
-                <button
-                  onClick={() => handleViewAvailability(court)}
-                  className="border-2 border-primary text-primary text-center py-2.5 rounded-lg text-sm font-medium hover:bg-primary/5 transition-colors flex items-center justify-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Book
                 </button>
                 <Link
                   href={`/queue/${court.id}`}
