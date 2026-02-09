@@ -138,17 +138,39 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
   const allAmenities = Array.from(uniqueAmenityNames)
 
   // Parse opening hours if it's a JSONB object
+  const formatTo12Hour = (time: string) => {
+    const [hours, minutes] = time.split(':').map(Number)
+    const period = hours >= 12 ? 'PM' : 'AM'
+    const hour12 = hours % 12 || 12
+    return `${hour12}${minutes ? `:${minutes.toString().padStart(2, '0')}` : ''} ${period}`
+  }
+
   const formatOpeningHours = (hours: any) => {
     if (!hours) return null
     if (typeof hours === 'string') return hours
 
-    // Format JSONB opening hours
+    // Format JSONB opening hours with structured data
     const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+    const dayAbbrev: Record<string, string> = {
+      monday: 'Mon',
+      tuesday: 'Tue',
+      wednesday: 'Wed',
+      thursday: 'Thu',
+      friday: 'Fri',
+      saturday: 'Sat',
+      sunday: 'Sun'
+    }
+    
     const formatted = days.map(day => {
       const schedule = hours[day]
-      if (!schedule) return null
-      return `${day.charAt(0).toUpperCase() + day.slice(1)}: ${schedule.open} - ${schedule.close}`
-    }).filter(Boolean)
+      if (!schedule) return { day: dayAbbrev[day], closed: true }
+      return {
+        day: dayAbbrev[day],
+        open: formatTo12Hour(schedule.open),
+        close: formatTo12Hour(schedule.close),
+        closed: false
+      }
+    })
 
     return formatted
   }
@@ -259,8 +281,39 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
               {/* Operating Hours */}
               {openingHours && (
                 <div className="mb-4 pb-4 border-b border-gray-100">
-                  <h4 className="font-semibold text-gray-900 text-sm mb-2">Operating Hours</h4>
-                  {Array.isArray(openingHours) ? (
+                  <div className="flex items-center gap-2 mb-3">
+                    <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <h4 className="font-semibold text-gray-900 text-sm">Operating Hours</h4>
+                  </div>
+                  {Array.isArray(openingHours) && typeof openingHours[0] === 'object' ? (
+                    <div className="space-y-1.5">
+                      {openingHours.map((schedule: any, index: number) => (
+                        <div
+                          key={index}
+                          className={`flex items-center justify-between px-3 py-2 rounded-lg ${
+                            schedule.closed
+                              ? 'bg-gray-50'
+                              : 'bg-primary/5'
+                          }`}
+                        >
+                          <span className={`text-xs font-semibold ${
+                            schedule.closed ? 'text-gray-400' : 'text-gray-700'
+                          }`}>
+                            {schedule.day}
+                          </span>
+                          {schedule.closed ? (
+                            <span className="text-xs text-gray-400">Closed</span>
+                          ) : (
+                            <span className="text-xs text-primary font-medium">
+                              {schedule.open} – {schedule.close}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : Array.isArray(openingHours) ? (
                     <div className="space-y-1">
                       {openingHours.map((schedule, index) => (
                         <p key={index} className="text-gray-600 text-xs">{schedule}</p>
