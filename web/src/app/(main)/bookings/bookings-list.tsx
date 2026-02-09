@@ -242,14 +242,14 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
 
   const bookingStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
-      pending_payment: 'bg-yellow-500 text-gray-900',
-      pending: 'bg-yellow-500 text-gray-900',
-      paid: 'bg-teal-500 text-white',
-      confirmed: 'bg-green-600 text-white',
+      pending_payment: 'bg-amber-500 text-white',
+      pending: 'bg-amber-500 text-white',
+      paid: 'bg-primary text-white',
+      confirmed: 'bg-emerald-600 text-white',
       cancelled: 'bg-red-600 text-white',
-      pending_refund: 'bg-orange-500 text-white',
+      pending_refund: 'bg-amber-600 text-white',
       refunded: 'bg-gray-500 text-white',
-      completed: 'bg-blue-600 text-white',
+      completed: 'bg-primary text-white',
       no_show: 'bg-gray-700 text-white',
     }
 
@@ -322,44 +322,44 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-3 gap-4 mb-8">
-        <Card className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+        <Card className="p-4 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">
+            <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center">
               <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
             </div>
             <div>
-              <p className="text-sm text-blue-700 font-medium">Total Bookings</p>
-              <p className="text-2xl font-bold text-blue-900">{bookings.length}</p>
+              <p className="text-sm text-primary font-medium">Total Bookings</p>
+              <p className="text-2xl font-bold text-gray-900">{bookings.length}</p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-4 bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200">
+        <Card className="p-4 bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-yellow-500 rounded-lg flex items-center justify-center">
-              <svg className="w-6 h-6 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-12 h-12 bg-amber-500 rounded-lg flex items-center justify-center">
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3" />
               </svg>
             </div>
             <div>
-              <p className="text-sm text-yellow-700 font-medium">Awaiting Payment</p>
-              <p className="text-2xl font-bold text-yellow-900">{awaitingPayment}</p>
+              <p className="text-sm text-amber-700 font-medium">Awaiting Payment</p>
+              <p className="text-2xl font-bold text-amber-900">{awaitingPayment}</p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-4 bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+        <Card className="p-4 bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center">
+            <div className="w-12 h-12 bg-emerald-500 rounded-lg flex items-center justify-center">
               <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
             <div>
-              <p className="text-sm text-green-700 font-medium">Confirmed / Paid</p>
-              <p className="text-2xl font-bold text-green-900">{totalConfirmed}</p>
+              <p className="text-sm text-emerald-700 font-medium">Confirmed / Paid</p>
+              <p className="text-2xl font-bold text-emerald-900">{totalConfirmed}</p>
             </div>
           </div>
         </Card>
@@ -421,7 +421,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                     {bookingStatusBadge(booking.status)}
                     {/* Show badge for recurring bookings */}
                     {booking.metadata?.recurrence_total && booking.metadata.recurrence_total > 1 && (
-                      <span className="px-3 py-1.5 rounded-full text-xs font-bold shadow-lg bg-purple-100 text-purple-800 border border-purple-200 flex items-center gap-1">
+                      <span className="px-3 py-1.5 rounded-full text-xs font-bold shadow-lg bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                         {/* Only show "Week X/Y" if there are multiple weeks */}
                         {booking.metadata.weeks_total && booking.metadata.weeks_total > 1 ? (
@@ -478,9 +478,9 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                     </div>
                     <div>
                       <p className="text-gray-500 mb-1">Payment</p>
-                      <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-bold shadow-sm ${paymentStatus.color === 'green' ? 'bg-green-500 text-white' :
-                        paymentStatus.color === 'yellow' ? 'bg-yellow-500 text-gray-900' :
-                          'bg-red-500 text-white'
+                      <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-bold shadow-sm text-white ${paymentStatus.color === 'green' ? 'bg-green-500' :
+                        paymentStatus.color === 'yellow' ? 'bg-yellow-500' :
+                          'bg-red-500'
                         }`}>
                         {paymentStatus.label}
                       </span>
