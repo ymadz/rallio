@@ -271,11 +271,40 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
           <div className="lg:col-span-1 space-y-6">
             {/* Venue Status Card */}
             <div className="bg-white border border-gray-200 rounded-xl p-4 sticky top-6">
-              <div className="flex items-center gap-2 mb-4">
-                <div className={`w-3 h-3 rounded-full ${isOpen ? 'bg-green-500' : 'bg-red-500'}`} />
-                <span className={`font-semibold text-sm ${isOpen ? 'text-green-700' : 'text-red-700'}`}>
-                  {isOpen ? 'Open Now' : 'Closed'}
-                </span>
+              {/* Venue Status Banner */}
+              <div className={`rounded-xl p-4 mb-4 ${
+                isOpen 
+                  ? 'bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200' 
+                  : 'bg-gradient-to-r from-red-50 to-orange-50 border border-red-200'
+              }`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                    isOpen ? 'bg-green-100' : 'bg-red-100'
+                  }`}>
+                    {isOpen ? (
+                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`font-bold text-base ${isOpen ? 'text-green-700' : 'text-red-700'}`}>
+                        {isOpen ? 'Open Now' : 'Currently Closed'}
+                      </span>
+                      <div className={`w-2 h-2 rounded-full animate-pulse ${
+                        isOpen ? 'bg-green-500' : 'bg-red-500'
+                      }`} />
+                    </div>
+                    <p className={`text-xs mt-0.5 ${isOpen ? 'text-green-600' : 'text-red-600'}`}>
+                      {isOpen ? 'Ready to accept bookings' : 'Check operating hours below'}
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {/* Operating Hours */}
@@ -316,7 +345,7 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
                   ) : Array.isArray(openingHours) ? (
                     <div className="space-y-1">
                       {openingHours.map((schedule, index) => (
-                        <p key={index} className="text-gray-600 text-xs">{schedule}</p>
+                        <p key={index} className="text-gray-600 text-xs">{String(schedule)}</p>
                       ))}
                     </div>
                   ) : (
