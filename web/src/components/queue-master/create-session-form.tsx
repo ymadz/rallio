@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createQueueSession } from '@/app/actions/queue-actions'
 import { getAvailableTimeSlotsAction, validateBookingAvailabilityAction, type TimeSlot } from '@/app/actions/reservations'
@@ -340,14 +340,6 @@ export function CreateSessionForm() {
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-      </div>
-    )
-  }
-
   // Get selected court details
   const selectedCourt = venues
     .flatMap(v => v.courts || [])
@@ -357,16 +349,54 @@ export function CreateSessionForm() {
     v.courts?.some(c => c.id === courtId)
   )
 
-  // Calculate estimated revenue
-  const estimatedGamesPerPlayer = duration * 2 // Rough estimate: 2 games per hour
-  const estimatedRevenue = maxPlayers * estimatedGamesPerPlayer * costPerGame
+
+
+  // Calculate all session dates for display
+  const allSessionDates = useMemo(() => {
+    if (!startDate) return []
+    const dates: Date[] = []
+    const start = new Date(startDate)
+    start.setHours(0, 0, 0, 0)
+
+    // Use selectedDays or default to startDay if empty (though effect handles this)
+    const daysToProcess = selectedDays.length > 0 ? selectedDays : [start.getDay()]
+
+    const startDay = start.getDay()
+
+    for (let w = 0; w < recurrenceWeeks; w++) {
+      daysToProcess.forEach(dayIndex => {
+        const dayDiff = dayIndex - startDay
+        const date = new Date(start)
+        date.setDate(date.getDate() + (w * 7) + dayDiff)
+
+        // Normalize time
+        date.setHours(0, 0, 0, 0)
+
+        // Only include if >= start date
+        if (date >= start) {
+          dates.push(date)
+        }
+      })
+    }
+    return dates.sort((a, b) => a.getTime() - b.getTime())
+  }, [startDate, recurrenceWeeks, selectedDays])
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    )
+  }
+
+
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Form */}
         <div className="lg:col-span-2 space-y-6">
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-6">
             {/* Error Alert */}
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start gap-2">
@@ -795,59 +825,13 @@ export function CreateSessionForm() {
               </label>
             </div>
 
-            {/* Actions */}
-            <div className="pt-6 border-t border-gray-200">
-              {/* Validation Status */}
-              <div className="mb-4">
-                {!validationState.valid && validationState.error && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm flex items-start gap-2 animate-pulse">
-                    <span className="text-red-500 mt-0.5">⚠️</span>
-                    <div>
-                      <p className="font-semibold text-red-800 text-xs uppercase tracking-wide">Cannot Book</p>
-                      <p className="text-red-700 font-medium">{validationState.error}</p>
-                    </div>
-                  </div>
-                )}
-                {validationState.validating && (
-                  <div className="mb-2 text-xs text-blue-600 flex items-center gap-1.5">
-                    <div className="animate-spin rounded-full h-3 w-3 border-2 border-blue-600 border-t-transparent" />
-                    Checking availability...
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center gap-3">
-                <Link
-                  href="/queue-master"
-                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-                >
-                  <ArrowLeft className="w-4 h-4 inline mr-2" />
-                  Cancel
-                </Link>
-                <button
-                  type="submit"
-                  disabled={isSubmitting || !courtId || !startTime || !validationState.valid || validationState.validating}
-                  className="flex-1 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Creating Session...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="w-5 h-5" />
-                      Create Session
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </form>
+            {/* Actions removed from here */}
+          </div>
         </div>
 
         {/* Sidebar Summary */}
         <div className="lg:col-span-1">
+
           <div className="sticky top-6 space-y-4">
             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
               <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
@@ -870,19 +854,42 @@ export function CreateSessionForm() {
 
                   <div className="pt-4 border-t border-gray-100">
                     <p className="text-xs text-gray-500 mb-2">SCHEDULE</p>
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2 text-sm text-gray-900">
-                        <CalendarIcon className="w-4 h-4 text-gray-400" />
-                        {startDate ? format(startDate, 'MMM d, yyyy') : '--'}
+                    <div className="space-y-2">
+                      {/* Dates */}
+                      <div className="flex items-start gap-2 text-sm text-gray-900">
+                        <CalendarIcon className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
+                        <div>
+                          {allSessionDates.length > 0 ? (
+                            <div className="space-y-1 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
+                              {allSessionDates.map((date, idx) => (
+                                <div key={idx} className="text-gray-700">
+                                  {format(date, 'EEE, MMM d, yyyy')}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            '--'
+                          )}
+                        </div>
                       </div>
+
+                      {/* Time */}
                       <div className="flex items-center gap-2 text-sm text-gray-900">
-                        <Clock className="w-4 h-4 text-gray-400" />
-                        {startTime || '--:--'} ({duration}h)
+                        <Clock className="w-4 h-4 text-gray-400 shrink-0" />
+                        {startTime ? (
+                          <span>
+                            {formatSlotTime(startTime)} - {formatSlotTime(`${parseInt(startTime.split(':')[0]) + duration}:${startTime.split(':')[1]}`)}
+                          </span>
+                        ) : (
+                          '--:--'
+                        )}
+                        {' '}({duration}h)
                       </div>
+
                       {recurrenceWeeks > 1 && (
                         <div className="flex items-center gap-2 text-sm text-blue-600 font-medium">
                           <TrendingUp className="w-4 h-4" />
-                          {recurrenceWeeks} weekly sessions
+                          {allSessionDates.length} sessions total
                         </div>
                       )}
                     </div>
@@ -900,23 +907,61 @@ export function CreateSessionForm() {
                     <p className="text-xs text-gray-500 mb-1">PRICING</p>
                     <p className="text-lg font-bold text-gray-900">₱{costPerGame} <span className="text-xs font-normal text-gray-500">/ game</span></p>
                   </div>
+
+                  {/* Checking Availability & Validation Errors */}
+                  <div className="pt-4 border-t border-gray-100">
+                    {validationState.validating ? (
+                      <div className="mb-4 text-xs text-blue-600 flex items-center gap-1.5 bg-blue-50 p-2 rounded-lg">
+                        <div className="animate-spin rounded-full h-3 w-3 border-2 border-blue-600 border-t-transparent" />
+                        Checking availability...
+                      </div>
+                    ) : !validationState.valid && validationState.error ? (
+                      <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3 text-sm flex items-start gap-2">
+                        <span className="text-red-500 mt-0.5">⚠️</span>
+                        <div>
+                          <p className="font-semibold text-red-800 text-xs uppercase tracking-wide">Unavailable</p>
+                          <p className="text-red-700 text-xs mt-1">{validationState.error}</p>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* Actions */}
+                    <div className="space-y-3">
+                      <button
+                        type="submit"
+                        disabled={isSubmitting || !courtId || !startTime || !validationState.valid || validationState.validating}
+                        className="w-full px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            Creating...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="w-5 h-5" />
+                            Create Session
+                          </>
+                        )}
+                      </button>
+
+                      <Link
+                        href="/queue-master"
+                        className="block w-full px-6 py-2 text-center text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                      >
+                        Cancel
+                      </Link>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
 
-            {courtId && costPerGame > 0 && (
-              <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <TrendingUp className="w-4 h-4 text-green-600" />
-                  <h4 className="font-semibold text-gray-900">Estimated Revenue</h4>
-                </div>
-                <p className="text-3xl font-bold text-green-700">₱{estimatedRevenue.toLocaleString()}</p>
-                <p className="text-[10px] text-gray-600 mt-2">Based on {maxPlayers} players × ~{estimatedGamesPerPlayer} games</p>
-              </div>
-            )}
+            {/* Removed Estimated Revenue Card */}
           </div>
+
         </div>
-      </div>
+      </form>
     </div>
   )
 }

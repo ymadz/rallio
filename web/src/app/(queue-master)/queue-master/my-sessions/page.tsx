@@ -2,6 +2,7 @@ import { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import { MySessionsClient } from '@/components/queue-master/my-sessions-client'
 import { redirect } from 'next/navigation'
+import { getQueueMasterHistory } from '@/app/actions/queue-actions'
 
 export const metadata: Metadata = {
     title: 'My Sessions | Queue Master | Rallio',
@@ -61,8 +62,13 @@ export default async function MySessionsPage() {
         redirect('/login')
     }
 
-    const sessions = await getMySessions()
+    // Parallel fetch for active sessions and history
+    const [sessions, historyResult] = await Promise.all([
+        getMySessions(),
+        getQueueMasterHistory()
+    ])
 
-    return <MySessionsClient initialSessions={sessions} />
-    // return <div>My Sessions Debug</div>
+    const history = historyResult.success ? historyResult.history : []
+
+    return <MySessionsClient initialSessions={sessions} initialHistory={history || []} />
 }

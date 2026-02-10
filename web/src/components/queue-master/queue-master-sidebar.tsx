@@ -42,7 +42,6 @@ export function QueueMasterSidebar({ user }: QueueMasterSidebarProps) {
   const navItems = [
     { href: '/queue-master', label: 'Dashboard', icon: LayoutDashboard, exact: true },
     { href: '/queue-master/my-sessions', label: 'My Sessions', icon: Calendar },
-    { href: '/queue-master/history', label: 'History', icon: Clock },
     { href: '/queue-master/analytics', label: 'Analytics', icon: BarChart3 },
   ]
 

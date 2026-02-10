@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Calendar, Users, DollarSign, Clock, PlayCircle, CheckCircle, XCircle, ArrowRight, Filter } from 'lucide-react'
 import Link from 'next/link'
+import { QueueMasterHistoryClient } from './queue-master-history-client'
 
 interface SessionData {
     id: string
@@ -22,33 +23,20 @@ interface SessionData {
 
 interface MySessionsClientProps {
     initialSessions: SessionData[]
+    initialHistory: any[]
 }
 
 type TabType = 'active' | 'past'
 
-export function MySessionsClient({ initialSessions }: MySessionsClientProps) {
+export function MySessionsClient({ initialSessions, initialHistory }: MySessionsClientProps) {
     const [activeTab, setActiveTab] = useState<TabType>('active')
     const [sessions] = useState<SessionData[]>(initialSessions)
 
     const activeStatuses = ['draft', 'open', 'active', 'paused', 'upcoming', 'pending_approval']
-    const pastStatuses = ['closed', 'cancelled', 'completed', 'expired', 'rejected']
 
-    const filteredSessions = sessions.filter(session => {
-        if (activeTab === 'active') {
-            return activeStatuses.includes(session.status)
-        } else {
-            return pastStatuses.includes(session.status)
-        }
-    })
-
-    // Sort: Active by start time asc, Past by end time desc
-    const sortedSessions = [...filteredSessions].sort((a, b) => {
-        if (activeTab === 'active') {
-            return new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-        } else {
-            return new Date(b.endTime).getTime() - new Date(a.endTime).getTime()
-        }
-    })
+    // Filter active sessions
+    const activeSessions = sessions.filter(session => activeStatuses.includes(session.status))
+        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
 
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -110,7 +98,7 @@ export function MySessionsClient({ initialSessions }: MySessionsClientProps) {
                         Active & Pending
                         <span className={`ml-2 py-0.5 px-2.5 rounded-full text-xs font-medium ${activeTab === 'active' ? 'bg-primary/10 text-primary' : 'bg-gray-100 text-gray-600'
                             }`}>
-                            {sessions.filter(s => activeStatuses.includes(s.status)).length}
+                            {activeSessions.length}
                         </span>
                     </button>
                     <button
@@ -127,88 +115,92 @@ export function MySessionsClient({ initialSessions }: MySessionsClientProps) {
                         History
                         <span className={`ml-2 py-0.5 px-2.5 rounded-full text-xs font-medium ${activeTab === 'past' ? 'bg-primary/10 text-primary' : 'bg-gray-100 text-gray-600'
                             }`}>
-                            {sessions.filter(s => pastStatuses.includes(s.status)).length}
+                            {initialHistory.length}
                         </span>
                     </button>
                 </nav>
             </div>
 
-            {/* Sessions List */}
+            {/* Content */}
             <div>
-                {sortedSessions.length === 0 ? (
-                    <div className="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
-                        <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <Filter className="w-8 h-8 text-gray-400" />
+                {activeTab === 'active' ? (
+                    // Active Sessions List
+                    activeSessions.length === 0 ? (
+                        <div className="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
+                            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Filter className="w-8 h-8 text-gray-400" />
+                            </div>
+                            <h3 className="text-lg font-medium text-gray-900 mb-1">No active sessions</h3>
+                            <p className="text-gray-500">
+                                You don't have any active or pending sessions at the moment.
+                            </p>
                         </div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-1">No sessions found</h3>
-                        <p className="text-gray-500">
-                            {activeTab === 'active'
-                                ? "You don't have any active or pending sessions."
-                                : "You don't have any past sessions yet."}
-                        </p>
-                    </div>
-                ) : (
-                    <div className="space-y-4">
-                        {sortedSessions.map((session) => (
-                            <div
-                                key={session.id}
-                                className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-md transition-shadow group"
-                            >
-                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                    {/* Left Section: Info */}
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-3 mb-2">
-                                            <div className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-xs font-medium ${getStatusColor(session.status)}`}>
-                                                {getStatusIcon(session.status)}
-                                                <span className="capitalize">{session.status}</span>
-                                            </div>
-                                            <span className="text-xs text-gray-500 font-mono">#{session.id.slice(0, 8)}</span>
-                                            <span className="text-xs text-gray-500">•</span>
-                                            <span className="text-xs text-gray-500">
-                                                {new Date(session.startTime).toLocaleDateString(undefined, {
-                                                    weekday: 'short',
-                                                    month: 'short',
-                                                    day: 'numeric'
-                                                })}
-                                            </span>
-                                        </div>
-
-                                        <h3 className="text-lg font-bold text-gray-900 mb-1 group-hover:text-primary transition-colors">
-                                            {session.courtName} <span className="font-normal text-gray-500">at</span> {session.venueName}
-                                        </h3>
-
-                                        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-600">
-                                            <div className="flex items-center gap-1.5">
-                                                <Clock className="w-4 h-4 text-gray-400" />
-                                                <span>
-                                                    {new Date(session.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - {new Date(session.endTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                    ) : (
+                        <div className="space-y-4">
+                            {activeSessions.map((session) => (
+                                <div
+                                    key={session.id}
+                                    className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-md transition-shadow group"
+                                >
+                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                        {/* Left Section: Info */}
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-3 mb-2">
+                                                <div className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-xs font-medium ${getStatusColor(session.status)}`}>
+                                                    {getStatusIcon(session.status)}
+                                                    <span className="capitalize">{session.status}</span>
+                                                </div>
+                                                <span className="text-xs text-gray-500 font-mono">#{session.id.slice(0, 8)}</span>
+                                                <span className="text-xs text-gray-500">•</span>
+                                                <span className="text-xs text-gray-500">
+                                                    {new Date(session.startTime).toLocaleDateString(undefined, {
+                                                        weekday: 'short',
+                                                        month: 'short',
+                                                        day: 'numeric'
+                                                    })}
                                                 </span>
                                             </div>
-                                            <div className="flex items-center gap-1.5">
-                                                <Users className="w-4 h-4 text-gray-400" />
-                                                <span>{session.currentPlayers} / {session.maxPlayers} Players</span>
-                                            </div>
-                                            <div className="flex items-center gap-1.5">
-                                                <DollarSign className="w-4 h-4 text-gray-400" />
-                                                <span>₱{session.costPerGame} / game</span>
+
+                                            <h3 className="text-lg font-bold text-gray-900 mb-1 group-hover:text-primary transition-colors">
+                                                {session.courtName} <span className="font-normal text-gray-500">at</span> {session.venueName}
+                                            </h3>
+
+                                            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-600">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Clock className="w-4 h-4 text-gray-400" />
+                                                    <span>
+                                                        {new Date(session.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - {new Date(session.endTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <Users className="w-4 h-4 text-gray-400" />
+                                                    <span>{session.currentPlayers} / {session.maxPlayers} Players</span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <DollarSign className="w-4 h-4 text-gray-400" />
+                                                    <span>₱{session.costPerGame} / game</span>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    {/* Right Section: Action */}
-                                    <div className="flex items-center justify-end">
-                                        <Link
-                                            href={`/queue-master/sessions/${session.id}`}
-                                            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 hover:text-gray-900 transition-colors font-medium text-sm"
-                                        >
-                                            Manage
-                                            <ArrowRight className="w-4 h-4" />
-                                        </Link>
+                                        {/* Right Section: Action */}
+                                        <div className="flex items-center justify-end">
+                                            <Link
+                                                href={`/queue-master/sessions/${session.id}`}
+                                                className="inline-flex items-center gap-2 px-4 py-2 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 hover:text-gray-900 transition-colors font-medium text-sm"
+                                            >
+                                                Manage
+                                                <ArrowRight className="w-4 h-4" />
+                                            </Link>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        ))}
-                    </div>
+                            ))}
+                        </div>
+                    )
+                ) : (
+                    // History Tab - Use the History Client Component
+                    <QueueMasterHistoryClient initialHistory={initialHistory} />
                 )}
             </div>
         </div>
