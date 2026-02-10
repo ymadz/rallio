@@ -217,7 +217,7 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
                 onClick={() => handleTabChange(tab.id)}
                 className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-colors whitespace-nowrap ${
                   isActive
-                    ? 'bg-blue-600 text-white shadow-sm'
+                    ? 'bg-primary text-white shadow-sm'
                     : 'text-gray-600 hover:bg-gray-100'
                 }`}
               >
