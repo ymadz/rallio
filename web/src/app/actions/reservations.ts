@@ -74,7 +74,7 @@ export async function getAvailableTimeSlotsAction(
   // Get existing reservations AND queue sessions for this court on this date
   // Query for the entire day range to catch any overlapping bookings
   const dateOnlyString = format(date, 'yyyy-MM-dd')
-  const activeStatuses = ['pending_payment', 'pending', 'paid', 'confirmed', 'pending_refund']
+  const activeStatuses = ['pending_payment', 'paid', 'confirmed', 'ongoing', 'pending_refund']
 
   // Use timezone-aware date range (Asia/Manila = +08:00)
   // Query from midnight to end of day in the venue's timezone
@@ -294,7 +294,7 @@ export async function validateBookingAvailabilityAction(data: {
   for (const slot of targetSlots) {
     const currentStartTimeISO = slot.start.toISOString()
     const currentEndTimeISO = slot.end.toISOString()
-    const conflictStatuses = ['pending_payment', 'pending', 'paid', 'confirmed', 'pending_refund']
+    const conflictStatuses = ['pending_payment', 'paid', 'confirmed', 'ongoing', 'pending_refund']
 
     // A. Check Operating Hours
     const dayName = dayNames[slot.start.getDay()]
@@ -363,7 +363,7 @@ export async function validateBookingAvailabilityAction(data: {
       // Let's rely on recurrenceWeeks > 1 || uniqueSelectedDays.length > 1
       const isRecurringCheck = recurrenceWeeks > 1 || uniqueSelectedDays.length > 1;
 
-      if (userId && conflict.user_id === userId && (conflict.status === 'pending_payment' || conflict.status === 'pending') && !isRecurringCheck) return false
+      if (userId && conflict.user_id === userId && conflict.status === 'pending_payment' && !isRecurringCheck) return false
       if (userId && conflict.user_id !== userId) return true
       if (!userId) return true
       return isRecurringCheck
@@ -452,7 +452,7 @@ export async function cleanupOldPendingReservationsAction(olderThanMinutes: numb
   const { data: oldReservations, error: fetchError } = await supabase
     .from('reservations')
     .select('id, created_at, start_time, end_time, user_id')
-    .in('status', ['pending_payment', 'pending'])
+    .in('status', ['pending_payment'])
     .lt('created_at', cutoffTimeISO)
 
   if (fetchError) {
@@ -471,7 +471,7 @@ export async function cleanupOldPendingReservationsAction(olderThanMinutes: numb
   const { error: updateError } = await supabase
     .from('reservations')
     .update({ status: 'cancelled' })
-    .in('status', ['pending_payment', 'pending'])
+    .in('status', ['pending_payment'])
     .lt('created_at', cutoffTimeISO)
 
   if (updateError) {

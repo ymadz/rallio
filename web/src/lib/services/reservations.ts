@@ -102,7 +102,7 @@ export async function createReservation(
         const currentStartTimeISO = slot.start.toISOString()
         const currentEndTimeISO = slot.end.toISOString()
 
-        const conflictStatuses = ['pending_payment', 'pending', 'paid', 'confirmed', 'pending_refund']
+        const conflictStatuses = ['pending_payment', 'paid', 'confirmed', 'ongoing', 'pending_refund']
 
         const [reservationConflicts, queueConflicts] = await Promise.all([
             adminDb
@@ -135,7 +135,7 @@ export async function createReservation(
         // Filter reservation conflicts
         const realConflicts = reservationConflicts.data?.filter(conflict => {
             if (conflict.status === 'confirmed' || conflict.status === 'paid') return true
-            if (conflict.user_id === data.userId && (conflict.status === 'pending_payment' || conflict.status === 'pending') && !isRecurring) return false
+            if (conflict.user_id === data.userId && conflict.status === 'pending_payment' && !isRecurring) return false
             if (conflict.user_id !== data.userId) return true
             return isRecurring // If recurring, even own pending conflicts block it
         }) || []
@@ -160,9 +160,21 @@ export async function createReservation(
         const slot = targetSlots[i]
 
         // Determine status
-        // For cash recurring, we auto-confirm them as "Reserved" but unpaid. (Parity with web behavior)
-        // If e-wallet, pending_payment.
-        const status = (data.paymentMethod === 'cash' && isRecurring) ? 'confirmed' : 'pending_payment'
+        // All reservations start as pending_payment regardless of payment method.
+        // Cash bookings require court admin to mark as paid before they become confirmed.
+        // E-wallet bookings get confirmed automatically via PayMongo webhook.
+        const status = 'pending_payment'
+
+        // Calculate cash payment deadline: 2 hours before start_time
+        // This gives players time to go to the venue and pay in person.
+        // If start_time is less than 2 hours from now, deadline = now + 30 min (minimum window).
+        let cashPaymentDeadline: string | null = null
+        if (data.paymentMethod === 'cash') {
+            const twoHoursBefore = new Date(slot.start.getTime() - 2 * 60 * 60 * 1000)
+            const minimumDeadline = new Date(Date.now() + 30 * 60 * 1000) // 30 min from now
+            const deadline = twoHoursBefore > minimumDeadline ? twoHoursBefore : minimumDeadline
+            cashPaymentDeadline = deadline.toISOString()
+        }
 
         // Use USER SCOPED Client for INSERT to respect RLS
         // (Ensure the passed client has an authenticated user)
@@ -178,6 +190,8 @@ export async function createReservation(
                 amount_paid: 0,
                 num_players: data.numPlayers || 1,
                 payment_type: data.paymentType || 'full',
+                payment_method: data.paymentMethod || null,
+                cash_payment_deadline: cashPaymentDeadline,
                 discount_applied: data.discountApplied ? (data.discountApplied / targetSlots.length) : 0, // Split discount too
                 discount_type: data.discountType || null,
                 discount_reason: data.discountReason || null,

@@ -27,8 +27,11 @@ export interface QueueSessionData {
   createdAt: Date
   mode: 'casual' | 'competitive'
   gameFormat: 'singles' | 'doubles' | 'mixed'
-  approvalStatus?: 'pending' | 'approved' | 'rejected'
   reservationId?: string
+  totalCost?: number
+  paymentStatus?: 'pending' | 'paid' | 'failed'
+  paymentMethod?: 'cash' | 'e-wallet'
+  participants?: QueueParticipantData[]
 }
 
 export interface QueueParticipantData {
@@ -863,10 +866,11 @@ export async function createQueueSession(data: {
       return { success: false, error: 'Court hourly rate not configured. Please contact venue admin.' }
     }
 
+    // Extract venue from court data
     const venue = court.venues as any
-    const requiresApproval = venue?.requires_queue_approval ?? true
-    const initialStatus = requiresApproval ? 'pending_approval' : 'draft'
-    const approvalStatus = requiresApproval ? 'pending' : 'approved'
+
+    // Simplified: All sessions start as pending_payment regardless of payment method
+    // Payment confirmation (e-wallet) or manual marking (cash) moves them to active/open
 
     // --- LOOP START ---
     // Generate all target dates first
@@ -956,7 +960,7 @@ export async function createQueueSession(data: {
         .from('reservations')
         .select('id')
         .eq('court_id', data.courtId)
-        .in('status', ['pending', 'confirmed', 'pending_payment', 'paid'])
+        .in('status', ['pending_payment', 'confirmed', 'paid', 'ongoing'])
         .lt('start_time', sessionEnd.toISOString())
         .gt('end_time', sessionStart.toISOString())
 
@@ -985,6 +989,15 @@ export async function createQueueSession(data: {
         totalAmount
       })
 
+      // Calculate cash payment deadline for queue session reservations
+      let cashPaymentDeadline: string | null = null
+      if (data.paymentMethod === 'cash') {
+        const twoHoursBefore = new Date(sessionStart.getTime() - 2 * 60 * 60 * 1000)
+        const minimumDeadline = new Date(Date.now() + 30 * 60 * 1000)
+        const deadline = twoHoursBefore > minimumDeadline ? twoHoursBefore : minimumDeadline
+        cashPaymentDeadline = deadline.toISOString()
+      }
+
       // Create Reservation with payment requirement
       const { data: reservation, error: reservationError } = await supabase
         .from('reservations')
@@ -998,6 +1011,8 @@ export async function createQueueSession(data: {
           amount_paid: 0,
           num_players: data.maxPlayers,
           payment_type: 'full',
+          payment_method: data.paymentMethod || null,
+          cash_payment_deadline: cashPaymentDeadline,
           metadata: {
             booking_origin: 'queue_session',
             queue_session_organizer: true,
@@ -1032,10 +1047,8 @@ export async function createQueueSession(data: {
           max_players: data.maxPlayers,
           cost_per_game: data.costPerGame,
           is_public: data.isPublic,
-          status: requiresApproval ? 'pending_approval' : 'pending_payment',
+          status: 'pending_payment', // Always start with pending payment
           current_players: 0,
-          requires_approval: requiresApproval,
-          approval_status: approvalStatus,
           metadata: {
             reservation_id: reservation.id,
             recurrence_group_id: recurrenceGroupId,
@@ -1050,9 +1063,10 @@ export async function createQueueSession(data: {
         .single()
 
       if (insertError || !session) {
+        console.error('[createQueueSession] ❌ DB Insert Error:', insertError)
         // Rollback reservation
         await supabase.from('reservations').delete().eq('id', reservation.id)
-        return { success: false, error: `Failed to create session for ${sessionStart.toLocaleDateString()}` }
+        return { success: false, error: `Failed to create session for ${sessionStart.toLocaleDateString()}: ${insertError?.message || 'Unknown error'}` }
       }
 
       createdSessions.push({
@@ -1070,88 +1084,37 @@ export async function createQueueSession(data: {
         createdAt: new Date(session.created_at),
         mode: session.mode,
         gameFormat: session.game_format,
-        reservationId: reservation.id
+        participants: [],
+        reservationId: reservation.id,
+        paymentStatus: session.metadata?.payment_status || 'pending',
+        paymentMethod: data.paymentMethod || 'e-wallet',
+        totalCost: totalAmount,
       })
     }
 
     console.log(`[createQueueSession] ✅ Successfully created ${createdSessions.length} sessions`)
 
-    // Send notifications
+    // Send payment notification to Queue Master
     try {
-      // Get Queue Master's display name
-      const { data: qmProfile } = await supabase
-        .from('profiles')
-        .select('display_name, first_name, last_name')
-        .eq('id', user.id)
-        .single()
+      const firstSession = createdSessions[0]
 
-      const queueMasterName = qmProfile?.display_name ||
-        `${qmProfile?.first_name || ''} ${qmProfile?.last_name || ''}`.trim() ||
-        'Queue Master'
-
-      // Notification for Queue Master
-      if (requiresApproval) {
-        // Session requires approval - notify QM that it's pending
-        await createNotification({
-          userId: user.id,
-          type: 'queue_approval_pending',
-          title: '📋 Queue Session Pending Approval',
-          message: `Your queue session on ${court.name} is pending approval from the venue admin. You'll be notified once it's reviewed.`,
-          actionUrl: `/queue-master/sessions/${createdSessions[0].id}`,
-          metadata: {
-            court_name: court.name,
-            venue_name: venue?.name || 'Unknown Venue',
-            session_count: createdSessions.length,
-            queue_session_id: createdSessions[0].id
-          }
-        })
-        console.log('[createQueueSession] 📬 Sent approval pending notification to Queue Master')
-      } else {
-        // Session approved - notify QM about payment
-        const firstSession = createdSessions[0]
-        const durationMs = firstSession.endTime.getTime() - firstSession.startTime.getTime()
-        const durationHours = durationMs / (1000 * 60 * 60)
-        const courtRental = court.hourly_rate * durationHours
-        const platformFee = courtRental * 0.05
-        const totalAmount = courtRental + platformFee
-
-        await createNotification({
-          userId: user.id,
-          type: 'queue_approval_approved',
-          title: '✅ Queue Session Created - Payment Required',
-          message: `Your queue session on ${court.name} has been created. Total payment due: ₱${totalAmount.toFixed(2)} (₱${courtRental.toFixed(2)} rental + ₱${platformFee.toFixed(2)} platform fee). Complete payment to activate the session.`,
-          actionUrl: `/queue-master/sessions/${firstSession.id}`,
-          metadata: {
-            court_name: court.name,
-            venue_name: venue?.name || 'Unknown Venue',
-            session_count: createdSessions.length,
-            queue_session_id: firstSession.id,
-            total_amount: totalAmount,
-            payment_required: true
-          }
-        })
-        console.log('[createQueueSession] 📬 Sent payment reminder notification to Queue Master')
-      }
-
-      // Notification for Court Admin/Venue Owner (if approval required)
-      if (requiresApproval && venue?.owner_id) {
-        await createNotification({
-          userId: venue.owner_id,
-          type: 'queue_approval_pending',
-          title: '📋 New Queue Session Pending Approval',
-          message: `${queueMasterName} has requested ${createdSessions.length} queue session${createdSessions.length > 1 ? 's' : ''} on ${court.name}. Review in Court Admin dashboard.`,
-          actionUrl: `/court-admin/queue-approvals`,
-          metadata: {
-            queue_master_name: queueMasterName,
-            queue_master_id: user.id,
-            court_name: court.name,
-            venue_name: venue?.name || 'Unknown Venue',
-            session_count: createdSessions.length,
-            queue_session_id: createdSessions[0].id
-          }
-        })
-        console.log('[createQueueSession] 📬 Sent approval request notification to Court Admin')
-      }
+      await createNotification({
+        userId: user.id,
+        type: 'queue_approval_approved',
+        title: '💳 Queue Session Payment Required',
+        message: `Your queue session${createdSessions.length > 1 ? 's have' : ' has'} been created at ${venue?.name || 'the venue'}. ${data.paymentMethod === 'cash' ? 'Please pay at the venue to activate your session.' : 'Complete payment to activate.'}`,
+        actionUrl: `/queue-master/sessions/${firstSession.id}`,
+        metadata: {
+          court_name: court.name,
+          venue_name: venue?.name || 'Unknown Venue',
+          session_count: createdSessions.length,
+          queue_session_id: firstSession.id,
+          total_amount: firstSession.totalCost,
+          payment_method: data.paymentMethod || 'e-wallet',
+          payment_required: true
+        }
+      })
+      console.log('[createQueueSession] 📬 Sent payment notification to Queue Master')
     } catch (notificationError) {
       // Non-critical error - log but don't fail
       console.error('[createQueueSession] ⚠️ Failed to send notifications (non-critical):', notificationError)
@@ -1163,7 +1126,7 @@ export async function createQueueSession(data: {
     revalidatePath(`/queue/${data.courtId}`)
 
     // Return the first session as primary, but include all
-    return { success: true, session: createdSessions[0], sessions: createdSessions, requiresApproval }
+    return { success: true, session: createdSessions[0], sessions: createdSessions }
 
   } catch (error: any) {
     console.error('[createQueueSession] ❌ Error:', error)
@@ -2132,6 +2095,9 @@ export async function getMyQueueMasterSessions(filter?: {
           mode: session.mode,
           gameFormat: session.game_format,
           participants: formattedParticipants,
+          totalCost: session.metadata?.payment_required ? parseFloat(session.metadata.payment_required) : 0,
+          paymentStatus: session.metadata?.payment_status || 'pending',
+          paymentMethod: session.metadata?.payment_method || 'e-wallet',
         }
       })
     )

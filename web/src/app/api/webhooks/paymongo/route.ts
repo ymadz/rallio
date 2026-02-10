@@ -359,9 +359,10 @@ async function markReservationPaidAndConfirmed({
     reservationRecord = data
   }
 
-  // PAYMENT CONFIRMATION FLOW (requires migration 006 applied):
-  // pending_payment → paid → confirmed
-  // If migration 006 NOT applied: pending → confirmed directly
+  // PAYMENT CONFIRMATION FLOW:
+  // Go directly from pending_payment → confirmed in a single atomic update.
+  // The 'paid' intermediate state is recorded in metadata for audit trail,
+  // but we skip it as a DB status to avoid stuck-in-paid edge cases.
 
   // Check if already in final state
   console.log('[markReservationPaidAndConfirmed] 🔍 Checking current reservation status')
@@ -394,75 +395,32 @@ async function markReservationPaidAndConfirmed({
     return
   }
 
-  // First, mark as 'paid' to indicate payment successful
-  console.log('[markReservationPaidAndConfirmed] 📝 Step 1: Marking reservation as PAID')
-  if (reservationRecord.status !== 'paid') {
-    const paidMetadata = {
-      ...(reservationRecord.metadata || {}),
-      payment_paid_event: {
-        eventId,
-        eventType,
-        paidAt: nowISO,
-        payment_id: payment.id,
-      },
-      payment_status_history: buildStatusHistory(reservationRecord.metadata, 'paid'),
-    }
+  // If already 'paid' (from a previous partial run), just proceed to confirm
+  // Otherwise skip the intermediate 'paid' step entirely and go straight to 'confirmed'
+  console.log('[markReservationPaidAndConfirmed] 📝 Confirming reservation atomically (skipping intermediate paid status)')
 
-    console.log('[markReservationPaidAndConfirmed] Attempting to update status to "paid":', {
-      reservationId,
-      currentStatus: reservationRecord.status,
-      targetStatus: 'paid',
-      amount: payment.amount,
-    })
-
-    const { data: paidReservation, error: paidError } = await supabase
-      .from('reservations')
-      .update({
-        status: 'paid',
-        amount_paid: payment.amount,
-        updated_at: nowISO,
-        metadata: paidMetadata,
-      })
-      .eq('id', reservationId)
-      .select('id, status, amount_paid, metadata')
-      .single()
-
-    if (paidError) {
-      console.error('[markReservationPaidAndConfirmed] ❌ Failed to mark reservation as paid:', {
-        reservationId,
-        error: {
-          message: paidError.message,
-          code: paidError.code,
-          details: paidError.details,
-          hint: paidError.hint
-        },
-        errorCode: paidError.code,
-        errorDetails: JSON.stringify(paidError, null, 2),
-      })
-
-      // If 'paid' status is not valid (migration 006 not applied), go directly to 'confirmed'
-      if (paidError.code === '23514') { // CHECK constraint violation
-        console.warn('[markReservationPaidAndConfirmed] ⚠️ Migration 006 NOT applied - "paid" status not in CHECK constraint')
-        console.warn('[markReservationPaidAndConfirmed] ⚠️ Will skip to "confirmed" status instead')
-        // Fall through to confirm step below
-      } else {
-        console.error('[markReservationPaidAndConfirmed] ❌ CRITICAL: Non-constraint error, aborting')
-        throw paidError
-      }
-    } else {
-      console.log('[markReservationPaidAndConfirmed] ✅ Reservation marked as PAID:', {
-        id: paidReservation.id,
-        status: paidReservation.status,
-        amountPaid: paidReservation.amount_paid
-      })
-      reservationRecord = paidReservation
-    }
-  } else {
-    console.log('[markReservationPaidAndConfirmed] ℹ️ Reservation already in "paid" status, proceeding to confirmation')
+  // Build comprehensive metadata that records the payment event
+  const confirmationMetadata = {
+    ...(reservationRecord.metadata || {}),
+    payment_paid_event: {
+      eventId,
+      eventType,
+      paidAt: nowISO,
+      payment_id: payment.id,
+    },
+    payment_status_history: buildStatusHistory(
+      { ...reservationRecord.metadata, payment_status_history: buildStatusHistory(reservationRecord.metadata, 'paid') },
+      'confirmed'
+    ),
   }
 
-  // Then, mark as 'confirmed' to finalize the booking
-  console.log('[markReservationPaidAndConfirmed] 📝 Step 2: Marking reservation as CONFIRMED')
+  // Mark as 'confirmed' directly — single atomic update
+  console.log('[markReservationPaidAndConfirmed] Attempting atomic confirmation:', {
+    reservationId,
+    currentStatus: reservationRecord.status,
+    targetStatus: 'confirmed',
+    amount: payment.amount,
+  })
 
   // Check for recurrence group (Bulk Payment Confirmation)
   const recurrenceGroupId = payment.metadata?.recurrence_group_id
@@ -475,7 +433,7 @@ async function markReservationPaidAndConfirmed({
       .from('reservations')
       .select('id, status, total_amount, metadata')
       .eq('recurrence_group_id', recurrenceGroupId)
-      .in('status', ['pending', 'pending_payment', 'paid']) // Include 'paid' just in case
+      .in('status', ['pending_payment', 'paid']) // Include 'paid' just in case
 
     if (groupFetchError) {
       console.error('[markReservationPaidAndConfirmed] ❌ Failed to fetch recurrence group:', groupFetchError)
@@ -483,7 +441,7 @@ async function markReservationPaidAndConfirmed({
     } else if (groupReservations && groupReservations.length > 0) {
       console.log('[markReservationPaidAndConfirmed] 🔄 Confirming group reservations:', groupReservations.length)
 
-      const confirmMetadata = {
+      const confirmGroupMetadata = {
         payment_confirmed_event: {
           eventId,
           eventType,
@@ -494,9 +452,6 @@ async function markReservationPaidAndConfirmed({
       }
 
       // 2. Mark ALL as confirmed and paid
-      // We calculate per-reservation payment amount (assuming even split or full coverage)
-      // Actually, since it's confirmed, we just mark them confirmed.
-
       const updates = groupReservations.map(res => ({
         id: res.id,
         status: 'confirmed',
@@ -504,7 +459,7 @@ async function markReservationPaidAndConfirmed({
         updated_at: nowISO,
         metadata: {
           ...(res.metadata || {}),
-          ...confirmMetadata,
+          ...confirmGroupMetadata,
           payment_status_history: buildStatusHistory(res.metadata, 'confirmed')
         }
       }))
@@ -535,24 +490,21 @@ async function markReservationPaidAndConfirmed({
 
   // STANDARD SINGLE CONFIRMATION FALLBACK
 
-  const confirmMetadata = {
-    ...(reservationRecord.metadata || {}),
-    payment_confirmed_event: {
-      eventId,
-      eventType,
-      confirmedAt: nowISO,
-      payment_id: payment.id,
-    },
-    payment_status_history: buildStatusHistory(reservationRecord.metadata, 'confirmed'),
-  }
-
   const { data: confirmedReservation, error: confirmError } = await supabase
     .from('reservations')
     .update({
       status: 'confirmed',
       amount_paid: payment.amount,
       updated_at: nowISO,
-      metadata: confirmMetadata,
+      metadata: {
+        ...confirmationMetadata,
+        payment_confirmed_event: {
+          eventId,
+          eventType,
+          confirmedAt: nowISO,
+          payment_id: payment.id,
+        },
+      },
     })
     .eq('id', reservationId)
     .select('id, status, amount_paid')

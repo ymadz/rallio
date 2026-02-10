@@ -308,7 +308,7 @@ export async function deleteCourt(courtId: string) {
       .from('reservations')
       .select('id')
       .eq('court_id', courtId)
-      .in('status', ['pending', 'confirmed'])
+      .in('status', ['pending_payment', 'paid', 'confirmed', 'ongoing'])
       .gte('start_time', new Date().toISOString())
 
     if (activeReservations && activeReservations.length > 0) {

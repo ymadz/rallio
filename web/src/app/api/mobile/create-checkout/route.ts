@@ -72,7 +72,7 @@ export async function POST(req: Request) {
                 .from('reservations')
                 .select('total_amount, status')
                 .eq('recurrence_group_id', recurrenceGroupId)
-                .in('status', ['pending', 'pending_payment'])
+                .in('status', ['pending_payment'])
 
             if (groupReservations && groupReservations.length > 0) {
                 amountToCharge = groupReservations.reduce((sum, res) => sum + (res.total_amount || 0), 0)

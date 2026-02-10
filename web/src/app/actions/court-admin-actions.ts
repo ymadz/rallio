@@ -521,21 +521,18 @@ export async function markReservationAsPaid(reservationId: string) {
       return { success: false, error: 'Unauthorized' }
     }
 
-    if (reservation.status !== 'pending_payment' && reservation.status !== 'pending') {
+    if (reservation.status !== 'pending_payment') {
       return { success: false, error: 'Reservation is not pending payment' }
     }
 
     const isQueueSession = reservation.metadata?.is_queue_session_reservation === true
 
     if (isQueueSession) {
-      // Find associated queue session
+      // Find associated queue session via metadata link (reliable)
       const { data: queueSession } = await supabase
         .from('queue_sessions')
-        .select('id, status')
-        .eq('court_id', (reservation.court as any).id)
-        .eq('organizer_id', reservation.user_id)
-        .eq('start_time', reservation.start_time)
-        .eq('end_time', reservation.end_time)
+        .select('id, status, metadata')
+        .filter('metadata->>reservation_id', 'eq', reservationId)
         .single()
 
       if (queueSession) {
@@ -543,9 +540,9 @@ export async function markReservationAsPaid(reservationId: string) {
         const { error: qsError } = await supabase
           .from('queue_sessions')
           .update({
-            status: 'active', // or 'open' depending on start time? 'active' is safe.
-            settings: {
-              ...reservation.metadata,
+            status: 'active',
+            metadata: {
+              ...queueSession.metadata,
               payment_status: 'paid',
               paid_at: new Date().toISOString(),
               payment_method: 'cash_confirmed_by_admin'
@@ -663,14 +660,11 @@ export async function rejectReservation(reservationId: string, reason: string) {
     const isQueueSession = reservation.metadata?.is_queue_session_reservation === true
 
     if (isQueueSession) {
-      // Find and reject queue session
+      // Find and reject queue session via metadata link (reliable)
       const { data: queueSession } = await supabase
         .from('queue_sessions')
         .select('id')
-        .eq('court_id', (reservation.court as any).id)
-        .eq('organizer_id', reservation.user_id)
-        .eq('start_time', reservation.start_time)
-        .eq('end_time', reservation.end_time)
+        .filter('metadata->>reservation_id', 'eq', reservationId)
         .single()
 
       if (queueSession) {

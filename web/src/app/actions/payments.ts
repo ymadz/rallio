@@ -125,7 +125,7 @@ export async function initiatePaymentAction(
         .from('reservations')
         .select('total_amount, status')
         .eq('recurrence_group_id', recurrenceGroupId)
-        .in('status', ['pending', 'pending_payment'])
+        .in('status', ['pending_payment'])
 
       if (groupReservations && groupReservations.length > 0) {
         // Sum up the total amount for all pending reservations in the group
@@ -284,12 +284,12 @@ export async function initiatePaymentAction(
     }
 
     // Update reservation to indicate payment initiated
-    // Status: 'pending_payment' (requires migration 006) or 'pending' (fallback)
     console.log('[initiatePaymentAction] 📝 Updating reservation status to pending_payment')
     const { error: reservationUpdateError } = await supabase
       .from('reservations')
       .update({
         status: 'pending_payment',
+        payment_method: 'e-wallet',
         metadata: {
           payment_initiated_at: new Date().toISOString(),
           payment_method: paymentMethod,
@@ -574,7 +574,7 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
         .select('id, total_amount')
         .eq('recurrence_group_id', recurrenceGroupId)
         .neq('id', payment.reservation_id) // Exclude the one we just updated
-        .in('status', ['pending', 'pending_payment'])
+        .in('status', ['pending_payment'])
 
       if (groupFetchError) {
         console.error('❌ Failed to fetch recurrence group for bulk update:', groupFetchError)
