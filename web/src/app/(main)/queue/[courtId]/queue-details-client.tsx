@@ -160,6 +160,9 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
 
   const isUserInQueue = queue.userPosition !== null
   const playersAhead = isUserInQueue ? queue.userPosition! - 1 : 0
+  const now = serverDate || new Date()
+  const isLive = new Date(queue.startTime) <= now && new Date(queue.endTime) > now
+  const displayStatus = queue.status === 'completed' ? 'completed' : isLive ? 'live' : 'upcoming'
 
   return (
     <>
@@ -213,7 +216,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                 </span>
               </div>
             </div>
-            <QueueStatusBadge status={queue.status} size="md" />
+            <QueueStatusBadge status={displayStatus} size="md" />
           </div>
 
           {/* Queue Stats */}

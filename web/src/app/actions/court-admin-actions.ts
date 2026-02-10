@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { createNotification, NotificationTemplates } from '@/lib/notifications'
+import { getServerNow } from '@/lib/time-server'
 
 /**
  * Get all venues owned by the current user (Court Admin)
@@ -536,15 +537,21 @@ export async function markReservationAsPaid(reservationId: string) {
         .single()
 
       if (queueSession) {
-        // Activate queue session
+        // Activate queue session only if start_time has passed;
+        // otherwise set 'open' (paid & ready, but scheduled for later)
+        const now = await getServerNow()
+        const sessionStart = new Date(reservation.start_time)
+        const newQueueStatus = sessionStart <= now ? 'active' : 'open'
+
         const { error: qsError } = await supabase
           .from('queue_sessions')
           .update({
-            status: 'active',
+            status: newQueueStatus,
+            approval_status: 'approved',
             metadata: {
               ...queueSession.metadata,
               payment_status: 'paid',
-              paid_at: new Date().toISOString(),
+              paid_at: now.toISOString(),
               payment_method: 'cash_confirmed_by_admin'
             }
           })

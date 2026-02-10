@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { getMyQueueMasterSessions, getQueueMasterStats } from '@/app/actions/queue-actions'
 import { Plus, Calendar, TrendingUp, DollarSign, Users, Clock, PlayCircle, CheckCircle, XCircle, Loader2, AlertCircle } from 'lucide-react'
+import { useServerTime } from '@/hooks/use-server-time'
 import Link from 'next/link'
 
 type SessionStatus = 'active' | 'pending' | 'past'
@@ -22,6 +23,9 @@ interface SessionData {
   gameFormat: string
   participants: any[]
   approvalStatus?: string
+  totalCost?: number
+  paymentStatus?: string
+  paymentMethod?: string
 }
 
 interface DashboardStats {
@@ -52,6 +56,7 @@ export function QueueMasterDashboard() {
   const [filter, setFilter] = useState<SessionStatus>('active')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { date: serverDate } = useServerTime()
 
   useEffect(() => {
     loadDashboard()
@@ -88,9 +93,24 @@ export function QueueMasterDashboard() {
     return session.status
   }
 
+  const isSessionLive = (session: SessionData) => {
+    const now = serverDate || new Date()
+    return new Date(session.startTime) <= now && new Date(session.endTime) > now
+  }
+
+  const getDisplayStatus = (session: SessionData) => {
+    const effective = getEffectiveStatus(session)
+    if (effective === 'open' || effective === 'active') {
+      return isSessionLive(session) ? 'live' : 'upcoming'
+    }
+    return effective
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'live': return 'bg-green-100 text-green-700 border-green-200'
       case 'active': return 'bg-green-100 text-green-700 border-green-200'
+      case 'upcoming': return 'bg-blue-100 text-blue-700 border-blue-200'
       case 'open': return 'bg-blue-100 text-blue-700 border-blue-200'
       case 'paused': return 'bg-yellow-100 text-yellow-700 border-yellow-200'
       case 'closed': return 'bg-gray-100 text-gray-700 border-gray-200'
@@ -104,14 +124,27 @@ export function QueueMasterDashboard() {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
+      case 'live': return <PlayCircle className="w-4 h-4" />
       case 'active': return <PlayCircle className="w-4 h-4" />
+      case 'upcoming': return <Clock className="w-4 h-4" />
       case 'open': return <Clock className="w-4 h-4" />
+      case 'paused': return <PlayCircle className="w-4 h-4" />
       case 'closed': return <CheckCircle className="w-4 h-4" />
       case 'cancelled': return <XCircle className="w-4 h-4" />
       case 'rejected': return <XCircle className="w-4 h-4" />
       case 'pending_approval': return <Clock className="w-4 h-4" />
       case 'pending_payment': return <DollarSign className="w-4 h-4" />
       default: return <Clock className="w-4 h-4" />
+    }
+  }
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'live': return 'Live Now'
+      case 'upcoming': return 'Upcoming'
+      case 'pending_approval': return 'Pending Approval'
+      case 'pending_payment': return 'Pending Payment'
+      default: return status.charAt(0).toUpperCase() + status.slice(1)
     }
   }
 
@@ -284,9 +317,9 @@ export function QueueMasterDashboard() {
                     </div>
                     <p className="text-sm text-gray-600">{session.venueName}</p>
                   </div>
-                  <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium ${getStatusColor(getEffectiveStatus(session))}`}>
-                    {getStatusIcon(getEffectiveStatus(session))}
-                    <span className="capitalize">{getEffectiveStatus(session).replace('_', ' ')}</span>
+                  <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium ${getStatusColor(getDisplayStatus(session))}`}>
+                    {getStatusIcon(getDisplayStatus(session))}
+                    <span>{getStatusLabel(getDisplayStatus(session))}</span>
                   </div>
                 </div>
 
@@ -311,6 +344,30 @@ export function QueueMasterDashboard() {
                       ₱{session.costPerGame}
                     </p>
                   </div>
+
+                  <div className="bg-gray-50 rounded-lg p-3 col-span-2 flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <DollarSign className="w-4 h-4 text-gray-500" />
+                        <span className="text-xs text-gray-600">Session Cost</span>
+                      </div>
+                      <p className="text-lg font-bold text-gray-900">
+                        ₱{session.totalCost?.toFixed(2) || '0.00'}
+                      </p>
+                    </div>
+
+                    <div className="text-right">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${session.paymentStatus === 'paid'
+                          ? 'bg-green-100 text-green-800 border-green-200'
+                          : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                        }`}>
+                        {session.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}
+                      </span>
+                      <p className="text-xs text-gray-500 mt-1 capitalize">
+                        via {session.paymentMethod?.replace('-', ' ') || 'cash'}
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Session Details */}
@@ -322,14 +379,24 @@ export function QueueMasterDashboard() {
                   </div>
                   <div className="text-right">
                     <div className="text-gray-900 font-medium">
-                      {Math.ceil((new Date(session.endTime).getTime() - new Date(session.startTime).getTime()) / (1000 * 60 * 60))}h Duration
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      Created {new Date(session.createdAt).toLocaleTimeString('en-US', {
+                      {new Date(session.startTime).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      })}{' '}
+                      {new Date(session.startTime).toLocaleTimeString('en-US', {
                         hour: 'numeric',
                         minute: '2-digit',
                         hour12: true
                       })}
+                      {' - '}
+                      {new Date(session.endTime).toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                      })}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {Math.ceil((new Date(session.endTime).getTime() - new Date(session.startTime).getTime()) / (1000 * 60 * 60))}h Duration
                     </div>
                   </div>
                 </div>

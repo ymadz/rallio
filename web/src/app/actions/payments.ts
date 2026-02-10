@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createGCashCheckout, createMayaCheckout, getSource, createPayment } from '@/lib/paymongo'
 import { revalidatePath } from 'next/cache'
+import { getServerNow } from '@/lib/time-server'
 
 export type PaymentMethod = 'gcash' | 'paymaya' | 'cash'
 
@@ -16,6 +17,7 @@ type ReservationWithRelations = {
   payment_type?: string
   num_players?: number
   recurrence_group_id?: string | null
+  metadata?: Record<string, any> | null
   courts: {
     name: string
     venues: {
@@ -149,7 +151,10 @@ export async function initiatePaymentAction(
 
     // Generate success/failed URLs
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    const successUrl = `${baseUrl}/checkout/success?reservation=${reservationId}`
+    const isQueueSessionReservation = reservation.metadata?.is_queue_session_reservation === true
+    const successUrl = isQueueSessionReservation
+      ? `${baseUrl}/queue-master/payment/success?reservation=${reservationId}`
+      : `${baseUrl}/checkout/success?reservation=${reservationId}`
     const failedUrl = `${baseUrl}/checkout/failed?reservation=${reservationId}`
 
     let checkoutUrl: string
@@ -658,24 +663,32 @@ async function updateQueueSessionStatus(reservationId: string, supabase: any) {
     // Check if this reservation is for a queue session
     const { data: queueSession } = await supabase
       .from('queue_sessions')
-      .select('id, status, metadata')
+      .select('id, status, approval_status, metadata, start_time')
       .filter('metadata->>reservation_id', 'eq', reservationId)
       .single()
 
     if (queueSession) {
       console.log('[updateQueueSessionStatus] 🔄 Found linked Queue Session:', queueSession.id)
 
-      // Only update if currently pending_payment or pending_approval (though usually payment comes after approval)
-      // If it's 'draft', maybe? But createQueueSession sets it to pending_payment.
-      if (['pending_payment'].includes(queueSession.status)) {
+      // Activate and approve when payment is confirmed
+      if (['pending_payment', 'pending_approval'].includes(queueSession.status)) {
+        // Only set 'active' if the session has already started;
+        // otherwise set 'open' (paid & ready, but scheduled for later)
+        const now = await getServerNow()
+        const startTime = new Date(queueSession.start_time)
+        const newStatus = startTime <= now ? 'active' : 'open'
+
+        console.log(`[updateQueueSessionStatus] 🕒 start_time=${startTime.toISOString()}, now=${now.toISOString()} → status='${newStatus}'`)
+
         const { error: updateError } = await supabase
           .from('queue_sessions')
           .update({
-            status: 'active', // Activate the session!
+            status: newStatus,
+            approval_status: 'approved',
             metadata: {
               ...queueSession.metadata,
               payment_status: 'paid',
-              payment_confirmed_at: new Date().toISOString()
+              payment_confirmed_at: now.toISOString()
             }
           })
           .eq('id', queueSession.id)
@@ -683,7 +696,7 @@ async function updateQueueSessionStatus(reservationId: string, supabase: any) {
         if (updateError) {
           console.error('[updateQueueSessionStatus] ❌ Failed to activate Queue Session:', updateError)
         } else {
-          console.log('[updateQueueSessionStatus] ✅ Queue Session activated successfully')
+          console.log(`[updateQueueSessionStatus] ✅ Queue Session set to '${newStatus}' successfully`)
           revalidatePath('/queue')
           revalidatePath('/queue-master')
         }
@@ -692,6 +705,7 @@ async function updateQueueSessionStatus(reservationId: string, supabase: any) {
         const { error: updateError } = await supabase
           .from('queue_sessions')
           .update({
+            approval_status: queueSession.approval_status === 'pending' ? 'approved' : queueSession.approval_status,
             metadata: {
               ...queueSession.metadata,
               payment_status: 'paid',

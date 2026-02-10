@@ -41,6 +41,7 @@ import { PaymentManagementModal } from './payment-management-modal'
 import { MatchAssignmentModal } from './match-assignment-modal'
 import { MatchTimer } from './match-timer'
 import { MatchStatusBadge } from './match-status-badge'
+import { useServerTime } from '@/hooks/use-server-time'
 
 interface SessionManagementClientProps {
   sessionId: string
@@ -81,6 +82,7 @@ interface QueueSession {
 
 export function SessionManagementClient({ sessionId }: SessionManagementClientProps) {
   const router = useRouter()
+  const { date: serverDate } = useServerTime()
   const supabase = createClient()
 
   const [session, setSession] = useState<QueueSession | null>(null)
@@ -509,12 +511,35 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'live': return 'bg-green-100 text-green-700 border-green-200'
       case 'active': return 'bg-green-100 text-green-700 border-green-200'
+      case 'upcoming': return 'bg-blue-100 text-blue-700 border-blue-200'
       case 'open': return 'bg-blue-100 text-blue-700 border-blue-200'
       case 'paused': return 'bg-yellow-100 text-yellow-700 border-yellow-200'
       case 'closed': return 'bg-gray-100 text-gray-700 border-gray-200'
       default: return 'bg-gray-100 text-gray-700 border-gray-200'
     }
+  }
+
+  const getDisplayStatus = () => {
+    const now = serverDate || new Date()
+    const status = session.status
+    if (status === 'open' || status === 'active') {
+      const isLive = new Date(session.startTime) <= now && new Date(session.endTime) > now
+      return isLive ? 'Live Now' : 'Upcoming'
+    }
+    if (status === 'pending_approval') return 'Pending Approval'
+    if (status === 'pending_payment') return 'Pending Payment'
+    return status.charAt(0).toUpperCase() + status.slice(1)
+  }
+
+  const getDisplayStatusKey = () => {
+    const now = serverDate || new Date()
+    const status = session.status
+    if (status === 'open' || status === 'active') {
+      return new Date(session.startTime) <= now && new Date(session.endTime) > now ? 'live' : 'upcoming'
+    }
+    return status
   }
 
   return (
@@ -585,9 +610,9 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
             </div>
             <p className="text-gray-600">{session.venueName}</p>
           </div>
-          <div className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium ${getStatusColor(session.status)}`}>
+          <div className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium ${getStatusColor(getDisplayStatusKey())}`}>
             <div className="w-2 h-2 rounded-full bg-current"></div>
-            <span className="capitalize">{session.status}</span>
+            <span>{getDisplayStatus()}</span>
           </div>
         </div>
       </div>

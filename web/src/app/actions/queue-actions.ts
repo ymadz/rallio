@@ -120,6 +120,21 @@ export async function getQueueDetails(courtId: string) {
       return { success: true, queue: null }
     }
 
+    // AUTO-ACTIVATE: If session is 'open' and start_time has passed, flip to 'active'
+    if (session.status === 'open' && new Date(session.start_time) <= now) {
+      console.log('[getQueueDetails] ▶️ Auto-activating session (start_time reached):', session.id)
+      const { error: activateError } = await supabase
+        .from('queue_sessions')
+        .update({ status: 'active' })
+        .eq('id', session.id)
+
+      if (!activateError) {
+        session.status = 'active'
+        revalidatePath(`/queue/${courtId}`)
+        revalidatePath('/queue')
+      }
+    }
+
     // Get all participants in this session
     const { data: participants, error: participantsError } = await supabase
       .from('queue_participants')
@@ -1988,11 +2003,11 @@ export async function getMyQueueMasterSessions(filter?: {
 
     // Apply status filter
     if (filter?.status === 'active') {
-      // Active: sessions that are currently running (active or paused)
-      query = query.in('status', ['active', 'paused'])
+      // Active: all confirmed/paid sessions (open, active, paused) — ready to go
+      query = query.in('status', ['active', 'paused', 'open'])
     } else if (filter?.status === 'pending') {
-      // Pending: sessions that are open or awaiting approval
-      query = query.in('status', ['open', 'pending_approval'])
+      // Pending: sessions awaiting approval or payment (needs action)
+      query = query.in('status', ['pending_approval', 'pending_payment'])
     } else if (filter?.status === 'past') {
       query = query.in('status', ['closed', 'cancelled'])
     }
@@ -2006,25 +2021,34 @@ export async function getMyQueueMasterSessions(filter?: {
       return { success: false, error: 'Failed to fetch sessions' }
     }
 
-    // Filter out expired sessions if we are looking for active ones
-    // and fire-and-forget an update to close them
-    const now = new Date()
+    // Auto-activate, auto-close, and filter sessions based on time
+    const now = await getServerNow()
     const validSessions = sessions.filter((session: any) => {
-      if (['open', 'active', 'paused'].includes(session.status)) {
-        const endTime = new Date(session.end_time)
-        if (endTime < now) {
-          // Expired!
-          console.log('[getMyQueueMasterSessions] 🕒 Session expired, auto-closing:', session.id)
-          supabase.from('queue_sessions').update({ status: 'closed' }).eq('id', session.id).then(({ error }) => {
-            if (error) console.error('Failed to auto-close expired session:', session.id, error)
-          })
+      const startTime = new Date(session.start_time)
+      const endTime = new Date(session.end_time)
 
-          // If filtering for active or pending, exclude expired sessions
-          if (filter?.status === 'active' || filter?.status === 'pending') {
-            return false
-          }
+      // AUTO-CLOSE: If past end_time, close the session
+      if (['open', 'active', 'paused'].includes(session.status) && endTime < now) {
+        console.log('[getMyQueueMasterSessions] 🕒 Session expired, auto-closing:', session.id)
+        supabase.from('queue_sessions').update({ status: 'closed' }).eq('id', session.id).then(({ error }) => {
+          if (error) console.error('Failed to auto-close expired session:', session.id, error)
+        })
+        // Exclude from active/pending views
+        if (filter?.status === 'active' || filter?.status === 'pending') {
+          return false
         }
+        return true
       }
+
+      // AUTO-ACTIVATE: If session is 'open' and start_time has passed, flip to 'active'
+      if (session.status === 'open' && startTime <= now) {
+        console.log('[getMyQueueMasterSessions] ▶️ Auto-activating session (start_time reached):', session.id)
+        supabase.from('queue_sessions').update({ status: 'active' }).eq('id', session.id).then(({ error }) => {
+          if (error) console.error('Failed to auto-activate session:', session.id, error)
+        })
+        session.status = 'active' // Update in-memory for current response
+      }
+
       return true
     })
 
@@ -2071,11 +2095,19 @@ export async function getMyQueueMasterSessions(filter?: {
           paymentStatus: p.payment_status,
         }))
 
-        // Check for auto-close condition
-        if (['open', 'active'].includes(session.status) && new Date(session.end_time) < new Date()) {
-          // Fire and forget update
+        // Time-aware status corrections (redundant safety check)
+        const sessionEnd = new Date(session.end_time)
+        const sessionStart = new Date(session.start_time)
+        const currentTime = new Date()
+
+        if (['open', 'active', 'paused'].includes(session.status) && sessionEnd < currentTime) {
+          // Auto-close expired sessions
           supabase.from('queue_sessions').update({ status: 'closed' }).eq('id', session.id).then()
           session.status = 'closed'
+        } else if (session.status === 'open' && sessionStart <= currentTime) {
+          // Auto-activate sessions whose start_time has passed
+          supabase.from('queue_sessions').update({ status: 'active' }).eq('id', session.id).then()
+          session.status = 'active'
         }
 
         return {
@@ -2168,7 +2200,7 @@ export async function getQueueMasterStats(): Promise<{
       return { success: false, error: 'Failed to fetch stats' }
     }
 
-    const now = new Date()
+    const now = await getServerNow()
     const totalSessions = sessions?.length || 0
 
     // Categorize sessions
@@ -2183,7 +2215,6 @@ export async function getQueueMasterStats(): Promise<{
     sessions?.forEach(session => {
       const startTime = new Date(session.start_time)
       const endTime = session.end_time ? new Date(session.end_time) : null
-      const isFuture = startTime > now
       const isExpired = endTime && endTime < now && ['open', 'active', 'paused'].includes(session.status)
 
       // Auto-close if expired (fire and forget)
@@ -2193,18 +2224,26 @@ export async function getQueueMasterStats(): Promise<{
         })
       }
 
+      // Auto-activate: open sessions whose start_time has passed (fire and forget)
+      if (!isExpired && session.status === 'open' && startTime <= now) {
+        supabase.from('queue_sessions').update({ status: 'active' }).eq('id', session.id).then(({ error }) => {
+          if (error) console.error('Failed to auto-activate session:', session.id, error)
+        })
+        session.status = 'active' // Use corrected status for counting
+      }
+
       // Count logic matching Dashboard filters
       // If it WAS active but is now expired, we count it as past for the stats
       const effectiveStatus = isExpired ? 'closed' : session.status
 
       if (['closed', 'cancelled', 'rejected', 'completed', 'expired'].includes(effectiveStatus)) {
         pastCount++
-      } else if (['draft', 'open', 'pending_approval'].includes(effectiveStatus)) {
-        // Pending: sessions that are open but not yet active, or awaiting approval
-        pendingCount++
-      } else if (['active', 'paused'].includes(effectiveStatus)) {
-        // Active: sessions that are currently running
+      } else if (['active', 'paused', 'open'].includes(effectiveStatus)) {
+        // Active: all confirmed/paid sessions (open, active, paused) — ready to go
         activeCount++
+      } else if (['draft', 'pending_approval', 'pending_payment'].includes(effectiveStatus)) {
+        // Pending: sessions awaiting approval or payment (needs action)
+        pendingCount++
       }
 
       // Stats calculation

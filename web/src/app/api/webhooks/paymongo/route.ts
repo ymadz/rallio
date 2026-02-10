@@ -598,7 +598,7 @@ async function markReservationPaidAndConfirmed({
   try {
     const { data: queueSession } = await supabase
       .from('queue_sessions')
-      .select('id, status, metadata')
+      .select('id, status, approval_status, metadata')
       .filter('metadata->>reservation_id', 'eq', reservationId)
       .single()
 
@@ -611,6 +611,10 @@ async function markReservationPaidAndConfirmed({
           payment_status: 'paid',
           payment_confirmed_at: nowISO
         }
+      }
+
+      if (queueSession.approval_status === 'pending' || queueSession.status === 'pending_approval') {
+        updateData.approval_status = 'approved'
       }
 
       if (['pending_payment', 'pending_approval'].includes(queueSession.status)) {

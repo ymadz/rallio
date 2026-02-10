@@ -16,8 +16,6 @@ import {
   Edit,
   Loader2,
   AlertCircle,
-  Settings,
-  ClipboardCheck
 } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -28,7 +26,6 @@ import { AvailabilityManagement } from './availability-management'
 import { AnalyticsDashboard } from './analytics-dashboard'
 import { ReviewsManagement } from './reviews-management'
 import DiscountManagement from './discount-management'
-import { QueueApprovalsManagement } from './queue-approvals-management'
 import { VenueEditModal } from './venue-edit-modal'
 
 interface VenueDetailProps {
@@ -102,7 +99,6 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
     { id: 'pricing', label: 'Pricing', icon: DollarSign },
     { id: 'discounts', label: 'Discounts', icon: DollarSign },
     { id: 'availability', label: 'Availability', icon: Clock },
-    { id: 'approvals', label: 'Queue Approvals', icon: ClipboardCheck },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'reviews', label: 'Reviews', icon: Star },
   ]
@@ -162,7 +158,7 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
             </div>
           </div>
 
-          <button 
+          <button
             onClick={() => setShowEditModal(true)}
             className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           >
@@ -190,11 +186,10 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
                 )}
               </div>
               <div className="flex items-center justify-center gap-2">
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  venue.is_verified
-                    ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                    : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
-                }`}>
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${venue.is_verified
+                  ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                  : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
+                  }`}>
                   {venue.is_verified ? 'Verified' : 'Pending Verification'}
                 </span>
               </div>
@@ -215,11 +210,10 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
-                className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-colors whitespace-nowrap ${
-                  isActive
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
+                className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-colors whitespace-nowrap ${isActive
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-100'
+                  }`}
               >
                 <Icon className="w-5 h-5" />
                 <span>{tab.label}</span>
@@ -229,60 +223,12 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
         </div>
       </div>
 
-      {/* Queue Settings Section */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <Settings className="w-5 h-5" />
-          Queue Session Settings
-        </h3>
-        
-        <div className="flex items-start justify-between p-4 bg-gray-50 rounded-lg">
-          <div className="flex-1">
-            <label htmlFor="requires-approval" className="block text-sm font-medium text-gray-900 mb-1">
-              Require Approval for Queue Sessions
-            </label>
-            <p className="text-sm text-gray-600">
-              When enabled, Queue Masters must wait for your approval before their sessions go live.
-              This gives you control over who uses your courts and when.
-            </p>
-          </div>
-          <div className="ml-4 flex-shrink-0">
-            <input
-              type="checkbox"
-              id="requires-approval"
-              checked={venue?.requires_queue_approval ?? true}
-              onChange={async (e) => {
-                try {
-                  const { error } = await supabase
-                    .from('venues')
-                    .update({ requires_queue_approval: e.target.checked })
-                    .eq('id', venueId)
-                  
-                  if (error) throw error
-                  
-                  await loadVenue()
-                  
-                  alert(e.target.checked 
-                    ? '✅ Queue sessions now require your approval' 
-                    : '✅ Queue sessions no longer require approval - they will go live immediately')
-                } catch (error) {
-                  console.error('Failed to update setting:', error)
-                  alert('❌ Failed to update setting. Please try again.')
-                }
-              }}
-              className="h-5 w-5 text-primary border-gray-300 rounded focus:ring-2 focus:ring-primary cursor-pointer"
-            />
-          </div>
-        </div>
-      </div>
-
       {/* Tab Content */}
       <div className="min-h-96">
         {activeTab === 'courts' && <VenueCourts venueId={venueId} onCourtChange={loadVenue} />}
         {activeTab === 'pricing' && <PricingManagement venueId={venueId} />}
         {activeTab === 'discounts' && <DiscountManagement venueId={venueId} />}
         {activeTab === 'availability' && <AvailabilityManagement venueId={venueId} />}
-        {activeTab === 'approvals' && <QueueApprovalsManagement />}
         {activeTab === 'analytics' && <AnalyticsDashboard venueId={venueId} />}
         {activeTab === 'reviews' && <ReviewsManagement venueId={venueId} />}
       </div>

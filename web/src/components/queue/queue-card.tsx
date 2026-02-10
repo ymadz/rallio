@@ -17,6 +17,9 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
   const startTime = queue.startTime ? new Date(queue.startTime) : new Date()
   const endTime = queue.endTime ? new Date(queue.endTime) : (queue.startTime ? new Date(new Date(queue.startTime).getTime() + 2 * 60 * 60 * 1000) : new Date())
   const openTime = subHours(startTime, 2)
+  const now = serverDate || new Date()
+  const isLive = startTime <= now && endTime > now
+  const displayStatus = queue.status === 'completed' ? 'completed' : isLive ? 'live' : 'upcoming'
   const [timeUntilOpen, setTimeUntilOpen] = useState<number>(0)
   const [isJoinable, setIsJoinable] = useState(false)
 
@@ -81,7 +84,7 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
           </div>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <QueueStatusBadge status={queue.status} size="sm" />
+          <QueueStatusBadge status={displayStatus} size="sm" />
           {!isJoinable && variant !== 'active' && timeUntilOpen > 0 && (
             <div className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs font-medium border border-blue-100">
               <Timer className="w-3 h-3" />

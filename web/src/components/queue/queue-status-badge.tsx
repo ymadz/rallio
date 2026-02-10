@@ -3,7 +3,7 @@
 import { Activity, Clock, CheckCircle } from 'lucide-react'
 
 interface QueueStatusBadgeProps {
-  status: 'waiting' | 'active' | 'completed'
+  status: 'waiting' | 'active' | 'completed' | 'upcoming' | 'live'
   size?: 'sm' | 'md' | 'lg'
 }
 
@@ -14,6 +14,18 @@ export function QueueStatusBadge({ status, size = 'md' }: QueueStatusBadgeProps)
       label: 'Waiting',
       className: 'bg-yellow-100 text-yellow-700 border-yellow-200',
       iconClassName: 'text-yellow-600',
+    },
+    upcoming: {
+      icon: Clock,
+      label: 'Upcoming',
+      className: 'bg-blue-100 text-blue-700 border-blue-200',
+      iconClassName: 'text-blue-600',
+    },
+    live: {
+      icon: Activity,
+      label: 'Live Now',
+      className: 'bg-green-100 text-green-700 border-green-200',
+      iconClassName: 'text-green-600',
     },
     active: {
       icon: Activity,
