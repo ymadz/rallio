@@ -7,7 +7,10 @@ import { Input } from '@/components/ui/input'
 import { Clock, RefreshCw, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+import { useRouter } from 'next/navigation'
+
 export function DevTimeToolbar() {
+    const router = useRouter()
     const { date, offsetMs, updateOffset, refresh, isLoading } = useServerTime()
     const [isOpen, setIsOpen] = useState(false)
     const [customDate, setCustomDate] = useState('')
@@ -15,13 +18,21 @@ export function DevTimeToolbar() {
     // Don't render in production (double check, though layout should handle this)
     if (process.env.NODE_ENV === 'production') return null
 
+    const handleUpdateOffset = async (newOffset: number) => {
+        await updateOffset(newOffset)
+        // Trigger background job to update booking statuses based on new time
+        await fetch('/api/cron/process-bookings').catch(err => console.error('Failed to trigger cron', err))
+        // Refresh the page data (Server Components) to reflect new status
+        router.refresh()
+    }
+
     const handleAddOffset = (minutes: number) => {
         const additionalMs = minutes * 60 * 1000
-        updateOffset(offsetMs + additionalMs)
+        handleUpdateOffset(offsetMs + additionalMs)
     }
 
     const handleReset = () => {
-        updateOffset(0)
+        handleUpdateOffset(0)
     }
 
     const handleCustomDateSubmit = (e: React.FormEvent) => {
@@ -32,7 +43,7 @@ export function DevTimeToolbar() {
         if (isNaN(targetTime)) return
 
         const newOffset = targetTime - Date.now()
-        updateOffset(newOffset)
+        handleUpdateOffset(newOffset)
     }
 
     if (!isOpen) {

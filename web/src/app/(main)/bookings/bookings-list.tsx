@@ -213,9 +213,16 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     const now = serverDate || new Date()
 
     if (activeTab === 'upcoming') {
-      // Upcoming: Future ACTIVE bookings
-      if (!activeStatuses.includes(booking.status)) return false
-      if (startTime < now) return false // Past bookings go to history
+      // Upcoming: Future ACTIVE bookings OR Currently Ongoing bookings
+      if (!activeStatuses.concat(['ongoing']).includes(booking.status)) return false
+
+      // If it's ongoing, always show in upcoming
+      if (booking.status === 'ongoing') return true
+
+      // If confirmed/paid but start time passed, check if it's still potentially active (end time in future)
+      // This handles the gap where cron hasn't run yet but it's technically "now"
+      const endTime = new Date(booking.end_time)
+      if (startTime < now && endTime < now) return false // Truly past bookings go to history
 
       if (filter === 'today') {
         return format(startTime, 'yyyy-MM-dd') === format(now, 'yyyy-MM-dd')
@@ -226,9 +233,11 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
       }
       return true
     } else {
-      // History: Past or Cancelled/Refunded
+      // History: Past or Cancelled/Refunded/Completed
       const isHistoryStatus = ['cancelled', 'refunded', 'pending_refund', 'completed', 'no_show'].includes(booking.status)
-      const isPastActive = activeStatuses.includes(booking.status) && startTime < now
+      const endTime = new Date(booking.end_time)
+      // It's history if it's a history status OR if it was an active status but the time has fully passed
+      const isPastActive = activeStatuses.includes(booking.status) && endTime < now
       return isHistoryStatus || isPastActive
     }
   })

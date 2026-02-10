@@ -119,6 +119,7 @@ export type ReservationStatus =
   | 'pending'
   | 'paid'
   | 'confirmed'
+  | 'ongoing'
   | 'cancelled'
   | 'completed'
   | 'no_show';

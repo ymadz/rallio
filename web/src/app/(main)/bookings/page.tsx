@@ -18,7 +18,7 @@ async function getUpcomingBookings(userId: string) {
   today.setHours(0, 0, 0, 0)
   const todayISO = today.toISOString()
 
-  const activeStatuses = ['pending_payment', 'pending', 'paid', 'confirmed']
+  const activeStatuses = ['pending_payment', 'pending', 'paid', 'confirmed', 'ongoing']
 
   const { data, error } = await supabase
     .from('reservations')

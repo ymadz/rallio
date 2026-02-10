@@ -200,6 +200,7 @@ export function ReservationManagement() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'confirmed': return 'bg-green-100 text-green-700 border-green-200'
+      case 'ongoing': return 'bg-purple-100 text-purple-700 border-purple-200 animate-pulse'
       case 'pending': return 'bg-yellow-100 text-yellow-700 border-yellow-200'
       case 'cancelled': return 'bg-red-100 text-red-700 border-red-200'
       case 'completed': return 'bg-blue-100 text-blue-700 border-blue-200'
@@ -211,6 +212,7 @@ export function ReservationManagement() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'confirmed': return <CheckCircle className="w-4 h-4" />
+      case 'ongoing': return <Clock className="w-4 h-4 animate-spin-slow" />
       case 'pending': return <Clock className="w-4 h-4" />
       case 'cancelled': return <XCircle className="w-4 h-4" />
       case 'completed': return <CheckCircle className="w-4 h-4" />
@@ -222,6 +224,7 @@ export function ReservationManagement() {
     all: reservations.length,
     pending: reservations.filter(r => getEffectiveStatus(r) === 'pending').length,
     confirmed: reservations.filter(r => getEffectiveStatus(r) === 'confirmed').length,
+    ongoing: reservations.filter(r => getEffectiveStatus(r) === 'ongoing').length,
     completed: reservations.filter(r => getEffectiveStatus(r) === 'completed').length,
     cancelled: reservations.filter(r => getEffectiveStatus(r) === 'cancelled').length,
   }
@@ -302,8 +305,8 @@ export function ReservationManagement() {
         <button
           onClick={() => setStatusFilter('all')}
           className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${statusFilter === 'all'
-              ? 'bg-primary text-white shadow-sm'
-              : 'text-gray-600 hover:bg-gray-100'
+            ? 'bg-primary text-white shadow-sm'
+            : 'text-gray-600 hover:bg-gray-100'
             }`}
         >
           All ({statusCounts.all})
@@ -311,8 +314,8 @@ export function ReservationManagement() {
         <button
           onClick={() => setStatusFilter('pending')}
           className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${statusFilter === 'pending'
-              ? 'bg-amber-500 text-white shadow-sm'
-              : 'text-gray-600 hover:bg-gray-100'
+            ? 'bg-amber-500 text-white shadow-sm'
+            : 'text-gray-600 hover:bg-gray-100'
             }`}
         >
           Pending ({statusCounts.pending})
@@ -320,17 +323,26 @@ export function ReservationManagement() {
         <button
           onClick={() => setStatusFilter('confirmed')}
           className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${statusFilter === 'confirmed'
-              ? 'bg-emerald-500 text-white shadow-sm'
-              : 'text-gray-600 hover:bg-gray-100'
+            ? 'bg-emerald-500 text-white shadow-sm'
+            : 'text-gray-600 hover:bg-gray-100'
             }`}
         >
           Confirmed ({statusCounts.confirmed})
         </button>
         <button
+          onClick={() => setStatusFilter('ongoing')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${statusFilter === 'ongoing'
+            ? 'bg-purple-500 text-white shadow-sm'
+            : 'text-gray-600 hover:bg-gray-100'
+            }`}
+        >
+          Ongoing ({statusCounts.ongoing})
+        </button>
+        <button
           onClick={() => setStatusFilter('completed')}
           className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${statusFilter === 'completed'
-              ? 'bg-blue-500 text-white shadow-sm'
-              : 'text-gray-600 hover:bg-gray-100'
+            ? 'bg-blue-500 text-white shadow-sm'
+            : 'text-gray-600 hover:bg-gray-100'
             }`}
         >
           Completed ({statusCounts.completed})
@@ -338,8 +350,8 @@ export function ReservationManagement() {
         <button
           onClick={() => setStatusFilter('cancelled')}
           className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${statusFilter === 'cancelled'
-              ? 'bg-rose-500 text-white shadow-sm'
-              : 'text-gray-600 hover:bg-gray-100'
+            ? 'bg-rose-500 text-white shadow-sm'
+            : 'text-gray-600 hover:bg-gray-100'
             }`}
         >
           Cancelled ({statusCounts.cancelled})

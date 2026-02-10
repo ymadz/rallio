@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { ProfileCompletionBanner } from '@/components/profile-completion-banner'
+import { ActiveBookingBanner } from '@/components/booking/active-booking-banner'
 import { NearbyVenues } from '@/components/home/nearby-venues'
 import { NearbyQueues } from '@/components/home/nearby-queues'
 import { formatCurrency } from '@rallio/shared'
@@ -79,6 +80,9 @@ export default async function HomePage() {
       <div className="p-6">
         {/* Profile Completion Reminder */}
         {!isProfileTrulyComplete && <ProfileCompletionBanner />}
+
+        {/* Active Booking Banner */}
+        <ActiveBookingBanner />
 
         {/* Quick Actions - Large Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
