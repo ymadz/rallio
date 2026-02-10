@@ -307,7 +307,7 @@ export function VenueManagementGlobal() {
           )}
           <button
             onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium text-sm"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium text-sm"
           >
             <Plus className="w-4 h-4" />
             Add Venue
@@ -328,7 +328,7 @@ export function VenueManagementGlobal() {
               setSearchQuery(e.target.value)
               setCurrentPage(1)
             }}
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
           />
         </div>
 
@@ -340,7 +340,7 @@ export function VenueManagementGlobal() {
               setCurrentPage(1)
             }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg whitespace-nowrap transition-colors ${statusFilter === 'all'
-              ? 'bg-purple-50 text-purple-700 border-2 border-purple-200'
+              ? 'bg-teal-50 text-teal-700 border-2 border-teal-200'
               : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
               }`}
           >
@@ -353,7 +353,7 @@ export function VenueManagementGlobal() {
               setCurrentPage(1)
             }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg whitespace-nowrap transition-colors ${statusFilter === 'active'
-              ? 'bg-purple-50 text-purple-700 border-2 border-purple-200'
+              ? 'bg-teal-50 text-teal-700 border-2 border-teal-200'
               : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
               }`}
           >
@@ -366,7 +366,7 @@ export function VenueManagementGlobal() {
               setCurrentPage(1)
             }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg whitespace-nowrap transition-colors ${statusFilter === 'inactive'
-              ? 'bg-purple-50 text-purple-700 border-2 border-purple-200'
+              ? 'bg-teal-50 text-teal-700 border-2 border-teal-200'
               : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
               }`}
           >
@@ -379,7 +379,7 @@ export function VenueManagementGlobal() {
               setCurrentPage(1)
             }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg whitespace-nowrap transition-colors ${statusFilter === 'verified'
-              ? 'bg-purple-50 text-purple-700 border-2 border-purple-200'
+              ? 'bg-teal-50 text-teal-700 border-2 border-teal-200'
               : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
               }`}
           >
@@ -392,7 +392,7 @@ export function VenueManagementGlobal() {
               setCurrentPage(1)
             }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg whitespace-nowrap transition-colors ${statusFilter === 'unverified'
-              ? 'bg-purple-50 text-purple-700 border-2 border-purple-200'
+              ? 'bg-teal-50 text-teal-700 border-2 border-teal-200'
               : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
               }`}
           >
@@ -409,7 +409,7 @@ export function VenueManagementGlobal() {
               setCityFilter(e.target.value)
               setCurrentPage(1)
             }}
-            className="appearance-none pl-4 pr-10 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white cursor-pointer min-w-[140px]"
+            className="appearance-none pl-4 pr-10 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-white cursor-pointer min-w-[140px]"
           >
             <option value="all">All Cities</option>
             {cities.map((filter) => (
@@ -431,7 +431,7 @@ export function VenueManagementGlobal() {
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
           </div>
         ) : venues.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
@@ -454,7 +454,7 @@ export function VenueManagementGlobal() {
                         type="checkbox"
                         checked={selectedVenues.size === venues.length && venues.length > 0}
                         onChange={toggleAllVenues}
-                        className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                        className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
                       />
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -485,7 +485,7 @@ export function VenueManagementGlobal() {
                           type="checkbox"
                           checked={selectedVenues.has(venue.id)}
                           onChange={() => toggleVenueSelection(venue.id)}
-                          className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                          className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
                         />
                       </td>
                       <td className="px-6 py-4" onClick={() => handleRowClick(venue)}>

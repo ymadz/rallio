@@ -122,7 +122,7 @@ export function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProp
             <div className="relative">
               <div
                 onClick={() => setShowUserDropdown(!showUserDropdown)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg cursor-pointer hover:border-primary transition-colors"
               >
                 {selectedUser ? (
                   <div>
@@ -150,7 +150,7 @@ export function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProp
                           value={userSearch}
                           onChange={(e) => setUserSearch(e.target.value)}
                           placeholder="Search users..."
-                          className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                          className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary outline-none"
                           onClick={(e) => e.stopPropagation()}
                         />
                       </div>
@@ -160,7 +160,7 @@ export function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProp
                     <div className="overflow-y-auto max-h-48">
                       {isLoadingUsers ? (
                         <div className="flex items-center justify-center py-4">
-                          <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+                          <Loader2 className="w-5 h-5 text-primary animate-spin" />
                         </div>
                       ) : users.length === 0 ? (
                         <div className="text-center py-4 text-sm text-gray-500">
@@ -200,7 +200,7 @@ export function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProp
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="e.g., Sunrise Sports Complex"
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
             />
           </div>
 
@@ -214,7 +214,7 @@ export function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProp
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               placeholder="Describe the venue, facilities, and features..."
               rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none resize-none"
             />
           </div>
 
@@ -252,7 +252,7 @@ export function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProp
               value={formData.city}
               onChange={(e) => setFormData({ ...formData, city: e.target.value })}
               placeholder="City"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
             />
           </div>
 
@@ -270,7 +270,7 @@ export function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProp
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 placeholder="Contact phone number"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
               />
             </div>
 
@@ -286,7 +286,7 @@ export function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProp
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="Contact email"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
               />
             </div>
           </div>
@@ -304,7 +304,7 @@ export function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProp
               value={formData.website}
               onChange={(e) => setFormData({ ...formData, website: e.target.value })}
               placeholder="https://example.com"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
             />
           </div>
 
@@ -320,7 +320,7 @@ export function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProp
                 value={formData.latitude}
                 onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
                 placeholder="e.g., 6.9214"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
               />
             </div>
 
@@ -334,7 +334,7 @@ export function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProp
                 value={formData.longitude}
                 onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
                 placeholder="e.g., 122.0790"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
               />
             </div>
           </div>
@@ -352,7 +352,7 @@ export function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProp
             <button
               type="submit"
               disabled={isSubmitting || !formData.owner_id}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-2"
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-2"
             >
               {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
               {venue ? 'Update Venue' : 'Create Venue'}

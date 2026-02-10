@@ -291,14 +291,14 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
         >
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
           ) : (
             <>
               {/* Header */}
               <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white text-2xl font-semibold">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-white text-2xl font-semibold">
                     {user.display_name?.charAt(0).toUpperCase() || 'U'}
                   </div>
                   <div>
@@ -315,7 +315,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                       })
                       setShowEditModal(true)
                     }}
-                    className="p-2 hover:bg-purple-50 rounded-lg transition-colors text-purple-600"
+                    className="p-2 hover:bg-primary/10 rounded-lg transition-colors text-primary"
                     title="Edit Profile"
                   >
                     <Edit className="w-5 h-5" />
@@ -346,7 +346,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                           type="text"
                           value={editForm.displayName}
                           onChange={(e) => setEditForm({ ...editForm, displayName: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                         />
                       </div>
                       <div>
@@ -355,7 +355,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                           type="tel"
                           value={editForm.phone}
                           onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                           placeholder="Optional"
                         />
                       </div>
@@ -363,7 +363,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                         <button
                           onClick={handleUpdateProfile}
                           disabled={actionLoading || !editForm.displayName}
-                          className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {actionLoading ? 'Saving...' : 'Save Changes'}
                         </button>
@@ -396,7 +396,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                           type="date"
                           value={editPlayerForm.birthDate}
                           onChange={(e) => setEditPlayerForm({ ...editPlayerForm, birthDate: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                         />
                       </div>
                       <div>
@@ -404,7 +404,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                         <select
                           value={editPlayerForm.gender}
                           onChange={(e) => setEditPlayerForm({ ...editPlayerForm, gender: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                         >
                           <option value="">Select Gender</option>
                           <option value="male">Male</option>
@@ -429,7 +429,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                         <select
                           value={editPlayerForm.playStyle}
                           onChange={(e) => setEditPlayerForm({ ...editPlayerForm, playStyle: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                         >
                           <option value="">Select Play Style</option>
                           <option value="casual">Casual</option>
@@ -444,7 +444,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                         <textarea
                           value={editPlayerForm.bio}
                           onChange={(e) => setEditPlayerForm({ ...editPlayerForm, bio: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                           rows={3}
                           placeholder="Tell us about yourself..."
                         />
@@ -453,7 +453,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                         <button
                           onClick={handleUpdatePlayerProfile}
                           disabled={actionLoading}
-                          className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {actionLoading ? 'Saving...' : 'Save Changes'}
                         </button>
@@ -486,7 +486,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                           type="password"
                           value={newPassword}
                           onChange={(e) => setNewPassword(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                           placeholder="Minimum 6 characters"
                         />
                       </div>
@@ -494,7 +494,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                         <button
                           onClick={handleResetPassword}
                           disabled={actionLoading || newPassword.length < 6}
-                          className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {actionLoading ? 'Resetting...' : 'Reset Password'}
                         </button>
@@ -594,7 +594,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                       return (
                         <div
                           key={role.id}
-                          className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-purple-300 transition-colors"
+                          className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-primary/50 transition-colors"
                         >
                           <div>
                             <h4 className="font-medium text-gray-900">{role.name}</h4>
@@ -606,7 +606,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                             className={cn(
                               'px-4 py-2 rounded-lg font-medium text-sm transition-colors disabled:opacity-50',
                               hasRole
-                                ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                                ? 'bg-primary/10 text-primary hover:bg-primary/20'
                                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             )}
                           >
@@ -657,7 +657,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                             })
                             setShowEditPlayerModal(true)
                           }}
-                          className="p-1.5 hover:bg-purple-50 rounded-lg transition-colors text-purple-600"
+                          className="p-1.5 hover:bg-primary/10 rounded-lg transition-colors text-primary"
                           title="Edit Player Profile"
                         >
                           <Edit className="w-4 h-4" />
@@ -760,7 +760,7 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                     <div className="space-y-2">
                       {user.recentActivity.map((activity: any, idx: number) => (
                         <div key={idx} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-                          <CheckCircle className="w-4 h-4 text-purple-600 mt-0.5" />
+                          <CheckCircle className="w-4 h-4 text-primary mt-0.5" />
                           <div className="flex-1">
                             <p className="text-sm font-medium text-gray-900">{activity.action_type}</p>
                             <p className="text-xs text-gray-600">

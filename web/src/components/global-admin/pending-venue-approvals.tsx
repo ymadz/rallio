@@ -113,7 +113,7 @@ export function PendingVenueApprovals({ onApprovalComplete }: Props) {
       const result = await toggleVenueVerified(venue.id, true)
       if (result.success) {
         toast.success(`${venue.name} has been approved and is now visible to users!`)
-        
+
         // Send notification to venue owner
         if (venue.owner?.id) {
           await createNotification({
@@ -124,7 +124,7 @@ export function PendingVenueApprovals({ onApprovalComplete }: Props) {
             actionUrl: '/court-admin/venues'
           })
         }
-        
+
         loadPendingVenues()
         onApprovalComplete?.()
       } else {
@@ -149,7 +149,7 @@ export function PendingVenueApprovals({ onApprovalComplete }: Props) {
       const result = await toggleVenueVerified(venue.id, false)
       if (result.success) {
         toast.success(`${venue.name} has been rejected`)
-        
+
         // Send notification to venue owner
         if (venue.owner?.id) {
           await createNotification({
@@ -160,7 +160,7 @@ export function PendingVenueApprovals({ onApprovalComplete }: Props) {
             actionUrl: '/court-admin/venues'
           })
         }
-        
+
         setShowRejectModal(null)
         setRejectionReason('')
         loadPendingVenues()
@@ -178,7 +178,7 @@ export function PendingVenueApprovals({ onApprovalComplete }: Props) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     )
   }
@@ -275,7 +275,7 @@ export function PendingVenueApprovals({ onApprovalComplete }: Props) {
                         href={venue.website}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-blue-600 hover:text-blue-700"
+                        className="flex items-center gap-1 text-primary hover:text-primary/80"
                       >
                         <Globe className="w-4 h-4" />
                         Website
@@ -289,7 +289,7 @@ export function PendingVenueApprovals({ onApprovalComplete }: Props) {
                   <button
                     onClick={() => handleApprove(venue)}
                     disabled={processingId === venue.id}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                    className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
                   >
                     {processingId === venue.id ? (
                       <Loader2 className="w-4 h-4 animate-spin" />

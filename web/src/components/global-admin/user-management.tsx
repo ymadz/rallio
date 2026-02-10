@@ -1,13 +1,18 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { 
-  getAllUsers, 
-  banUser, 
-  unbanUser, 
+import {
+  getAllUsers,
+  banUser,
+  unbanUser,
   resetUserPassword,
   deactivateUser
 } from '@/app/actions/global-admin-user-actions'
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from '@/components/ui/avatar'
 import {
   Search,
   Filter,
@@ -108,9 +113,9 @@ export default function UserManagement() {
 
   const getRoleBadgeColor = (roleName: string) => {
     switch (roleName) {
-      case 'global_admin': return 'bg-purple-100 text-purple-700'
+      case 'global_admin': return 'bg-teal-100 text-teal-700'
       case 'court_admin': return 'bg-blue-100 text-blue-700'
-      case 'queue_master': return 'bg-green-100 text-green-700'
+      case 'queue_master': return 'bg-emerald-100 text-emerald-700'
       case 'player': return 'bg-gray-100 text-gray-700'
       default: return 'bg-gray-100 text-gray-700'
     }
@@ -171,7 +176,7 @@ export default function UserManagement() {
   const handleResetPassword = async (userId: string) => {
     const newPassword = prompt('Enter new password for this user (minimum 6 characters):')
     if (!newPassword) return
-    
+
     if (newPassword.length < 6) {
       toast({
         title: 'Error',
@@ -262,7 +267,7 @@ export default function UserManagement() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
           <p className="text-gray-600 mt-2">
-            {selectedUsers.size > 0 
+            {selectedUsers.size > 0
               ? `${selectedUsers.size} user(s) selected`
               : 'Manage users, roles, and permissions'
             }
@@ -299,7 +304,7 @@ export default function UserManagement() {
           )}
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
           >
             <UserPlus className="w-5 h-5" />
             Create User
@@ -322,7 +327,7 @@ export default function UserManagement() {
                   setSearchQuery(e.target.value)
                   setCurrentPage(1)
                 }}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
               />
             </div>
           </div>
@@ -341,7 +346,7 @@ export default function UserManagement() {
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors',
                     roleFilter === filter.id
-                      ? 'bg-purple-100 text-purple-700'
+                      ? 'bg-teal-100 text-teal-700'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   )}
                 >
@@ -359,7 +364,7 @@ export default function UserManagement() {
               setStatusFilter(e.target.value as 'all' | 'active' | 'banned')
               setCurrentPage(1)
             }}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
           >
             {statusFilters.map((filter) => (
               <option key={filter.id} value={filter.id}>
@@ -381,7 +386,7 @@ export default function UserManagement() {
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
         ) : users.length === 0 ? (
           <div className="text-center py-12">
@@ -397,7 +402,7 @@ export default function UserManagement() {
                       type="checkbox"
                       checked={selectedUsers.size === users.length && users.length > 0}
                       onChange={toggleAllUsers}
-                      className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                      className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
                     />
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -426,7 +431,7 @@ export default function UserManagement() {
                     key={user.id}
                     className={cn(
                       "hover:bg-gray-50 transition-colors",
-                      selectedUsers.has(user.id) && "bg-purple-50"
+                      selectedUsers.has(user.id) && "bg-teal-50"
                     )}
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -437,17 +442,20 @@ export default function UserManagement() {
                           e.stopPropagation()
                           toggleUserSelection(user.id)
                         }}
-                        className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                        className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
                       />
                     </td>
-                    <td 
+                    <td
                       className="px-6 py-4 whitespace-nowrap cursor-pointer"
                       onClick={() => setSelectedUser(user.id)}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white font-semibold">
-                          {user.display_name?.charAt(0).toUpperCase() || 'U'}
-                        </div>
+                        <Avatar className="h-10 w-10 border border-gray-200">
+                          <AvatarImage src={user.avatar_url || ''} alt={user.display_name || 'User'} />
+                          <AvatarFallback className="bg-teal-100 text-teal-700 font-semibold">
+                            {(user.display_name?.charAt(0) || user.email.charAt(0)).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
                         <div>
                           <p className="font-medium text-gray-900">{user.display_name}</p>
                         </div>
@@ -478,8 +486,8 @@ export default function UserManagement() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {user.is_active === false ? (
-                        <div 
-                          className="flex items-center gap-2 cursor-help" 
+                        <div
+                          className="flex items-center gap-2 cursor-help"
                           title="Account has been deactivated"
                         >
                           <UserX className="w-4 h-4 text-gray-600" />
@@ -488,8 +496,8 @@ export default function UserManagement() {
                           </div>
                         </div>
                       ) : user.is_banned ? (
-                        <div 
-                          className="flex items-center gap-2 cursor-help" 
+                        <div
+                          className="flex items-center gap-2 cursor-help"
                           title={user.banned_reason || 'No reason provided'}
                         >
                           <UserX className="w-4 h-4 text-red-600" />
@@ -528,12 +536,12 @@ export default function UserManagement() {
                         >
                           <MoreVertical className="w-5 h-5 text-gray-600" />
                         </button>
-                        
+
                         {/* Dropdown Menu */}
                         {openDropdown === user.id && (
                           <>
-                            <div 
-                              className="fixed inset-0 z-10" 
+                            <div
+                              className="fixed inset-0 z-10"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 setOpenDropdown(null)
