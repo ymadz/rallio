@@ -40,11 +40,26 @@ export function BookingSummaryCard({
   const perPlayer = getPerPlayerAmount()
 
   const formatTime = (timeString: string) => {
-    try {
-      return format(new Date(timeString), 'h:mm a')
-    } catch {
-      return timeString
+    // If it's a full date string (ISO), use date-fns
+    if (timeString.includes('T')) {
+      try {
+        return format(new Date(timeString), 'h:mm a')
+      } catch {
+        return timeString
+      }
     }
+
+    // If it's just HH:mm
+    if (timeString.includes(':')) {
+      const [hours, minutes] = timeString.split(':').map(Number)
+      if (!isNaN(hours)) {
+        const period = hours >= 12 ? 'PM' : 'AM'
+        const displayHours = hours % 12 || 12
+        return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`
+      }
+    }
+
+    return timeString
   }
 
   return (
