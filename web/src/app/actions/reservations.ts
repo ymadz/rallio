@@ -17,7 +17,8 @@ export interface TimeSlot {
  */
 export async function getAvailableTimeSlotsAction(
   courtId: string,
-  dateString: string
+  dateString: string,
+  excludeReservationId?: string
 ): Promise<TimeSlot[]> {
   // Use Service Client to bypass RLS and ensure we see ALL bookings
   const supabase = await createClient() // Keep for court fetching (unlikely RLS protected for read) but better to use service for ALL availability checks
@@ -83,15 +84,23 @@ export async function getAvailableTimeSlotsAction(
   console.log(`[Availability Check] Querying for date: ${dateOnlyString}`)
   console.log(`[Availability Check] Date range: ${startOfDayLocal} to ${endOfDayLocal}`)
 
+  // Build reservations query
+  let reservationsQuery = adminDb
+    .from('reservations')
+    .select('start_time, end_time, status')
+    .eq('court_id', courtId)
+    .lt('start_time', endOfDayLocal) // Starts before the end of the query window
+    .gt('end_time', startOfDayLocal) // Ends after the start of the query window
+    .in('status', activeStatuses)
+
+  // Exclude specific reservation if provided (for rescheduling)
+  if (excludeReservationId) {
+    reservationsQuery = reservationsQuery.neq('id', excludeReservationId)
+  }
+
   const [reservationsResult, queueSessionsResult] = await Promise.all([
-    // Get reservations - use overlap logic
-    adminDb
-      .from('reservations')
-      .select('start_time, end_time, status')
-      .eq('court_id', courtId)
-      .lt('start_time', endOfDayLocal) // Starts before the end of the query window
-      .gt('end_time', startOfDayLocal) // Ends after the start of the query window
-      .in('status', activeStatuses),
+    // Execute reservations query
+    reservationsQuery,
 
     // Get queue sessions
     adminDb

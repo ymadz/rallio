@@ -16,6 +16,14 @@ export interface BookingData {
   capacity: number
   recurrenceWeeks?: number // 1 = single booking, 4 = 4 weeks, etc.
   selectedDays?: number[] // Array of day indices (0-6) for multi-day booking
+  isQueueSession?: boolean
+  queueSessionData?: {
+    mode: 'casual' | 'competitive'
+    gameFormat: 'singles' | 'doubles' | 'mixed'
+    maxPlayers: number
+    costPerGame: number
+    isPublic: boolean
+  }
 }
 
 export interface PlayerPaymentStatus {

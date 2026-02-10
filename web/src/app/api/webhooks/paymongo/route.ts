@@ -641,6 +641,52 @@ async function markReservationPaidAndConfirmed({
     console.error('[markReservationPaidAndConfirmed] ⚠️ Failed to send notifications (non-critical):', notificationError)
     // Don't throw - notifications are non-critical, booking is already confirmed
   }
+
+  // LINKED QUEUE SESSION UPDATE
+  try {
+    const { data: queueSession } = await supabase
+      .from('queue_sessions')
+      .select('id, status, metadata')
+      .filter('metadata->>reservation_id', 'eq', reservationId)
+      .single()
+
+    if (queueSession) {
+      console.log('[markReservationPaidAndConfirmed] 🔄 Linked Queue Session found:', queueSession.id)
+
+      const updateData: any = {
+        metadata: {
+          ...queueSession.metadata,
+          payment_status: 'paid',
+          payment_confirmed_at: nowISO
+        }
+      }
+
+      if (['pending_payment', 'pending_approval'].includes(queueSession.status)) {
+        updateData.status = 'active'
+        console.log('[markReservationPaidAndConfirmed] 🚀 Activating Queue Session')
+      }
+
+      const { error: qError } = await supabase
+        .from('queue_sessions')
+        .update(updateData)
+        .eq('id', queueSession.id)
+
+      if (qError) {
+        console.error('[markReservationPaidAndConfirmed] ❌ Failed to update Queue Session:', qError)
+      } else {
+        console.log('[markReservationPaidAndConfirmed] ✅ Queue Session updated successfully')
+        // Revalidate is tricky in webhook, but we try
+        try {
+          revalidatePath('/queue')
+          revalidatePath('/queue-master')
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+  } catch (qErr) {
+    console.error('[markReservationPaidAndConfirmed] Error checking/updating queue session:', qErr)
+  }
 }
 
 /**

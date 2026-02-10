@@ -21,6 +21,7 @@ interface SessionData {
   mode: string
   gameFormat: string
   participants: any[]
+  approvalStatus?: string
 }
 
 interface DashboardStats {
@@ -82,6 +83,11 @@ export function QueueMasterDashboard() {
     }
   }
 
+  const getEffectiveStatus = (session: SessionData) => {
+    if (session.approvalStatus === 'rejected') return 'rejected'
+    return session.status
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active': return 'bg-green-100 text-green-700 border-green-200'
@@ -89,7 +95,9 @@ export function QueueMasterDashboard() {
       case 'paused': return 'bg-yellow-100 text-yellow-700 border-yellow-200'
       case 'closed': return 'bg-gray-100 text-gray-700 border-gray-200'
       case 'cancelled': return 'bg-red-100 text-red-700 border-red-200'
+      case 'rejected': return 'bg-red-100 text-red-700 border-red-200'
       case 'pending_approval': return 'bg-orange-100 text-orange-700 border-orange-200'
+      case 'pending_payment': return 'bg-orange-100 text-orange-700 border-orange-200'
       default: return 'bg-gray-100 text-gray-700 border-gray-200'
     }
   }
@@ -100,7 +108,9 @@ export function QueueMasterDashboard() {
       case 'open': return <Clock className="w-4 h-4" />
       case 'closed': return <CheckCircle className="w-4 h-4" />
       case 'cancelled': return <XCircle className="w-4 h-4" />
+      case 'rejected': return <XCircle className="w-4 h-4" />
       case 'pending_approval': return <Clock className="w-4 h-4" />
+      case 'pending_payment': return <DollarSign className="w-4 h-4" />
       default: return <Clock className="w-4 h-4" />
     }
   }
@@ -274,9 +284,9 @@ export function QueueMasterDashboard() {
                     </div>
                     <p className="text-sm text-gray-600">{session.venueName}</p>
                   </div>
-                  <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium ${getStatusColor(session.status)}`}>
-                    {getStatusIcon(session.status)}
-                    <span className="capitalize">{session.status}</span>
+                  <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium ${getStatusColor(getEffectiveStatus(session))}`}>
+                    {getStatusIcon(getEffectiveStatus(session))}
+                    <span className="capitalize">{getEffectiveStatus(session).replace('_', ' ')}</span>
                   </div>
                 </div>
 

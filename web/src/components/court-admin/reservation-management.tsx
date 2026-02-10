@@ -104,10 +104,19 @@ export function ReservationManagement() {
         return 'pending'
       }
       if (queueSession.approval_status === 'rejected') {
-        return 'cancelled'
+        return 'rejected'
       }
-      // If approved, keep the reservation status (should be 'confirmed')
+      if (queueSession.status === 'pending_payment') {
+        return 'pending_payment'
+      }
     }
+
+    if (reservation.status === 'pending_payment') return 'pending_payment'
+
+    if (reservation.status === 'cancelled' && (reservation as any).cancellation_reason) {
+      return 'rejected'
+    }
+
     return reservation.status
   }
 
@@ -137,7 +146,12 @@ export function ReservationManagement() {
 
     // Status filter (using effective status for queue sessions)
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(r => getEffectiveStatus(r) === statusFilter)
+      filtered = filtered.filter(r => {
+        const effective = getEffectiveStatus(r)
+        if (statusFilter === 'pending') return ['pending', 'pending_payment'].includes(effective)
+        if (statusFilter === 'cancelled') return ['cancelled', 'rejected'].includes(effective)
+        return effective === statusFilter
+      })
     }
 
     // Date filter
@@ -202,7 +216,9 @@ export function ReservationManagement() {
       case 'confirmed': return 'bg-green-100 text-green-700 border-green-200'
       case 'ongoing': return 'bg-purple-100 text-purple-700 border-purple-200 animate-pulse'
       case 'pending': return 'bg-yellow-100 text-yellow-700 border-yellow-200'
-      case 'cancelled': return 'bg-red-100 text-red-700 border-red-200'
+      case 'pending_payment': return 'bg-orange-100 text-orange-700 border-orange-200'
+      case 'cancelled':
+      case 'rejected': return 'bg-red-100 text-red-700 border-red-200'
       case 'completed': return 'bg-blue-100 text-blue-700 border-blue-200'
       case 'no_show': return 'bg-gray-100 text-gray-700 border-gray-200'
       default: return 'bg-gray-100 text-gray-700 border-gray-200'
@@ -213,8 +229,10 @@ export function ReservationManagement() {
     switch (status) {
       case 'confirmed': return <CheckCircle className="w-4 h-4" />
       case 'ongoing': return <Clock className="w-4 h-4 animate-spin-slow" />
-      case 'pending': return <Clock className="w-4 h-4" />
-      case 'cancelled': return <XCircle className="w-4 h-4" />
+      case 'pending':
+      case 'pending_payment': return <Clock className="w-4 h-4" />
+      case 'cancelled':
+      case 'rejected': return <XCircle className="w-4 h-4" />
       case 'completed': return <CheckCircle className="w-4 h-4" />
       default: return <Clock className="w-4 h-4" />
     }
@@ -222,11 +240,11 @@ export function ReservationManagement() {
 
   const statusCounts = {
     all: reservations.length,
-    pending: reservations.filter(r => getEffectiveStatus(r) === 'pending').length,
+    pending: reservations.filter(r => ['pending', 'pending_payment'].includes(getEffectiveStatus(r))).length,
     confirmed: reservations.filter(r => getEffectiveStatus(r) === 'confirmed').length,
     ongoing: reservations.filter(r => getEffectiveStatus(r) === 'ongoing').length,
     completed: reservations.filter(r => getEffectiveStatus(r) === 'completed').length,
-    cancelled: reservations.filter(r => getEffectiveStatus(r) === 'cancelled').length,
+    cancelled: reservations.filter(r => ['cancelled', 'rejected'].includes(getEffectiveStatus(r))).length,
   }
 
   if (isLoading) {

@@ -11,6 +11,8 @@ export default function PaymentSuccessPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const reservationId = searchParams.get('reservation')
+  const [isQueueSession, setIsQueueSession] = useState(false)
+  const [queueSessionId, setQueueSessionId] = useState<string | null>(null)
 
   const [processing, setProcessing] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -87,6 +89,44 @@ export default function PaymentSuccessPage() {
     processPayment()
   }, [searchParams, reservationId])
 
+  useEffect(() => {
+    async function checkQueueSession() {
+      if (!reservationId) return
+
+      try {
+        const { createClient } = await import('@/lib/supabase/client')
+        const supabase = createClient()
+
+        // Check if reservation is linked to a queue session
+        const { data: queueSession } = await supabase
+          .from('queue_sessions')
+          .select('id')
+          .filter('metadata->>reservation_id', 'eq', reservationId)
+          .single()
+
+        if (queueSession) {
+          console.log('Found linked queue session:', queueSession.id)
+          setIsQueueSession(true)
+          setQueueSessionId(queueSession.id)
+        }
+      } catch (err) {
+        console.error('Error checking queue session:', err)
+      }
+    }
+
+    checkQueueSession()
+  }, [reservationId])
+
+  // Auto-redirect for Queue Sessions
+  useEffect(() => {
+    if (isQueueSession && queueSessionId && !processing && !error) {
+      const timer = setTimeout(() => {
+        router.push(`/queue-master/sessions/${queueSessionId}`)
+      }, 2000) // 2 second delay to show success message
+      return () => clearTimeout(timer)
+    }
+  }, [isQueueSession, queueSessionId, processing, error, router])
+
   if (processing) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -127,18 +167,29 @@ export default function PaymentSuccessPage() {
 
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Payment Successful!</h1>
         <p className="text-gray-600 mb-6">
-          Your payment has been received and your court reservation is confirmed.
+          {isQueueSession
+            ? 'Your queue session is now active. Redirecting you to session management...'
+            : 'Your payment has been received and your court reservation is confirmed.'}
         </p>
 
         <div className="space-y-3">
-          <Link href={`/bookings`} className="block">
-            <Button className="w-full">View My Bookings</Button>
-          </Link>
-          <Link href="/courts" className="block">
-            <Button variant="outline" className="w-full">
-              Find More Courts
-            </Button>
-          </Link>
+          {isQueueSession ? (
+            <Link href={queueSessionId ? `/queue-master/sessions/${queueSessionId}` : '/queue-master/sessions'} className="block">
+              <Button className="w-full">Manage Session</Button>
+            </Link>
+          ) : (
+            <Link href={`/bookings`} className="block">
+              <Button className="w-full">View My Bookings</Button>
+            </Link>
+          )}
+
+          {!isQueueSession && (
+            <Link href="/courts" className="block">
+              <Button variant="outline" className="w-full">
+                Find More Courts
+              </Button>
+            </Link>
+          )}
           {reservationId && (
             <Link href={`/bookings/${reservationId}/receipt`} className="block">
               <Button variant="outline" className="w-full">

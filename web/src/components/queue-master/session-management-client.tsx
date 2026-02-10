@@ -4,12 +4,12 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getQueueDetails } from '@/app/actions/queue-actions'
-import { 
-  pauseQueueSession, 
-  resumeQueueSession, 
+import {
+  pauseQueueSession,
+  resumeQueueSession,
   closeQueueSession,
   removeParticipant,
-  waiveFee 
+  waiveFee
 } from '@/app/actions/queue-actions'
 import {
   assignMatchFromQueue,
@@ -17,6 +17,7 @@ import {
   getActiveMatch,
   startMatch
 } from '@/app/actions/match-actions'
+import { initiatePaymentAction } from '@/app/actions/payments'
 import {
   Users,
   Clock,
@@ -75,17 +76,18 @@ interface QueueSession {
   players: Participant[]
   requiresApproval?: boolean
   approvalStatus?: string
+  metadata?: any
 }
 
 export function SessionManagementClient({ sessionId }: SessionManagementClientProps) {
   const router = useRouter()
   const supabase = createClient()
-  
+
   const [session, setSession] = useState<QueueSession | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
-  
+
   // Modal states
   const [showMatchAssignModal, setShowMatchAssignModal] = useState(false)
   const [showScoreModal, setShowScoreModal] = useState(false)
@@ -93,7 +95,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null)
   const [activeMatches, setActiveMatches] = useState<any[]>([])
-  
+
   // Session summary modal state
   const [showSummaryModal, setShowSummaryModal] = useState(false)
   const [sessionSummary, setSessionSummary] = useState<{
@@ -105,10 +107,10 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
 
   useEffect(() => {
     loadSession()
-    
+
     // Subscribe to real-time updates
     console.log('🔔 [useEffect] Setting up real-time subscriptions for session:', sessionId)
-    
+
     const channel = supabase
       .channel(`queue-session-${sessionId}`)
       .on(
@@ -163,7 +165,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
   const loadSession = async () => {
     console.log('🚨🚨🚨 [loadSession] Starting session load')
     console.log('🔍 [loadSession] Session ID:', sessionId)
-    
+
     setIsLoading(true)
     setError(null)
     try {
@@ -217,9 +219,9 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         .is('left_at', null)
         .order('joined_at', { ascending: true })
 
-      console.log('📥 [loadSession] Participants query result:', { 
-        count: participants?.length || 0, 
-        error: participantsError 
+      console.log('📥 [loadSession] Participants query result:', {
+        count: participants?.length || 0,
+        error: participantsError
       })
 
       if (participantsError) {
@@ -268,6 +270,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         mode: sessionData.mode,
         gameFormat: sessionData.game_format,
         players: formattedParticipants,
+        metadata: sessionData.metadata
       }
 
       console.log('✅ [loadSession] Session formatted successfully:', {
@@ -279,11 +282,11 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
       })
 
       setSession(formattedSession)
-      
+
       // Load active matches
       console.log('📡 [loadSession] Loading active matches...')
       await loadActiveMatches()
-      
+
       console.log('✅✅✅ [loadSession] Session load complete!')
     } catch (err: any) {
       console.log('❌❌❌ [loadSession] Error occurred:', err)
@@ -298,7 +301,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
   const loadActiveMatches = async () => {
     console.log('🏸 [loadActiveMatches] Starting to load active matches')
     console.log('🔍 [loadActiveMatches] Session ID:', sessionId)
-    
+
     try {
       console.log('📡 [loadActiveMatches] Querying matches table...')
       const { data: matches, error: matchError } = await supabase
@@ -311,9 +314,9 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         .in('status', ['scheduled', 'in_progress'])
         .order('created_at', { ascending: false })
 
-      console.log('📥 [loadActiveMatches] Matches query result:', { 
-        count: matches?.length || 0, 
-        error: matchError 
+      console.log('📥 [loadActiveMatches] Matches query result:', {
+        count: matches?.length || 0,
+        error: matchError
       })
 
       if (matches) {
@@ -389,7 +392,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
     try {
       const result = await closeQueueSession(sessionId)
       if (!result.success) throw new Error(result.error)
-      
+
       // Show summary modal instead of redirecting immediately
       if (result.summary) {
         setSessionSummary(result.summary)
@@ -446,6 +449,27 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
       await loadSession()
     } catch (err: any) {
       alert(err.message || 'Failed to start match')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+
+  const handlePayNow = async () => {
+    if (!session?.metadata?.reservation_id) {
+      alert('Payment information not found. Please contact support.')
+      return
+    }
+
+    setActionLoading('pay')
+    try {
+      const result = await initiatePaymentAction(session.metadata.reservation_id, 'gcash')
+      if (!result.success || !result.checkoutUrl) {
+        throw new Error(result.error || 'Failed to initiate payment')
+      }
+      window.location.href = result.checkoutUrl
+    } catch (err: any) {
+      alert(err.message || 'Payment initiation failed')
     } finally {
       setActionLoading(null)
     }
@@ -515,10 +539,38 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                   Pending Venue Owner Approval
                 </h3>
                 <p className="mt-1 text-sm text-yellow-700">
-                  Your session is waiting for approval from the venue owner. 
+                  Your session is waiting for approval from the venue owner.
                   You'll be notified once a decision is made. Players cannot join until the session is approved.
                 </p>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Payment Required Alert */}
+        {session.status === 'pending_payment' && (
+          <div className="bg-orange-50 border-l-4 border-orange-400 p-4 mb-6 rounded-r-lg">
+            <div className="flex items-start justify-between">
+              <div className="flex items-start">
+                <DollarSign className="h-5 w-5 text-orange-400 mt-0.5 mr-3 flex-shrink-0" />
+                <div>
+                  <h3 className="text-sm font-medium text-orange-800">
+                    Payment Required
+                  </h3>
+                  <p className="mt-1 text-sm text-orange-700">
+                    Your session has been approved but requires payment to activate.
+                    {session.metadata?.total_amount && ` Amount due: ₱${parseFloat(session.metadata.total_amount).toFixed(2)}`}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handlePayNow}
+                disabled={actionLoading === 'pay'}
+                className="ml-4 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {actionLoading === 'pay' && <Loader2 className="w-4 h-4 animate-spin" />}
+                Pay Now
+              </button>
             </div>
           </div>
         )}
@@ -624,23 +676,21 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                 {activeMatches.map((match) => (
                   <div
                     key={match.id}
-                    className={`border-2 rounded-lg p-4 ${
-                      match.status === 'scheduled'
-                        ? 'border-gray-200 bg-gray-50'
-                        : match.status === 'in_progress'
+                    className={`border-2 rounded-lg p-4 ${match.status === 'scheduled'
+                      ? 'border-gray-200 bg-gray-50'
+                      : match.status === 'in_progress'
                         ? 'border-green-200 bg-green-50'
                         : 'border-blue-200 bg-blue-50'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          match.status === 'scheduled'
-                            ? 'bg-gray-600'
-                            : match.status === 'in_progress'
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${match.status === 'scheduled'
+                          ? 'bg-gray-600'
+                          : match.status === 'in_progress'
                             ? 'bg-green-600'
                             : 'bg-blue-600'
-                        }`}>
+                          }`}>
                           <Trophy className="w-4 h-4 text-white" />
                         </div>
                         <div>
@@ -743,13 +793,12 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                         </div>
                         <button
                           onClick={() => handleOpenPaymentModal(player)}
-                          className={`px-3 py-1 text-xs font-medium rounded-full border ${
-                            player.paymentStatus === 'paid'
-                              ? 'bg-green-100 text-green-700 border-green-200'
-                              : player.paymentStatus === 'partial'
+                          className={`px-3 py-1 text-xs font-medium rounded-full border ${player.paymentStatus === 'paid'
+                            ? 'bg-green-100 text-green-700 border-green-200'
+                            : player.paymentStatus === 'partial'
                               ? 'bg-yellow-100 text-yellow-700 border-yellow-200'
                               : 'bg-red-100 text-red-700 border-red-200 hover:bg-red-200'
-                          }`}
+                            }`}
                           title="Manage payment"
                         >
                           <DollarSign className="w-3 h-3 inline mr-0.5" />
@@ -833,20 +882,20 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600">Start Time</span>
                 <span className="font-medium text-gray-900">
-                  {new Date(session.startTime).toLocaleTimeString('en-US', { 
-                    hour: 'numeric', 
+                  {new Date(session.startTime).toLocaleTimeString('en-US', {
+                    hour: 'numeric',
                     minute: '2-digit',
-                    hour12: true 
+                    hour12: true
                   })}
                 </span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600">End Time</span>
                 <span className="font-medium text-gray-900">
-                  {new Date(session.endTime).toLocaleTimeString('en-US', { 
-                    hour: 'numeric', 
+                  {new Date(session.endTime).toLocaleTimeString('en-US', {
+                    hour: 'numeric',
                     minute: '2-digit',
-                    hour12: true 
+                    hour12: true
                   })}
                 </span>
               </div>

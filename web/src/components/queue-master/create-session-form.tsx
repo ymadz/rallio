@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createQueueSession } from '@/app/actions/queue-actions'
+import { createQueuePaymentIntent } from '@/app/actions/queue-payment-actions'
+// import { useCheckoutStore } from '@/stores/checkout-store' // No longer used for redirection
 import { getAvailableTimeSlotsAction, validateBookingAvailabilityAction, type TimeSlot } from '@/app/actions/reservations'
 import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
@@ -10,8 +12,10 @@ import { Calendar as CalendarIcon, Clock, Users, DollarSign, Settings, Loader2, 
 import { DayPicker } from 'react-day-picker'
 import 'react-day-picker/dist/style.css'
 import Link from 'next/link'
+import { Link as LinkIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/use-auth'
+import { useToast } from '@/hooks/use-toast'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -37,8 +41,10 @@ interface Court {
 
 export function CreateSessionForm() {
   const router = useRouter()
+  const { toast } = useToast()
   const supabase = createClient()
   const { user } = useAuth()
+  // const { setBookingData } = useCheckoutStore()
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -54,6 +60,7 @@ export function CreateSessionForm() {
   const [maxPlayers, setMaxPlayers] = useState(12)
   const [costPerGame, setCostPerGame] = useState(50)
   const [isPublic, setIsPublic] = useState(true)
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'e-wallet'>('e-wallet')
 
   // Validation state
   const [validationState, setValidationState] = useState<{
@@ -308,7 +315,13 @@ export function CreateSessionForm() {
         throw new Error(availability.error || 'Selected time is not available')
       }
 
-      // Create session
+      // Calculate checkout values
+      const startH = parseInt(startTime.split(':')[0])
+      const startM = parseInt(startTime.split(':')[1])
+      const endH = startH + duration
+      const endTimeString = `${endH.toString().padStart(2, '0')}:${startM.toString().padStart(2, '0')}`
+
+      // Create Session Directly
       const result = await createQueueSession({
         courtId,
         startTime: startDateTime,
@@ -319,21 +332,40 @@ export function CreateSessionForm() {
         costPerGame,
         isPublic,
         recurrenceWeeks,
-        selectedDays: selectedDays.length > 0 ? selectedDays : undefined
+        selectedDays: selectedDays.length > 0 ? selectedDays : undefined,
+        paymentMethod
       })
 
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to create session')
+      if (!result.success || !result.session) {
+        throw new Error(result.error || 'Failed to create queue session')
       }
 
-      // Handle approval requirement
+      const sessionId = result.session.id
+
+      // Check if approval is required
       if (result.requiresApproval) {
-        alert('✅ Session created! It will be visible once the venue owner approves it. You\'ll be notified of their decision.')
-        router.push('/queue-master/sessions')
-      } else {
-        router.push(`/queue-master/sessions/${result.session?.id}`)
+        toast({
+          title: "Session Request Sent",
+          description: "Your session is pending approval from the venue. You will be notified when it's approved to proceed with payment.",
+        })
+        router.push(`/queue-master/sessions/${sessionId}`)
+        return
       }
+
+      // Handle Payment Flow (Only if approval NOT required)
+      if (paymentMethod === 'e-wallet') {
+        const paymentResult = await createQueuePaymentIntent(sessionId, 'gcash')
+        if (!paymentResult.success || !paymentResult.checkoutUrl) {
+          throw new Error(paymentResult.error || 'Failed to initiate payment')
+        }
+        window.location.href = paymentResult.checkoutUrl
+      } else {
+        // Cash Payment - Redirect to Session/Dashboard
+        router.push(`/queue-master/sessions/${sessionId}`)
+      }
+
     } catch (err: any) {
+      console.error(err)
       setError(err.message || 'An error occurred')
     } finally {
       setIsSubmitting(false)
@@ -349,6 +381,19 @@ export function CreateSessionForm() {
     v.courts?.some(c => c.id === courtId)
   )
 
+  // Calculate payment amounts for Queue Master
+  const courtRental = useMemo(() => {
+    if (!selectedCourt?.hourly_rate || !duration || duration <= 0) return 0
+    return selectedCourt.hourly_rate * duration
+  }, [selectedCourt?.hourly_rate, duration])
+
+  const platformFee = useMemo(() => {
+    return courtRental * 0.05
+  }, [courtRental])
+
+  const totalAmount = useMemo(() => {
+    return courtRental + platformFee
+  }, [courtRental, platformFee])
 
 
   // Calculate all session dates for display
@@ -825,6 +870,8 @@ export function CreateSessionForm() {
               </label>
             </div>
 
+
+
             {/* Actions removed from here */}
           </div>
         </div>
@@ -908,6 +955,85 @@ export function CreateSessionForm() {
                     <p className="text-lg font-bold text-gray-900">₱{costPerGame} <span className="text-xs font-normal text-gray-500">/ game</span></p>
                   </div>
 
+                  {/* Payment Breakdown for Queue Master */}
+                  {courtId && selectedCourt?.hourly_rate && duration > 0 && (
+                    <div className="pt-4 border-t border-gray-100">
+                      <p className="text-xs text-gray-500 mb-2 font-semibold">PAYMENT DUE</p>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between items-center text-gray-600">
+                          <span>Court rental ({duration}h @ ₱{selectedCourt.hourly_rate}/h)</span>
+                          <span className="font-medium text-gray-900">₱{courtRental.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-gray-600">
+                          <span>Platform fee (5%)</span>
+                          <span className="font-medium text-gray-900">₱{platformFee.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                          <span className="font-semibold text-gray-900">Total</span>
+                          <span className="font-bold text-primary text-lg">₱{totalAmount.toFixed(2)}</span>
+                        </div>
+                      </div>
+                      <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-xs text-blue-800">
+                          <span className="font-semibold">ℹ️ Payment required:</span> You must pay the court rental and platform fee before the session can start.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Payment Method Selection - Relocated */}
+                  <div className="pt-4 border-t border-gray-100">
+                    <p className="text-xs text-gray-500 mb-2 font-semibold">PAYMENT METHOD</p>
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('e-wallet')}
+                        className={cn(
+                          "relative p-3 border rounded-lg text-left transition-all",
+                          paymentMethod === 'e-wallet'
+                            ? "border-primary bg-primary/5 ring-1 ring-primary"
+                            : "border-gray-200 hover:border-gray-300"
+                        )}
+                      >
+                        <div className="font-semibold text-gray-900 text-sm">E-Wallet</div>
+                        <div className="text-[10px] text-gray-600">GCash / Maya</div>
+                        {paymentMethod === 'e-wallet' && (
+                          <div className="absolute top-2 right-2 text-primary">
+                            <CheckCircle className="w-3 h-3" />
+                          </div>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('cash')}
+                        className={cn(
+                          "relative p-3 border rounded-lg text-left transition-all",
+                          paymentMethod === 'cash'
+                            ? "border-primary bg-primary/5 ring-1 ring-primary"
+                            : "border-gray-200 hover:border-gray-300"
+                        )}
+                      >
+                        <div className="font-semibold text-gray-900 text-sm">Cash</div>
+                        <div className="text-[10px] text-gray-600">Pay at venue</div>
+                        {paymentMethod === 'cash' && (
+                          <div className="absolute top-2 right-2 text-primary">
+                            <CheckCircle className="w-3 h-3" />
+                          </div>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Compact Policy */}
+                    <div className="bg-gray-50 rounded p-2 text-xs text-gray-600 mb-2">
+                      {paymentMethod === 'e-wallet' ? (
+                        <p>Instant confirmation. Refundable 24h before.</p>
+                      ) : (
+                        <p>Pay at venue. Session pending until paid.</p>
+                      )}
+                    </div>
+                  </div>
+
                   {/* Checking Availability & Validation Errors */}
                   <div className="pt-4 border-t border-gray-100">
                     {validationState.validating ? (
@@ -935,12 +1061,21 @@ export function CreateSessionForm() {
                         {isSubmitting ? (
                           <>
                             <Loader2 className="w-5 h-5 animate-spin" />
-                            Creating...
+                            <span>{paymentMethod === 'e-wallet' ? 'Redirecting...' : 'Creating...'}</span>
                           </>
                         ) : (
                           <>
-                            <CheckCircle className="w-5 h-5" />
-                            Create Session
+                            {paymentMethod === 'e-wallet' ? (
+                              <>
+                                <DollarSign className="w-5 h-5" />
+                                Pay & Create
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="w-5 h-5" />
+                                Create (Pay Cash)
+                              </>
+                            )}
                           </>
                         )}
                       </button>

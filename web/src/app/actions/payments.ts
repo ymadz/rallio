@@ -421,6 +421,9 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
         console.log('✅ Reservation already confirmed, no action needed')
       }
 
+      // Check if linked to Queue Session and update
+      await updateQueueSessionStatus(payment.reservation_id, supabase)
+
       return { success: true }
     }
 
@@ -610,6 +613,9 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
     revalidatePath('/reservations')
     revalidatePath('/bookings')
 
+    // Check if linked to Queue Session and update
+    await updateQueueSessionStatus(payment.reservation_id, supabase)
+
     return { success: true }
   } catch (error) {
     console.error('Charge processing error:', error)
@@ -641,6 +647,66 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
       success: false,
       error: error instanceof Error ? error.message : 'Charge processing failed',
     }
+  }
+}
+
+/**
+ * Helper to update associated Queue Session if it exists
+ */
+async function updateQueueSessionStatus(reservationId: string, supabase: any) {
+  try {
+    // Check if this reservation is for a queue session
+    const { data: queueSession } = await supabase
+      .from('queue_sessions')
+      .select('id, status, metadata')
+      .filter('metadata->>reservation_id', 'eq', reservationId)
+      .single()
+
+    if (queueSession) {
+      console.log('[updateQueueSessionStatus] 🔄 Found linked Queue Session:', queueSession.id)
+
+      // Only update if currently pending_payment or pending_approval (though usually payment comes after approval)
+      // If it's 'draft', maybe? But createQueueSession sets it to pending_payment.
+      if (['pending_payment'].includes(queueSession.status)) {
+        const { error: updateError } = await supabase
+          .from('queue_sessions')
+          .update({
+            status: 'active', // Activate the session!
+            metadata: {
+              ...queueSession.metadata,
+              payment_status: 'paid',
+              payment_confirmed_at: new Date().toISOString()
+            }
+          })
+          .eq('id', queueSession.id)
+
+        if (updateError) {
+          console.error('[updateQueueSessionStatus] ❌ Failed to activate Queue Session:', updateError)
+        } else {
+          console.log('[updateQueueSessionStatus] ✅ Queue Session activated successfully')
+          revalidatePath('/queue')
+          revalidatePath('/queue-master')
+        }
+      } else {
+        // Just update payment status if already active (or other status)
+        const { error: updateError } = await supabase
+          .from('queue_sessions')
+          .update({
+            metadata: {
+              ...queueSession.metadata,
+              payment_status: 'paid',
+              payment_confirmed_at: new Date().toISOString()
+            }
+          })
+          .eq('id', queueSession.id)
+
+        if (!updateError) {
+          console.log('[updateQueueSessionStatus] ✅ Queue Session payment status updated')
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[updateQueueSessionStatus] Error checking queue session:', err)
   }
 }
 
@@ -712,6 +778,10 @@ export async function processPaymentByReservationAction(reservationId: string): 
 
       revalidatePath('/reservations')
       revalidatePath('/bookings')
+
+      // Check if linked to Queue Session and update
+      await updateQueueSessionStatus(reservationId, supabase)
+
       return { success: true, status: 'confirmed' }
     }
 
@@ -734,6 +804,7 @@ export async function processPaymentByReservationAction(reservationId: string): 
     const result = await processChargeableSourceAction(sourceId)
 
     if (result.success) {
+      // Logic handled inside processChargeableSourceAction now
       return { success: true, status: 'confirmed' }
     } else {
       return { success: false, error: result.error, status: 'pending_payment' }

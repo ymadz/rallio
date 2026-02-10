@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { format, differenceInHours, isPast, isFuture } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -8,6 +9,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { cancelReservationAction } from '@/app/actions/reservations'
 import { BookingReviewButton } from '@/components/venue/booking-review-button'
 import { RefundRequestButton } from '@/components/reservations/refund-request-button'
+import { RescheduleModal } from '@/components/booking/reschedule-modal'
 import { useServerTime } from '@/hooks/use-server-time'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -53,9 +55,11 @@ interface BookingsListProps {
 }
 
 export function BookingsList({ initialBookings }: BookingsListProps) {
+  const router = useRouter()
   const { date: serverDate } = useServerTime()
   const [bookings, setBookings] = useState(initialBookings)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
+  const [reschedulingBooking, setReschedulingBooking] = useState<Booking | null>(null)
   const [resumingPaymentId, setResumingPaymentId] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'today' | 'week'>('all')
   const [activeTab, setActiveTab] = useState<'upcoming' | 'history'>('upcoming')
@@ -580,39 +584,53 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                       </Link>
 
                       {canCancelBooking(booking) && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleCancelBooking(booking)}
-                          disabled={cancellingId === booking.id}
-                          className="flex-1 h-10 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors"
-                        >
-                          {cancellingId === booking.id ? (
-                            <>
-                              <Spinner className="w-4 h-4 mr-2" />
-                              Please wait...
-                            </>
-                          ) : (
-                            <>
-                              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                              Cancel
-                            </>
-                          )}
-                        </Button>
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setReschedulingBooking(booking)}
+                            className="flex-1 h-10 border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 transition-colors"
+                          >
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            Reschedule
+                          </Button>
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCancelBooking(booking)}
+                            disabled={cancellingId === booking.id}
+                            className="flex-1 h-10 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors"
+                          >
+                            {cancellingId === booking.id ? (
+                              <>
+                                <Spinner className="w-4 h-4 mr-2" />
+                                Please wait...
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                                Cancel
+                              </>
+                            )}
+                          </Button>
+                        </>
                       )}
                     </div>
                     {canCancelBooking(booking) && (
                       <p className="text-[10px] text-gray-400 mt-2 text-center">
-                        Free cancellation/refund available up to 24 hours before booking.
+                        Free rescheduling/cancellation available up to 24 hours before booking.
                       </p>
                     )}
                   </div>
 
                   {!canCancelBooking(booking) && booking.status !== 'cancelled' && (
                     <p className="text-xs text-gray-500 mt-2 text-center">
-                      Cannot cancel within 24 hours of booking
+                      Cannot cancel or reschedule within 24 hours of booking
                     </p>
                   )}
                 </div>
@@ -620,6 +638,18 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
             )
           })}
         </div>
+      )}
+
+      {reschedulingBooking && (
+        <RescheduleModal
+          booking={reschedulingBooking}
+          isOpen={!!reschedulingBooking}
+          onClose={() => setReschedulingBooking(null)}
+          onSuccess={() => {
+            setReschedulingBooking(null)
+            router.refresh()
+          }}
+        />
       )}
     </div>
   )

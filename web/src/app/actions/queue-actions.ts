@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
 import { checkRateLimit, createRateLimitConfig } from '@/lib/rate-limiter'
-import { createBulkNotifications, NotificationTemplates } from '@/lib/notifications'
+import { createBulkNotifications, createNotification, NotificationTemplates } from '@/lib/notifications'
 import { getServerNow } from '@/lib/time-server'
 
 /**
@@ -27,6 +27,8 @@ export interface QueueSessionData {
   createdAt: Date
   mode: 'casual' | 'competitive'
   gameFormat: 'singles' | 'doubles' | 'mixed'
+  approvalStatus?: 'pending' | 'approved' | 'rejected'
+  reservationId?: string
 }
 
 export interface QueueParticipantData {
@@ -762,6 +764,7 @@ export async function createQueueSession(data: {
   isPublic: boolean
   recurrenceWeeks?: number
   selectedDays?: number[]
+  paymentMethod?: 'cash' | 'e-wallet'
 }): Promise<{
   success: boolean
   session?: QueueSessionData
@@ -829,7 +832,7 @@ export async function createQueueSession(data: {
       return { success: false, error: 'Max players must be between 4 and 20' }
     }
 
-    // 4. Verify court exists and get venue settings
+    // 4. Verify court exists and get venue settings + hourly rate
     const { data: court, error: courtError } = await supabase
       .from('courts')
       .select(`
@@ -837,6 +840,7 @@ export async function createQueueSession(data: {
         name,
         is_active,
         venue_id,
+        hourly_rate,
         venues!inner (
           id,
           name,
@@ -853,6 +857,10 @@ export async function createQueueSession(data: {
     }
     if (!court.is_active) {
       return { success: false, error: 'Court is not active' }
+    }
+    if (!court.hourly_rate || court.hourly_rate <= 0) {
+      console.error('[createQueueSession] ❌ Court hourly rate not configured')
+      return { success: false, error: 'Court hourly rate not configured. Please contact venue admin.' }
     }
 
     const venue = court.venues as any
@@ -962,7 +970,22 @@ export async function createQueueSession(data: {
       const sessionEnd = new Date(sessionStart)
       sessionEnd.setTime(sessionStart.getTime() + (new Date(data.endTime).getTime() - new Date(data.startTime).getTime()))
 
-      // Create Reservation
+      // Calculate payment amounts
+      const durationMs = sessionEnd.getTime() - sessionStart.getTime()
+      const durationHours = durationMs / (1000 * 60 * 60)
+      const courtRental = court.hourly_rate * durationHours
+      const platformFee = courtRental * 0.05
+      const totalAmount = courtRental + platformFee
+
+      console.log(`[createQueueSession] 💰 Payment calculation:`, {
+        hourlyRate: court.hourly_rate,
+        durationHours,
+        courtRental,
+        platformFee,
+        totalAmount
+      })
+
+      // Create Reservation with payment requirement
       const { data: reservation, error: reservationError } = await supabase
         .from('reservations')
         .insert({
@@ -970,8 +993,8 @@ export async function createQueueSession(data: {
           user_id: user.id,
           start_time: sessionStart.toISOString(),
           end_time: sessionEnd.toISOString(),
-          status: 'confirmed',
-          total_amount: 0,
+          status: 'pending_payment',
+          total_amount: totalAmount, // Fixed: Include platform fee in total_amount
           amount_paid: 0,
           num_players: data.maxPlayers,
           payment_type: 'full',
@@ -979,9 +1002,14 @@ export async function createQueueSession(data: {
             booking_origin: 'queue_session',
             queue_session_organizer: true,
             is_queue_session_reservation: true,
-            recurrence_group_id: recurrenceGroupId
+            recurrence_group_id: recurrenceGroupId,
+            platform_fee: platformFee,
+            hourly_rate: court.hourly_rate,
+            duration_hours: durationHours,
+            total_with_fee: totalAmount,
+            intended_payment_method: data.paymentMethod
           },
-          notes: `Queue Session (${data.mode}) - ${sessionStart.toLocaleDateString()}`,
+          notes: `Queue Session (${data.mode}) - ${sessionStart.toLocaleDateString()}${data.paymentMethod === 'cash' ? ' (Cash Payment)' : ''}`,
         })
         .select('id')
         .single()
@@ -1004,13 +1032,18 @@ export async function createQueueSession(data: {
           max_players: data.maxPlayers,
           cost_per_game: data.costPerGame,
           is_public: data.isPublic,
-          status: initialStatus,
+          status: requiresApproval ? 'pending_approval' : 'pending_payment',
           current_players: 0,
           requires_approval: requiresApproval,
           approval_status: approvalStatus,
           metadata: {
             reservation_id: reservation.id,
-            recurrence_group_id: recurrenceGroupId
+            recurrence_group_id: recurrenceGroupId,
+            payment_required: totalAmount,
+            payment_status: 'pending',
+            payment_method: data.paymentMethod || 'e-wallet',
+            court_rental: courtRental,
+            platform_fee: platformFee
           },
         })
         .select()
@@ -1037,10 +1070,92 @@ export async function createQueueSession(data: {
         createdAt: new Date(session.created_at),
         mode: session.mode,
         gameFormat: session.game_format,
+        reservationId: reservation.id
       })
     }
 
     console.log(`[createQueueSession] ✅ Successfully created ${createdSessions.length} sessions`)
+
+    // Send notifications
+    try {
+      // Get Queue Master's display name
+      const { data: qmProfile } = await supabase
+        .from('profiles')
+        .select('display_name, first_name, last_name')
+        .eq('id', user.id)
+        .single()
+
+      const queueMasterName = qmProfile?.display_name ||
+        `${qmProfile?.first_name || ''} ${qmProfile?.last_name || ''}`.trim() ||
+        'Queue Master'
+
+      // Notification for Queue Master
+      if (requiresApproval) {
+        // Session requires approval - notify QM that it's pending
+        await createNotification({
+          userId: user.id,
+          type: 'queue_approval_pending',
+          title: '📋 Queue Session Pending Approval',
+          message: `Your queue session on ${court.name} is pending approval from the venue admin. You'll be notified once it's reviewed.`,
+          actionUrl: `/queue-master/sessions/${createdSessions[0].id}`,
+          metadata: {
+            court_name: court.name,
+            venue_name: venue?.name || 'Unknown Venue',
+            session_count: createdSessions.length,
+            queue_session_id: createdSessions[0].id
+          }
+        })
+        console.log('[createQueueSession] 📬 Sent approval pending notification to Queue Master')
+      } else {
+        // Session approved - notify QM about payment
+        const firstSession = createdSessions[0]
+        const durationMs = firstSession.endTime.getTime() - firstSession.startTime.getTime()
+        const durationHours = durationMs / (1000 * 60 * 60)
+        const courtRental = court.hourly_rate * durationHours
+        const platformFee = courtRental * 0.05
+        const totalAmount = courtRental + platformFee
+
+        await createNotification({
+          userId: user.id,
+          type: 'queue_approval_approved',
+          title: '✅ Queue Session Created - Payment Required',
+          message: `Your queue session on ${court.name} has been created. Total payment due: ₱${totalAmount.toFixed(2)} (₱${courtRental.toFixed(2)} rental + ₱${platformFee.toFixed(2)} platform fee). Complete payment to activate the session.`,
+          actionUrl: `/queue-master/sessions/${firstSession.id}`,
+          metadata: {
+            court_name: court.name,
+            venue_name: venue?.name || 'Unknown Venue',
+            session_count: createdSessions.length,
+            queue_session_id: firstSession.id,
+            total_amount: totalAmount,
+            payment_required: true
+          }
+        })
+        console.log('[createQueueSession] 📬 Sent payment reminder notification to Queue Master')
+      }
+
+      // Notification for Court Admin/Venue Owner (if approval required)
+      if (requiresApproval && venue?.owner_id) {
+        await createNotification({
+          userId: venue.owner_id,
+          type: 'queue_approval_pending',
+          title: '📋 New Queue Session Pending Approval',
+          message: `${queueMasterName} has requested ${createdSessions.length} queue session${createdSessions.length > 1 ? 's' : ''} on ${court.name}. Review in Court Admin dashboard.`,
+          actionUrl: `/court-admin/queue-approvals`,
+          metadata: {
+            queue_master_name: queueMasterName,
+            queue_master_id: user.id,
+            court_name: court.name,
+            venue_name: venue?.name || 'Unknown Venue',
+            session_count: createdSessions.length,
+            queue_session_id: createdSessions[0].id
+          }
+        })
+        console.log('[createQueueSession] 📬 Sent approval request notification to Court Admin')
+      }
+    } catch (notificationError) {
+      // Non-critical error - log but don't fail
+      console.error('[createQueueSession] ⚠️ Failed to send notifications (non-critical):', notificationError)
+    }
 
     // 9. Revalidate paths
     revalidatePath('/queue')
@@ -2007,6 +2122,7 @@ export async function getMyQueueMasterSessions(filter?: {
           venueName: session.courts?.venues?.name || 'Unknown Venue',
           venueId: session.courts?.venues?.id || '',
           status: session.status,
+          approvalStatus: session.approval_status,
           currentPlayers: formattedParticipants.length,
           maxPlayers: session.max_players || 12,
           costPerGame: parseFloat(session.cost_per_game || '0'),

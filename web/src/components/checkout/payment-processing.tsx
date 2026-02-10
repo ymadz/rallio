@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useCheckoutStore } from '@/stores/checkout-store'
 import { createReservationAction } from '@/app/actions/reservations'
+import { createQueueSession } from '@/app/actions/queue-actions'
 import { initiatePaymentAction } from '@/app/actions/payments'
 import { createClient } from '@/lib/supabase/client'
 import Image from 'next/image'
@@ -116,53 +117,108 @@ export function PaymentProcessing() {
           totalAmount: getTotalAmount(),
         })
 
-        const reservationResult = await createReservationAction({
-          courtId: bookingData.courtId,
-          userId: user.id,
-          startTimeISO,
-          endTimeISO,
-          totalAmount: getTotalAmount(),
-          numPlayers: isSplitPayment ? playerCount : 1,
-          paymentType: isSplitPayment ? 'split' : 'full',
-          paymentMethod,
-          notes: isSplitPayment ? `Split payment with ${playerCount} players` : undefined,
-          discountApplied: Math.abs(discountAmount),
-          discountType,
-          discountReason,
-          recurrenceWeeks: bookingData.recurrenceWeeks,
-          selectedDays: bookingData.selectedDays,
-        })
+        let newReservationId: string | null = null
 
-        if (!reservationResult.success || !reservationResult.reservationId) {
-          console.error('Reservation creation failed:', {
-            error: reservationResult.error,
-            bookingData: {
-              courtId: bookingData.courtId,
-              courtName: bookingData.courtName,
-              venueName: bookingData.venueName,
-              startTime: startTimeISO,
-              endTime: endTimeISO,
-            },
-            userId: user.id,
+        if (bookingData.isQueueSession && bookingData.queueSessionData) {
+          console.log('Creating queue session(s)...')
+
+          const sessionResult = await createQueueSession({
+            courtId: bookingData.courtId,
+            startTime: startDateTime,
+            endTime: endDateTime,
+            mode: bookingData.queueSessionData.mode,
+            gameFormat: bookingData.queueSessionData.gameFormat,
+            maxPlayers: bookingData.queueSessionData.maxPlayers,
+            costPerGame: bookingData.queueSessionData.costPerGame,
+            isPublic: bookingData.queueSessionData.isPublic,
+            recurrenceWeeks: bookingData.recurrenceWeeks,
+            selectedDays: bookingData.selectedDays
           })
-          throw new Error(reservationResult.error || 'Failed to create reservation')
+
+          if (!sessionResult.success) {
+            console.error('Queue session creation failed:', sessionResult.error)
+            throw new Error(sessionResult.error || 'Failed to create queue session')
+          }
+
+          // If session requires approval, we stop here (no payment yet)
+          if (sessionResult.requiresApproval) {
+            router.push('/queue-master/sessions') // Or success page?
+            return
+          }
+
+          // If no approval required, we expect a reservation ID for payment
+          // If free (no payment required), metadata might indicate that?
+          // But here we assume payment flow.
+          // We must grab reservationId from the first created session.
+          if (!sessionResult.session?.reservationId) {
+            // Fallback for unexpected case where session created but no reservation ID returned
+            // This might happen if session logic changed.
+            console.error('No reservation ID returned for queue session')
+            throw new Error('Failed to retrieve reservation details for payment')
+          }
+
+          newReservationId = sessionResult.session.reservationId
+
+        } else {
+          // Standard Reservation Flow
+          console.log('Creating standard reservation...')
+
+          const reservationResult = await createReservationAction({
+            courtId: bookingData.courtId,
+            userId: user.id,
+            startTimeISO,
+            endTimeISO,
+            totalAmount: getTotalAmount(),
+            numPlayers: isSplitPayment ? playerCount : 1,
+            paymentType: isSplitPayment ? 'split' : 'full',
+            paymentMethod,
+            notes: isSplitPayment ? `Split payment with ${playerCount} players` : undefined,
+            discountApplied: Math.abs(discountAmount),
+            discountType,
+            discountReason,
+            recurrenceWeeks: bookingData.recurrenceWeeks,
+            selectedDays: bookingData.selectedDays,
+          })
+
+          if (!reservationResult.success || !reservationResult.reservationId) {
+            console.error('Reservation creation failed:', {
+              error: reservationResult.error,
+              bookingData: {
+                courtId: bookingData.courtId,
+                courtName: bookingData.courtName,
+                venueName: bookingData.venueName,
+                startTime: startTimeISO,
+                endTime: endTimeISO,
+              },
+              userId: user.id,
+            })
+            throw new Error(reservationResult.error || 'Failed to create reservation')
+          }
+          newReservationId = reservationResult.reservationId
         }
 
-        const newReservationId = reservationResult.reservationId
-        setReservationId(newReservationId)
-        console.log('Reservation created successfully:', newReservationId)
+        const confirmedReservationId = newReservationId
+        setReservationId(confirmedReservationId)
+        console.log('Reservation created successfully:', confirmedReservationId)
 
         // For cash payments, skip payment initiation
         if (paymentMethod === 'cash') {
           setLoading(false)
           setPaymentStatus('processing')
-          setBookingReference(newReservationId.slice(0, 8), newReservationId)
+          setBookingReference(confirmedReservationId.slice(0, 8), confirmedReservationId)
+
+          // Special handling for Queue Sessions with cash payment
+          if (bookingData.isQueueSession) {
+            // Maybe show success message or just redirect?
+            // Since "Pending Payment" status is set, they can proceed.
+            // We return here to show processing state.
+          }
           return
         }
 
         // Step 2: Initiate payment for e-wallet
         // Use the payment method selected by the user (gcash, maya, etc.)
-        const paymentResult = await initiatePaymentAction(newReservationId, 'gcash')
+        const paymentResult = await initiatePaymentAction(confirmedReservationId, 'gcash')
 
         if (!paymentResult.success || !paymentResult.checkoutUrl) {
           throw new Error(paymentResult.error || 'Failed to initiate payment')
@@ -171,7 +227,7 @@ export function PaymentProcessing() {
         // Set loading to false and update UI to show confirmation
         setLoading(false)
         setPaymentStatus('processing')
-        setBookingReference(newReservationId.slice(0, 8), newReservationId)
+        setBookingReference(confirmedReservationId.slice(0, 8), confirmedReservationId)
 
         // Store checkout URL for manual redirect
         sessionStorage.setItem('paymongoCheckoutUrl', paymentResult.checkoutUrl)
