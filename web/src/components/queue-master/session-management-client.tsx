@@ -275,6 +275,32 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         metadata: sessionData.metadata
       }
 
+      // AUTO-CLOSE: If past end_time, close the session on the spot
+      const now = serverDate || new Date()
+      if (['open', 'active', 'paused'].includes(formattedSession.status) && formattedSession.endTime < now) {
+        console.log('🕒 [loadSession] Session expired, auto-closing:', sessionData.id)
+        const { error: closeErr } = await supabase
+          .from('queue_sessions')
+          .update({ status: 'closed', updated_at: new Date().toISOString() })
+          .eq('id', sessionData.id)
+
+        if (!closeErr) {
+          formattedSession.status = 'closed'
+        }
+      }
+      // AUTO-ACTIVATE: If 'open' and start_time has passed, flip to 'active'
+      else if (formattedSession.status === 'open' && formattedSession.startTime <= now && formattedSession.endTime > now) {
+        console.log('▶️ [loadSession] Auto-activating session:', sessionData.id)
+        const { error: activateErr } = await supabase
+          .from('queue_sessions')
+          .update({ status: 'active', updated_at: new Date().toISOString() })
+          .eq('id', sessionData.id)
+
+        if (!activateErr) {
+          formattedSession.status = 'active'
+        }
+      }
+
       console.log('✅ [loadSession] Session formatted successfully:', {
         id: formattedSession.id,
         courtName: formattedSession.courtName,

@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
             .update({ status: 'ongoing' })
             .eq('status', 'confirmed')
             .lte('start_time', nowIso)
+            .gt('end_time', nowIso)
             .select('id')
 
         if (startResult.error) {
@@ -36,6 +37,19 @@ export async function GET(req: NextRequest) {
             throw new Error(`Failed to end games: ${endResult.error.message}`)
         }
 
+        // 2b. Also complete confirmed reservations whose end_time has passed
+        // (edge case: start_time was never caught, or very short booking)
+        const completedConfirmedResult = await supabase
+            .from('reservations')
+            .update({ status: 'completed' })
+            .eq('status', 'confirmed')
+            .lte('end_time', nowIso)
+            .select('id')
+
+        if (completedConfirmedResult.error) {
+            throw new Error(`Failed to complete confirmed: ${completedConfirmedResult.error.message}`)
+        }
+
         // 3. Revert Games (Time Travel Support): ongoing -> confirmed
         // If we travelled back in time, we need to revert active games to confirmed
         const revertResult = await supabase
@@ -49,15 +63,49 @@ export async function GET(req: NextRequest) {
             throw new Error(`Failed to revert games: ${revertResult.error.message}`)
         }
 
+        // 4. Auto-close expired queue sessions
+        // Close sessions that are past their end_time
+        const closeSessionsResult = await supabase
+            .from('queue_sessions')
+            .update({ status: 'closed', updated_at: nowIso })
+            .in('status', ['open', 'active', 'paused'])
+            .lte('end_time', nowIso)
+            .select('id')
+
+        if (closeSessionsResult.error) {
+            console.error('[ProcessBookings] Failed to close sessions:', closeSessionsResult.error)
+        }
+
+        // 5. Auto-activate queue sessions whose start_time has arrived
+        const activateSessionsResult = await supabase
+            .from('queue_sessions')
+            .update({ status: 'active', updated_at: nowIso })
+            .eq('status', 'open')
+            .lte('start_time', nowIso)
+            .gt('end_time', nowIso)
+            .select('id')
+
+        if (activateSessionsResult.error) {
+            console.error('[ProcessBookings] Failed to activate sessions:', activateSessionsResult.error)
+        }
+
+        // Note: The DB trigger trg_queue_session_closed (migration 039) will
+        // automatically complete linked reservations when sessions close above.
+
         return NextResponse.json({
             success: true,
             processedAt: nowIso,
             started: startResult.data.length,
-            ended: endResult.data.length,
+            ended: endResult.data.length + (completedConfirmedResult.data?.length || 0),
             reverted: revertResult.data.length,
+            sessionsClosed: closeSessionsResult.data?.length || 0,
+            sessionsActivated: activateSessionsResult.data?.length || 0,
             startedIds: startResult.data.map(r => r.id),
-            endedIds: endResult.data.map(r => r.id),
-            revertedIds: revertResult.data.map(r => r.id)
+            endedIds: [
+                ...endResult.data.map(r => r.id),
+                ...(completedConfirmedResult.data?.map(r => r.id) || []),
+            ],
+            revertedIds: revertResult.data.map(r => r.id),
         })
 
     } catch (error: any) {

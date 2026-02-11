@@ -526,9 +526,6 @@ export async function getMyQueueHistory() {
         )
       `)
       .eq('user_id', user.id)
-      .eq('user_id', user.id)
-      .or(`status.eq.left,queue_sessions.status.in.(closed,cancelled),queue_sessions.end_time.lt.${(await getServerNow()).toISOString()}`)
-      .order('joined_at', { ascending: false })
       .order('joined_at', { ascending: false })
       .limit(50) // Limit to last 50 for now
 
@@ -537,7 +534,16 @@ export async function getMyQueueHistory() {
       return { success: false, error: 'Failed to fetch history' }
     }
 
-    const history = (participations || []).map((p: any) => {
+    const serverNow = await getServerNow()
+
+    const history = (participations || [])
+      .filter((p: any) => {
+        const isLeft = p.status === 'left'
+        const isSessionClosed = ['closed', 'cancelled'].includes(p.queue_sessions?.status)
+        const isSessionEnded = new Date(p.queue_sessions?.end_time) < serverNow
+        return isLeft || isSessionClosed || isSessionEnded
+      })
+      .map((p: any) => {
       const costPerGame = parseFloat(p.queue_sessions.cost_per_game || '0')
       const gamesPlayed = p.games_played || 0
       const totalCost = costPerGame * gamesPlayed
@@ -1455,7 +1461,7 @@ export async function closeQueueSession(sessionId: string): Promise<{
     // 2. Get session and verify user is organizer
     const { data: session, error: sessionError } = await supabase
       .from('queue_sessions')
-      .select('organizer_id, status, court_id')
+      .select('organizer_id, status, court_id, metadata')
       .eq('id', sessionId)
       .single()
 
@@ -1509,6 +1515,33 @@ export async function closeQueueSession(sessionId: string): Promise<{
     }
 
     console.log('[closeQueueSession] ✅ Queue session closed successfully:', summary)
+
+    // 5b. Also complete the linked reservation (belt-and-suspenders with DB trigger)
+    const linkedReservationId = session.metadata?.reservation_id
+    if (linkedReservationId) {
+      const { error: resError } = await supabase
+        .from('reservations')
+        .update({
+          status: 'completed',
+          metadata: {
+            auto_completed: {
+              at: new Date().toISOString(),
+              by: 'queue_master',
+              reason: 'queue_session_closed',
+              queue_session_id: sessionId,
+            },
+          },
+        })
+        .eq('id', linkedReservationId)
+        .in('status', ['confirmed', 'ongoing'])
+
+      if (resError) {
+        console.error('[closeQueueSession] ⚠️ Failed to complete linked reservation:', resError)
+      } else {
+        console.log('[closeQueueSession] ✅ Linked reservation completed:', linkedReservationId)
+        revalidatePath('/court-admin/reservations')
+      }
+    }
 
     // 6. Send notifications to all participants
     try {
@@ -2023,34 +2056,43 @@ export async function getMyQueueMasterSessions(filter?: {
 
     // Auto-activate, auto-close, and filter sessions based on time
     const now = await getServerNow()
-    const validSessions = sessions.filter((session: any) => {
+    const validSessions: any[] = []
+    for (const session of sessions) {
       const startTime = new Date(session.start_time)
       const endTime = new Date(session.end_time)
 
-      // AUTO-CLOSE: If past end_time, close the session
+      // AUTO-CLOSE: If past end_time, close the session (awaited for consistency)
       if (['open', 'active', 'paused'].includes(session.status) && endTime < now) {
         console.log('[getMyQueueMasterSessions] 🕒 Session expired, auto-closing:', session.id)
-        supabase.from('queue_sessions').update({ status: 'closed' }).eq('id', session.id).then(({ error }) => {
-          if (error) console.error('Failed to auto-close expired session:', session.id, error)
-        })
+        const { error } = await supabase.from('queue_sessions')
+          .update({ status: 'closed', updated_at: now.toISOString() })
+          .eq('id', session.id)
+        if (error) {
+          console.error('Failed to auto-close expired session:', session.id, error)
+        } else {
+          session.status = 'closed'
+        }
         // Exclude from active/pending views
         if (filter?.status === 'active' || filter?.status === 'pending') {
-          return false
+          continue
         }
-        return true
+        validSessions.push(session)
+        continue
       }
 
       // AUTO-ACTIVATE: If session is 'open' and start_time has passed, flip to 'active'
-      if (session.status === 'open' && startTime <= now) {
+      if (session.status === 'open' && startTime <= now && endTime > now) {
         console.log('[getMyQueueMasterSessions] ▶️ Auto-activating session (start_time reached):', session.id)
-        supabase.from('queue_sessions').update({ status: 'active' }).eq('id', session.id).then(({ error }) => {
-          if (error) console.error('Failed to auto-activate session:', session.id, error)
-        })
-        session.status = 'active' // Update in-memory for current response
+        const { error } = await supabase.from('queue_sessions')
+          .update({ status: 'active', updated_at: now.toISOString() })
+          .eq('id', session.id)
+        if (!error) {
+          session.status = 'active'
+        }
       }
 
-      return true
-    })
+      validSessions.push(session)
+    }
 
     // 3. Get participant data for each session
     const sessionsWithParticipants = await Promise.all(
@@ -2095,20 +2137,7 @@ export async function getMyQueueMasterSessions(filter?: {
           paymentStatus: p.payment_status,
         }))
 
-        // Time-aware status corrections (redundant safety check)
-        const sessionEnd = new Date(session.end_time)
-        const sessionStart = new Date(session.start_time)
-        const currentTime = new Date()
-
-        if (['open', 'active', 'paused'].includes(session.status) && sessionEnd < currentTime) {
-          // Auto-close expired sessions
-          supabase.from('queue_sessions').update({ status: 'closed' }).eq('id', session.id).then()
-          session.status = 'closed'
-        } else if (session.status === 'open' && sessionStart <= currentTime) {
-          // Auto-activate sessions whose start_time has passed
-          supabase.from('queue_sessions').update({ status: 'active' }).eq('id', session.id).then()
-          session.status = 'active'
-        }
+        // Status corrections are already handled above in the for-loop
 
         return {
           id: session.id,
