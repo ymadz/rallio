@@ -555,12 +555,14 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                         <p className="text-xs text-gray-400 mt-0.5">per session</p>
                       )}
                     </div>
-                    <div>
-                      <p className="text-gray-500 mb-1">{isOngoing(booking) ? 'Time Remaining' : 'Time Until'}</p>
-                      <p className="font-semibold text-primary">
-                        {isOngoing(booking) ? getRemainingTime(booking.end_time) : getTimeRemaining(booking.start_time)}
-                      </p>
-                    </div>
+                    {booking.status !== 'completed' && (
+                      <div>
+                        <p className="text-gray-500 mb-1">{isOngoing(booking) ? 'Time Remaining' : 'Time Until'}</p>
+                        <p className="font-semibold text-primary">
+                          {isOngoing(booking) ? getRemainingTime(booking.end_time) : getTimeRemaining(booking.start_time)}
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Actions */}
@@ -683,7 +685,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                     )}
                   </div>
 
-                  {!canCancelBooking(booking) && booking.status !== 'cancelled' && (
+                  {!canCancelBooking(booking) && booking.status !== 'cancelled' && booking.status !== 'completed' && (
                     <p className="text-xs text-gray-500 mt-2 text-center">
                       Cannot cancel or reschedule within 24 hours of booking
                     </p>
