@@ -156,6 +156,12 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     setCancellingId(null)
   }
 
+  const isCashBooking = (booking: Booking): boolean => {
+    return booking.metadata?.intended_payment_method === 'cash' ||
+           booking.metadata?.payment_method === 'cash' ||
+           booking.payments?.[0]?.payment_method === 'cash'
+  }
+
   const getPaymentStatus = (booking: Booking) => {
     // Check if fully paid
     const isFullyPaid = booking.amount_paid >= booking.total_amount
@@ -168,6 +174,11 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     // If confirmed but not fully paid (e.g. Cash at Venue)
     if (booking.status === 'confirmed' && !isFullyPaid) {
       return { label: 'Pay at Venue', color: 'orange', needsPayment: false }
+    }
+
+    // Cash bookings: Court Admin handles payment - no self-service payment needed
+    if (isCashBooking(booking) && booking.status === 'pending_payment') {
+      return { label: 'Pay at Venue', color: 'blue', needsPayment: false }
     }
 
     // Check payment records for digital attempts
@@ -507,6 +518,8 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                       <p className="text-gray-500 mb-1">Payment</p>
                       <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-bold shadow-sm text-white ${paymentStatus.color === 'green' ? 'bg-green-500' :
                         paymentStatus.color === 'yellow' ? 'bg-yellow-500' :
+                        paymentStatus.color === 'blue' ? 'bg-blue-500' :
+                        paymentStatus.color === 'orange' ? 'bg-orange-500' :
                           'bg-red-500'
                         }`}>
                         {paymentStatus.label}
@@ -515,6 +528,9 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                     <div>
                       <p className="text-gray-500 mb-1">Amount</p>
                       <p className="font-bold text-gray-900">₱{booking.total_amount.toFixed(2)}</p>
+                      {(booking.metadata?.recurrence_total > 1) && (
+                        <p className="text-xs text-gray-400 mt-0.5">per session</p>
+                      )}
                     </div>
                     <div>
                       <p className="text-gray-500 mb-1">Time Until</p>
@@ -555,8 +571,8 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                       </div>
                     )}
 
-                    {/* Continue Payment Button for Pending Payments */}
-                    {paymentStatus.needsPayment && (
+                    {/* Continue Payment Button for E-wallet Pending Payments (not for cash) */}
+                    {paymentStatus.needsPayment && !isCashBooking(booking) && (
                       <Button
                         className="w-full bg-primary hover:bg-primary/90"
                         size="sm"
