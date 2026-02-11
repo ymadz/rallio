@@ -166,11 +166,6 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     // Check if fully paid
     const isFullyPaid = booking.amount_paid >= booking.total_amount
 
-    // Ongoing and completed bookings are always paid (can't reach those statuses without payment)
-    if (booking.status === 'ongoing' || booking.status === 'completed') {
-      return { label: 'Paid', color: 'green', needsPayment: false }
-    }
-
     // If booking is marked as 'paid' or is 'confirmed' with full payment
     if (booking.status === 'paid' || (booking.status === 'confirmed' && isFullyPaid)) {
       return { label: 'Paid', color: 'green', needsPayment: false }
@@ -226,24 +221,6 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     if (hours < 24) return `${hours}h remaining`
     const days = Math.floor(hours / 24)
     return `${days} day${days > 1 ? 's' : ''}`
-  }
-
-  const getRemainingTime = (endTime: string) => {
-    const now = serverDate || new Date()
-    const hours = differenceInHours(new Date(endTime), now)
-    if (hours < 1) {
-      const minutes = Math.max(0, Math.floor((new Date(endTime).getTime() - now.getTime()) / (1000 * 60)))
-      return `${minutes}m left`
-    }
-    return `${hours}h left`
-  }
-
-  const isOngoing = (booking: Booking): boolean => {
-    if (booking.status === 'ongoing') return true
-    const now = serverDate || new Date()
-    const start = new Date(booking.start_time)
-    const end = new Date(booking.end_time)
-    return now >= start && now < end && (booking.status === 'confirmed' || booking.status === 'paid')
   }
 
   const filteredBookings = bookings.filter((booking) => {
@@ -555,14 +532,10 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                         <p className="text-xs text-gray-400 mt-0.5">per session</p>
                       )}
                     </div>
-                    {booking.status !== 'completed' && (
-                      <div>
-                        <p className="text-gray-500 mb-1">{isOngoing(booking) ? 'Time Remaining' : 'Time Until'}</p>
-                        <p className="font-semibold text-primary">
-                          {isOngoing(booking) ? getRemainingTime(booking.end_time) : getTimeRemaining(booking.start_time)}
-                        </p>
-                      </div>
-                    )}
+                    <div>
+                      <p className="text-gray-500 mb-1">Time Until</p>
+                      <p className="font-semibold text-primary">{getTimeRemaining(booking.start_time)}</p>
+                    </div>
                   </div>
 
                   {/* Actions */}
@@ -685,7 +658,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                     )}
                   </div>
 
-                  {!canCancelBooking(booking) && booking.status !== 'cancelled' && booking.status !== 'completed' && (
+                  {!canCancelBooking(booking) && booking.status !== 'cancelled' && (
                     <p className="text-xs text-gray-500 mt-2 text-center">
                       Cannot cancel or reschedule within 24 hours of booking
                     </p>

@@ -75,14 +75,6 @@ export function AvailabilityModal({
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
   const [loading, setLoading] = useState(false)
   const [isBooking, setIsBooking] = useState(false)
-  const [refreshKey, setRefreshKey] = useState(0)
-
-  // Force refresh availability data every time the modal opens
-  useEffect(() => {
-    if (isOpen) {
-      setRefreshKey(prev => prev + 1)
-    }
-  }, [isOpen])
 
   // Pricing state
   const [calculatedPrice, setCalculatedPrice] = useState<{
@@ -115,7 +107,7 @@ export function AvailabilityModal({
     }
 
     fetchTimeSlots()
-  }, [selectedDate, courtId, isOpen, refreshKey])
+  }, [selectedDate, courtId, isOpen])
 
   // Helpers needed for effects
   const getDuration = (): number => {

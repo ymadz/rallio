@@ -117,7 +117,7 @@ export async function createReservation(
                 .from('queue_sessions')
                 .select('id, start_time, end_time')
                 .eq('court_id', data.courtId)
-                .in('status', ['upcoming', 'open', 'active', 'draft', 'pending_approval'])
+                .in('status', ['draft', 'active', 'pending_approval'])
                 .in('approval_status', ['pending', 'approved'])
                 .lt('start_time', currentEndTimeISO)
                 .gt('end_time', currentStartTimeISO)

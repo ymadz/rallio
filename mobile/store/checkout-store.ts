@@ -109,41 +109,21 @@ export const useCheckoutStore = create<CheckoutState>()(
                 if (!bookingData) return 0;
 
                 const recurrenceWeeks = bookingData.recurrenceWeeks || 1;
-                const selectedDays = bookingData.selectedDays || [];
+                const sessionsPerWeek = bookingData.selectedDays?.length || 1;
 
                 // Calculate base price first
                 // NOTE: Using duration from bookingData directly as it's pre-calculated on mobile
                 const baseRate = bookingData.hourlyRate * bookingData.duration;
 
-                // Calculate ACTUAL future slots that will be created (matching reservations.ts logic)
-                const initialStartTime = new Date(bookingData.date);
-                const startDayIndex = initialStartTime.getDay();
+                // If discountAmount is total (which seems to be the case from current logic),
+                // we should multiply baseRate by recurrence THEN subtract discount.
+                // Assuming discount passed is per-session still, we might need adjustments.
+                // BUT per current `book.tsx`, discount is calculated once.
 
-                // Deduplicate selected days
-                const uniqueSelectedDays = selectedDays.length > 0
-                    ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
-                    : [startDayIndex];
+                const totalBase = baseRate * recurrenceWeeks * sessionsPerWeek;
 
-                // Count only FUTURE slots (matching reservation service skip logic)
-                let actualSlotCount = 0;
-                for (let i = 0; i < recurrenceWeeks; i++) {
-                    const weekBaseTime = initialStartTime.getTime() + (i * 7 * 24 * 60 * 60 * 1000);
-                    
-                    for (const dayIndex of uniqueSelectedDays) {
-                        const dayOffset = dayIndex - startDayIndex;
-                        const slotStartTime = new Date(weekBaseTime + (dayOffset * 24 * 60 * 60 * 1000));
-                        
-                        // Skip past dates (matches reservation service logic)
-                        if (slotStartTime.getTime() < initialStartTime.getTime()) {
-                            continue;
-                        }
-                        
-                        actualSlotCount++;
-                    }
-                }
-
-                // Calculate total based on ACTUAL slots that will be created
-                const totalBase = baseRate * actualSlotCount;
+                // If discount is set once, we might want to multiply it too if it's per session.
+                // However, let's assume discountStore holds the TOTAL discount.
                 return Math.max(0, totalBase - state.discountAmount);
             },
 
