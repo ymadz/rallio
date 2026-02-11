@@ -219,12 +219,41 @@ export const useCheckoutStore = create<CheckoutState>()(
         const endHour = parseInt(bookingData.endTime.split(':')[0])
         const duration = endHour - startHour
         const recurrenceWeeks = bookingData.recurrenceWeeks || 1
-        const numSessionsPerWeek = bookingData.selectedDays?.length || 1
+        const selectedDays = bookingData.selectedDays || []
 
         const baseRate = bookingData.hourlyRate * duration
 
-        // Calculate total base price based on duration, recurrence weeks, and sessions per week
-        const totalBase = baseRate * recurrenceWeeks * numSessionsPerWeek
+        // Calculate ACTUAL future slots that will be created (matching reservations.ts logic)
+        const initialStartTime = new Date(bookingData.date)
+        const [startH, startM] = bookingData.startTime.split(':')
+        initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
+        const startDayIndex = initialStartTime.getDay()
+
+        // Deduplicate selected days
+        const uniqueSelectedDays = selectedDays.length > 0
+          ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
+          : [startDayIndex]
+
+        // Count only FUTURE slots (matching reservation service skip logic)
+        let actualSlotCount = 0
+        for (let i = 0; i < recurrenceWeeks; i++) {
+          const weekBaseTime = initialStartTime.getTime() + (i * 7 * 24 * 60 * 60 * 1000)
+          
+          for (const dayIndex of uniqueSelectedDays) {
+            const dayOffset = dayIndex - startDayIndex
+            const slotStartTime = new Date(weekBaseTime + (dayOffset * 24 * 60 * 60 * 1000))
+            
+            // Skip past dates (matches reservation service logic)
+            if (slotStartTime.getTime() < initialStartTime.getTime()) {
+              continue
+            }
+            
+            actualSlotCount++
+          }
+        }
+
+        // Calculate total based on ACTUAL slots that will be created
+        const totalBase = baseRate * actualSlotCount
         return Math.max(0, totalBase - state.discountAmount)
       },
 
