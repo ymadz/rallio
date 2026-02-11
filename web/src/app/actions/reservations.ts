@@ -60,17 +60,6 @@ export async function getAvailableTimeSlotsAction(
   const [openHour] = dayHours.open.split(':').map(Number)
   const [closeHour] = dayHours.close.split(':').map(Number)
 
-  // Generate all possible hourly slots
-  const allSlots: TimeSlot[] = []
-  for (let hour = openHour; hour < closeHour; hour++) {
-    const timeString = `${hour.toString().padStart(2, '0')}:00`
-    allSlots.push({
-      time: timeString,
-      available: true,
-      price: court.hourly_rate,
-    })
-  }
-
   // Get existing reservations AND queue sessions for this court on this date
   // Query for the entire day range to catch any overlapping bookings
   const dateOnlyString = format(date, 'yyyy-MM-dd')
@@ -109,7 +98,7 @@ export async function getAvailableTimeSlotsAction(
       .eq('court_id', courtId)
       .lt('start_time', endOfDayLocal)
       .gt('end_time', startOfDayLocal)
-      .in('status', ['upcoming', 'open', 'active', 'draft', 'pending_approval'])
+      .in('status', ['draft', 'active', 'pending_approval'])
       .in('approval_status', ['pending', 'approved'])
   ])
 
@@ -139,6 +128,48 @@ export async function getAvailableTimeSlotsAction(
   }
 
   console.log(`[Availability Check] Total booked slots: ${allBookedSlots.length}`)
+
+  // Determine the effective slot range by extending operating hours to include
+  // any hours that have existing reservations. This ensures booked slots are
+  // always visible even if the venue's operating hours for this day don't cover them.
+  let effectiveOpenHour = openHour
+  let effectiveCloseHour = closeHour
+
+  if (allBookedSlots && allBookedSlots.length > 0) {
+    for (const reservation of allBookedSlots) {
+      try {
+        const startTime = new Date(reservation.start_time)
+        const endTime = new Date(reservation.end_time)
+
+        const startHourStr = startTime.toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Manila' })
+        const endHourStr = endTime.toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Manila' })
+
+        const resStartHour = parseInt(startHourStr) % 24
+        let resEndHour = parseInt(endHourStr) % 24
+        if (resEndHour === 0 && resStartHour > 0) resEndHour = 24
+
+        const endMinutes = endTime.getMinutes()
+        const resEndHourCeil = endMinutes > 0 ? resEndHour + 1 : resEndHour
+
+        // Extend the effective range to include this reservation's hours
+        effectiveOpenHour = Math.min(effectiveOpenHour, resStartHour)
+        effectiveCloseHour = Math.max(effectiveCloseHour, resEndHourCeil)
+      } catch (error) {
+        // Ignore parse errors for range extension; they'll be caught below
+      }
+    }
+  }
+
+  // Generate all possible hourly slots using the effective range
+  const allSlots: TimeSlot[] = []
+  for (let hour = effectiveOpenHour; hour < effectiveCloseHour; hour++) {
+    const timeString = `${hour.toString().padStart(2, '0')}:00`
+    allSlots.push({
+      time: timeString,
+      available: true,
+      price: court.hourly_rate,
+    })
+  }
 
   // Mark unavailable slots based on existing reservations AND queue sessions
   if (allBookedSlots && allBookedSlots.length > 0) {
@@ -344,7 +375,7 @@ export async function validateBookingAvailabilityAction(data: {
         .from('queue_sessions')
         .select('id, start_time, end_time')
         .eq('court_id', data.courtId)
-        .in('status', ['upcoming', 'open', 'active', 'draft', 'pending_approval'])
+        .in('status', ['draft', 'active', 'pending_approval'])
         .in('approval_status', ['pending', 'approved'])
         .lt('start_time', currentEndTimeISO)
         .gt('end_time', currentStartTimeISO)
