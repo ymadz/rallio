@@ -82,6 +82,8 @@ export async function getAvailableTimeSlotsAction(
   const endOfDayLocal = `${dateOnlyString}T23:59:59+08:00`
 
   console.log(`[Availability Check] Querying for date: ${dateOnlyString}`)
+  console.log(`[Availability Check] Court: ${courtId}`)
+  console.log(`[Availability Check] Checking statuses: ${activeStatuses.join(', ')}`)
   console.log(`[Availability Check] Date range: ${startOfDayLocal} to ${endOfDayLocal}`)
 
   // Build reservations query

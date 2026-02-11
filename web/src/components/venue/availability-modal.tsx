@@ -84,6 +84,7 @@ export function AvailabilityModal({
     appliedDiscountName?: string
   } | null>(null)
   const [isCalculatingPrice, setIsCalculatingPrice] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0) // Force refetch when needed
 
   // Fetch available time slots for the selected date
   useEffect(() => {
@@ -107,7 +108,18 @@ export function AvailabilityModal({
     }
 
     fetchTimeSlots()
-  }, [selectedDate, courtId, isOpen])
+  }, [selectedDate, courtId, isOpen, refreshKey])
+
+  // Simple auto-refresh every 10 seconds while modal is open to detect new bookings
+  useEffect(() => {
+    if (!isOpen) return
+    
+    const interval = setInterval(() => {
+      setRefreshKey(prev => prev + 1)
+    }, 10000) // Refresh every 10 seconds
+
+    return () => clearInterval(interval)
+  }, [isOpen])
 
   // Helpers needed for effects
   const getDuration = (): number => {
@@ -516,9 +528,19 @@ export function AvailabilityModal({
 
               {/* Time Slots */}
               <div>
-                <h4 className="font-semibold text-gray-900 mb-3">
-                  Select Time Range
-                </h4>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-semibold text-gray-900">
+                    Select Time Range
+                  </h4>
+                  <button
+                    onClick={() => setRefreshKey(prev => prev + 1)}
+                    disabled={loading}
+                    className="text-xs px-2.5 py-1.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Refresh availability"
+                  >
+                    🔄 Refresh
+                  </button>
+                </div>
 
                 <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col h-[400px]">
                   {loading ? (
