@@ -18,7 +18,10 @@ async function getUpcomingBookings(userId: string) {
   today.setHours(0, 0, 0, 0)
   const todayISO = today.toISOString()
 
+  // Fetch both active AND history statuses so history tab works
   const activeStatuses = ['pending_payment', 'pending', 'paid', 'confirmed', 'ongoing']
+  const historyStatuses = ['completed', 'cancelled', 'refunded', 'pending_refund', 'no_show']
+  const allStatuses = [...activeStatuses, ...historyStatuses]
 
   const { data, error } = await supabase
     .from('reservations')
@@ -54,8 +57,8 @@ async function getUpcomingBookings(userId: string) {
       )
     `)
     .eq('user_id', userId)
-    .gte('start_time', todayISO) // Show bookings from today onwards (not just future)
-    .in('status', activeStatuses)
+    .gte('start_time', todayISO) // Show bookings from today onwards
+    .in('status', allStatuses)
     .order('start_time', { ascending: true })
 
   if (error) {
