@@ -82,8 +82,6 @@ export async function getAvailableTimeSlotsAction(
   const endOfDayLocal = `${dateOnlyString}T23:59:59+08:00`
 
   console.log(`[Availability Check] Querying for date: ${dateOnlyString}`)
-  console.log(`[Availability Check] Court: ${courtId}`)
-  console.log(`[Availability Check] Checking statuses: ${activeStatuses.join(', ')}`)
   console.log(`[Availability Check] Date range: ${startOfDayLocal} to ${endOfDayLocal}`)
 
   // Build reservations query
@@ -111,7 +109,7 @@ export async function getAvailableTimeSlotsAction(
       .eq('court_id', courtId)
       .lt('start_time', endOfDayLocal)
       .gt('end_time', startOfDayLocal)
-      .in('status', ['draft', 'active', 'pending_approval'])
+      .in('status', ['upcoming', 'open', 'active', 'draft', 'pending_approval'])
       .in('approval_status', ['pending', 'approved'])
   ])
 
@@ -346,7 +344,7 @@ export async function validateBookingAvailabilityAction(data: {
         .from('queue_sessions')
         .select('id, start_time, end_time')
         .eq('court_id', data.courtId)
-        .in('status', ['draft', 'active', 'pending_approval'])
+        .in('status', ['upcoming', 'open', 'active', 'draft', 'pending_approval'])
         .in('approval_status', ['pending', 'approved'])
         .lt('start_time', currentEndTimeISO)
         .gt('end_time', currentStartTimeISO)
