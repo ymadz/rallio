@@ -217,6 +217,7 @@ export function ReservationManagement() {
       case 'ongoing': return 'bg-purple-100 text-purple-700 border-purple-200 animate-pulse'
       case 'pending': return 'bg-yellow-100 text-yellow-700 border-yellow-200'
       case 'pending_payment': return 'bg-orange-100 text-orange-700 border-orange-200'
+      case 'reserved': return 'bg-blue-100 text-blue-700 border-blue-200'
       case 'cancelled':
       case 'rejected': return 'bg-red-100 text-red-700 border-red-200'
       case 'completed': return 'bg-blue-100 text-blue-700 border-blue-200'
@@ -230,12 +231,42 @@ export function ReservationManagement() {
       case 'confirmed': return <CheckCircle className="w-4 h-4" />
       case 'ongoing': return <Clock className="w-4 h-4 animate-spin-slow" />
       case 'pending':
-      case 'pending_payment': return <Clock className="w-4 h-4" />
+      case 'pending_payment':
+      case 'reserved': return <Clock className="w-4 h-4" />
       case 'cancelled':
       case 'rejected': return <XCircle className="w-4 h-4" />
       case 'completed': return <CheckCircle className="w-4 h-4" />
       default: return <Clock className="w-4 h-4" />
     }
+  }
+
+  /**
+   * Get display-friendly status key and label for a reservation.
+   * Cash pending_payment → 'reserved' / 'Reserved'
+   * E-wallet pending_payment → 'pending_payment' / 'Pending Payment'
+   */
+  const getDisplayStatus = (reservation: Reservation): { key: string, label: string } => {
+    const effectiveStatus = getEffectiveStatus(reservation)
+    
+    if (effectiveStatus === 'pending_payment') {
+      const paymentMethod = reservation.metadata?.intended_payment_method ||
+                            reservation.metadata?.payment_method
+      if (paymentMethod === 'cash') {
+        return { key: 'reserved', label: 'Reserved' }
+      }
+      return { key: 'pending_payment', label: 'Pending Payment' }
+    }
+    
+    if (effectiveStatus === 'ongoing') {
+      return { key: 'ongoing', label: 'Ongoing' }
+    }
+    
+    const label = effectiveStatus
+      .split('_')
+      .map((part: string) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ')
+    
+    return { key: effectiveStatus, label }
   }
 
   const statusCounts = {
@@ -464,19 +495,24 @@ export function ReservationManagement() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">
-                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium ${getStatusColor(getEffectiveStatus(reservation))}`}>
-                            {getStatusIcon(getEffectiveStatus(reservation))}
-                            <span className="capitalize">{getEffectiveStatus(reservation).replace('_', ' ')}</span>
-                          </span>
+                          {(() => {
+                            const { key, label } = getDisplayStatus(reservation)
+                            return (
+                              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium ${getStatusColor(key)}`}>
+                                {getStatusIcon(key)}
+                                <span>{label}</span>
+                              </span>
+                            )
+                          })()}
                           {reservation.metadata?.is_queue_session_reservation && (
                             <span className="px-2 py-1 text-xs font-medium rounded-full bg-purple-50 text-purple-700">
                               Queue
                             </span>
                           )}
-                          {reservation.metadata?.recurrence_total > 1 && (
+                          {reservation.metadata?.weeks_total > 1 && (
                             <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-50 text-blue-700 flex items-center gap-1">
                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                              Recurring
+                              Week {(reservation.metadata.week_index ?? 0) + 1}/{reservation.metadata.weeks_total}
                             </span>
                           )}
                         </div>

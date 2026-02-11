@@ -253,12 +253,14 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     return activeTab === 'upcoming' ? timeA - timeB : timeB - timeA
   })
 
-  const bookingStatusBadge = (status: string) => {
+  const bookingStatusBadge = (status: string, booking?: Booking) => {
     const styles: Record<string, string> = {
+      reserved: 'bg-blue-500 text-white',
       pending_payment: 'bg-amber-500 text-white',
       pending: 'bg-amber-500 text-white',
       paid: 'bg-primary text-white',
       confirmed: 'bg-emerald-600 text-white',
+      ongoing: 'bg-green-500 text-white animate-pulse',
       cancelled: 'bg-red-600 text-white',
       pending_refund: 'bg-amber-600 text-white',
       refunded: 'bg-gray-500 text-white',
@@ -266,17 +268,35 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
       no_show: 'bg-gray-700 text-white',
     }
 
-    const readable = status
-      .split('_')
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(' ')
+    // Determine display status
+    let displayStatus = status
+    let displayLabel = ''
+
+    if (status === 'pending_payment') {
+      // Check if this is a cash booking → show "Reserved"
+      const paymentMethod = booking?.metadata?.intended_payment_method || 
+                            booking?.payments?.[0]?.payment_method
+      if (paymentMethod === 'cash') {
+        displayStatus = 'reserved'
+        displayLabel = 'Reserved'
+      } else {
+        displayLabel = 'Pending Payment'
+      }
+    } else if (status === 'ongoing') {
+      displayLabel = 'Ongoing'
+    } else {
+      displayLabel = status
+        .split('_')
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ')
+    }
 
     return (
       <span
-        className={`px-3 py-1.5 rounded-full text-xs font-bold shadow-lg ${styles[status] || 'bg-gray-500 text-white'
+        className={`px-3 py-1.5 rounded-full text-xs font-bold shadow-lg ${styles[displayStatus] || 'bg-gray-500 text-white'
           }`}
       >
-        {readable}
+        {displayLabel}
       </span>
     )
   }
@@ -431,18 +451,12 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                     </svg>
                   </div>
                   <div className="absolute top-3 right-3 flex gap-2">
-                    {bookingStatusBadge(booking.status)}
-                    {/* Show badge for recurring bookings */}
-                    {booking.metadata?.recurrence_total && booking.metadata.recurrence_total > 1 && (
+                    {bookingStatusBadge(booking.status, booking)}
+                    {/* Show badge only for weekly recurring bookings */}
+                    {booking.metadata?.weeks_total && booking.metadata.weeks_total > 1 && (
                       <span className="px-3 py-1.5 rounded-full text-xs font-bold shadow-lg bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                        {/* Only show "Week X/Y" if there are multiple weeks */}
-                        {booking.metadata.weeks_total && booking.metadata.weeks_total > 1 ? (
-                          <>Week {(booking.metadata.week_index ?? 0) + 1}/{booking.metadata.weeks_total}</>
-                        ) : (
-                          // For same-week multi-day, just show session index
-                          <>Session {(booking.metadata.recurrence_index ?? 0) + 1}/{booking.metadata.recurrence_total}</>
-                        )}
+                        Week {(booking.metadata.week_index ?? 0) + 1}/{booking.metadata.weeks_total}
                       </span>
                     )}
                   </div>
