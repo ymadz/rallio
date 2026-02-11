@@ -30,7 +30,7 @@ export interface QueueSession {
   courtName: string
   venueName: string
   venueId: string
-  status: 'waiting' | 'active' | 'completed'
+  status: 'upcoming' | 'waiting' | 'active' | 'completed'
   players: QueuePlayer[]
   userPosition: number | null
   estimatedWaitTime: number // in minutes
@@ -45,6 +45,29 @@ export interface QueueSession {
     players: string[]
     startTime: Date
     duration: number
+  }
+}
+
+/**
+ * Map DB queue session status to player-facing UI status
+ * - pending_payment: not shown to players
+ * - upcoming: session exists but not joinable yet (>2h before start)
+ * - open: session is open for joining (≤2h before start) -> 'waiting'
+ * - active: session is live -> 'active'
+ * - completed/cancelled: session ended -> 'completed'
+ */
+function mapQueueStatusForPlayer(dbStatus: string): 'upcoming' | 'waiting' | 'active' | 'completed' {
+  switch (dbStatus) {
+    case 'upcoming':
+      return 'upcoming'
+    case 'open':
+      return 'waiting'
+    case 'active':
+      return 'active'
+    case 'completed':
+    case 'cancelled':
+    default:
+      return 'completed'
   }
 }
 
@@ -97,7 +120,7 @@ export function useQueue(courtId: string) {
         courtName: queueData.courtName,
         venueName: queueData.venueName,
         venueId: queueData.venueId,
-        status: queueData.status === 'open' ? 'waiting' : queueData.status === 'active' ? 'active' : 'completed',
+        status: mapQueueStatusForPlayer(queueData.status),
         players: queueData.players.map(p => ({
           id: p.id,
           userId: p.userId,
@@ -288,7 +311,7 @@ export function useMyQueues() {
         courtName: q.courtName,
         venueName: q.venueName,
         venueId: q.venueId,
-        status: q.status === 'open' ? 'waiting' : q.status === 'active' ? 'active' : 'completed',
+        status: mapQueueStatusForPlayer(q.status),
         players: q.players || [],
         userPosition: q.userPosition,
         estimatedWaitTime: q.estimatedWaitTime,
@@ -398,7 +421,7 @@ export function useNearbyQueues(latitude?: number, longitude?: number) {
         courtName: q.courtName,
         venueName: q.venueName,
         venueId: q.venueId,
-        status: q.status === 'open' ? 'waiting' : q.status === 'active' ? 'active' : 'completed',
+        status: mapQueueStatusForPlayer(q.status),
         players: q.players || [],
         userPosition: q.userPosition,
         estimatedWaitTime: q.estimatedWaitTime,

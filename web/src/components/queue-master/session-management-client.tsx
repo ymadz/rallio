@@ -275,17 +275,17 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         metadata: sessionData.metadata
       }
 
-      // AUTO-CLOSE: If past end_time, close the session on the spot
+      // AUTO-COMPLETE: If past end_time, complete the session on the spot
       const now = serverDate || new Date()
       if (['open', 'active', 'paused'].includes(formattedSession.status) && formattedSession.endTime < now) {
-        console.log('🕒 [loadSession] Session expired, auto-closing:', sessionData.id)
+        console.log('🕒 [loadSession] Session expired, auto-completing:', sessionData.id)
         const { error: closeErr } = await supabase
           .from('queue_sessions')
-          .update({ status: 'closed', updated_at: new Date().toISOString() })
+          .update({ status: 'completed', updated_at: new Date().toISOString() })
           .eq('id', sessionData.id)
 
         if (!closeErr) {
-          formattedSession.status = 'closed'
+          formattedSession.status = 'completed'
         }
       }
       // AUTO-ACTIVATE: If 'open' and start_time has passed, flip to 'active'
@@ -542,7 +542,8 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
       case 'upcoming': return 'bg-blue-100 text-blue-700 border-blue-200'
       case 'open': return 'bg-blue-100 text-blue-700 border-blue-200'
       case 'paused': return 'bg-yellow-100 text-yellow-700 border-yellow-200'
-      case 'closed': return 'bg-gray-100 text-gray-700 border-gray-200'
+      case 'pending_payment': return 'bg-amber-100 text-amber-700 border-amber-200'
+      case 'completed': return 'bg-gray-100 text-gray-700 border-gray-200'
       default: return 'bg-gray-100 text-gray-700 border-gray-200'
     }
   }
@@ -670,7 +671,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
 
         {/* Action Buttons */}
         <div className="flex items-center gap-3 mt-6 pt-6 border-t border-white/20">
-          {(session.status === 'closed' || session.status === 'cancelled') ? (
+          {(session.status === 'completed' || session.status === 'cancelled') ? (
             <Link
               href={`/queue-master/sessions/${sessionId}/summary`}
               className="flex items-center gap-2 px-4 py-2 bg-white text-primary rounded-lg hover:bg-white/90 transition-colors font-medium"

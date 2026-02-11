@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { Calendar, Users, DollarSign, Clock, PlayCircle, CheckCircle, XCircle, ArrowRight, Filter } from 'lucide-react'
+import { Calendar, Users, DollarSign, Clock, ArrowRight, Filter, PlayCircle, History } from 'lucide-react'
 import Link from 'next/link'
 import { QueueMasterHistoryClient } from './queue-master-history-client'
+import { getStatusBadgeClasses, getStatusLabel, getStatusIcon, type QueueSessionStatus } from '@/lib/queue-status'
 
 interface SessionData {
     id: string
@@ -32,36 +33,20 @@ export function MySessionsClient({ initialSessions, initialHistory }: MySessions
     const [activeTab, setActiveTab] = useState<TabType>('active')
     const [sessions] = useState<SessionData[]>(initialSessions)
 
-    const activeStatuses = ['draft', 'open', 'active', 'paused', 'upcoming', 'pending_approval']
+    const activeStatuses = ['pending_payment', 'upcoming', 'open', 'active', 'paused']
 
     // Filter active sessions
     const activeSessions = sessions.filter(session => activeStatuses.includes(session.status))
         .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
 
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'active': return 'bg-green-100 text-green-700 border-green-200'
-            case 'open': return 'bg-blue-100 text-blue-700 border-blue-200'
-            case 'paused': return 'bg-yellow-100 text-yellow-700 border-yellow-200'
-            case 'closed': return 'bg-gray-100 text-gray-700 border-gray-200'
-            case 'cancelled': return 'bg-red-100 text-red-700 border-red-200'
-            case 'draft': return 'bg-gray-100 text-gray-600 border-gray-200'
-            case 'pending_approval': return 'bg-orange-100 text-orange-700 border-orange-200'
-            case 'rejected': return 'bg-red-100 text-red-700 border-red-200'
-            default: return 'bg-gray-100 text-gray-700 border-gray-200'
-        }
-    }
-
-    const getStatusIcon = (status: string) => {
-        switch (status) {
-            case 'active': return <PlayCircle className="w-4 h-4" />
-            case 'open': return <Clock className="w-4 h-4" />
-            case 'closed': return <CheckCircle className="w-4 h-4" />
-            case 'cancelled': return <XCircle className="w-4 h-4" />
-            case 'pending_approval': return <Clock className="w-4 h-4" />
-            case 'rejected': return <XCircle className="w-4 h-4" />
-            default: return <Clock className="w-4 h-4" />
-        }
+    const StatusBadge = ({ status }: { status: string }) => {
+        const Icon = getStatusIcon(status as QueueSessionStatus)
+        return (
+            <div className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-xs font-medium ${getStatusBadgeClasses(status as QueueSessionStatus)}`}>
+                <Icon className="w-4 h-4" />
+                <span>{getStatusLabel(status as QueueSessionStatus)}</span>
+            </div>
+        )
     }
 
     return (
@@ -146,10 +131,7 @@ export function MySessionsClient({ initialSessions, initialHistory }: MySessions
                                         {/* Left Section: Info */}
                                         <div className="flex-1">
                                             <div className="flex items-center gap-3 mb-2">
-                                                <div className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-xs font-medium ${getStatusColor(session.status)}`}>
-                                                    {getStatusIcon(session.status)}
-                                                    <span className="capitalize">{session.status}</span>
-                                                </div>
+                                                <StatusBadge status={session.status} />
                                                 <span className="text-xs text-gray-500 font-mono">#{session.id.slice(0, 8)}</span>
                                                 <span className="text-xs text-gray-500">•</span>
                                                 <span className="text-xs text-gray-500">

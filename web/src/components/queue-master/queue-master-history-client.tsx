@@ -7,14 +7,13 @@ import { format } from 'date-fns'
 import { formatCurrency } from '@/lib/utils'
 import {
     Calendar,
-    CheckCircle,
-    XCircle,
     Clock,
     DollarSign,
     Trophy,
     Search,
     Download
 } from 'lucide-react'
+import { getStatusBadgeClasses, getStatusLabel, getStatusIcon, type QueueSessionStatus } from '@/lib/queue-status'
 
 interface QueueMasterHistoryClientProps {
     initialHistory: any[]
@@ -42,29 +41,16 @@ export function QueueMasterHistoryClient({ initialHistory }: QueueMasterHistoryC
     const totalSessions = filteredHistory.length
 
     const getStatusBadge = (status: string) => {
-        switch (status) {
-            case 'closed':
-                return (
-                    <Badge variant="secondary" className="bg-gray-100 text-gray-700 hover:bg-gray-200">
-                        <CheckCircle className="w-3 h-3 mr-1" />
-                        Closed
-                    </Badge>
-                )
-            case 'cancelled':
-                return (
-                    <Badge variant="destructive" className="bg-red-100 text-red-700 hover:bg-red-200 shadow-none border border-red-200">
-                        <XCircle className="w-3 h-3 mr-1" />
-                        Cancelled
-                    </Badge>
-                )
-            default:
-                return (
-                    <Badge variant="outline" className="text-gray-600">
-                        <Clock className="w-3 h-3 mr-1" />
-                        {status}
-                    </Badge>
-                )
-        }
+        const Icon = getStatusIcon(status as QueueSessionStatus)
+        return (
+            <Badge 
+                variant="secondary" 
+                className={`${getStatusBadgeClasses(status as QueueSessionStatus)} hover:opacity-80`}
+            >
+                <Icon className="w-3 h-3 mr-1" />
+                {getStatusLabel(status as QueueSessionStatus)}
+            </Badge>
+        )
     }
 
     return (

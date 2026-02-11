@@ -598,7 +598,7 @@ async function markReservationPaidAndConfirmed({
   try {
     const { data: queueSession } = await supabase
       .from('queue_sessions')
-      .select('id, status, approval_status, metadata')
+      .select('id, status, approval_status, metadata, start_time, end_time')
       .filter('metadata->>reservation_id', 'eq', reservationId)
       .single()
 
@@ -617,9 +617,32 @@ async function markReservationPaidAndConfirmed({
         updateData.approval_status = 'approved'
       }
 
+      // Calculate correct status based on time lifecycle
+      // pending_payment → upcoming (if >2h before start) or open (if ≤2h before start)
+      // At start_time → active (handled by cron)
+      // At end_time → completed (handled by cron)
       if (['pending_payment', 'pending_approval'].includes(queueSession.status)) {
-        updateData.status = 'active'
-        console.log('[markReservationPaidAndConfirmed] 🚀 Activating Queue Session')
+        const now = new Date()
+        const startTime = new Date(queueSession.start_time)
+        const endTime = new Date(queueSession.end_time)
+        const twoHoursInMs = 2 * 60 * 60 * 1000
+        
+        let newStatus: string
+        if (now >= endTime) {
+          newStatus = 'completed'
+          console.log('[markReservationPaidAndConfirmed] 📅 Session already ended → completed')
+        } else if (now >= startTime) {
+          newStatus = 'active'
+          console.log('[markReservationPaidAndConfirmed] 🚀 Session already started → active')
+        } else if (startTime.getTime() - now.getTime() <= twoHoursInMs) {
+          newStatus = 'open'
+          console.log('[markReservationPaidAndConfirmed] 🔓 Within 2 hours of start → open')
+        } else {
+          newStatus = 'upcoming'
+          console.log('[markReservationPaidAndConfirmed] ⏰ More than 2 hours away → upcoming')
+        }
+        
+        updateData.status = newStatus
       }
 
       const { error: qError } = await supabase

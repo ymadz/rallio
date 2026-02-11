@@ -537,11 +537,24 @@ export async function markReservationAsPaid(reservationId: string) {
         .single()
 
       if (queueSession) {
-        // Activate queue session only if start_time has passed;
-        // otherwise set 'open' (paid & ready, but scheduled for later)
+        // Calculate correct status based on time lifecycle
+        // pending_payment → upcoming (if >2h before start) or open (if ≤2h before start)
+        // At start_time → active (handled by cron)
         const now = await getServerNow()
         const sessionStart = new Date(reservation.start_time)
-        const newQueueStatus = sessionStart <= now ? 'active' : 'open'
+        const sessionEnd = new Date(reservation.end_time)
+        const twoHoursInMs = 2 * 60 * 60 * 1000
+        
+        let newQueueStatus: string
+        if (now >= sessionEnd) {
+          newQueueStatus = 'completed'
+        } else if (now >= sessionStart) {
+          newQueueStatus = 'active'
+        } else if (sessionStart.getTime() - now.getTime() <= twoHoursInMs) {
+          newQueueStatus = 'open'
+        } else {
+          newQueueStatus = 'upcoming'
+        }
 
         const { error: qsError } = await supabase
           .from('queue_sessions')

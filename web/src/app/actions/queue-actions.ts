@@ -18,7 +18,7 @@ export interface QueueSessionData {
   courtName: string
   venueName: string
   venueId: string
-  status: 'draft' | 'open' | 'active' | 'paused' | 'closed' | 'cancelled'
+  status: 'pending_payment' | 'upcoming' | 'open' | 'active' | 'paused' | 'completed' | 'cancelled'
   currentPlayers: number
   maxPlayers: number
   costPerGame: number
@@ -723,7 +723,7 @@ export async function getQueueMasterHistory() {
       return { success: false, error: 'User not authenticated' }
     }
 
-    // Fetch sessions organized by user that are closed or cancelled
+    // Fetch sessions organized by user that are completed or cancelled
     // Also include expired sessions that might still be marked active/open if cron failed (fallback)
     const { data: sessions, error } = await supabase
       .from('queue_sessions')
@@ -738,7 +738,7 @@ export async function getQueueMasterHistory() {
       `)
       .eq('organizer_id', user.id)
       .eq('organizer_id', user.id)
-      .or(`status.in.(closed,cancelled),end_time.lt.${(await getServerNow()).toISOString()}`)
+      .or(`status.in.(completed,cancelled),end_time.lt.${(await getServerNow()).toISOString()}`)
       .order('start_time', { ascending: false })
       .order('start_time', { ascending: false })
 
@@ -1497,24 +1497,24 @@ export async function closeQueueSession(sessionId: string): Promise<{
       unpaidBalances,
     }
 
-    // 5. Update session status to closed
+    // 5. Update session status to completed
     const { error: updateError } = await supabase
       .from('queue_sessions')
       .update({
-        status: 'closed',
+        status: 'completed',
         settings: {
-          closed_at: new Date().toISOString(),
+          completed_at: new Date().toISOString(),
           summary,
         },
       })
       .eq('id', sessionId)
 
     if (updateError) {
-      console.error('[closeQueueSession] ❌ Failed to close session:', updateError)
-      return { success: false, error: 'Failed to close queue session' }
+      console.error('[closeQueueSession] ❌ Failed to complete session:', updateError)
+      return { success: false, error: 'Failed to complete queue session' }
     }
 
-    console.log('[closeQueueSession] ✅ Queue session closed successfully:', summary)
+    console.log('[closeQueueSession] ✅ Queue session completed successfully:', summary)
 
     // 5b. Also complete the linked reservation (belt-and-suspenders with DB trigger)
     const linkedReservationId = session.metadata?.reservation_id

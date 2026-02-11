@@ -45,8 +45,16 @@ export function NearbyQueues() {
                 <h3 className="font-medium text-gray-900 truncate">{queue.courtName}</h3>
                 <p className="text-sm text-gray-500 truncate">{queue.venueName}</p>
               </div>
-              <span className="ml-2 px-2 py-1 bg-primary/10 text-primary text-xs font-medium rounded-full flex-shrink-0">
-                {queue.status === 'waiting' ? 'Waiting' : 'Active'}
+              <span className={`ml-2 px-2 py-1 text-xs font-medium rounded-full flex-shrink-0 ${
+                queue.status === 'active' ? 'bg-green-100 text-green-700' :
+                queue.status === 'waiting' ? 'bg-yellow-100 text-yellow-700' :
+                queue.status === 'upcoming' ? 'bg-blue-100 text-blue-700' :
+                'bg-gray-100 text-gray-700'
+              }`}>
+                {queue.status === 'active' ? 'Live' :
+                 queue.status === 'waiting' ? 'Open' :
+                 queue.status === 'upcoming' ? 'Upcoming' :
+                 'Completed'}
               </span>
             </div>
 

@@ -643,6 +643,11 @@ export function AvailabilityModal({
                   <p className="text-gray-600">
                     <span className="font-medium text-gray-900">Selected:</span>{' '}
                     {format(selectedDate, 'MMM d, yyyy')}
+                    {selectedDays.length > 1 && (
+                      <span className="text-gray-500 text-sm ml-1">
+                        ({selectedDays.map(d => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ')})
+                      </span>
+                    )}
                   </p>
                   <p className="text-gray-600">
                     {formatTime(startSlot.time)} - {formatTime(getEndTime())}
