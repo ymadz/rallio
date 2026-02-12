@@ -542,7 +542,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                     <div>
                       <p className="text-gray-500 mb-1">Amount</p>
                       <p className="font-bold text-gray-900">₱{booking.total_amount.toFixed(2)}</p>
-                      {(booking.metadata?.recurrence_total > 1) && (
+                      {(booking.metadata?.recurrence_total && booking.metadata.recurrence_total > 1) && (
                         <p className="text-xs text-gray-400 mt-0.5">per session</p>
                       )}
                     </div>
