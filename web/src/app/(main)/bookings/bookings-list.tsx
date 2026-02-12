@@ -158,8 +158,8 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
 
   const isCashBooking = (booking: Booking): boolean => {
     return booking.metadata?.intended_payment_method === 'cash' ||
-           booking.metadata?.payment_method === 'cash' ||
-           booking.payments?.[0]?.payment_method === 'cash'
+      booking.metadata?.payment_method === 'cash' ||
+      booking.payments?.[0]?.payment_method === 'cash'
   }
 
   const getPaymentStatus = (booking: Booking) => {
@@ -215,8 +215,22 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     return activeStatuses.includes(booking.status) && hoursUntilStart > 24
   }
 
-  const getTimeRemaining = (startTime: string) => {
+  const getTimeRemaining = (startTime: string, endTime?: string, isOngoing?: boolean) => {
     const now = serverDate || new Date()
+
+    // For ongoing bookings, calculate time until end
+    if (isOngoing && endTime) {
+      const hours = differenceInHours(new Date(endTime), now)
+      if (hours < 1) {
+        const minutes = Math.floor((new Date(endTime).getTime() - now.getTime()) / (1000 * 60))
+        return `${Math.max(0, minutes)}m remaining`
+      }
+      if (hours < 24) return `${hours}h remaining`
+      const days = Math.floor(hours / 24)
+      return `${days} day${days > 1 ? 's' : ''}`
+    }
+
+    // For upcoming bookings, calculate time until start
     const hours = differenceInHours(new Date(startTime), now)
     if (hours < 24) return `${hours}h remaining`
     const days = Math.floor(hours / 24)
@@ -285,8 +299,8 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
 
     if (status === 'pending_payment') {
       // Check if this is a cash booking → show "Reserved"
-      const paymentMethod = booking?.metadata?.intended_payment_method || 
-                            booking?.payments?.[0]?.payment_method
+      const paymentMethod = booking?.metadata?.intended_payment_method ||
+        booking?.payments?.[0]?.payment_method
       if (paymentMethod === 'cash') {
         displayStatus = 'reserved'
         displayLabel = 'Reserved'
@@ -518,9 +532,9 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                       <p className="text-gray-500 mb-1">Payment</p>
                       <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-bold shadow-sm text-white ${paymentStatus.color === 'green' ? 'bg-green-500' :
                         paymentStatus.color === 'yellow' ? 'bg-yellow-500' :
-                        paymentStatus.color === 'blue' ? 'bg-blue-500' :
-                        paymentStatus.color === 'orange' ? 'bg-orange-500' :
-                          'bg-red-500'
+                          paymentStatus.color === 'blue' ? 'bg-blue-500' :
+                            paymentStatus.color === 'orange' ? 'bg-orange-500' :
+                              'bg-red-500'
                         }`}>
                         {paymentStatus.label}
                       </span>
