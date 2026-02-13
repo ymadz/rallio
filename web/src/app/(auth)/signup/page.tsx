@@ -8,12 +8,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert } from '@/components/ui/alert'
-import { PhoneInput, validatePhilippinePhone } from '@/components/ui/phone-input'
 import { getPublicSettings } from '@/app/actions/global-admin-settings-actions'
 import { LegalContentDialog } from '@/components/auth/legal-content-dialog'
 import { DEFAULT_PRIVACY_POLICY, DEFAULT_TERMS_AND_CONDITIONS } from '@/lib/legal-content'
-
-type SignupStep = 'details' | 'phone'
 
 interface SignupData {
   firstName: string
@@ -22,13 +19,11 @@ interface SignupData {
   email: string
   password: string
   confirmPassword: string
-  phoneNumber: string
   agreeToTerms: boolean
 }
 
 export default function SignupPage() {
   const router = useRouter()
-  const [step, setStep] = useState<SignupStep>('details')
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -85,7 +80,6 @@ export default function SignupPage() {
     email: '',
     password: '',
     confirmPassword: '',
-    phoneNumber: '',
     agreeToTerms: false,
   })
 
@@ -93,7 +87,7 @@ export default function SignupPage() {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
-  const handleDetailsSubmit = (e: React.FormEvent) => {
+  const handleSignupSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
@@ -115,19 +109,6 @@ export default function SignupPage() {
 
     if (!formData.agreeToTerms) {
       setError('Please agree to the Terms and Conditions')
-      return
-    }
-
-    setStep('phone')
-  }
-
-  const handlePhoneSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-
-    // Validate Philippine phone number
-    if (!validatePhilippinePhone(formData.phoneNumber)) {
-      setError('Please enter a valid Philippine mobile number (10 digits starting with 9)')
       return
     }
 
@@ -153,7 +134,7 @@ export default function SignupPage() {
             first_name: formData.firstName,
             middle_initial: formData.middleInitial,
             last_name: formData.lastName,
-            phone_number: formData.phoneNumber,
+            // Phone number is no longer collected at signup
           },
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
@@ -165,8 +146,7 @@ export default function SignupPage() {
       }
 
       // Profile and player records are automatically created by database trigger (handle_new_user)
-      // No need for manual inserts here
-
+      
       // Redirect to verification page
       router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`)
     } catch {
@@ -209,77 +189,6 @@ export default function SignupPage() {
     }
   }
 
-  if (step === 'phone') {
-    return (
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="text-center space-y-2">
-          <div className="mx-auto w-16 h-16 border-2 border-primary rotate-45 flex items-center justify-center mb-4">
-            <svg
-              className="-rotate-45 w-8 h-8 text-primary"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 5l7 7-7 7"
-              />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight">Ready to Rally?</h1>
-          <p className="text-muted-foreground text-sm">
-            Enter your number so we can keep you updated on your next match!
-          </p>
-        </div>
-
-        {/* Error Alert */}
-        {error && (
-          <Alert variant="destructive">
-            {error}
-          </Alert>
-        )}
-
-        {/* Phone Form */}
-        <form onSubmit={handlePhoneSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="phoneNumber">Mobile Number (Philippines)</Label>
-            <PhoneInput
-              id="phoneNumber"
-              value={formData.phoneNumber}
-              onChange={(value) => updateFormData('phoneNumber', value)}
-              disabled={isLoading}
-              placeholder="9XX XXX XXXX"
-            />
-            <p className="text-xs text-muted-foreground">
-              Enter your 10-digit Philippine mobile number
-            </p>
-          </div>
-
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={isLoading}
-          >
-            {isLoading ? 'Creating account...' : 'Continue'}
-          </Button>
-
-          <Button
-            type="button"
-            variant="ghost"
-            className="w-full"
-            onClick={() => setStep('details')}
-            disabled={isLoading}
-          >
-            Back
-          </Button>
-        </form>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -296,7 +205,7 @@ export default function SignupPage() {
       )}
 
       {/* Signup Form */}
-      <form onSubmit={handleDetailsSubmit} className="space-y-4">
+      <form onSubmit={handleSignupSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="firstName">First Name *</Label>

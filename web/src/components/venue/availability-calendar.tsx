@@ -61,8 +61,27 @@ export function AvailabilityCalendar({ courtId, courtName, hourlyRate }: Availab
     fetchTimeSlots()
   }, [selectedDate, courtId])
 
-  const formatTime = (dateString: string) => {
-    return format(new Date(dateString), 'h:mm a')
+  const formatTime = (timeString: string) => {
+    // If it's a full date string (ISO), use date-fns
+    if (timeString.includes('T')) {
+      try {
+        return format(new Date(timeString), 'h:mm a')
+      } catch {
+        return timeString
+      }
+    }
+
+    // If it's just HH:mm or HH:mm:ss
+    if (timeString.includes(':')) {
+      const [hours, minutes] = timeString.split(':').map(Number)
+      if (!isNaN(hours)) {
+        const period = hours >= 12 ? 'PM' : 'AM'
+        const displayHours = hours % 12 || 12
+        return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`
+      }
+    }
+
+    return timeString
   }
 
   const disabledDays = { before: new Date() }
@@ -112,13 +131,12 @@ export function AvailabilityCalendar({ courtId, courtName, hourlyRate }: Availab
                   key={slot.id}
                   onClick={() => !slot.is_reserved && setSelectedSlot(slot)}
                   disabled={slot.is_reserved}
-                  className={`w-full p-3 rounded-lg text-left transition-all ${
-                    slot.is_reserved
+                  className={`w-full p-3 rounded-lg text-left transition-all ${slot.is_reserved
                       ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                       : selectedSlot?.id === slot.id
-                      ? 'bg-primary text-white ring-2 ring-primary ring-offset-2'
-                      : 'bg-white border border-gray-200 text-gray-700 hover:border-primary hover:bg-primary/5'
-                  }`}
+                        ? 'bg-primary text-white ring-2 ring-primary ring-offset-2'
+                        : 'bg-white border border-gray-200 text-gray-700 hover:border-primary hover:bg-primary/5'
+                    }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
