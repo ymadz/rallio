@@ -34,6 +34,8 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
   // We will keep `activeTab` and sync it with Tabs onValueChange to keep logic simple without rewriting everything right away.
   const [activeTab, setActiveTab] = useState('upcoming')
 
+  const activeStatuses = ['pending_payment', 'pending', 'paid', 'confirmed']
+
   const filteredBookings = bookings.filter((booking) => {
     const startTime = new Date(booking.start_time)
     const now = serverDate || new Date()
@@ -74,8 +76,6 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     const timeB = new Date(b.start_time).getTime()
     return activeTab === 'upcoming' ? timeA - timeB : timeB - timeA
   })
-
-  const activeStatuses = ['pending_payment', 'pending', 'paid', 'confirmed']
 
   const handleResumePayment = async (booking: Booking) => {
     setResumingPaymentId(booking.id)
