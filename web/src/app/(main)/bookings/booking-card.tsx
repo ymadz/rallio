@@ -119,7 +119,7 @@ export function BookingCard({
         const startTime = new Date(b.start_time)
         const now = serverDate || new Date()
         const hoursUntilStart = differenceInHours(startTime, now)
-        return activeStatuses.includes(b.status) && hoursUntilStart > 24
+        return activeStatuses.includes(b.status) && hoursUntilStart >= 24
     }
 
     const getTimeRemaining = (startTime: string, endTime?: string, isOngoing?: boolean) => {
