@@ -218,7 +218,7 @@ export function RefundManagement() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -234,67 +234,93 @@ export function RefundManagement() {
         </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {[
-          { label: 'Total', count: statusCounts.all, bgColor: 'bg-slate-50', textColor: 'text-slate-600', countColor: 'text-slate-900', icon: Undo2 },
-          { label: 'Pending', count: statusCounts.pending, bgColor: 'bg-amber-50', textColor: 'text-amber-600', countColor: 'text-amber-700', icon: Clock },
-          { label: 'Processing', count: statusCounts.processing, bgColor: 'bg-blue-50', textColor: 'text-blue-600', countColor: 'text-blue-700', icon: RefreshCw },
-          { label: 'Completed', count: statusCounts.succeeded, bgColor: 'bg-emerald-50', textColor: 'text-emerald-600', countColor: 'text-emerald-700', icon: CheckCircle },
-          { label: 'Failed', count: statusCounts.failed, bgColor: 'bg-red-50', textColor: 'text-red-600', countColor: 'text-red-700', icon: XCircle },
-        ].map((stat) => (
-          <Card key={stat.label} className={`p-4 ${stat.bgColor} border-0 shadow-sm`}>
-            <div className="flex items-center gap-2 mb-1">
-              <stat.icon className={`w-4 h-4 ${stat.textColor}`} />
-              <p className={`text-sm font-medium ${stat.textColor}`}>{stat.label}</p>
+      {/* Filters */}
+      <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">
+        <div className="flex flex-col lg:flex-row gap-4">
+          {/* Search */}
+          <div className="flex-1">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search by customer or venue..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
-            <p className={`text-2xl font-bold ${stat.countColor}`}>{stat.count}</p>
-          </Card>
-        ))}
+          </div>
+
+          {/* Export Button */}
+          <button className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            <Undo2 className="w-4 h-4" />
+            <span>Export</span>
+          </button>
+        </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        {/* Search */}
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search by customer or venue..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
-          />
-        </div>
-
-        {/* Status Filter */}
-        <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-gray-500" />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
-          >
-            <option value="all">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="processing">Processing</option>
-            <option value="succeeded">Completed</option>
-            <option value="failed">Failed</option>
-          </select>
-        </div>
+      {/* Status Tabs */}
+      <div className="bg-white border border-gray-200 rounded-xl p-2 mb-6 inline-flex gap-2 overflow-x-auto">
+        <button
+          onClick={() => setStatusFilter('all')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${statusFilter === 'all'
+            ? 'bg-primary text-white shadow-sm'
+            : 'text-gray-600 hover:bg-gray-100'
+            }`}
+        >
+          All ({statusCounts.all})
+        </button>
+        <button
+          onClick={() => setStatusFilter('pending')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${statusFilter === 'pending'
+            ? 'bg-amber-500 text-white shadow-sm'
+            : 'text-gray-600 hover:bg-gray-100'
+            }`}
+        >
+          Pending ({statusCounts.pending})
+        </button>
+        <button
+          onClick={() => setStatusFilter('processing')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${statusFilter === 'processing'
+            ? 'bg-blue-500 text-white shadow-sm'
+            : 'text-gray-600 hover:bg-gray-100'
+            }`}
+        >
+          Processing ({statusCounts.processing})
+        </button>
+        <button
+          onClick={() => setStatusFilter('succeeded')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${statusFilter === 'succeeded'
+            ? 'bg-emerald-500 text-white shadow-sm'
+            : 'text-gray-600 hover:bg-gray-100'
+            }`}
+        >
+          Completed ({statusCounts.succeeded})
+        </button>
+        <button
+          onClick={() => setStatusFilter('failed')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${statusFilter === 'failed'
+            ? 'bg-red-500 text-white shadow-sm'
+            : 'text-gray-600 hover:bg-gray-100'
+            }`}
+        >
+          Failed ({statusCounts.failed})
+        </button>
       </div>
 
       {/* Refunds List */}
       {filteredRefunds.length === 0 ? (
-        <Card className="p-12 text-center">
-          <Undo2 className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+        <div className="bg-white border border-gray-200 rounded-xl p-12 text-center">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Undo2 className="w-8 h-8 text-gray-400" />
+          </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">No Refunds Found</h3>
           <p className="text-gray-600">
-            {statusFilter !== 'all' 
+            {statusFilter !== 'all'
               ? `No refunds with status "${statusFilter}"`
               : 'No refund requests for your venues yet'}
           </p>
-        </Card>
+        </div>
       ) : (
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
           <table className="w-full">
@@ -364,7 +390,7 @@ export function RefundManagement() {
             <div className="p-6 border-b border-gray-200">
               <h2 className="text-xl font-bold text-gray-900">Refund Details</h2>
             </div>
-            
+
             <div className="p-6 space-y-4">
               {/* Status */}
               <div className="flex items-center justify-between">
@@ -436,7 +462,7 @@ export function RefundManagement() {
               >
                 Close
               </Button>
-              
+
               {selectedRefund.status === 'pending' && (
                 <>
                   <Button

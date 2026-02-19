@@ -151,7 +151,7 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="e.g., Sunrise Sports Complex"
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
             />
           </div>
 
@@ -165,7 +165,7 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               placeholder="Describe the venue, facilities, and features..."
               rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none resize-none"
             />
           </div>
 
@@ -203,7 +203,7 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
               value={formData.city}
               onChange={(e) => setFormData({ ...formData, city: e.target.value })}
               placeholder="City"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
             />
           </div>
 
@@ -221,7 +221,7 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 placeholder="Contact phone number"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
               />
             </div>
 
@@ -237,7 +237,7 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="Contact email"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
               />
             </div>
           </div>
@@ -255,7 +255,7 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
               value={formData.website}
               onChange={(e) => setFormData({ ...formData, website: e.target.value })}
               placeholder="https://example.com"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
             />
           </div>
 
@@ -271,7 +271,7 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
                 value={formData.latitude}
                 onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
                 placeholder="e.g., 6.9214"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
               />
             </div>
 
@@ -285,7 +285,7 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
                 value={formData.longitude}
                 onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
                 placeholder="e.g., 122.0790"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
               />
             </div>
           </div>
@@ -303,7 +303,7 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
             <button
               type="submit"
               disabled={isSubmitting || !formData.name}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-2"
+              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-2"
             >
               {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
               Save Changes

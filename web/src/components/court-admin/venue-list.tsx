@@ -29,7 +29,7 @@ const LocationPicker = dynamic(
     ssr: false,
     loading: () => (
       <div className="h-full w-full flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     )
   }
@@ -154,7 +154,7 @@ export function VenueList() {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
       </div>
     )
@@ -191,7 +191,7 @@ export function VenueList() {
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm hover:shadow-md"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm hover:shadow-md"
           >
             <Plus className="w-5 h-5" />
             <span className="font-semibold">Add Venue</span>
@@ -202,8 +202,8 @@ export function VenueList() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white border border-gray-200 rounded-xl p-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Building2 className="w-6 h-6 text-blue-600" />
+              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                <Building2 className="w-6 h-6 text-primary" />
               </div>
               <div>
                 <p className="text-sm text-gray-500">Total Venues</p>
@@ -262,7 +262,7 @@ export function VenueList() {
           </p>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
           >
             <Plus className="w-5 h-5" />
             <span>Create First Venue</span>
@@ -274,13 +274,13 @@ export function VenueList() {
             <Link
               key={venue.id}
               href={`/court-admin/venues/${venue.id}`}
-              className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-lg hover:border-blue-300 transition-all group"
+              className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-lg hover:border-primary/30 transition-all group"
             >
               {/* Venue Header */}
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-xl font-bold text-gray-900 group-hover:text-blue-600 transition-colors">
+                    <h3 className="text-xl font-bold text-gray-900 group-hover:text-primary transition-colors">
                       {venue.name}
                     </h3>
                     {venue.is_verified ? (
@@ -304,7 +304,7 @@ export function VenueList() {
                     <p className="text-sm text-gray-600 line-clamp-2">{venue.description}</p>
                   )}
                 </div>
-                <ChevronRight className="w-6 h-6 text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all flex-shrink-0" />
+                <ChevronRight className="w-6 h-6 text-gray-400 group-hover:text-primary group-hover:translate-x-1 transition-all flex-shrink-0" />
               </div>
 
               {/* Venue Info */}
@@ -342,7 +342,7 @@ export function VenueList() {
                         }`}>
                         {venue.is_active ? 'Active' : 'Inactive'}
                       </p>
-                      <p className={`text-xs font-medium ${venue.is_verified ? 'text-blue-600' : 'text-yellow-600'
+                      <p className={`text-xs font-medium ${venue.is_verified ? 'text-primary' : 'text-yellow-600'
                         }`}>
                         {venue.is_verified ? 'Verified' : 'Pending Verification'}
                       </p>
@@ -356,7 +356,7 @@ export function VenueList() {
               <div className="mt-4 pt-4 border-t border-gray-200">
                 <div className="flex items-center justify-between">
                   <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${venue.is_active
-                    ? 'bg-green-100 text-green-700'
+                    ? 'bg-primary/10 text-primary'
                     : 'bg-gray-100 text-gray-700'
                     }`}>
                     {venue.is_active ? (
@@ -371,7 +371,7 @@ export function VenueList() {
                       </>
                     )}
                   </span>
-                  <span className="text-sm text-blue-600 font-medium group-hover:underline">
+                  <span className="text-sm text-primary font-medium group-hover:underline">
                     View Details →
                   </span>
                 </div>
@@ -386,10 +386,10 @@ export function VenueList() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-8 py-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-white">
+            <div className="flex items-center justify-between px-8 py-6 border-b border-gray-100 bg-gradient-to-r from-primary/5 to-white">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
+                  <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
                     <Building2 className="w-5 h-5 text-white" />
                   </div>
                   Create New Venue
@@ -424,7 +424,7 @@ export function VenueList() {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="e.g., Sunrise Sports Complex"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all outline-none"
                 />
               </div>
 
@@ -438,7 +438,7 @@ export function VenueList() {
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Describe your venue facilities, features, and amenities..."
                   rows={3}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none resize-none"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all outline-none resize-none"
                 />
               </div>
 
@@ -477,7 +477,7 @@ export function VenueList() {
                   value={formData.city}
                   onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                   placeholder="Zamboanga City"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all outline-none"
                 />
               </div>
 
@@ -495,7 +495,7 @@ export function VenueList() {
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     placeholder="+63 912 345 6789"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all outline-none"
                   />
                 </div>
                 <div>
@@ -510,7 +510,7 @@ export function VenueList() {
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     placeholder="info@venue.com"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all outline-none"
                   />
                 </div>
               </div>
@@ -528,7 +528,7 @@ export function VenueList() {
                   value={formData.website}
                   onChange={(e) => setFormData({ ...formData, website: e.target.value })}
                   placeholder="https://www.yourwebsite.com"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all outline-none"
                 />
               </div>
 
@@ -540,7 +540,7 @@ export function VenueList() {
                   <button
                     type="button"
                     onClick={() => setShowMapPicker(true)}
-                    className="inline-flex items-center gap-1.5 text-sm text-blue-600 font-medium hover:text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-colors"
+                    className="inline-flex items-center gap-1.5 text-sm text-primary font-medium hover:text-primary-dark hover:bg-primary/5 px-3 py-1.5 rounded-lg transition-colors"
                   >
                     <MapPin className="w-4 h-4" />
                     Pick on Map
@@ -558,7 +558,7 @@ export function VenueList() {
                       value={formData.latitude}
                       onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
                       placeholder="e.g., 6.9214"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all outline-none"
                     />
                   </div>
                   <div>
@@ -571,7 +571,7 @@ export function VenueList() {
                       value={formData.longitude}
                       onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
                       placeholder="e.g., 122.0790"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all outline-none"
                     />
                   </div>
                 </div>
@@ -590,7 +590,7 @@ export function VenueList() {
                 <button
                   type="submit"
                   disabled={isCreating || !formData.name.trim()}
-                  className="inline-flex items-center gap-2 px-8 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-2 px-8 py-2.5 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isCreating && <Loader2 className="w-4 h-4 animate-spin" />}
                   {isCreating ? 'Creating...' : 'Create Venue'}
