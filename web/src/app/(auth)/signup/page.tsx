@@ -8,12 +8,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert } from '@/components/ui/alert'
-import { PhoneInput, validatePhilippinePhone } from '@/components/ui/phone-input'
 import { getPublicSettings } from '@/app/actions/global-admin-settings-actions'
 import { LegalContentDialog } from '@/components/auth/legal-content-dialog'
 import { DEFAULT_PRIVACY_POLICY, DEFAULT_TERMS_AND_CONDITIONS } from '@/lib/legal-content'
-
-type SignupStep = 'details' | 'phone'
 
 interface SignupData {
   firstName: string
@@ -22,13 +19,13 @@ interface SignupData {
   email: string
   password: string
   confirmPassword: string
-  phoneNumber: string
+  phoneNumber?: string // Optional now as we don't use it in this form
   agreeToTerms: boolean
 }
 
 export default function SignupPage() {
   const router = useRouter()
-  const [step, setStep] = useState<SignupStep>('details')
+  // const [step, setStep] = useState<SignupStep>('details') // Removed step state
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -43,7 +40,7 @@ export default function SignupPage() {
     terms: '',
     privacy: '',
   })
-  
+
   // Fetch legal content on mount
   useEffect(() => {
     const fetchContent = async () => {
@@ -52,13 +49,13 @@ export default function SignupPage() {
           getPublicSettings('terms_and_conditions'),
           getPublicSettings('privacy_policy')
         ])
-        
+
         setLegalContent({
-          terms: termsRes.success && termsRes.data && (termsRes.data as any).setting_value?.content 
-            ? (termsRes.data as any).setting_value.content 
+          terms: termsRes.success && termsRes.data && (termsRes.data as any).setting_value?.content
+            ? (termsRes.data as any).setting_value.content
             : DEFAULT_TERMS_AND_CONDITIONS,
-          privacy: privacyRes.success && privacyRes.data && (privacyRes.data as any).setting_value?.content 
-            ? (privacyRes.data as any).setting_value.content 
+          privacy: privacyRes.success && privacyRes.data && (privacyRes.data as any).setting_value?.content
+            ? (privacyRes.data as any).setting_value.content
             : DEFAULT_PRIVACY_POLICY,
         })
       } catch (err) {
@@ -85,7 +82,7 @@ export default function SignupPage() {
     email: '',
     password: '',
     confirmPassword: '',
-    phoneNumber: '',
+    phoneNumber: '', // Kept in type for now to avoid breaking other things if strict, but ignoring it
     agreeToTerms: false,
   })
 
@@ -93,7 +90,7 @@ export default function SignupPage() {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
-  const handleDetailsSubmit = (e: React.FormEvent) => {
+  const handleDetailsSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
@@ -115,19 +112,6 @@ export default function SignupPage() {
 
     if (!formData.agreeToTerms) {
       setError('Please agree to the Terms and Conditions')
-      return
-    }
-
-    setStep('phone')
-  }
-
-  const handlePhoneSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-
-    // Validate Philippine phone number
-    if (!validatePhilippinePhone(formData.phoneNumber)) {
-      setError('Please enter a valid Philippine mobile number (10 digits starting with 9)')
       return
     }
 
@@ -153,7 +137,7 @@ export default function SignupPage() {
             first_name: formData.firstName,
             middle_initial: formData.middleInitial,
             last_name: formData.lastName,
-            phone_number: formData.phoneNumber,
+            // phone_number: formData.phoneNumber, // Removed phone number
           },
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
@@ -161,6 +145,7 @@ export default function SignupPage() {
 
       if (error) {
         setError(error.message)
+        setIsLoading(false) // Stop loading on error
         return
       }
 
@@ -171,7 +156,6 @@ export default function SignupPage() {
       router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`)
     } catch {
       setError('An unexpected error occurred')
-    } finally {
       setIsLoading(false)
     }
   }
@@ -183,7 +167,7 @@ export default function SignupPage() {
       const supabase = createClient()
       const redirectUrl = `${window.location.origin}/auth/callback`
       console.log('🔍 [Google Signup] Redirect URL:', redirectUrl)
-      
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -207,77 +191,6 @@ export default function SignupPage() {
     } finally {
       setIsLoading(false)
     }
-  }
-
-  if (step === 'phone') {
-    return (
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="text-center space-y-2">
-          <div className="mx-auto w-16 h-16 border-2 border-primary rotate-45 flex items-center justify-center mb-4">
-            <svg
-              className="-rotate-45 w-8 h-8 text-primary"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 5l7 7-7 7"
-              />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight">Ready to Rally?</h1>
-          <p className="text-muted-foreground text-sm">
-            Enter your number so we can keep you updated on your next match!
-          </p>
-        </div>
-
-        {/* Error Alert */}
-        {error && (
-          <Alert variant="destructive">
-            {error}
-          </Alert>
-        )}
-
-        {/* Phone Form */}
-        <form onSubmit={handlePhoneSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="phoneNumber">Mobile Number (Philippines)</Label>
-            <PhoneInput
-              id="phoneNumber"
-              value={formData.phoneNumber}
-              onChange={(value) => updateFormData('phoneNumber', value)}
-              disabled={isLoading}
-              placeholder="9XX XXX XXXX"
-            />
-            <p className="text-xs text-muted-foreground">
-              Enter your 10-digit Philippine mobile number
-            </p>
-          </div>
-
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={isLoading}
-          >
-            {isLoading ? 'Creating account...' : 'Continue'}
-          </Button>
-
-          <Button
-            type="button"
-            variant="ghost"
-            className="w-full"
-            onClick={() => setStep('details')}
-            disabled={isLoading}
-          >
-            Back
-          </Button>
-        </form>
-      </div>
-    )
   }
 
   return (
@@ -423,16 +336,16 @@ export default function SignupPage() {
           />
           <Label htmlFor="terms" className="text-sm font-normal leading-snug">
             I've read and agree with the{' '}
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={(e) => openLegalModal(e, 'terms')}
               className="text-primary hover:underline hover:text-primary/90 inline-block font-normal p-0 h-auto"
             >
               Terms and Conditions
             </button>{' '}
             and the{' '}
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={(e) => openLegalModal(e, 'privacy')}
               className="text-primary hover:underline hover:text-primary/90 inline-block font-normal p-0 h-auto"
             >
