@@ -81,13 +81,7 @@ export default async function BookingsPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
-      <div className="px-6 py-4">
-        <div className="bg-primary/10 px-4 py-2 rounded-lg inline-flex items-center gap-2">
-          <p className="text-xs text-primary font-medium">Active Bookings:</p>
-          <p className="text-base font-bold text-primary">{bookings.length}</p>
-        </div>
-      </div>
+
 
       {/* Main Content */}
       <div className="p-6">
