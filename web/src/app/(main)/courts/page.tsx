@@ -641,8 +641,12 @@ export default function CourtsPage() {
                             )}
                           </span>
                         </div>
-                        <span className="text-[10px] md:text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded-full">
-                          {venue.courts.length} Courts
+                        <span className="text-[10px] md:text-xs text-primary bg-primary/10 px-2 py-1 rounded-full">
+                          {!venue?.courts?.length
+                            ? 'No Court Yet'
+                            : venue.courts.length > 1
+                              ? `${venue.courts.length} Courts`
+                              : '1 Court'}
                         </span>
                       </div>
                     </div>
