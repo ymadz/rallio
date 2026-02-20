@@ -9,16 +9,8 @@ export const metadata = {
 
 export const dynamic = 'force-dynamic'
 
-async function getUpcomingBookings(userId: string) {
+async function getUserBookings(userId: string) {
   const supabase = await createClient()
-
-  // Get today's date at midnight (local time) to include bookings from today onwards
-  // This ensures that even if a booking started earlier today, it still shows up
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const todayISO = today.toISOString()
-
-  const activeStatuses = ['pending_payment', 'pending', 'paid', 'confirmed', 'ongoing']
 
   const { data, error } = await supabase
     .from('reservations')
@@ -54,9 +46,7 @@ async function getUpcomingBookings(userId: string) {
       )
     `)
     .eq('user_id', userId)
-    .gte('start_time', todayISO) // Show bookings from today onwards (not just future)
-    .in('status', activeStatuses)
-    .order('start_time', { ascending: true })
+    .order('start_time', { ascending: false })
 
   if (error) {
     console.error('Error fetching bookings:', error)
@@ -64,7 +54,7 @@ async function getUpcomingBookings(userId: string) {
     return []
   }
 
-  console.log(`Found ${data?.length || 0} upcoming bookings for user ${userId}`)
+  console.log(`Found ${data?.length || 0} bookings for user ${userId}`)
 
   return data || []
 }
@@ -77,7 +67,7 @@ export default async function BookingsPage() {
     redirect('/login')
   }
 
-  const bookings = await getUpcomingBookings(user.id)
+  const bookings = await getUserBookings(user.id)
 
   return (
     <div className="min-h-screen bg-white">

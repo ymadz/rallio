@@ -167,8 +167,8 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     setCancellingId(null)
   }
 
-  const totalConfirmed = bookings.filter((b) => ['paid', 'confirmed'].includes(b.status)).length
-  const awaitingPayment = bookings.filter((b) => {
+  const totalConfirmed = filteredBookings.filter((b) => ['paid', 'confirmed'].includes(b.status)).length
+  const awaitingPayment = filteredBookings.filter((b) => {
     const isFullyPaid = b.amount_paid >= b.total_amount
     return ['pending_payment', 'pending'].includes(b.status) || (b.status === 'confirmed' && !isFullyPaid)
   }).length
@@ -216,7 +216,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                 </div>
                 <div>
                   <p className="text-sm text-primary font-medium">Total Bookings</p>
-                  <p className="text-2xl font-bold text-gray-900">{bookings.length}</p>
+                  <p className="text-2xl font-bold text-gray-900">{filteredBookings.length}</p>
                 </div>
               </div>
             </Card>

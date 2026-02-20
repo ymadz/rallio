@@ -122,23 +122,7 @@ export function BookingCard({
         return activeStatuses.includes(b.status) && hoursUntilStart >= 24
     }
 
-    const getTimeRemaining = (startTime: string, endTime?: string, isOngoing?: boolean) => {
-        const now = serverDate || new Date()
-        if (isOngoing && endTime) {
-            const hours = differenceInHours(new Date(endTime), now)
-            if (hours < 1) {
-                const minutes = Math.floor((new Date(endTime).getTime() - now.getTime()) / (1000 * 60))
-                return `${Math.max(0, minutes)}m remaining`
-            }
-            if (hours < 24) return `${hours}h remaining`
-            const days = Math.floor(hours / 24)
-            return `${days} day${days > 1 ? 's' : ''}`
-        }
-        const hours = differenceInHours(new Date(startTime), now)
-        if (hours < 24) return `${hours}h remaining`
-        const days = Math.floor(hours / 24)
-        return `${days} day${days > 1 ? 's' : ''}`
-    }
+
 
     const bookingStatusBadge = (status: string, b: Booking) => {
         const styles: Record<string, string> = {
@@ -266,10 +250,7 @@ export function BookingCard({
                             <p className="text-xs text-gray-400 mt-0.5">per session</p>
                         )}
                     </div>
-                    <div>
-                        <p className="text-gray-500 mb-1">Time Until</p>
-                        <p className="font-semibold text-primary">{getTimeRemaining(booking.start_time)}</p>
-                    </div>
+
                 </div>
 
                 {/* Actions */}
