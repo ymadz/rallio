@@ -612,459 +612,456 @@ export default function BookingScreen() {
                                 onPress={() => setNumPlayers(Math.min(selectedCourt.capacity, numPlayers + 1))}
                             >
                                 <Ionicons name="add" size={24} color={Colors.dark.text} />
-                            </TouchableOpacity>
-                        </View>
-                        <Text style={styles.playersHint}>Max {selectedCourt.capacity} players</Text>
-                    </>
+                            </>
                 )}
 
-                {/* Notes */}
-                {selectedTime && (
-                    <>
-                        <Text style={styles.sectionTitle}>Notes (Optional)</Text>
-                        <TextInput
-                            style={styles.notesInput}
-                            value={notes}
-                            onChangeText={setNotes}
-                            placeholder="Any special requests..."
-                            placeholderTextColor={Colors.dark.textTertiary}
-                            multiline
-                            numberOfLines={3}
-                        />
-                    </>
-                )}
+                            {/* Notes */}
+                            {selectedTime && (
+                                <>
+                                    <Text style={styles.sectionTitle}>Notes (Optional)</Text>
+                                    <TextInput
+                                        style={styles.notesInput}
+                                        value={notes}
+                                        onChangeText={setNotes}
+                                        placeholder="Any special requests..."
+                                        placeholderTextColor={Colors.dark.textTertiary}
+                                        multiline
+                                        numberOfLines={3}
+                                    />
+                                </>
+                            )}
 
-                {/* Summary */}
-                {selectedTime && selectedCourt && selectedDate && (
-                    <Card variant="glass" padding="lg" style={styles.summaryCard}>
-                        <Text style={styles.summaryTitle}>Booking Summary</Text>
+                            {/* Summary */}
+                            {selectedTime && selectedCourt && selectedDate && (
+                                <Card variant="glass" padding="lg" style={styles.summaryCard}>
+                                    <Text style={styles.summaryTitle}>Booking Summary</Text>
 
-                        <View style={styles.summaryRow}>
-                            <Text style={styles.summaryLabel}>Date</Text>
-                            <Text style={styles.summaryValue}>
-                                {format(selectedDate, 'EEEE, MMM d')}
-                            </Text>
-                        </View>
-
-                        <View style={styles.summaryRow}>
-                            <Text style={styles.summaryLabel}>Time</Text>
-                            <Text style={styles.summaryValue}>
-                                {formatTime(selectedTime)} - {formatTime(getEndTimeStr(endTime || selectedTime))}
-                            </Text>
-                        </View>
-
-                        <View style={styles.summaryRow}>
-                            <Text style={styles.summaryLabel}>Duration</Text>
-                            <Text style={styles.summaryValue}>
-                                {duration} {duration === 1 ? 'hour' : 'hours'}
-                            </Text>
-                        </View>
-
-                        {recurrenceWeeks > 1 && (
-                            <View style={styles.summaryRow}>
-                                <Text style={styles.summaryLabel}>Recurrence</Text>
-                                <Text style={[styles.summaryValue, { color: Colors.dark.primary }]}>
-                                    {recurrenceWeeks} Weeks
-                                </Text>
-                            </View>
-                        )}
-
-                        <View style={[styles.summaryRow, styles.totalRow]}>
-                            <Text style={styles.totalLabel}>Total</Text>
-                            <Text style={styles.totalValue}>₱{(totalPrice * recurrenceWeeks).toLocaleString()}</Text>
-                        </View>
-
-                        {discountResults.discounts.length > 0 && (
-                            <View style={styles.discountContainer}>
-                                {discountResults.discounts.map((discount, index) => (
-                                    <View key={index} style={styles.summaryRow}>
-                                        <Text style={[
-                                            styles.summaryLabel,
-                                            { color: discount.isIncrease ? Colors.dark.error : Colors.dark.success }
-                                        ]}>
-                                            {discount.name} (per week)
-                                        </Text>
-                                        <Text style={[
-                                            styles.summaryValue,
-                                            { color: discount.isIncrease ? Colors.dark.error : Colors.dark.success }
-                                        ]}>
-                                            {discount.isIncrease ? '+' : '-'}₱{discount.amount.toLocaleString()}
+                                    <View style={styles.summaryRow}>
+                                        <Text style={styles.summaryLabel}>Date</Text>
+                                        <Text style={styles.summaryValue}>
+                                            {format(selectedDate, 'EEEE, MMM d')}
                                         </Text>
                                     </View>
-                                ))}
-                                <View style={[styles.summaryRow, styles.finalPriceRow]}>
-                                    <Text style={styles.finalPriceLabel}>Final Price</Text>
-                                    <Text style={styles.finalPriceValue}>₱{(discountResults.finalPrice * recurrenceWeeks).toLocaleString()}</Text>
+
+                                    <View style={styles.summaryRow}>
+                                        <Text style={styles.summaryLabel}>Time</Text>
+                                        <Text style={styles.summaryValue}>
+                                            {formatTime(selectedTime)} - {formatTime(getEndTimeStr(endTime || selectedTime))}
+                                        </Text>
+                                    </View>
+
+                                    <View style={styles.summaryRow}>
+                                        <Text style={styles.summaryLabel}>Duration</Text>
+                                        <Text style={styles.summaryValue}>
+                                            {duration} {duration === 1 ? 'hour' : 'hours'}
+                                        </Text>
+                                    </View>
+
+                                    {recurrenceWeeks > 1 && (
+                                        <View style={styles.summaryRow}>
+                                            <Text style={styles.summaryLabel}>Recurrence</Text>
+                                            <Text style={[styles.summaryValue, { color: Colors.dark.primary }]}>
+                                                {recurrenceWeeks} Weeks
+                                            </Text>
+                                        </View>
+                                    )}
+
+                                    <View style={[styles.summaryRow, styles.totalRow]}>
+                                        <Text style={styles.totalLabel}>Total</Text>
+                                        <Text style={styles.totalValue}>₱{(totalPrice * recurrenceWeeks).toLocaleString()}</Text>
+                                    </View>
+
+                                    {discountResults.discounts.length > 0 && (
+                                        <View style={styles.discountContainer}>
+                                            {discountResults.discounts.map((discount, index) => (
+                                                <View key={index} style={styles.summaryRow}>
+                                                    <Text style={[
+                                                        styles.summaryLabel,
+                                                        { color: discount.isIncrease ? Colors.dark.error : Colors.dark.success }
+                                                    ]}>
+                                                        {discount.name} (per week)
+                                                    </Text>
+                                                    <Text style={[
+                                                        styles.summaryValue,
+                                                        { color: discount.isIncrease ? Colors.dark.error : Colors.dark.success }
+                                                    ]}>
+                                                        {discount.isIncrease ? '+' : '-'}₱{discount.amount.toLocaleString()}
+                                                    </Text>
+                                                </View>
+                                            ))}
+                                            <View style={[styles.summaryRow, styles.finalPriceRow]}>
+                                                <Text style={styles.finalPriceLabel}>Final Price</Text>
+                                                <Text style={styles.finalPriceValue}>₱{(discountResults.finalPrice * recurrenceWeeks).toLocaleString()}</Text>
+                                            </View>
+                                        </View>
+                                    )}
+                                </Card>
+                            )}
+
+                            <View style={{ height: 120 }} />
+                        </ScrollView>
+
+                        {/* Bottom CTA */}
+                        {selectedTime && (
+                            <View style={styles.bottomCta}>
+                                <View style={styles.priceContainer}>
+                                    <Text style={styles.priceLabel}>Total</Text>
+                                    {discountResults.finalPrice !== totalPrice && discountResults.finalPrice > 0 ? (
+                                        <View>
+                                            <Text style={[styles.priceValue, { textDecorationLine: 'line-through', fontSize: 14, color: Colors.dark.textSecondary }]}>
+                                                ₱{totalPrice.toLocaleString()}
+                                            </Text>
+                                            <Text style={[styles.priceValue, { color: Colors.dark.primary }]}>
+                                                ₱{discountResults.finalPrice.toLocaleString()}
+                                            </Text>
+                                        </View>
+                                    ) : (
+                                        <Text style={styles.priceValue}>₱{totalPrice.toLocaleString()}</Text>
+                                    )}
                                 </View>
+                                <Button
+                                    onPress={handleContinue}
+                                    disabled={!selectedTime}
+                                    style={styles.continueButton}
+                                >
+                                    Continue to Payment
+                                </Button>
                             </View>
                         )}
-                    </Card>
-                )}
-
-                <View style={{ height: 120 }} />
-            </ScrollView>
-
-            {/* Bottom CTA */}
-            {selectedTime && (
-                <View style={styles.bottomCta}>
-                    <View style={styles.priceContainer}>
-                        <Text style={styles.priceLabel}>Total</Text>
-                        {discountResults.finalPrice !== totalPrice && discountResults.finalPrice > 0 ? (
-                            <View>
-                                <Text style={[styles.priceValue, { textDecorationLine: 'line-through', fontSize: 14, color: Colors.dark.textSecondary }]}>
-                                    ₱{totalPrice.toLocaleString()}
-                                </Text>
-                                <Text style={[styles.priceValue, { color: Colors.dark.primary }]}>
-                                    ₱{discountResults.finalPrice.toLocaleString()}
-                                </Text>
-                            </View>
-                        ) : (
-                            <Text style={styles.priceValue}>₱{totalPrice.toLocaleString()}</Text>
-                        )}
-                    </View>
-                    <Button
-                        onPress={handleContinue}
-                        disabled={!selectedTime}
-                        style={styles.continueButton}
-                    >
-                        Continue to Payment
-                    </Button>
-                </View>
-            )}
-        </SafeAreaView>
-    );
+                    </SafeAreaView>
+                );
 }
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: Colors.dark.background,
+                const styles = StyleSheet.create({
+                    container: {
+                    flex: 1,
+                backgroundColor: Colors.dark.background,
     },
-    loadingContainer: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
+                loadingContainer: {
+                    flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
     },
-    errorContainer: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: Spacing.xl,
-        gap: Spacing.md,
+                errorContainer: {
+                    flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: Spacing.xl,
+                gap: Spacing.md,
     },
-    errorTitle: {
-        ...Typography.h2,
-        color: Colors.dark.text,
+                errorTitle: {
+                    ...Typography.h2,
+                    color: Colors.dark.text,
     },
-    errorText: {
-        ...Typography.body,
-        color: Colors.dark.textSecondary,
-        textAlign: 'center',
+                errorText: {
+                    ...Typography.body,
+                    color: Colors.dark.textSecondary,
+                textAlign: 'center',
     },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: Spacing.lg,
+                header: {
+                    flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: Spacing.lg,
     },
-    backButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: Colors.dark.surface,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: Colors.dark.border,
+                backButton: {
+                    width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: Colors.dark.surface,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 1,
+                borderColor: Colors.dark.border,
     },
-    title: {
-        ...Typography.h2,
-        color: Colors.dark.text,
+                title: {
+                    ...Typography.h2,
+                    color: Colors.dark.text,
     },
-    scrollView: {
-        flex: 1,
-        paddingHorizontal: Spacing.lg,
+                scrollView: {
+                    flex: 1,
+                paddingHorizontal: Spacing.lg,
     },
-    venueCard: {
-        marginBottom: Spacing.lg,
+                venueCard: {
+                    marginBottom: Spacing.lg,
     },
-    venueName: {
-        ...Typography.h3,
-        color: Colors.dark.text,
+                venueName: {
+                    ...Typography.h3,
+                    color: Colors.dark.text,
     },
-    venueAddress: {
-        ...Typography.bodySmall,
-        color: Colors.dark.textSecondary,
-        marginTop: 4,
+                venueAddress: {
+                    ...Typography.bodySmall,
+                    color: Colors.dark.textSecondary,
+                marginTop: 4,
     },
-    sectionTitle: {
-        ...Typography.body,
-        color: Colors.dark.text,
-        fontWeight: '600',
-        marginBottom: Spacing.sm,
-        marginTop: Spacing.md,
+                sectionTitle: {
+                    ...Typography.body,
+                    color: Colors.dark.text,
+                fontWeight: '600',
+                marginBottom: Spacing.sm,
+                marginTop: Spacing.md,
     },
-    durationHint: {
-        color: Colors.dark.primary,
-        fontWeight: '400',
+                durationHint: {
+                    color: Colors.dark.primary,
+                fontWeight: '400',
     },
-    horizontalScroll: {
-        marginHorizontal: -Spacing.lg,
-        paddingHorizontal: Spacing.lg,
+                horizontalScroll: {
+                    marginHorizontal: -Spacing.lg,
+                paddingHorizontal: Spacing.lg,
     },
-    courtChip: {
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.sm,
-        backgroundColor: Colors.dark.surface,
-        borderRadius: Radius.md,
-        borderWidth: 1,
-        borderColor: Colors.dark.border,
-        marginRight: Spacing.sm,
-        alignItems: 'center',
+                courtChip: {
+                    paddingHorizontal: Spacing.md,
+                paddingVertical: Spacing.sm,
+                backgroundColor: Colors.dark.surface,
+                borderRadius: Radius.md,
+                borderWidth: 1,
+                borderColor: Colors.dark.border,
+                marginRight: Spacing.sm,
+                alignItems: 'center',
     },
-    courtChipSelected: {
-        backgroundColor: Colors.dark.primary + '20',
-        borderColor: Colors.dark.primary,
+                courtChipSelected: {
+                    backgroundColor: Colors.dark.primary + '20',
+                borderColor: Colors.dark.primary,
     },
-    courtChipText: {
-        ...Typography.body,
-        color: Colors.dark.text,
-        fontWeight: '500',
+                courtChipText: {
+                    ...Typography.body,
+                    color: Colors.dark.text,
+                fontWeight: '500',
     },
-    courtChipPrice: {
-        ...Typography.caption,
-        color: Colors.dark.textSecondary,
-        marginTop: 2,
+                courtChipPrice: {
+                    ...Typography.caption,
+                    color: Colors.dark.textSecondary,
+                marginTop: 2,
     },
-    courtChipTextSelected: {
-        color: Colors.dark.primary,
+                courtChipTextSelected: {
+                    color: Colors.dark.primary,
     },
-    dateChip: {
-        width: 64,
-        paddingVertical: Spacing.sm,
-        backgroundColor: Colors.dark.surface,
-        borderRadius: Radius.md,
-        borderWidth: 1,
-        borderColor: Colors.dark.border,
-        marginRight: Spacing.sm,
-        alignItems: 'center',
+                dateChip: {
+                    width: 64,
+                paddingVertical: Spacing.sm,
+                backgroundColor: Colors.dark.surface,
+                borderRadius: Radius.md,
+                borderWidth: 1,
+                borderColor: Colors.dark.border,
+                marginRight: Spacing.sm,
+                alignItems: 'center',
     },
-    dateChipSelected: {
-        backgroundColor: Colors.dark.primary + '20',
-        borderColor: Colors.dark.primary,
+                dateChipSelected: {
+                    backgroundColor: Colors.dark.primary + '20',
+                borderColor: Colors.dark.primary,
     },
-    dateDay: {
-        ...Typography.caption,
-        color: Colors.dark.textSecondary,
+                dateDay: {
+                    ...Typography.caption,
+                    color: Colors.dark.textSecondary,
     },
-    dateNumber: {
-        ...Typography.h3,
-        color: Colors.dark.text,
-        marginVertical: 2,
+                dateNumber: {
+                    ...Typography.h3,
+                    color: Colors.dark.text,
+                marginVertical: 2,
     },
-    dateMonth: {
-        ...Typography.caption,
-        color: Colors.dark.textSecondary,
+                dateMonth: {
+                    ...Typography.caption,
+                    color: Colors.dark.textSecondary,
     },
-    dateTextSelected: {
-        color: Colors.dark.primary,
+                dateTextSelected: {
+                    color: Colors.dark.primary,
     },
-    rangeInfoContainer: {
-        backgroundColor: Colors.dark.surface,
-        padding: Spacing.md,
-        borderRadius: Radius.md,
-        marginBottom: Spacing.md,
-        borderWidth: 1,
-        borderColor: Colors.dark.border,
+                rangeInfoContainer: {
+                    backgroundColor: Colors.dark.surface,
+                padding: Spacing.md,
+                borderRadius: Radius.md,
+                marginBottom: Spacing.md,
+                borderWidth: 1,
+                borderColor: Colors.dark.border,
     },
-    rangeInfoText: {
-        ...Typography.bodySmall,
-        color: Colors.dark.primary,
-        textAlign: 'center',
+                rangeInfoText: {
+                    ...Typography.bodySmall,
+                    color: Colors.dark.primary,
+                textAlign: 'center',
     },
-    slotsLoading: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: Spacing.lg,
-        gap: Spacing.sm,
+                slotsLoading: {
+                    flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: Spacing.lg,
+                gap: Spacing.sm,
     },
-    slotsLoadingText: {
-        ...Typography.body,
-        color: Colors.dark.textSecondary,
+                slotsLoadingText: {
+                    ...Typography.body,
+                    color: Colors.dark.textSecondary,
     },
-    closedCard: {
-        alignItems: 'center',
-        gap: Spacing.sm,
+                closedCard: {
+                    alignItems: 'center',
+                gap: Spacing.sm,
     },
-    closedText: {
-        ...Typography.body,
-        color: Colors.dark.error,
-        fontWeight: '600',
+                closedText: {
+                    ...Typography.body,
+                    color: Colors.dark.error,
+                fontWeight: '600',
     },
-    closedHint: {
-        ...Typography.caption,
-        color: Colors.dark.textSecondary,
+                closedHint: {
+                    ...Typography.caption,
+                    color: Colors.dark.textSecondary,
     },
-    timeSlotsGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: Spacing.sm,
+                timeSlotsGrid: {
+                    flexDirection: 'row',
+                flexWrap: 'wrap',
+                gap: Spacing.sm,
     },
-    timeSlot: {
-        width: '23%',
-        paddingVertical: Spacing.sm,
-        backgroundColor: Colors.dark.surface,
-        borderRadius: Radius.md,
-        borderWidth: 1,
-        borderColor: Colors.dark.border,
-        alignItems: 'center',
+                timeSlot: {
+                    width: '23%',
+                paddingVertical: Spacing.sm,
+                backgroundColor: Colors.dark.surface,
+                borderRadius: Radius.md,
+                borderWidth: 1,
+                borderColor: Colors.dark.border,
+                alignItems: 'center',
     },
-    timeSlotUnavailable: {
-        backgroundColor: Colors.dark.background,
-        borderColor: Colors.dark.borderLight,
-        opacity: 0.5,
+                timeSlotUnavailable: {
+                    backgroundColor: Colors.dark.background,
+                borderColor: Colors.dark.borderLight,
+                opacity: 0.5,
     },
-    timeSlotSelected: {
-        backgroundColor: Colors.dark.primary + '20',
-        borderColor: Colors.dark.primary,
+                timeSlotSelected: {
+                    backgroundColor: Colors.dark.primary + '20',
+                borderColor: Colors.dark.primary,
     },
-    timeSlotInRange: {
-        backgroundColor: Colors.dark.primary + '10',
-        borderColor: Colors.dark.primary,
-        borderWidth: 1,
+                timeSlotInRange: {
+                    backgroundColor: Colors.dark.primary + '10',
+                borderColor: Colors.dark.primary,
+                borderWidth: 1,
     },
-    timeSlotTextInRange: {
-        color: Colors.dark.primary,
-        fontWeight: '500',
+                timeSlotTextInRange: {
+                    color: Colors.dark.primary,
+                fontWeight: '500',
     },
-    timeSlotText: {
-        ...Typography.bodySmall,
-        color: Colors.dark.text,
+                timeSlotText: {
+                    ...Typography.bodySmall,
+                    color: Colors.dark.text,
     },
-    timeSlotTextUnavailable: {
-        color: Colors.dark.textTertiary,
+                timeSlotTextUnavailable: {
+                    color: Colors.dark.textTertiary,
     },
-    timeSlotTextSelected: {
-        color: Colors.dark.primary,
-        fontWeight: '600',
+                timeSlotTextSelected: {
+                    color: Colors.dark.primary,
+                fontWeight: '600',
     },
-    playersRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: Spacing.lg,
+                playersRow: {
+                    flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: Spacing.lg,
     },
-    playerButton: {
-        width: 48,
-        height: 48,
-        borderRadius: Radius.md,
-        backgroundColor: Colors.dark.surface,
-        alignItems: 'center',
-        justifyContent: 'center',
+                playerButton: {
+                    width: 48,
+                height: 48,
+                borderRadius: Radius.md,
+                backgroundColor: Colors.dark.surface,
+                alignItems: 'center',
+                justifyContent: 'center',
     },
-    discountContainer: {
-        marginTop: Spacing.sm,
-        paddingTop: Spacing.sm,
-        borderTopWidth: 1,
-        borderTopColor: Colors.dark.border,
+                discountContainer: {
+                    marginTop: Spacing.sm,
+                paddingTop: Spacing.sm,
+                borderTopWidth: 1,
+                borderTopColor: Colors.dark.border,
     },
-    finalPriceRow: {
-        marginTop: Spacing.xs,
+                finalPriceRow: {
+                    marginTop: Spacing.xs,
     },
-    finalPriceLabel: {
-        ...Typography.body,
-        fontWeight: '600',
-        color: Colors.dark.text,
+                finalPriceLabel: {
+                    ...Typography.body,
+                    fontWeight: '600',
+                color: Colors.dark.text,
     },
-    finalPriceValue: {
-        ...Typography.h3,
-        color: Colors.dark.primary,
+                finalPriceValue: {
+                    ...Typography.h3,
+                    color: Colors.dark.primary,
     },
-    playersCount: {
-        ...Typography.h2,
-        color: Colors.dark.text,
-        minWidth: 40,
-        textAlign: 'center',
+                playersCount: {
+                    ...Typography.h2,
+                    color: Colors.dark.text,
+                minWidth: 40,
+                textAlign: 'center',
     },
-    playersHint: {
-        ...Typography.caption,
-        color: Colors.dark.textSecondary,
-        textAlign: 'center',
-        marginTop: Spacing.xs,
+                playersHint: {
+                    ...Typography.caption,
+                    color: Colors.dark.textSecondary,
+                textAlign: 'center',
+                marginTop: Spacing.xs,
     },
-    notesInput: {
-        backgroundColor: Colors.dark.surface,
-        borderRadius: Radius.md,
-        borderWidth: 1,
-        borderColor: Colors.dark.border,
-        padding: Spacing.md,
-        color: Colors.dark.text,
-        ...Typography.body,
-        minHeight: 80,
-        textAlignVertical: 'top',
+                notesInput: {
+                    backgroundColor: Colors.dark.surface,
+                borderRadius: Radius.md,
+                borderWidth: 1,
+                borderColor: Colors.dark.border,
+                padding: Spacing.md,
+                color: Colors.dark.text,
+                ...Typography.body,
+                minHeight: 80,
+                textAlignVertical: 'top',
     },
-    summaryCard: {
-        marginTop: Spacing.lg,
+                summaryCard: {
+                    marginTop: Spacing.lg,
     },
-    summaryTitle: {
-        ...Typography.h3,
-        color: Colors.dark.text,
-        marginBottom: Spacing.md,
+                summaryTitle: {
+                    ...Typography.h3,
+                    color: Colors.dark.text,
+                marginBottom: Spacing.md,
     },
-    summaryRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        paddingVertical: Spacing.xs,
+                summaryRow: {
+                    flexDirection: 'row',
+                justifyContent: 'space-between',
+                paddingVertical: Spacing.xs,
     },
-    summaryLabel: {
-        ...Typography.body,
-        color: Colors.dark.textSecondary,
+                summaryLabel: {
+                    ...Typography.body,
+                    color: Colors.dark.textSecondary,
     },
-    summaryValue: {
-        ...Typography.body,
-        color: Colors.dark.text,
-        fontWeight: '500',
+                summaryValue: {
+                    ...Typography.body,
+                    color: Colors.dark.text,
+                fontWeight: '500',
     },
-    totalRow: {
-        marginTop: Spacing.sm,
-        paddingTop: Spacing.sm,
-        borderTopWidth: 1,
-        borderTopColor: Colors.dark.border,
+                totalRow: {
+                    marginTop: Spacing.sm,
+                paddingTop: Spacing.sm,
+                borderTopWidth: 1,
+                borderTopColor: Colors.dark.border,
     },
-    totalLabel: {
-        ...Typography.h3,
-        color: Colors.dark.text,
+                totalLabel: {
+                    ...Typography.h3,
+                    color: Colors.dark.text,
     },
-    totalValue: {
-        ...Typography.h2,
-        color: Colors.dark.primary,
+                totalValue: {
+                    ...Typography.h2,
+                    color: Colors.dark.primary,
     },
-    bottomCta: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: Spacing.lg,
-        paddingBottom: Spacing.xl,
-        backgroundColor: Colors.dark.elevated,
-        borderTopWidth: 1,
-        borderTopColor: Colors.dark.border,
+                bottomCta: {
+                    position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                flexDirection: 'row',
+                alignItems: 'center',
+                padding: Spacing.lg,
+                paddingBottom: Spacing.xl,
+                backgroundColor: Colors.dark.elevated,
+                borderTopWidth: 1,
+                borderTopColor: Colors.dark.border,
     },
-    priceContainer: {
-        marginRight: Spacing.lg,
+                priceContainer: {
+                    marginRight: Spacing.lg,
     },
-    priceLabel: {
-        ...Typography.caption,
-        color: Colors.dark.textSecondary,
+                priceLabel: {
+                    ...Typography.caption,
+                    color: Colors.dark.textSecondary,
     },
-    priceValue: {
-        ...Typography.h2,
-        color: Colors.dark.primary,
+                priceValue: {
+                    ...Typography.h2,
+                    color: Colors.dark.primary,
     },
-    continueButton: {
-        flex: 1,
+                continueButton: {
+                    flex: 1,
     },
 });

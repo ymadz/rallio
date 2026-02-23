@@ -385,12 +385,6 @@ export default function VenueDetailsScreen() {
                                             {court.court_type}
                                         </Text>
                                     </View>
-                                    {court.capacity && (
-                                        <View style={styles.badge}>
-                                            <Ionicons name="people-outline" size={12} color={Colors.dark.textSecondary} />
-                                            <Text style={styles.badgeText}>{court.capacity} max</Text>
-                                        </View>
-                                    )}
                                 </View>
 
                                 {/* Court actions */}

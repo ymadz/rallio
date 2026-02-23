@@ -317,7 +317,7 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
               className="w-full"
             />
             <p className="text-xs text-gray-500 mt-1">
-              This affects group booking discounts (max {selectedCourt.capacity} players)
+              This affects group booking discounts
             </p>
           </div>
         )}

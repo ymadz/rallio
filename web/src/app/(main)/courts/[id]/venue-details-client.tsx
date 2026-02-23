@@ -66,9 +66,6 @@ export function VenueDetailsClient({ courts, venueId, venueName, discounts }: Ve
                       }`}>
                       {court.court_type}
                     </span>
-                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
-                      {court.capacity} players max
-                    </span>
                   </div>
                 </div>
                 <div className="text-right ml-4">
