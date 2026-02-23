@@ -77,12 +77,12 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     return activeTab === 'upcoming' ? timeA - timeB : timeB - timeA
   })
 
-  const handleResumePayment = async (booking: Booking) => {
+  const handleResumePayment = async (booking: Booking, paymentMethod: 'gcash' | 'paymaya' = 'gcash') => {
     setResumingPaymentId(booking.id)
 
     try {
       const { initiatePaymentAction } = await import('@/app/actions/payments')
-      const result = await initiatePaymentAction(booking.id, 'gcash')
+      const result = await initiatePaymentAction(booking.id, paymentMethod)
 
       if (result.success && result.checkoutUrl) {
         window.location.href = result.checkoutUrl

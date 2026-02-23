@@ -324,6 +324,16 @@ export function ReservationDetailModal({
                   Paid: ₱{parseFloat(reservation.amount_paid).toFixed(2)}
                 </div>
               )}
+              {reservation.metadata?.payment_method && (
+                <div className="text-xs text-gray-500 mt-1 capitalize">
+                  Method: {reservation.metadata.payment_method === 'gcash' ? 'GCash' : reservation.metadata.payment_method === 'paymaya' ? 'Maya' : reservation.metadata.payment_method.replace('_', ' ')}
+                </div>
+              )}
+              {!reservation.metadata?.payment_method && reservation.status === 'pending_payment' && (
+                <div className="text-xs text-gray-500 mt-1">
+                  Method: Cash (Unpaid)
+                </div>
+              )}
             </div>
           </div>
 

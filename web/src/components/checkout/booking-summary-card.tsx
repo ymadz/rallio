@@ -39,6 +39,13 @@ export function BookingSummaryCard({
   const total = getTotalAmount()
   const perPlayer = getPerPlayerAmount()
 
+  let duration = 1
+  try {
+    const startHour = parseInt(bookingData.startTime.split(':')[0])
+    const endHour = parseInt(bookingData.endTime.split(':')[0])
+    duration = Math.max(1, endHour - startHour)
+  } catch (e) { }
+
   const formatTime = (timeString: string) => {
     try {
       return format(new Date(timeString), 'h:mm a')
@@ -92,8 +99,13 @@ export function BookingSummaryCard({
       {/* Price Breakdown */}
       <div className="space-y-2 py-4">
         <div className="flex justify-between text-sm">
-          <span className="text-gray-600">Court Fee</span>
-          <span className="font-medium text-gray-900">₱{bookingData.hourlyRate.toFixed(2)}</span>
+          <span className="text-gray-600">
+            Court Fee (₱{bookingData.hourlyRate.toFixed(2)} × {duration} {duration > 1 ? 'hrs' : 'hr'})
+            {bookingData.recurrenceWeeks && bookingData.recurrenceWeeks > 1 ? ` × ${bookingData.recurrenceWeeks} wks` : ''}
+          </span>
+          <span className="font-medium text-gray-900">
+            ₱{(subtotal + discountAmount).toFixed(2)}
+          </span>
         </div>
 
         {discountAmount !== 0 && (
@@ -164,25 +176,26 @@ export function BookingSummaryCard({
       </div>
 
       {/* Navigation Buttons */}
-      {showButtons && currentStep !== 'processing' && currentStep !== 'confirmation' && (
-        <div className="pt-4 mt-4 border-t border-gray-200 flex flex-col gap-3">
-          <button
-            onClick={onContinue}
-            disabled={!canContinue}
-            className="w-full px-6 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Continue
-          </button>
-          {currentStep !== 'details' && (
+      {
+        showButtons && currentStep !== 'processing' && currentStep !== 'confirmation' && (
+          <div className="pt-4 mt-4 border-t border-gray-200 flex flex-col gap-3">
             <button
-              onClick={onBack}
-              className="w-full px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+              onClick={onContinue}
+              disabled={!canContinue}
+              className="w-full px-6 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Back
+              Continue
             </button>
-          )}
-        </div>
-      )}
+            {currentStep !== 'details' && (
+              <button
+                onClick={onBack}
+                className="w-full px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+              >
+                Back
+              </button>
+            )}
+          </div>
+        )}
     </div>
   )
 }
