@@ -5,7 +5,7 @@ import { useCheckoutStore } from '@/stores/checkout-store'
 
 export function CancellationPolicy() {
   const { paymentMethod, policyAccepted, setPolicyAccepted } = useCheckoutStore()
-  const [activeTab, setActiveTab] = useState<'e-wallet' | 'cash'>(paymentMethod || 'e-wallet')
+  const activeTab = paymentMethod || 'e-wallet'
 
   const eWalletPolicy = [
     'You can cancel your booking anytime.',
@@ -33,35 +33,7 @@ export function CancellationPolicy() {
         Guidelines on booking cancellations, refunds, and applicable fees.
       </p>
 
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-gray-200">
-        <button
-          onClick={() => setActiveTab('e-wallet')}
-          className={`
-            px-6 py-3 font-medium text-sm border-b-2 transition-colors
-            ${
-              activeTab === 'e-wallet'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
-            }
-          `}
-        >
-          E-Wallet
-        </button>
-        <button
-          onClick={() => setActiveTab('cash')}
-          className={`
-            px-6 py-3 font-medium text-sm border-b-2 transition-colors
-            ${
-              activeTab === 'cash'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
-            }
-          `}
-        >
-          Cash
-        </button>
-      </div>
+      {/* Tabs Removed */}
 
       {/* Policy Content */}
       <div className="bg-gray-50 rounded-xl border border-gray-200 p-6">

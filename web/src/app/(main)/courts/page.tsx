@@ -533,11 +533,7 @@ export default function CourtsPage() {
                         >
                           {isOpen ? 'OPEN' : 'CLOSED'}
                         </span>
-                        {venue.is_verified && (
-                          <span className="px-1.5 py-0.5 md:px-2.5 md:py-1 bg-primary text-white text-[10px] md:text-xs font-bold rounded md:rounded-md shadow-sm">
-                            VERIFIED
-                          </span>
-                        )}
+
                         {venue.hasActiveDiscounts && (
                           <span className="px-1.5 py-0.5 md:px-2.5 md:py-1 bg-red-500 text-white text-[10px] md:text-xs font-bold rounded md:rounded-md shadow-sm">
                             PROMO

@@ -580,7 +580,13 @@ export function PaymentProcessing() {
         {/* Action Button */}
         <div className="flex justify-end">
           <button
-            onClick={() => setCurrentStep('confirmation')}
+            onClick={() => {
+              if (reservationId) {
+                router.push(`/bookings/${reservationId}/receipt`)
+              } else {
+                setCurrentStep('confirmation')
+              }
+            }}
             disabled={paymentMethod === 'e-wallet' && paymentStatus !== 'success'}
             className="px-8 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -731,7 +737,13 @@ export function PaymentProcessing() {
       {/* Action Button */}
       <div className="flex justify-end">
         <button
-          onClick={() => setCurrentStep('confirmation')}
+          onClick={() => {
+            if (reservationId) {
+              router.push(`/bookings/${reservationId}/receipt`)
+            } else {
+              setCurrentStep('confirmation')
+            }
+          }}
           disabled={playerPayments.some(p => p.status !== 'paid')}
           className="px-8 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >

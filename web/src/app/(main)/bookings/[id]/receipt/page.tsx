@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import { format } from 'date-fns'
 import Link from 'next/link'
-import { PrintButton } from '@/components/shared/print-button'
+import { DownloadReceiptButton } from '@/components/shared/download-receipt-button'
 
 export default async function BookingReceiptPage({ params }: { params: Promise<{ id: string }> }) {
     const supabase = await createClient()
@@ -60,18 +60,8 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
     return (
         <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
             <div className="max-w-2xl mx-auto">
-                {/* Print Actions (Hidden when printing) */}
-                <div className="mb-6 flex justify-between items-center print:hidden">
-                    <Link
-                        href="/bookings"
-                        className="text-sm font-medium text-gray-600 hover:text-gray-900 flex items-center gap-2"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                        </svg>
-                        Back to Bookings
-                    </Link>
-                    <PrintButton />
+                <div className="print:hidden">
+                    {/* Header actions removed to standardize receipt */}
                 </div>
 
                 {/* Receipt Card */}
@@ -154,6 +144,17 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
                             <p>Rallio Court Booking System</p>
                             <p className="mt-1">Generated on {format(new Date(), 'MMM d, yyyy h:mm a')}</p>
                         </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="border-t border-gray-200 p-6 bg-gray-50 grid grid-cols-2 gap-3 print:hidden">
+                        <DownloadReceiptButton />
+                        <Link
+                            href="/bookings"
+                            className="w-full text-center px-6 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors"
+                        >
+                            Done
+                        </Link>
                     </div>
                 </div>
             </div>

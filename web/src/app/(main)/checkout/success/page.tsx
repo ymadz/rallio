@@ -178,22 +178,15 @@ export default function PaymentSuccessPage() {
               <Button className="w-full">Manage Session</Button>
             </Link>
           ) : (
-            <Link href={`/bookings`} className="block">
-              <Button className="w-full">View My Bookings</Button>
+            <Link href={`/bookings/${reservationId}/receipt`} className="block">
+              <Button className="w-full">View Receipt</Button>
             </Link>
           )}
 
           {!isQueueSession && (
-            <Link href="/courts" className="block">
+            <Link href="/bookings" className="block">
               <Button variant="outline" className="w-full">
-                Find More Courts
-              </Button>
-            </Link>
-          )}
-          {reservationId && (
-            <Link href={`/bookings/${reservationId}/receipt`} className="block">
-              <Button variant="outline" className="w-full">
-                View Receipt
+                Back to Bookings
               </Button>
             </Link>
           )}
