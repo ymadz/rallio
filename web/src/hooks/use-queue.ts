@@ -30,7 +30,7 @@ export interface QueueSession {
   courtName: string
   venueName: string
   venueId: string
-  status: 'upcoming' | 'waiting' | 'active' | 'completed'
+  status: 'waiting' | 'active' | 'completed'
   players: QueuePlayer[]
   userPosition: number | null
   estimatedWaitTime: number // in minutes
@@ -50,22 +50,20 @@ export interface QueueSession {
 
 /**
  * Map DB queue session status to player-facing UI status
- * - pending_payment: not shown to players
- * - upcoming: session exists but not joinable yet (>2h before start)
- * - open: session is open for joining (≤2h before start) -> 'waiting'
+ * - pending_payment: not shown to players (filtered out before this)
+ * - open: session is open for joining -> 'waiting'
  * - active: session is live -> 'active'
  * - completed/cancelled: session ended -> 'completed'
  */
-function mapQueueStatusForPlayer(dbStatus: string): 'upcoming' | 'waiting' | 'active' | 'completed' {
+function mapQueueStatusForPlayer(dbStatus: string): 'waiting' | 'active' | 'completed' {
   switch (dbStatus) {
-    case 'upcoming':
-      return 'upcoming'
     case 'open':
       return 'waiting'
     case 'active':
       return 'active'
     case 'completed':
     case 'cancelled':
+    case 'closed': // legacy
     default:
       return 'completed'
   }

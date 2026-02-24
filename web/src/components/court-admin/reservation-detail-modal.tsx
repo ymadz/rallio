@@ -302,39 +302,29 @@ export function ReservationDetailModal({
           </div>
 
           {/* Booking Details */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-gray-50 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Users className="w-5 h-5 text-gray-400" />
-                <h3 className="font-semibold text-gray-900">Players</h3>
-              </div>
-              <div className="text-2xl font-bold text-gray-900">{reservation.num_players}</div>
+          <div className="bg-gray-50 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <DollarSign className="w-5 h-5 text-gray-400" />
+              <h3 className="font-semibold text-gray-900">Amount</h3>
             </div>
-
-            <div className="bg-gray-50 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <DollarSign className="w-5 h-5 text-gray-400" />
-                <h3 className="font-semibold text-gray-900">Amount</h3>
-              </div>
-              <div className="text-2xl font-bold text-gray-900">
-                ₱{parseFloat(reservation.total_amount).toFixed(2)}
-              </div>
-              {parseFloat(reservation.amount_paid) > 0 && (
-                <div className="text-sm text-green-600 mt-1">
-                  Paid: ₱{parseFloat(reservation.amount_paid).toFixed(2)}
-                </div>
-              )}
-              {reservation.metadata?.payment_method && (
-                <div className="text-xs text-gray-500 mt-1 capitalize">
-                  Method: {reservation.metadata.payment_method === 'gcash' ? 'GCash' : reservation.metadata.payment_method === 'paymaya' ? 'Maya' : reservation.metadata.payment_method.replace('_', ' ')}
-                </div>
-              )}
-              {!reservation.metadata?.payment_method && reservation.status === 'pending_payment' && (
-                <div className="text-xs text-gray-500 mt-1">
-                  Method: Cash (Unpaid)
-                </div>
-              )}
+            <div className="text-2xl font-bold text-gray-900">
+              ₱{parseFloat(reservation.total_amount).toFixed(2)}
             </div>
+            {parseFloat(reservation.amount_paid) > 0 && (
+              <div className="text-sm text-green-600 mt-1">
+                Paid: ₱{parseFloat(reservation.amount_paid).toFixed(2)}
+              </div>
+            )}
+            {reservation.metadata?.payment_method && (
+              <div className="text-xs text-gray-500 mt-1 capitalize">
+                Method: {reservation.metadata.payment_method === 'gcash' ? 'GCash' : reservation.metadata.payment_method === 'paymaya' ? 'Maya' : reservation.metadata.payment_method.replace('_', ' ')}
+              </div>
+            )}
+            {!reservation.metadata?.payment_method && reservation.status === 'pending_payment' && (
+              <div className="text-xs text-gray-500 mt-1">
+                Method: Cash (Unpaid)
+              </div>
+            )}
           </div>
 
           {/* Notes */}

@@ -7,38 +7,32 @@
  * - Court Admin Reservations
  * 
  * LIFECYCLE:
- * pending_payment → upcoming → open → active → completed
+ * pending_payment → open → active → completed
+ * 
+ * Terminal states: completed, cancelled
  */
 
-import { 
-  Clock, 
-  PlayCircle, 
-  PauseCircle, 
-  CheckCircle, 
-  XCircle, 
-  DollarSign, 
-  Calendar,
-  type LucideIcon 
+import {
+  Clock,
+  PlayCircle,
+  CheckCircle,
+  XCircle,
+  DollarSign,
+  type LucideIcon
 } from 'lucide-react'
 
-export type QueueSessionStatus = 
-  | 'pending_payment'  // Waiting for payment
-  | 'upcoming'         // Paid, > 2h before start
-  | 'open'             // Within 2h of start, players can join
-  | 'active'           // Currently running
-  | 'completed'        // Finished
-  | 'paused'           // Temporarily paused
-  | 'cancelled'        // Cancelled
-  | 'rejected'         // Court Admin rejected
-  // Legacy statuses (for backwards compatibility)
-  | 'draft'
-  | 'pending_approval'
-  | 'closed'
+export type QueueSessionStatus =
+  | 'pending_payment'  // Waiting for payment (cash or e-wallet)
+  | 'open'             // Paid, players can join (within join window)
+  | 'active'           // Currently running (start_time has passed)
+  | 'completed'        // Finished (end_time passed or QM manually closed)
+  | 'cancelled'        // Cancelled by QM or auto-cancelled (missed deadline)
 
 /**
- * Hours before start_time when session transitions from 'upcoming' to 'open'
+ * Hours before start_time when players can join the session.
+ * Players see the session but can only join within this window.
  */
-export const OPEN_BEFORE_START_HOURS = 2
+export const OPEN_BEFORE_START_HOURS = 12
 
 /**
  * Display configuration for each status
@@ -48,7 +42,7 @@ export const STATUS_CONFIG: Record<string, {
   color: string
   bgColor: string
   borderColor: string
-  icon: 'clock' | 'play' | 'pause' | 'check' | 'x' | 'dollar' | 'calendar'
+  icon: 'clock' | 'play' | 'check' | 'x' | 'dollar'
   canJoin: boolean
 }> = {
   pending_payment: {
@@ -57,14 +51,6 @@ export const STATUS_CONFIG: Record<string, {
     bgColor: 'bg-orange-100',
     borderColor: 'border-orange-200',
     icon: 'dollar',
-    canJoin: false,
-  },
-  upcoming: {
-    label: 'Upcoming',
-    color: 'text-blue-700',
-    bgColor: 'bg-blue-100',
-    borderColor: 'border-blue-200',
-    icon: 'calendar',
     canJoin: false,
   },
   open: {
@@ -91,14 +77,6 @@ export const STATUS_CONFIG: Record<string, {
     icon: 'check',
     canJoin: false,
   },
-  paused: {
-    label: 'Paused',
-    color: 'text-yellow-700',
-    bgColor: 'bg-yellow-100',
-    borderColor: 'border-yellow-200',
-    icon: 'pause',
-    canJoin: false,
-  },
   cancelled: {
     label: 'Cancelled',
     color: 'text-red-700',
@@ -107,15 +85,7 @@ export const STATUS_CONFIG: Record<string, {
     icon: 'x',
     canJoin: false,
   },
-  rejected: {
-    label: 'Rejected',
-    color: 'text-red-700',
-    bgColor: 'bg-red-100',
-    borderColor: 'border-red-200',
-    icon: 'x',
-    canJoin: false,
-  },
-  // Legacy mappings
+  // Legacy fallback — old rows that still have 'closed' in DB
   closed: {
     label: 'Completed',
     color: 'text-gray-700',
@@ -124,29 +94,13 @@ export const STATUS_CONFIG: Record<string, {
     icon: 'check',
     canJoin: false,
   },
-  draft: {
-    label: 'Draft',
-    color: 'text-gray-600',
-    bgColor: 'bg-gray-50',
-    borderColor: 'border-gray-200',
-    icon: 'clock',
-    canJoin: false,
-  },
-  pending_approval: {
-    label: 'Pending Approval',
-    color: 'text-orange-700',
-    bgColor: 'bg-orange-100',
-    borderColor: 'border-orange-200',
-    icon: 'clock',
-    canJoin: false,
-  },
 }
 
 /**
  * Get the display configuration for a status
  */
 export function getStatusConfig(status: string) {
-  return STATUS_CONFIG[status] || STATUS_CONFIG.upcoming
+  return STATUS_CONFIG[status] || STATUS_CONFIG.completed
 }
 
 /**
@@ -172,11 +126,9 @@ export function getStatusIcon(status: string): LucideIcon {
   switch (config.icon) {
     case 'clock': return Clock
     case 'play': return PlayCircle
-    case 'pause': return PauseCircle
     case 'check': return CheckCircle
     case 'x': return XCircle
     case 'dollar': return DollarSign
-    case 'calendar': return Calendar
     default: return Clock
   }
 }
@@ -189,8 +141,8 @@ export function canPlayersJoin(status: string): boolean {
 }
 
 /**
- * Calculate what status a session SHOULD have based on current time
- * This is used for time-based auto-transitions
+ * Calculate what status a session SHOULD have based on current time.
+ * Used for time-based auto-transitions (cron + inline corrections).
  */
 export function calculateExpectedStatus(
   currentStatus: string,
@@ -198,29 +150,18 @@ export function calculateExpectedStatus(
   endTime: Date,
   now: Date
 ): QueueSessionStatus {
-  // Terminal states - don't change
-  if (['cancelled', 'rejected', 'completed', 'closed'].includes(currentStatus)) {
+  // Terminal states — don't change
+  if (['cancelled', 'completed'].includes(currentStatus)) {
+    // Legacy: treat 'closed' as 'completed'
     return currentStatus === 'closed' ? 'completed' : currentStatus as QueueSessionStatus
   }
 
-  // Waiting for payment - don't auto-transition
+  // Waiting for payment — don't auto-transition
   if (currentStatus === 'pending_payment') {
     return 'pending_payment'
   }
 
-  // Paused - don't auto-transition (Queue Master controls this)
-  if (currentStatus === 'paused') {
-    // But if end_time passed while paused, complete it
-    if (endTime < now) {
-      return 'completed'
-    }
-    return 'paused'
-  }
-
-  // Time-based transitions for paid sessions
-  const msUntilStart = startTime.getTime() - now.getTime()
-  const hoursUntilStart = msUntilStart / (1000 * 60 * 60)
-
+  // Time-based transitions for paid sessions (open, active)
   // Past end_time → completed
   if (endTime < now) {
     return 'completed'
@@ -231,27 +172,22 @@ export function calculateExpectedStatus(
     return 'active'
   }
 
-  // Within 2 hours of start → open
-  if (hoursUntilStart <= OPEN_BEFORE_START_HOURS) {
-    return 'open'
-  }
-
-  // More than 2 hours before start → upcoming
-  return 'upcoming'
+  // Before start → open
+  return 'open'
 }
 
 /**
- * Helper to format time until session opens
+ * Helper to format time until session opens for joining
  */
 export function getTimeUntilOpen(startTime: Date, now: Date): string {
   const openTime = new Date(startTime.getTime() - OPEN_BEFORE_START_HOURS * 60 * 60 * 1000)
   const msUntilOpen = openTime.getTime() - now.getTime()
-  
+
   if (msUntilOpen <= 0) return 'Now'
-  
+
   const hours = Math.floor(msUntilOpen / (1000 * 60 * 60))
   const minutes = Math.floor((msUntilOpen % (1000 * 60 * 60)) / (1000 * 60))
-  
+
   if (hours > 0) {
     return `${hours}h ${minutes}m`
   }
@@ -262,14 +198,14 @@ export function getTimeUntilOpen(startTime: Date, now: Date): string {
  * Check if a session is in a "finished" state
  */
 export function isSessionFinished(status: string): boolean {
-  return ['completed', 'closed', 'cancelled', 'rejected'].includes(status)
+  return ['completed', 'closed', 'cancelled'].includes(status)
 }
 
 /**
  * Check if a session is in an "active" state (not finished, not pending)
  */
 export function isSessionActive(status: string): boolean {
-  return ['upcoming', 'open', 'active', 'paused'].includes(status)
+  return ['open', 'active'].includes(status)
 }
 
 /**
@@ -277,4 +213,14 @@ export function isSessionActive(status: string): boolean {
  */
 export function isAwaitingPayment(status: string): boolean {
   return status === 'pending_payment'
+}
+
+/**
+ * Check if a player can join based on time window.
+ * Players can only join within OPEN_BEFORE_START_HOURS of start_time.
+ */
+export function isWithinJoinWindow(startTime: Date, now: Date): boolean {
+  const msUntilStart = startTime.getTime() - now.getTime()
+  const hoursUntilStart = msUntilStart / (1000 * 60 * 60)
+  return hoursUntilStart <= OPEN_BEFORE_START_HOURS
 }

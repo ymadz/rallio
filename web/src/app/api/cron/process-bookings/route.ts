@@ -10,17 +10,12 @@ export async function GET(req: NextRequest) {
         const supabase = createServiceClient()
         const now = await getServerNow()
         const nowIso = now.toISOString()
-        
-        // Calculate the time threshold for opening sessions (2 hours before start)
-        const openThreshold = new Date(now.getTime() + OPEN_BEFORE_START_HOURS * 60 * 60 * 1000)
-        const openThresholdIso = openThreshold.toISOString()
 
         // =====================
         // RESERVATION LIFECYCLE
         // =====================
 
         // 1. Start Games: confirmed -> ongoing
-        // We look for reservations that are 'confirmed' and start_time has passed
         const startResult = await supabase
             .from('reservations')
             .update({ status: 'ongoing' })
@@ -34,7 +29,6 @@ export async function GET(req: NextRequest) {
         }
 
         // 2. End Games: ongoing -> completed
-        // We look for reservations that are 'ongoing' and end_time has passed
         const endResult = await supabase
             .from('reservations')
             .update({ status: 'completed' })
@@ -47,7 +41,6 @@ export async function GET(req: NextRequest) {
         }
 
         // 2b. Also complete confirmed reservations whose end_time has passed
-        // (edge case: start_time was never caught, or very short booking)
         const completedConfirmedResult = await supabase
             .from('reservations')
             .update({ status: 'completed' })
@@ -60,7 +53,6 @@ export async function GET(req: NextRequest) {
         }
 
         // 3. Revert Games (Time Travel Support): ongoing -> confirmed
-        // If we travelled back in time, we need to revert active games to confirmed
         const revertResult = await supabase
             .from('reservations')
             .update({ status: 'confirmed' })
@@ -75,18 +67,19 @@ export async function GET(req: NextRequest) {
         // =========================
         // QUEUE SESSION LIFECYCLE
         // =========================
-        // Lifecycle: pending_payment → upcoming → open → active → completed
-        // - pending_payment: Waiting for payment (cash or failed e-wallet)
-        // - upcoming: Paid, but more than 2 hours before start
-        // - open: Within 2 hours of start, players can join
+        // Lifecycle: pending_payment → open → active → completed
+        // - pending_payment: Waiting for payment (cash or e-wallet)
+        // - open: Paid, players can join (within join window)
         // - active: Session is live (start_time has passed)
-        // - completed: Session ended (end_time has passed)
+        // - completed: Session ended (end_time has passed) or QM manually closed
 
-        // 4. Complete expired queue sessions: active/open → completed
+        // 4. Complete expired queue sessions: open/active → completed
+        // IMPORTANT: Skip sessions that were manually closed by QM (settings.manually_closed = true)
+        // Those are already 'completed' and shouldn't be touched.
         const completeSessionsResult = await supabase
             .from('queue_sessions')
             .update({ status: 'completed', updated_at: nowIso })
-            .in('status', ['open', 'active', 'paused'])
+            .in('status', ['open', 'active'])
             .lte('end_time', nowIso)
             .select('id')
 
@@ -107,60 +100,49 @@ export async function GET(req: NextRequest) {
             console.error('[ProcessBookings] Failed to activate sessions:', activateSessionsResult.error)
         }
 
-        // 6. Open queue sessions: upcoming → open (2 hours before start)
-        const openSessionsResult = await supabase
-            .from('queue_sessions')
-            .update({ status: 'open', updated_at: nowIso })
-            .eq('status', 'upcoming')
-            .lte('start_time', openThresholdIso) // start_time is within 2 hours from now
-            .gt('end_time', nowIso)
-            .select('id')
-
-        if (openSessionsResult.error) {
-            console.error('[ProcessBookings] Failed to open sessions:', openSessionsResult.error)
-        }
-
         // =========================
         // TIME TRAVEL SUPPORT
         // =========================
         // Revert sessions if we traveled back in time
 
-        // 7. Revert completed → active if end_time is still in the future
-        const revertCompletedResult = await supabase
+        // 6. Revert completed → active if end_time is still in the future
+        // BUT skip manually closed sessions — QM closed them intentionally
+        // We fetch candidates first and filter out manually_closed ones
+        const { data: completedCandidates } = await supabase
             .from('queue_sessions')
-            .update({ status: 'active', updated_at: nowIso })
+            .select('id, settings')
             .eq('status', 'completed')
             .lte('start_time', nowIso)
             .gt('end_time', nowIso)
-            .select('id')
 
-        if (revertCompletedResult.error) {
-            console.error('[ProcessBookings] Failed to revert completed sessions:', revertCompletedResult.error)
+        const revertableCompleted = (completedCandidates || [])
+            .filter(s => !s.settings?.manually_closed)
+            .map(s => s.id)
+
+        let revertCompletedCount = 0
+        if (revertableCompleted.length > 0) {
+            const revertCompletedResult = await supabase
+                .from('queue_sessions')
+                .update({ status: 'active', updated_at: nowIso })
+                .in('id', revertableCompleted)
+                .select('id')
+
+            if (revertCompletedResult.error) {
+                console.error('[ProcessBookings] Failed to revert completed sessions:', revertCompletedResult.error)
+            }
+            revertCompletedCount = revertCompletedResult.data?.length || 0
         }
 
-        // 8. Revert active → open if start_time is still in the future (but within 2h)
+        // 7. Revert active → open if start_time is still in the future
         const revertActiveResult = await supabase
             .from('queue_sessions')
             .update({ status: 'open', updated_at: nowIso })
             .eq('status', 'active')
             .gt('start_time', nowIso)
-            .lte('start_time', openThresholdIso)
             .select('id')
 
         if (revertActiveResult.error) {
             console.error('[ProcessBookings] Failed to revert active sessions:', revertActiveResult.error)
-        }
-
-        // 9. Revert open/active → upcoming if start_time is more than 2h away
-        const revertToUpcomingResult = await supabase
-            .from('queue_sessions')
-            .update({ status: 'upcoming', updated_at: nowIso })
-            .in('status', ['open', 'active'])
-            .gt('start_time', openThresholdIso)
-            .select('id')
-
-        if (revertToUpcomingResult.error) {
-            console.error('[ProcessBookings] Failed to revert to upcoming:', revertToUpcomingResult.error)
         }
 
         // Note: The DB trigger trg_queue_session_closed (migration 039) will
@@ -176,10 +158,8 @@ export async function GET(req: NextRequest) {
             // Queue Sessions
             sessionsCompleted: completeSessionsResult.data?.length || 0,
             sessionsActivated: activateSessionsResult.data?.length || 0,
-            sessionsOpened: openSessionsResult.data?.length || 0,
-            sessionsRevertedToActive: revertCompletedResult.data?.length || 0,
+            sessionsRevertedToActive: revertCompletedCount,
             sessionsRevertedToOpen: revertActiveResult.data?.length || 0,
-            sessionsRevertedToUpcoming: revertToUpcomingResult.data?.length || 0,
             // IDs for debugging
             startedIds: startResult.data.map(r => r.id),
             endedIds: [

@@ -54,6 +54,40 @@ export function BookingSummaryCard({
     }
   }
 
+  // Calculate ACTUAL future slots that will be created (matching checkout-store logic)
+  const getActualBookedDates = () => {
+    if (!bookingData) return []
+
+    const initialStartTime = new Date(bookingData.date)
+    const [startH, startM] = bookingData.startTime.split(':')
+    initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
+    const startDayIndex = initialStartTime.getDay()
+
+    const recurrenceWeeks = bookingData.recurrenceWeeks || 1
+    const selectedDays = bookingData.selectedDays || []
+
+    const uniqueSelectedDays = selectedDays.length > 0
+      ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
+      : [startDayIndex]
+
+    const bookedDates: Date[] = []
+
+    for (let i = 0; i < recurrenceWeeks; i++) {
+      for (const dayIndex of uniqueSelectedDays) {
+        const dayOffset = (dayIndex - startDayIndex + 7) % 7
+
+        const slotStartTime = new Date(initialStartTime.getTime())
+        slotStartTime.setDate(slotStartTime.getDate() + (i * 7) + dayOffset)
+
+        bookedDates.push(slotStartTime)
+      }
+    }
+
+    return bookedDates
+  }
+
+  const bookedDates = getActualBookedDates()
+
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-6 sticky top-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">Booking Summary</h3>
@@ -71,13 +105,27 @@ export function BookingSummaryCard({
           <p className="font-medium text-gray-900">
             {format(new Date(bookingData.date), 'EEEE, MMM d, yyyy')}
           </p>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-600 mb-2">
             {formatTime(bookingData.startTime)} - {formatTime(bookingData.endTime)}
           </p>
+
+          {bookedDates.length > 0 && (
+            <div className="mt-2 text-xs">
+              <p className="font-medium text-gray-700 mb-1">Booked Dates ({bookedDates.length}):</p>
+              <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto p-1.5 bg-gray-50 rounded-md border border-gray-100">
+                {bookedDates.map((date, idx) => (
+                  <span key={idx} className="bg-white border border-gray-200 text-gray-600 px-2 py-0.5 rounded-md shadow-sm">
+                    {format(date, 'MMM d (E)')}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {bookingData.recurrenceWeeks && bookingData.recurrenceWeeks > 1 && (
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap gap-2">
               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                {bookingData.recurrenceWeeks} Weeks
+                {bookingData.recurrenceWeeks} Weeks Selection
               </span>
               {(bookingData.selectedDays?.length || 0) > 1 && (
                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
@@ -101,7 +149,7 @@ export function BookingSummaryCard({
         <div className="flex justify-between text-sm">
           <span className="text-gray-600">
             Court Fee (₱{bookingData.hourlyRate.toFixed(2)} × {duration} {duration > 1 ? 'hrs' : 'hr'})
-            {bookingData.recurrenceWeeks && bookingData.recurrenceWeeks > 1 ? ` × ${bookingData.recurrenceWeeks} wks` : ''}
+            {bookedDates.length > 1 ? ` × ${bookedDates.length} sessions` : ''}
           </span>
           <span className="font-medium text-gray-900">
             ₱{(subtotal + discountAmount).toFixed(2)}

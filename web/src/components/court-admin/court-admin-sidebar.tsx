@@ -44,7 +44,6 @@ export function CourtAdminSidebar({ user, venues }: CourtAdminSidebarProps) {
   const navItems = [
     { href: '/court-admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
     { href: '/court-admin/reservations', label: 'Reservations', icon: Calendar },
-    { href: '/court-admin/refunds', label: 'Refunds', icon: Undo2 },
     { href: '/court-admin/venues', label: 'My Venues', icon: Building2 },
     { href: '/court-admin/analytics', label: 'Analytics', icon: BarChart3 },
     { href: '/court-admin/queue-history', label: 'Queue History', icon: Clock },

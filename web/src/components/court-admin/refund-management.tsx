@@ -50,7 +50,7 @@ interface Refund {
   }
 }
 
-export function RefundManagement() {
+export function RefundManagement({ hideHeader = false }: { hideHeader?: boolean } = {}) {
   const supabase = createClient()
   const [refunds, setRefunds] = useState<Refund[]>([])
   const [filteredRefunds, setFilteredRefunds] = useState<Refund[]>([])
@@ -218,21 +218,23 @@ export function RefundManagement() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className={hideHeader ? "" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"}>
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Undo2 className="w-7 h-7" />
-            Refund Management
-          </h1>
-          <p className="text-gray-600 mt-1">Review and process refund requests for your venues</p>
+      {!hideHeader && (
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <Undo2 className="w-7 h-7" />
+              Refund Management
+            </h1>
+            <p className="text-gray-600 mt-1">Review and process refund requests for your venues</p>
+          </div>
+          <Button onClick={loadRefunds} variant="outline" size="sm">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh
+          </Button>
         </div>
-        <Button onClick={loadRefunds} variant="outline" size="sm">
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Refresh
-        </Button>
-      </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">

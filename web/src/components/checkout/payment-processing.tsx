@@ -201,7 +201,7 @@ export function PaymentProcessing() {
         setReservationId(confirmedReservationId)
         console.log('Reservation created successfully:', confirmedReservationId)
 
-        // For cash payments, skip payment initiation
+        // For cash payments, skip payment initiation and redirect to receipt
         if (paymentMethod === 'cash') {
           setLoading(false)
           setPaymentStatus('processing')
@@ -209,10 +209,12 @@ export function PaymentProcessing() {
 
           // Special handling for Queue Sessions with cash payment
           if (bookingData.isQueueSession) {
-            // Maybe show success message or just redirect?
-            // Since "Pending Payment" status is set, they can proceed.
-            // We return here to show processing state.
+            // Queue sessions redirect to session management
+            return
           }
+
+          // Redirect cash bookings directly to the receipt page
+          router.push(`/bookings/${confirmedReservationId}/receipt`)
           return
         }
 

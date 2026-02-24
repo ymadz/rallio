@@ -27,6 +27,7 @@ async function getUserBookings(userId: string) {
       created_at,
       recurrence_group_id,
       metadata,
+      cancellation_reason,
       courts (
         id,
         name,

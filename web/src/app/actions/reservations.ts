@@ -294,15 +294,14 @@ export async function validateBookingAvailabilityAction(data: {
   const targetSlots: { start: Date; end: Date; weekIndex: number }[] = []
 
   for (let i = 0; i < recurrenceWeeks; i++) {
-    const weekBaseTime = initialStartTime.getTime() + (i * 7 * 24 * 60 * 60 * 1000)
     for (const dayIndex of uniqueSelectedDays) {
-      const dayOffset = dayIndex - startDayIndex
-      const slotStartTime = new Date(weekBaseTime + (dayOffset * 24 * 60 * 60 * 1000))
+      const dayOffset = (dayIndex - startDayIndex + 7) % 7
+
+      const slotStartTime = new Date(initialStartTime.getTime())
+      slotStartTime.setDate(slotStartTime.getDate() + (i * 7) + dayOffset)
+
       const slotEndTime = new Date(slotStartTime.getTime() + durationMs)
 
-      if (slotStartTime.getTime() < initialStartTime.getTime()) {
-        continue
-      }
       targetSlots.push({ start: slotStartTime, end: slotEndTime, weekIndex: i })
     }
   }

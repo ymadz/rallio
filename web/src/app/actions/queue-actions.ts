@@ -18,7 +18,7 @@ export interface QueueSessionData {
   courtName: string
   venueName: string
   venueId: string
-  status: 'pending_payment' | 'upcoming' | 'open' | 'active' | 'paused' | 'completed' | 'cancelled'
+  status: 'pending_payment' | 'open' | 'active' | 'completed' | 'cancelled'
   currentPlayers: number
   maxPlayers: number
   costPerGame: number
@@ -105,7 +105,7 @@ export async function getQueueDetails(courtId: string) {
       // Update DB to close the session
       const { error: closeError } = await supabase
         .from('queue_sessions')
-        .update({ status: 'closed' })
+        .update({ status: 'completed' })
         .eq('id', session.id)
 
       if (closeError) {
@@ -375,6 +375,14 @@ export async function leaveQueue(sessionId: string) {
       return { success: false, error: 'Failed to leave queue' }
     }
 
+    // Decrement current_players count
+    const { error: decrementError } = await supabase.rpc('decrement_queue_players', {
+      session_id: sessionId,
+    })
+    if (decrementError) {
+      console.warn('[leaveQueue] ⚠️ Failed to decrement player count:', decrementError)
+    }
+
     console.log('[leaveQueue] ✅ Successfully left queue')
 
     // Revalidate queue pages
@@ -544,26 +552,26 @@ export async function getMyQueueHistory() {
         return isLeft || isSessionClosed || isSessionEnded
       })
       .map((p: any) => {
-      const costPerGame = parseFloat(p.queue_sessions.cost_per_game || '0')
-      const gamesPlayed = p.games_played || 0
-      const totalCost = costPerGame * gamesPlayed
+        const costPerGame = parseFloat(p.queue_sessions.cost_per_game || '0')
+        const gamesPlayed = p.games_played || 0
+        const totalCost = costPerGame * gamesPlayed
 
-      return {
-        id: p.queue_session_id,
-        courtId: p.queue_sessions.court_id,
-        courtName: p.queue_sessions.courts?.name || 'Unknown Court',
-        venueName: p.queue_sessions.courts?.venues?.name || 'Unknown Venue',
-        status: p.queue_sessions.status, // might be 'active' if user just left
-        date: p.queue_sessions.start_time,
-        joinedAt: p.joined_at,
-        leftAt: p.left_at,
-        gamesPlayed,
-        gamesWon: p.games_won || 0,
-        totalCost,
-        paymentStatus: p.payment_status,
-        userStatus: p.status, // 'left' or 'waiting'/'playing' if session closed
-      }
-    })
+        return {
+          id: p.queue_session_id,
+          courtId: p.queue_sessions.court_id,
+          courtName: p.queue_sessions.courts?.name || 'Unknown Court',
+          venueName: p.queue_sessions.courts?.venues?.name || 'Unknown Venue',
+          status: p.queue_sessions.status, // might be 'active' if user just left
+          date: p.queue_sessions.start_time,
+          joinedAt: p.joined_at,
+          leftAt: p.left_at,
+          gamesPlayed,
+          gamesWon: p.games_won || 0,
+          totalCost,
+          paymentStatus: p.payment_status,
+          userStatus: p.status, // 'left' or 'waiting'/'playing' if session closed
+        }
+      })
 
     console.log('[getMyQueueHistory] ✅ Fetched history items:', history.length)
 
@@ -601,7 +609,6 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
       `)
       .in('status', ['open', 'active'])
       .eq('is_public', true)
-      .eq('approval_status', 'approved') // CRITICAL: Only show approved sessions
       .gt('end_time', (await getServerNow()).toISOString()) // Filter out expired sessions
       .order('start_time', { ascending: true })
       .limit(20)
@@ -678,6 +685,7 @@ export async function calculateQueuePayment(sessionId: string) {
       `)
       .eq('queue_session_id', sessionId)
       .eq('user_id', user.id)
+      .is('left_at', null)
       .single()
 
     if (participantError || !participant) {
@@ -737,9 +745,7 @@ export async function getQueueMasterHistory() {
         )
       `)
       .eq('organizer_id', user.id)
-      .eq('organizer_id', user.id)
       .or(`status.in.(completed,cancelled),end_time.lt.${(await getServerNow()).toISOString()}`)
-      .order('start_time', { ascending: false })
       .order('start_time', { ascending: false })
 
     if (error) throw error
@@ -906,26 +912,14 @@ export async function createQueueSession(data: {
       ? data.selectedDays
       : [startObj.getDay()]
 
-    // Get the Sunday of the start week (assuming week starts on Sunday)
-    const startWeekSunday = new Date(startObj)
-    startWeekSunday.setDate(startObj.getDate() - startObj.getDay())
-    startWeekSunday.setHours(startObj.getHours(), startObj.getMinutes(), 0, 0)
+    const startDayIndex = startObj.getDay()
 
     for (let i = 0; i < recurrenceWeeks; i++) {
-      const weekBase = new Date(startWeekSunday)
-      weekBase.setDate(weekBase.getDate() + (i * 7)) // Move to the ith week
-
       for (const dayIndex of daysToBook) {
-        const targetStart = new Date(weekBase)
-        targetStart.setDate(targetStart.getDate() + dayIndex)
+        const dayOffset = (dayIndex - startDayIndex + 7) % 7
 
-        // If it's the first week, ensure we don't book in the past relative to the chosen start date
-        // (Unless it's the exact same day/time, which is fine)
-        // But if user picks Wed, and adds Mon, Mon is in the past of that week.
-        // We typically skip past days in the first week.
-        if (i === 0 && targetStart < startObj) {
-          continue
-        }
+        const targetStart = new Date(startObj.getTime())
+        targetStart.setDate(targetStart.getDate() + (i * 7) + dayOffset)
 
         targetDates.push(targetStart)
       }
@@ -1206,11 +1200,11 @@ export async function updateQueueSession(
       return { success: false, error: 'Unauthorized: Not session organizer' }
     }
 
-    // 3. Only allow updates if status is draft or open
-    if (!['draft', 'open'].includes(session.status)) {
+    // 3. Only allow updates if status is pending_payment or open
+    if (!['pending_payment', 'open'].includes(session.status)) {
       return {
         success: false,
-        error: 'Cannot update session in current status. Only draft or open sessions can be updated.',
+        error: 'Cannot update session in current status. Only pending or open sessions can be updated.',
       }
     }
 
@@ -1461,7 +1455,7 @@ export async function closeQueueSession(sessionId: string): Promise<{
     // 2. Get session and verify user is organizer
     const { data: session, error: sessionError } = await supabase
       .from('queue_sessions')
-      .select('organizer_id, status, court_id, metadata')
+      .select('organizer_id, status, court_id, metadata, settings')
       .eq('id', sessionId)
       .single()
 
@@ -1503,6 +1497,8 @@ export async function closeQueueSession(sessionId: string): Promise<{
       .update({
         status: 'completed',
         settings: {
+          ...(session.settings || {}),
+          manually_closed: true,
           completed_at: new Date().toISOString(),
           summary,
         },
@@ -1614,7 +1610,7 @@ export async function cancelQueueSession(
     // 2. Get session and verify user is organizer
     const { data: session, error: sessionError } = await supabase
       .from('queue_sessions')
-      .select('organizer_id, status, court_id, current_players')
+      .select('organizer_id, status, court_id, current_players, metadata')
       .eq('id', sessionId)
       .single()
 
@@ -1626,9 +1622,9 @@ export async function cancelQueueSession(
       return { success: false, error: 'Unauthorized: Not session organizer' }
     }
 
-    // 3. Only allow cancellation if status is draft or open with no players
-    if (!['draft', 'open'].includes(session.status)) {
-      return { success: false, error: 'Can only cancel draft or open sessions' }
+    // 3. Only allow cancellation if status is pending_payment or open with no players
+    if (!['pending_payment', 'open'].includes(session.status)) {
+      return { success: false, error: 'Can only cancel pending or open sessions' }
     }
 
     if (session.current_players > 0) {
@@ -1644,6 +1640,7 @@ export async function cancelQueueSession(
       .update({
         status: 'cancelled',
         metadata: {
+          ...(session.metadata || {}),
           cancelled_at: new Date().toISOString(),
           cancellation_reason: reason,
         },
@@ -2036,13 +2033,13 @@ export async function getMyQueueMasterSessions(filter?: {
 
     // Apply status filter
     if (filter?.status === 'active') {
-      // Active: all confirmed/paid sessions (open, active, paused) — ready to go
-      query = query.in('status', ['active', 'paused', 'open'])
+      // Active: all paid sessions (open, active) — ready to go
+      query = query.in('status', ['active', 'open'])
     } else if (filter?.status === 'pending') {
-      // Pending: sessions awaiting approval or payment (needs action)
-      query = query.in('status', ['pending_approval', 'pending_payment'])
+      // Pending: sessions awaiting payment (needs action)
+      query = query.in('status', ['pending_payment'])
     } else if (filter?.status === 'past') {
-      query = query.in('status', ['closed', 'cancelled'])
+      query = query.in('status', ['completed', 'cancelled'])
     }
 
     query = query.order('created_at', { ascending: false })
@@ -2061,16 +2058,16 @@ export async function getMyQueueMasterSessions(filter?: {
       const startTime = new Date(session.start_time)
       const endTime = new Date(session.end_time)
 
-      // AUTO-CLOSE: If past end_time, close the session (awaited for consistency)
-      if (['open', 'active', 'paused'].includes(session.status) && endTime < now) {
-        console.log('[getMyQueueMasterSessions] 🕒 Session expired, auto-closing:', session.id)
+      // AUTO-CLOSE: If past end_time, complete the session
+      if (['open', 'active'].includes(session.status) && endTime < now) {
+        console.log('[getMyQueueMasterSessions] 🕒 Session expired, auto-completing:', session.id)
         const { error } = await supabase.from('queue_sessions')
-          .update({ status: 'closed', updated_at: now.toISOString() })
+          .update({ status: 'completed', updated_at: now.toISOString() })
           .eq('id', session.id)
         if (error) {
-          console.error('Failed to auto-close expired session:', session.id, error)
+          console.error('Failed to auto-complete expired session:', session.id, error)
         } else {
-          session.status = 'closed'
+          session.status = 'completed'
         }
         // Exclude from active/pending views
         if (filter?.status === 'active' || filter?.status === 'pending') {
@@ -2244,12 +2241,12 @@ export async function getQueueMasterStats(): Promise<{
     sessions?.forEach(session => {
       const startTime = new Date(session.start_time)
       const endTime = session.end_time ? new Date(session.end_time) : null
-      const isExpired = endTime && endTime < now && ['open', 'active', 'paused'].includes(session.status)
+      const isExpired = endTime && endTime < now && ['open', 'active'].includes(session.status)
 
-      // Auto-close if expired (fire and forget)
+      // Auto-complete if expired (fire and forget)
       if (isExpired) {
-        supabase.from('queue_sessions').update({ status: 'closed' }).eq('id', session.id).then(({ error }) => {
-          if (error) console.error('Failed to auto-close expired session:', session.id, error)
+        supabase.from('queue_sessions').update({ status: 'completed' }).eq('id', session.id).then(({ error }) => {
+          if (error) console.error('Failed to auto-complete expired session:', session.id, error)
         })
       }
 
@@ -2262,16 +2259,13 @@ export async function getQueueMasterStats(): Promise<{
       }
 
       // Count logic matching Dashboard filters
-      // If it WAS active but is now expired, we count it as past for the stats
-      const effectiveStatus = isExpired ? 'closed' : session.status
+      const effectiveStatus = isExpired ? 'completed' : session.status
 
-      if (['closed', 'cancelled', 'rejected', 'completed', 'expired'].includes(effectiveStatus)) {
+      if (['completed', 'cancelled'].includes(effectiveStatus)) {
         pastCount++
-      } else if (['active', 'paused', 'open'].includes(effectiveStatus)) {
-        // Active: all confirmed/paid sessions (open, active, paused) — ready to go
+      } else if (['active', 'open'].includes(effectiveStatus)) {
         activeCount++
-      } else if (['draft', 'pending_approval', 'pending_payment'].includes(effectiveStatus)) {
-        // Pending: sessions awaiting approval or payment (needs action)
+      } else if (['pending_payment'].includes(effectiveStatus)) {
         pendingCount++
       }
 
@@ -2279,7 +2273,7 @@ export async function getQueueMasterStats(): Promise<{
       const sessionRevenue = session.queue_participants?.reduce((sum: number, p: any) => sum + (p.amount_owed || 0), 0) || 0
       totalRevenue += sessionRevenue
 
-      if (['active', 'open', 'closed', 'completed'].includes(effectiveStatus)) {
+      if (['active', 'open', 'completed'].includes(effectiveStatus)) {
         totalPlayers += session.queue_participants?.length || 0
         evaluatedSessions++
       }

@@ -52,23 +52,13 @@ export async function createReservation(
     const targetSlots: { start: Date; end: Date; weekIndex: number }[] = []
 
     for (let i = 0; i < recurrenceWeeks; i++) {
-        // The "base" date for this week's iteration (aligned with the initial start date)
-        const weekBaseTime = initialStartTime.getTime() + (i * 7 * 24 * 60 * 60 * 1000)
-
         for (const dayIndex of uniqueSelectedDays) {
-            // Calculate offset from the original start day
-            // e.g. Start is Wed (3). Target is Mon (1). Offset = -2 days.
-            const dayOffset = dayIndex - startDayIndex
+            const dayOffset = (dayIndex - startDayIndex + 7) % 7
 
-            const slotStartTime = new Date(weekBaseTime + (dayOffset * 24 * 60 * 60 * 1000))
+            const slotStartTime = new Date(initialStartTime.getTime())
+            slotStartTime.setDate(slotStartTime.getDate() + (i * 7) + dayOffset)
+
             const slotEndTime = new Date(slotStartTime.getTime() + durationMs)
-
-            // Skip past dates (e.g., missed days in the first week)
-            // We allow a small buffer (e.g. 1 min) to avoid equality issues, but >= should be fine.
-            // Actually strictly, if it's the SAME time as initial, we allow it.
-            if (slotStartTime.getTime() < initialStartTime.getTime()) {
-                continue
-            }
 
             targetSlots.push({
                 start: slotStartTime,

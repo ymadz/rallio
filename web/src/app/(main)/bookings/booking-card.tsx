@@ -38,6 +38,7 @@ export interface Booking {
         amount: number
     }>
     recurrence_group_id?: string | null
+    cancellation_reason?: string | null
     metadata?: {
         recurrence_total?: number
         recurrence_index?: number
@@ -133,6 +134,7 @@ export function BookingCard({
             confirmed: 'bg-emerald-600 text-white',
             ongoing: 'bg-green-500 text-white animate-pulse',
             cancelled: 'bg-red-600 text-white',
+            rejected: 'bg-red-600 text-white',
             pending_refund: 'bg-amber-600 text-white',
             refunded: 'bg-gray-500 text-white',
             completed: 'bg-primary text-white',
@@ -142,7 +144,12 @@ export function BookingCard({
         let displayStatus = status
         let displayLabel = ''
 
-        if (status === 'pending_payment') {
+        // Display as Completed if end time has passed and status is confirmed or paid
+        const isPastBooking = new Date(b.end_time) < (serverDate || new Date())
+        if ((status === 'confirmed' || status === 'paid') && isPastBooking) {
+            displayStatus = 'completed'
+            displayLabel = 'Completed'
+        } else if (status === 'pending_payment') {
             const paymentMethod = b.metadata?.intended_payment_method || b.payments?.[0]?.payment_method
             if (paymentMethod === 'cash') {
                 displayStatus = 'reserved'
@@ -152,6 +159,9 @@ export function BookingCard({
             }
         } else if (status === 'ongoing') {
             displayLabel = 'Ongoing'
+        } else if (status === 'cancelled' && b.cancellation_reason) {
+            displayStatus = 'rejected'
+            displayLabel = 'Rejected'
         } else {
             displayLabel = status
                 .split('_')
@@ -228,29 +238,46 @@ export function BookingCard({
 
                 {/* Details Grid */}
                 <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
-                    <div>
-                        <p className="text-gray-500 mb-1">Players</p>
-                        <p className="font-semibold text-gray-900">{booking.num_players || 1} player{(booking.num_players || 1) > 1 ? 's' : ''}</p>
-                    </div>
-                    <div>
-                        <p className="text-gray-500 mb-1">Payment</p>
-                        <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-bold shadow-sm text-white ${paymentStatus.color === 'green' ? 'bg-green-500' :
-                            paymentStatus.color === 'yellow' ? 'bg-yellow-500' :
-                                paymentStatus.color === 'blue' ? 'bg-blue-500' :
-                                    paymentStatus.color === 'orange' ? 'bg-orange-500' :
-                                        'bg-red-500'
-                            }`}>
-                            {paymentStatus.label}
-                        </span>
-                    </div>
-                    <div>
-                        <p className="text-gray-500 mb-1">Amount</p>
-                        <p className="font-bold text-gray-900">₱{booking.total_amount.toFixed(2)}</p>
-                        {(booking.metadata?.recurrence_total && booking.metadata.recurrence_total > 1) && (
-                            <p className="text-xs text-gray-400 mt-0.5">per session</p>
-                        )}
-                    </div>
-
+                    {/* Reason for rejection instead of payment */}
+                    {((booking.status === 'rejected' || booking.status === 'cancelled') && booking.cancellation_reason) ? (
+                        <>
+                            <div className="col-span-2 bg-red-50 border border-red-100 rounded-lg p-3">
+                                <p className="text-red-800 font-semibold mb-1 text-xs uppercase tracking-wider">Reason for Rejection</p>
+                                <p className="text-red-700">{booking.cancellation_reason}</p>
+                            </div>
+                            <div>
+                                <p className="text-gray-500 mb-1">Status</p>
+                                <span className="inline-block px-2.5 py-1 rounded-md text-xs font-bold shadow-sm text-white bg-red-500">
+                                    Rejected
+                                </span>
+                            </div>
+                            <div>
+                                <p className="text-gray-500 mb-1">Amount</p>
+                                <p className="font-bold text-gray-900 line-through text-gray-400">₱{booking.total_amount.toFixed(2)}</p>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div>
+                                <p className="text-gray-500 mb-1">Payment</p>
+                                <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-bold shadow-sm text-white ${paymentStatus.color === 'green' ? 'bg-green-500' :
+                                    paymentStatus.color === 'yellow' ? 'bg-yellow-500' :
+                                        paymentStatus.color === 'blue' ? 'bg-blue-500' :
+                                            paymentStatus.color === 'orange' ? 'bg-orange-500' :
+                                                'bg-red-500'
+                                    }`}>
+                                    {paymentStatus.label}
+                                </span>
+                            </div>
+                            <div>
+                                <p className="text-gray-500 mb-1">Amount</p>
+                                <p className="font-bold text-gray-900">₱{booking.total_amount.toFixed(2)}</p>
+                                {(booking.metadata?.recurrence_total && booking.metadata.recurrence_total > 1) && (
+                                    <p className="text-xs text-gray-400 mt-0.5">per session</p>
+                                )}
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 {/* Actions */}

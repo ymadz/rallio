@@ -144,9 +144,36 @@ export function AvailabilityModal({
       const duration = getDuration()
       const endTime = getEndTime() // "HH:MM"
 
-      // Basic base price calculation
-      const numSessionsPerWeek = selectedDays.length
-      const basePrice = (startSlot.price || hourlyRate) * duration * recurrenceWeeks * numSessionsPerWeek
+      // Calculate actual slots that will be created (matching checkout-store logic)
+      const initialStartTime = new Date(selectedDate)
+      const [startH, startM] = startSlot.time.split(':')
+      initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
+      const startDayIndex = initialStartTime.getDay()
+
+      // Deduplicate selected days
+      const uniqueSelectedDays = selectedDays.length > 0
+        ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
+        : [startDayIndex]
+
+      // Count only FUTURE slots
+      let actualSlotCount = 0
+      for (let i = 0; i < recurrenceWeeks; i++) {
+        const weekBaseTime = initialStartTime.getTime() + (i * 7 * 24 * 60 * 60 * 1000)
+
+        for (const dayIndex of uniqueSelectedDays) {
+          const dayOffset = dayIndex - startDayIndex
+          const slotStartTime = new Date(weekBaseTime + (dayOffset * 24 * 60 * 60 * 1000))
+
+          // Skip past dates (matches reservation service logic)
+          if (slotStartTime.getTime() < initialStartTime.getTime()) {
+            continue
+          }
+
+          actualSlotCount++
+        }
+      }
+
+      const basePrice = (startSlot.price || hourlyRate) * duration * actualSlotCount
 
       try {
         // Construct ISO strings for start/end
@@ -640,15 +667,48 @@ export function AvailabilityModal({
                       {calculatedPrice.discount > 0 ? 'Discount Applied:' : 'Surcharge Applied:'} {calculatedPrice.appliedDiscountName}
                     </div>
                   )}
-                  <p className="text-gray-600">
+                  <div className="text-gray-600">
                     <span className="font-medium text-gray-900">Selected:</span>{' '}
-                    {format(selectedDate, 'MMM d, yyyy')}
-                    {selectedDays.length > 1 && (
-                      <span className="text-gray-500 text-sm ml-1">
-                        ({selectedDays.map(d => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ')})
-                      </span>
-                    )}
-                  </p>
+                    {(() => {
+                      if (selectedDays.length <= 1 && recurrenceWeeks === 1) {
+                        return format(selectedDate, 'MMM d, yyyy')
+                      }
+
+                      // Generate exact dates
+                      const initialStartTime = new Date(selectedDate)
+                      const [startH, startM] = startSlot.time.split(':')
+                      initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
+                      const startDayIndex = initialStartTime.getDay()
+
+                      const uniqueSelectedDays = selectedDays.length > 0
+                        ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
+                        : [startDayIndex]
+
+                      const bookedDates: Date[] = []
+
+                      for (let i = 0; i < recurrenceWeeks; i++) {
+                        for (const dayIndex of uniqueSelectedDays) {
+                          const dayOffset = (dayIndex - startDayIndex + 7) % 7
+
+                          const slotStartTime = new Date(initialStartTime.getTime())
+                          slotStartTime.setDate(slotStartTime.getDate() + (i * 7) + dayOffset)
+
+                          bookedDates.push(slotStartTime)
+                        }
+                      }
+
+                      // Sort dates
+                      bookedDates.sort((a, b) => a.getTime() - b.getTime())
+
+                      const formattedDates = bookedDates.map(d => format(d, 'MMM d'))
+
+                      if (formattedDates.length <= 3) {
+                        return formattedDates.join(', ') + (formattedDates.length > 0 ? `, ${format(bookedDates[0], 'yyyy')}` : '')
+                      } else {
+                        return `${formattedDates[0]}, ${formattedDates[1]} + ${formattedDates.length - 2} more (${format(bookedDates[0], 'yyyy')})`
+                      }
+                    })()}
+                  </div>
                   <p className="text-gray-600">
                     {formatTime(startSlot.time)} - {formatTime(getEndTime())}
                   </p>
@@ -665,7 +725,29 @@ export function AvailabilityModal({
                         )}
                       </>
                     ) : (
-                      <span>₱{((startSlot.price || hourlyRate) * duration * recurrenceWeeks * selectedDays.length).toLocaleString()}</span>
+                      (() => {
+                        // Calculate ACTUAL base price for initial display (when not calculated yet)
+                        const getDisplayBasePrice = () => {
+                          const initialStartTime = new Date(selectedDate)
+                          const [startH, startM] = startSlot.time.split(':')
+                          initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
+                          const startDayIndex = initialStartTime.getDay()
+                          const uniqueSelectedDays = selectedDays.length > 0
+                            ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
+                            : [startDayIndex]
+
+                          let actualSlotCount = 0
+                          for (let i = 0; i < recurrenceWeeks; i++) {
+                            for (const dayIndex of uniqueSelectedDays) {
+                              // We don't actually need to calculate the date, since every generated combination is valid!
+                              // Without filtering past dates in the first week, actualSlotCount is simply recurrences * uniqueSelectedDays
+                              actualSlotCount++
+                            }
+                          }
+                          return ((startSlot.price || hourlyRate) * duration * actualSlotCount).toLocaleString()
+                        }
+                        return <span>₱{getDisplayBasePrice()}</span>
+                      })()
                     )}
                     {recurrenceWeeks > 1 && <span className="text-xs font-normal text-gray-500 ml-1">({recurrenceWeeks} weeks)</span>}
                     {selectedDays.length > 1 && <span className="text-xs font-normal text-gray-500 ml-1">({selectedDays.length} days/week)</span>}
