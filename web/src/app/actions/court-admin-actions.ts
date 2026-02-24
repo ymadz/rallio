@@ -404,7 +404,6 @@ export async function approveReservation(reservationId: string) {
         const { error: qsError } = await supabase
           .from('queue_sessions')
           .update({
-            approval_status: 'approved',
             status: 'pending_payment', // Wait for payment
             metadata: {
               reservation_id: reservation.id,
@@ -537,30 +536,25 @@ export async function markReservationAsPaid(reservationId: string) {
         .single()
 
       if (queueSession) {
-        // Calculate correct status based on time lifecycle
-        // pending_payment → upcoming (if >2h before start) or open (if ≤2h before start)
-        // At start_time → active (handled by cron)
+        // Calculate correct status based on time
+        // After payment: open (players can join) or active (if already started)
         const now = await getServerNow()
         const sessionStart = new Date(reservation.start_time)
         const sessionEnd = new Date(reservation.end_time)
-        const twoHoursInMs = 2 * 60 * 60 * 1000
-        
+
         let newQueueStatus: string
         if (now >= sessionEnd) {
           newQueueStatus = 'completed'
         } else if (now >= sessionStart) {
           newQueueStatus = 'active'
-        } else if (sessionStart.getTime() - now.getTime() <= twoHoursInMs) {
-          newQueueStatus = 'open'
         } else {
-          newQueueStatus = 'upcoming'
+          newQueueStatus = 'open'
         }
 
         const { error: qsError } = await supabase
           .from('queue_sessions')
           .update({
             status: newQueueStatus,
-            approval_status: 'approved',
             metadata: {
               ...queueSession.metadata,
               payment_status: 'paid',
@@ -691,7 +685,6 @@ export async function rejectReservation(reservationId: string, reason: string) {
         await supabase
           .from('queue_sessions')
           .update({
-            approval_status: 'rejected',
             status: 'cancelled',
             metadata: { rejection_reason: reason }
           })

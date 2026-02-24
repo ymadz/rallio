@@ -16,10 +16,10 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
   const isUserInQueue = queue.userPosition !== null
   const startTime = queue.startTime ? new Date(queue.startTime) : new Date()
   const endTime = queue.endTime ? new Date(queue.endTime) : (queue.startTime ? new Date(new Date(queue.startTime).getTime() + 2 * 60 * 60 * 1000) : new Date())
-  const openTime = subHours(startTime, 2)
+  const openTime = subHours(startTime, 12)
   const now = serverDate || new Date()
   const isLive = startTime <= now && endTime > now
-  const displayStatus = queue.status === 'completed' ? 'completed' : isLive ? 'live' : 'upcoming'
+  const displayStatus = queue.status === 'completed' ? 'completed' : isLive ? 'live' : 'open'
   const [timeUntilOpen, setTimeUntilOpen] = useState<number>(0)
   const [isJoinable, setIsJoinable] = useState(false)
 

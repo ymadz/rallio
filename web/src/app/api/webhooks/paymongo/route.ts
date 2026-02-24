@@ -614,19 +614,16 @@ async function markReservationPaidAndConfirmed({
       }
 
       if (queueSession.approval_status === 'pending' || queueSession.status === 'pending_approval') {
-        updateData.approval_status = 'approved'
+        // Legacy: just clear it
       }
 
       // Calculate correct status based on time lifecycle
-      // pending_payment → upcoming (if >2h before start) or open (if ≤2h before start)
-      // At start_time → active (handled by cron)
-      // At end_time → completed (handled by cron)
+      // pending_payment → open (if within 12h before start) or open (default after payment)
       if (['pending_payment', 'pending_approval'].includes(queueSession.status)) {
         const now = new Date()
         const startTime = new Date(queueSession.start_time)
         const endTime = new Date(queueSession.end_time)
-        const twoHoursInMs = 2 * 60 * 60 * 1000
-        
+
         let newStatus: string
         if (now >= endTime) {
           newStatus = 'completed'
@@ -634,14 +631,11 @@ async function markReservationPaidAndConfirmed({
         } else if (now >= startTime) {
           newStatus = 'active'
           console.log('[markReservationPaidAndConfirmed] 🚀 Session already started → active')
-        } else if (startTime.getTime() - now.getTime() <= twoHoursInMs) {
-          newStatus = 'open'
-          console.log('[markReservationPaidAndConfirmed] 🔓 Within 2 hours of start → open')
         } else {
-          newStatus = 'upcoming'
-          console.log('[markReservationPaidAndConfirmed] ⏰ More than 2 hours away → upcoming')
+          newStatus = 'open'
+          console.log('[markReservationPaidAndConfirmed] 🔓 Session paid → open')
         }
-        
+
         updateData.status = newStatus
       }
 

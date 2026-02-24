@@ -107,13 +107,6 @@ export function ReservationManagement() {
     const isQueueSession = reservation.metadata?.is_queue_session_reservation === true
     if (isQueueSession && reservation.queue_session && reservation.queue_session.length > 0) {
       const queueSession = reservation.queue_session[0]
-      // Map queue session approval status to reservation status
-      if (queueSession.approval_status === 'pending') {
-        return 'pending'
-      }
-      if (queueSession.approval_status === 'rejected') {
-        return 'rejected'
-      }
       if (queueSession.status === 'pending_payment') {
         return 'pending_payment'
       }

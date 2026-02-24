@@ -89,7 +89,6 @@ export function QueueMasterDashboard() {
   }
 
   const getEffectiveStatus = (session: SessionData) => {
-    if (session.approvalStatus === 'rejected') return 'rejected'
     return session.status
   }
 
@@ -110,14 +109,10 @@ export function QueueMasterDashboard() {
     switch (status) {
       case 'live': return 'bg-green-100 text-green-700 border-green-200'
       case 'active': return 'bg-green-100 text-green-700 border-green-200'
-      case 'upcoming': return 'bg-blue-100 text-blue-700 border-blue-200'
       case 'open': return 'bg-blue-100 text-blue-700 border-blue-200'
-      case 'paused': return 'bg-yellow-100 text-yellow-700 border-yellow-200'
-      case 'closed': return 'bg-gray-100 text-gray-700 border-gray-200'
       case 'cancelled': return 'bg-red-100 text-red-700 border-red-200'
-      case 'rejected': return 'bg-red-100 text-red-700 border-red-200'
-      case 'pending_approval': return 'bg-orange-100 text-orange-700 border-orange-200'
       case 'pending_payment': return 'bg-orange-100 text-orange-700 border-orange-200'
+      case 'completed': return 'bg-gray-100 text-gray-700 border-gray-200'
       default: return 'bg-gray-100 text-gray-700 border-gray-200'
     }
   }
@@ -126,13 +121,9 @@ export function QueueMasterDashboard() {
     switch (status) {
       case 'live': return <PlayCircle className="w-4 h-4" />
       case 'active': return <PlayCircle className="w-4 h-4" />
-      case 'upcoming': return <Clock className="w-4 h-4" />
       case 'open': return <Clock className="w-4 h-4" />
-      case 'paused': return <PlayCircle className="w-4 h-4" />
-      case 'closed': return <CheckCircle className="w-4 h-4" />
       case 'cancelled': return <XCircle className="w-4 h-4" />
-      case 'rejected': return <XCircle className="w-4 h-4" />
-      case 'pending_approval': return <Clock className="w-4 h-4" />
+      case 'completed': return <CheckCircle className="w-4 h-4" />
       case 'pending_payment': return <DollarSign className="w-4 h-4" />
       default: return <Clock className="w-4 h-4" />
     }
@@ -141,8 +132,6 @@ export function QueueMasterDashboard() {
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'live': return 'Live Now'
-      case 'upcoming': return 'Upcoming'
-      case 'pending_approval': return 'Pending Approval'
       case 'pending_payment': return 'Pending Payment'
       default: return status.charAt(0).toUpperCase() + status.slice(1)
     }
@@ -358,8 +347,8 @@ export function QueueMasterDashboard() {
 
                     <div className="text-right">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${session.paymentStatus === 'paid'
-                          ? 'bg-green-100 text-green-800 border-green-200'
-                          : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                        ? 'bg-green-100 text-green-800 border-green-200'
+                        : 'bg-yellow-100 text-yellow-800 border-yellow-200'
                         }`}>
                         {session.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}
                       </span>
@@ -402,7 +391,7 @@ export function QueueMasterDashboard() {
                 </div>
 
                 {/* View Summary for closed sessions */}
-                {(session.status === 'closed' || session.status === 'cancelled') && (
+                {(session.status === 'completed' || session.status === 'cancelled') && (
                   <div className="mt-4 pt-4 border-t border-gray-100">
                     <div className="flex items-center justify-center gap-2 text-primary font-medium text-sm group-hover:text-primary-dark transition-colors">
                       <CheckCircle className="w-4 h-4" />

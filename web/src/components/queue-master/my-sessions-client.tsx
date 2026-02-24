@@ -33,7 +33,8 @@ export function MySessionsClient({ initialSessions, initialHistory }: MySessions
     const [activeTab, setActiveTab] = useState<TabType>('active')
     const [sessions] = useState<SessionData[]>(initialSessions)
 
-    const activeStatuses = ['pending_payment', 'upcoming', 'open', 'active', 'paused']
+    // Include legacy statuses so old sessions aren't invisible
+    const activeStatuses = ['pending_payment', 'open', 'active', 'draft', 'pending_approval', 'upcoming', 'paused']
 
     // Filter active sessions
     const activeSessions = sessions.filter(session => activeStatuses.includes(session.status))

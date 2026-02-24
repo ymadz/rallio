@@ -2037,9 +2037,10 @@ export async function getMyQueueMasterSessions(filter?: {
       query = query.in('status', ['active', 'open'])
     } else if (filter?.status === 'pending') {
       // Pending: sessions awaiting payment (needs action)
-      query = query.in('status', ['pending_payment'])
+      // Include legacy statuses that map to pending
+      query = query.in('status', ['pending_payment', 'draft', 'pending_approval', 'upcoming'])
     } else if (filter?.status === 'past') {
-      query = query.in('status', ['completed', 'cancelled'])
+      query = query.in('status', ['completed', 'cancelled', 'closed', 'rejected'])
     }
 
     query = query.order('created_at', { ascending: false })
@@ -2261,11 +2262,12 @@ export async function getQueueMasterStats(): Promise<{
       // Count logic matching Dashboard filters
       const effectiveStatus = isExpired ? 'completed' : session.status
 
-      if (['completed', 'cancelled'].includes(effectiveStatus)) {
+      if (['completed', 'cancelled', 'closed', 'rejected'].includes(effectiveStatus)) {
         pastCount++
       } else if (['active', 'open'].includes(effectiveStatus)) {
         activeCount++
-      } else if (['pending_payment'].includes(effectiveStatus)) {
+      } else {
+        // pending_payment + any legacy statuses (draft, pending_approval, upcoming)
         pendingCount++
       }
 

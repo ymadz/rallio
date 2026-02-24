@@ -5,8 +5,6 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getQueueDetails } from '@/app/actions/queue-actions'
 import {
-  pauseQueueSession,
-  resumeQueueSession,
   closeQueueSession,
   removeParticipant,
   waiveFee
@@ -23,7 +21,6 @@ import {
   Clock,
   DollarSign,
   PlayCircle,
-  PauseCircle,
   StopCircle,
   Loader2,
   AlertCircle,
@@ -277,7 +274,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
 
       // AUTO-COMPLETE: If past end_time, complete the session on the spot
       const now = serverDate || new Date()
-      if (['open', 'active', 'paused'].includes(formattedSession.status) && formattedSession.endTime < now) {
+      if (['open', 'active'].includes(formattedSession.status) && formattedSession.endTime < now) {
         console.log('🕒 [loadSession] Session expired, auto-completing:', sessionData.id)
         const { error: closeErr } = await supabase
           .from('queue_sessions')
@@ -385,32 +382,6 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
     }
   }
 
-  const handlePause = async () => {
-    setActionLoading('pause')
-    try {
-      const result = await pauseQueueSession(sessionId)
-      if (!result.success) throw new Error(result.error)
-      await loadSession()
-    } catch (err: any) {
-      alert(err.message || 'Failed to pause session')
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  const handleResume = async () => {
-    setActionLoading('resume')
-    try {
-      const result = await resumeQueueSession(sessionId)
-      if (!result.success) throw new Error(result.error)
-      await loadSession()
-    } catch (err: any) {
-      alert(err.message || 'Failed to resume session')
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
   const handleClose = async () => {
     if (!confirm('Are you sure you want to close this session? This action cannot be undone.')) {
       return
@@ -491,7 +462,8 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
 
     setActionLoading('pay')
     try {
-      const result = await initiatePaymentAction(session.metadata.reservation_id, 'gcash')
+      const paymentMethod = session.metadata?.payment_method === 'paymaya' ? 'paymaya' : 'gcash'
+      const result = await initiatePaymentAction(session.metadata.reservation_id, paymentMethod)
       if (!result.success || !result.checkoutUrl) {
         throw new Error(result.error || 'Failed to initiate payment')
       }
@@ -539,9 +511,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
     switch (status) {
       case 'live': return 'bg-green-100 text-green-700 border-green-200'
       case 'active': return 'bg-green-100 text-green-700 border-green-200'
-      case 'upcoming': return 'bg-blue-100 text-blue-700 border-blue-200'
       case 'open': return 'bg-blue-100 text-blue-700 border-blue-200'
-      case 'paused': return 'bg-yellow-100 text-yellow-700 border-yellow-200'
       case 'pending_payment': return 'bg-amber-100 text-amber-700 border-amber-200'
       case 'completed': return 'bg-gray-100 text-gray-700 border-gray-200'
       default: return 'bg-gray-100 text-gray-700 border-gray-200'
@@ -553,9 +523,8 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
     const status = session.status
     if (status === 'open' || status === 'active') {
       const isLive = new Date(session.startTime) <= now && new Date(session.endTime) > now
-      return isLive ? 'Live Now' : 'Upcoming'
+      return isLive ? 'Live Now' : 'Open'
     }
-    if (status === 'pending_approval') return 'Pending Approval'
     if (status === 'pending_payment') return 'Pending Payment'
     return status.charAt(0).toUpperCase() + status.slice(1)
   }
@@ -581,24 +550,6 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
           <span>Back to Dashboard</span>
         </Link>
 
-        {/* Pending Approval Alert */}
-        {session.status === 'pending_approval' && (
-          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 rounded-r-lg">
-            <div className="flex items-start">
-              <Clock className="h-5 w-5 text-yellow-400 mt-0.5 mr-3 flex-shrink-0" />
-              <div>
-                <h3 className="text-sm font-medium text-yellow-800">
-                  Pending Venue Owner Approval
-                </h3>
-                <p className="mt-1 text-sm text-yellow-700">
-                  Your session is waiting for approval from the venue owner.
-                  You'll be notified once a decision is made. Players cannot join until the session is approved.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Payment Required Alert */}
         {session.status === 'pending_payment' && (
           <div className="bg-orange-50 border-l-4 border-orange-400 p-4 mb-6 rounded-r-lg">
@@ -610,8 +561,8 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                     Payment Required
                   </h3>
                   <p className="mt-1 text-sm text-orange-700">
-                    Your session has been approved but requires payment to activate.
-                    {session.metadata?.total_amount && ` Amount due: ₱${parseFloat(session.metadata.total_amount).toFixed(2)}`}
+                    Complete payment to activate your session and allow players to join.
+                    {session.metadata?.payment_required && ` Amount due: ₱${parseFloat(session.metadata.payment_required).toFixed(2)}`}
                   </p>
                 </div>
               </div>
@@ -681,26 +632,6 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
             </Link>
           ) : (
             <>
-              {session.status === 'active' && (
-                <button
-                  onClick={handlePause}
-                  disabled={actionLoading === 'pause'}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  <PauseCircle className="w-4 h-4" />
-                  <span>Pause</span>
-                </button>
-              )}
-              {session.status === 'paused' && (
-                <button
-                  onClick={handleResume}
-                  disabled={actionLoading === 'resume'}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  <PlayCircle className="w-4 h-4" />
-                  <span>Resume</span>
-                </button>
-              )}
               <button
                 onClick={handleClose}
                 disabled={actionLoading === 'close'}

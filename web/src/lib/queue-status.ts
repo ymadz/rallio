@@ -94,13 +94,46 @@ export const STATUS_CONFIG: Record<string, {
     icon: 'check',
     canJoin: false,
   },
+  // Legacy statuses — map to closest current equivalent
+  draft: {
+    label: 'Pending Payment',
+    color: 'text-orange-700',
+    bgColor: 'bg-orange-100',
+    borderColor: 'border-orange-200',
+    icon: 'dollar',
+    canJoin: false,
+  },
+  pending_approval: {
+    label: 'Pending Payment',
+    color: 'text-orange-700',
+    bgColor: 'bg-orange-100',
+    borderColor: 'border-orange-200',
+    icon: 'dollar',
+    canJoin: false,
+  },
+  upcoming: {
+    label: 'Open',
+    color: 'text-green-700',
+    bgColor: 'bg-green-100',
+    borderColor: 'border-green-200',
+    icon: 'clock',
+    canJoin: true,
+  },
+  paused: {
+    label: 'Active',
+    color: 'text-green-700',
+    bgColor: 'bg-green-100',
+    borderColor: 'border-green-200',
+    icon: 'play',
+    canJoin: false,
+  },
 }
 
 /**
  * Get the display configuration for a status
  */
 export function getStatusConfig(status: string) {
-  return STATUS_CONFIG[status] || STATUS_CONFIG.completed
+  return STATUS_CONFIG[status] || STATUS_CONFIG.pending_payment
 }
 
 /**
