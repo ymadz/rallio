@@ -46,7 +46,7 @@ export async function ActiveBookingBanner() {
                 venues (name)
             )
         `)
-        .eq('queue_master_id', user.id)
+        .eq('organizer_id', user.id)
         .in('status', ['open', 'active'])
         .lte('start_time', nowIso)
         .gte('end_time', nowIso)

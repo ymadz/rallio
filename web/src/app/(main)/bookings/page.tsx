@@ -87,7 +87,7 @@ async function getUserQueueSessions(userId: string) {
       cost_per_game,
       is_public,
       created_at,
-      reservation_id,
+      metadata,
       courts (
         id,
         name,
@@ -106,7 +106,7 @@ async function getUserQueueSessions(userId: string) {
         )
       )
     `)
-    .eq('queue_master_id', userId)
+    .eq('organizer_id', userId)
     .order('start_time', { ascending: false })
 
   if (error) {
@@ -115,33 +115,37 @@ async function getUserQueueSessions(userId: string) {
   }
 
   // Normalize queue sessions into the Booking shape
-  const queueSessions = (data || []).map((qs: any) => ({
-    id: qs.reservation_id || qs.id,
-    start_time: qs.start_time,
-    end_time: qs.end_time,
-    status: mapQueueStatus(qs.status),
-    total_amount: 0,
-    amount_paid: 0,
-    num_players: qs.max_players || 0,
-    payment_type: 'full',
-    notes: null,
-    created_at: qs.created_at,
-    courts: qs.courts,
-    payments: [],
-    recurrence_group_id: null,
-    cancellation_reason: null,
-    metadata: {
-      queue_mode: qs.mode,
-      queue_game_format: qs.game_format,
-      queue_cost_per_game: qs.cost_per_game,
-      queue_is_public: qs.is_public,
-    },
-    // Queue session specific fields
-    type: 'queue_session' as const,
-    queue_session_id: qs.id,
-    game_format: qs.game_format,
-    mode: qs.mode,
-  }))
+  // reservation_id is inside metadata JSON, not a top-level column
+  const queueSessions = (data || []).map((qs: any) => {
+    const reservationId = qs.metadata?.reservation_id || null
+    return {
+      id: reservationId || qs.id,
+      start_time: qs.start_time,
+      end_time: qs.end_time,
+      status: mapQueueStatus(qs.status),
+      total_amount: 0,
+      amount_paid: 0,
+      num_players: qs.max_players || 0,
+      payment_type: 'full',
+      notes: null,
+      created_at: qs.created_at,
+      courts: qs.courts,
+      payments: [],
+      recurrence_group_id: null,
+      cancellation_reason: null,
+      metadata: {
+        queue_mode: qs.mode,
+        queue_game_format: qs.game_format,
+        queue_cost_per_game: qs.cost_per_game,
+        queue_is_public: qs.is_public,
+      },
+      // Queue session specific fields
+      type: 'queue_session' as const,
+      queue_session_id: qs.id,
+      game_format: qs.game_format,
+      mode: qs.mode,
+    }
+  })
 
   return queueSessions
 }
