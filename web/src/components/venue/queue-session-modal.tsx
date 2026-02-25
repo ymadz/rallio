@@ -524,10 +524,52 @@ export function QueueSessionModal({
                                     <h4 className="font-semibold text-gray-900 mb-2">Session Schedule</h4>
                                     <div className="text-sm text-gray-600 space-y-1">
                                         <p><strong>Court:</strong> {courtName}</p>
-                                        <p><strong>Date:</strong> {format(selectedDate, 'MMM d, yyyy')}</p>
+                                        <p>
+                                            <strong>Date:</strong>{' '}
+                                            {(() => {
+                                                if (selectedDays.length <= 1 && recurrenceWeeks === 1) {
+                                                    return format(selectedDate, 'MMM d, yyyy')
+                                                }
+
+                                                // Generate exact dates
+                                                const initialStartTime = new Date(selectedDate)
+                                                const [startH, startM] = (startSlot?.time || "00:00").split(':')
+                                                initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
+                                                const startDayIndex = initialStartTime.getDay()
+
+                                                const uniqueSelectedDays = selectedDays.length > 0
+                                                    ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
+                                                    : [startDayIndex]
+
+                                                const bookedDates: Date[] = []
+
+                                                for (let i = 0; i < recurrenceWeeks; i++) {
+                                                    for (const dayIndex of uniqueSelectedDays) {
+                                                        const dayOffset = (dayIndex - startDayIndex + 7) % 7
+                                                        const slotStartTime = new Date(initialStartTime.getTime())
+                                                        slotStartTime.setDate(slotStartTime.getDate() + (i * 7) + dayOffset)
+                                                        bookedDates.push(slotStartTime)
+                                                    }
+                                                }
+
+                                                bookedDates.sort((a, b) => a.getTime() - b.getTime())
+
+                                                return (
+                                                    <div className="mt-2 text-xs">
+                                                        <p className="font-medium text-gray-700 mb-1">Booked Dates ({bookedDates.length}):</p>
+                                                        <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto p-1.5 bg-white/50 rounded-md border border-primary/10">
+                                                            {bookedDates.map((date, idx) => (
+                                                                <span key={idx} className="bg-white border border-gray-200 text-gray-600 px-2 py-0.5 rounded-md shadow-sm">
+                                                                    {format(date, 'MMM d (E)')}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })()}
+                                        </p>
                                         <p><strong>Time:</strong> {startSlot && formatTime(startSlot.time)} - {formatTime(getEndTime())}</p>
                                         <p><strong>Duration:</strong> {duration} hour{duration > 1 ? 's' : ''}</p>
-                                        {recurrenceWeeks > 1 && <p><strong>Recurrence:</strong> {recurrenceWeeks} weeks</p>}
                                     </div>
                                 </div>
 
@@ -667,13 +709,63 @@ export function QueueSessionModal({
 
                                     <p className="text-gray-600">
                                         <span className="font-medium text-gray-900">Selected:</span>{' '}
-                                        {format(selectedDate, 'MMM d, yyyy')}
+                                        {(() => {
+                                            if (selectedDays.length <= 1 && recurrenceWeeks === 1) {
+                                                return format(selectedDate, 'MMM d, yyyy')
+                                            }
+
+                                            // Generate exact dates
+                                            const initialStartTime = new Date(selectedDate)
+                                            const [startH, startM] = startSlot.time.split(':')
+                                            initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
+                                            const startDayIndex = initialStartTime.getDay()
+
+                                            const uniqueSelectedDays = selectedDays.length > 0
+                                                ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
+                                                : [startDayIndex]
+
+                                            const bookedDates: Date[] = []
+
+                                            for (let i = 0; i < recurrenceWeeks; i++) {
+                                                for (const dayIndex of uniqueSelectedDays) {
+                                                    const dayOffset = (dayIndex - startDayIndex + 7) % 7
+                                                    const slotStartTime = new Date(initialStartTime.getTime())
+                                                    slotStartTime.setDate(slotStartTime.getDate() + (i * 7) + dayOffset)
+                                                    bookedDates.push(slotStartTime)
+                                                }
+                                            }
+
+                                            bookedDates.sort((a, b) => a.getTime() - b.getTime())
+                                            const formattedDates = bookedDates.map(d => format(d, 'MMM d'))
+
+                                            if (formattedDates.length <= 3) {
+                                                return formattedDates.join(', ') + (formattedDates.length > 0 ? `, ${format(bookedDates[0], 'yyyy')}` : '')
+                                            } else {
+                                                return `${formattedDates[0]}, ${formattedDates[1]} + ${formattedDates.length - 2} more (${format(bookedDates[0], 'yyyy')})`
+                                            }
+                                        })()}
                                     </p>
                                     <p className="text-gray-600">
                                         {formatTime(startSlot.time)} - {formatTime(getEndTime())}
                                     </p>
                                     <p className="text-lg font-bold text-primary mt-1">
-                                        ₱{(hourlyRate * duration * recurrenceWeeks * (selectedDays.length || 1)).toLocaleString()}
+                                        {(() => {
+                                            const initialStartTime = new Date(selectedDate)
+                                            const [startH, startM] = startSlot.time.split(':')
+                                            initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
+                                            const startDayIndex = initialStartTime.getDay()
+                                            const uniqueSelectedDays = selectedDays.length > 0
+                                                ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
+                                                : [startDayIndex]
+
+                                            let actualSlotCount = 0
+                                            for (let i = 0; i < recurrenceWeeks; i++) {
+                                                for (const dayIndex of uniqueSelectedDays) {
+                                                    actualSlotCount++
+                                                }
+                                            }
+                                            return `₱${(hourlyRate * duration * actualSlotCount).toLocaleString()}`
+                                        })()}
                                         {recurrenceWeeks > 1 && <span className="text-xs font-normal text-gray-500 ml-1">({recurrenceWeeks} weeks)</span>}
                                     </p>
                                 </div>

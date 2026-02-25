@@ -207,12 +207,6 @@ export function PaymentProcessing() {
           setPaymentStatus('processing')
           setBookingReference(confirmedReservationId.slice(0, 8), confirmedReservationId)
 
-          // Special handling for Queue Sessions with cash payment
-          if (bookingData.isQueueSession) {
-            // Queue sessions redirect to session management
-            return
-          }
-
           // Redirect cash bookings directly to the receipt page
           router.push(`/bookings/${confirmedReservationId}/receipt`)
           return

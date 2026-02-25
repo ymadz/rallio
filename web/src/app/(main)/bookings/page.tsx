@@ -174,8 +174,14 @@ export default async function BookingsPage() {
     getUserQueueSessions(user.id),
   ])
 
+  // Process queue sessions to ensure they have unique IDs if needed, but we use the reservation ID to deduplicate
+  const queueSessionReservationIds = new Set(queueSessions.map(qs => qs.id))
+
+  // Filter out reservations that already exist as queue sessions
+  const regularBookings = bookings.filter(b => !queueSessionReservationIds.has(b.id))
+
   // Merge and sort by start_time descending
-  const allBookings = [...bookings, ...queueSessions].sort(
+  const allBookings = [...regularBookings, ...queueSessions].sort(
     (a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
   )
 
