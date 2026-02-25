@@ -25,7 +25,23 @@ export default function CheckoutPage() {
         resetCheckout,
         getSubtotal,
         discountAmount,
+        reservationId: storeReservationId,
     } = useCheckoutStore()
+
+    // Guard: detect stale checkout state (e.g. page revisited after completed booking)
+    useEffect(() => {
+        if (currentStep === 'processing') {
+            // If we have a stored reservationId, redirect to receipt
+            if (storeReservationId) {
+                resetCheckout()
+                router.push(`/bookings/${storeReservationId}/receipt`)
+            } else {
+                // No reservationId = stale state, reset and go home
+                resetCheckout()
+                router.push('/courts')
+            }
+        }
+    }, []) // Only run on mount
 
     // Redirect if no booking data
     useEffect(() => {
