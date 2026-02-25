@@ -21,6 +21,8 @@ export function PaymentProcessing() {
     getTotalAmount,
     setCurrentStep,
     setBookingReference,
+    resetCheckout,
+    reservationId: storeReservationId,
     discountAmount,
     discountType,
     discountReason,
@@ -30,7 +32,7 @@ export function PaymentProcessing() {
   const [loading, setLoading] = useState(true)
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'processing' | 'success'>('pending')
   const [error, setError] = useState<string | null>(null)
-  const [reservationId, setReservationId] = useState<string | null>(null)
+  const [reservationId, setReservationId] = useState<string | null>(storeReservationId || null)
   const [isRetrying, setIsRetrying] = useState(false)
 
   // Use useRef to prevent re-renders and useEffect loops
@@ -209,6 +211,8 @@ export function PaymentProcessing() {
 
           // Redirect cash bookings directly to the receipt page
           router.push(`/bookings/${confirmedReservationId}/receipt`)
+          // Reset checkout state so user doesn't see stale processing step
+          resetCheckout()
           return
         }
 
