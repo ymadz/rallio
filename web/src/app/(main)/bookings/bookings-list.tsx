@@ -155,7 +155,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
       const result = await cancelReservationAction(booking.id)
 
       if (result.success) {
-        setBookings((prev) => prev.filter((b) => b.id !== booking.id))
+        setBookings((prev) => prev.map((b) => b.id === booking.id ? { ...b, status: 'cancelled' } : b))
       } else {
         alert(result.error || 'Failed to cancel booking')
       }

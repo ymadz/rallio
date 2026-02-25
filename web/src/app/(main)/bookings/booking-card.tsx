@@ -24,11 +24,17 @@ export interface Booking {
         id: string
         name: string
         hourly_rate: number
+        court_images?: Array<{
+            url: string
+            is_primary: boolean
+            display_order: number
+        }>
         venues: {
             id: string
             name: string
             address?: string
             city: string
+            image_url?: string
         }
     }
     payments: Array<{
@@ -184,12 +190,30 @@ export function BookingCard({
     return (
         <Card className="overflow-hidden hover:shadow-lg transition-shadow">
             {/* Image Header */}
-            <div className="relative h-48 bg-gradient-to-br from-primary/20 to-primary/5">
-                <div className="w-full h-full flex items-center justify-center">
-                    <svg className="w-12 h-12 text-primary/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                </div>
+            <div className="relative h-48 bg-gradient-to-br from-primary/20 to-primary/5 overflow-hidden">
+                {(() => {
+                    const courtImages = booking.courts.court_images || []
+                    const primaryImage = courtImages.find(img => img.is_primary)
+                    const imageUrl = primaryImage?.url || courtImages[0]?.url || booking.courts.venues.image_url
+
+                    if (imageUrl) {
+                        return (
+                            <img
+                                src={imageUrl}
+                                alt={booking.courts.name}
+                                className="w-full h-full object-cover"
+                            />
+                        )
+                    }
+
+                    return (
+                        <div className="w-full h-full flex items-center justify-center">
+                            <svg className="w-12 h-12 text-primary/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                            </svg>
+                        </div>
+                    )
+                })()}
                 <div className="absolute top-3 right-3 flex gap-2">
                     {bookingStatusBadge(booking.status, booking)}
                     {booking.metadata?.weeks_total && booking.metadata.weeks_total > 1 && (

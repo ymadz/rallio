@@ -32,11 +32,17 @@ async function getUserBookings(userId: string) {
         id,
         name,
         hourly_rate,
+        court_images (
+          url,
+          is_primary,
+          display_order
+        ),
         venues (
           id,
           name,
           address,
-          city
+          city,
+          image_url
         )
       ),
       payments (
