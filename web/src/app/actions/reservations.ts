@@ -63,7 +63,7 @@ export async function getAvailableTimeSlotsAction(
   // Get existing reservations AND queue sessions for this court on this date
   // Query for the entire day range to catch any overlapping bookings
   const dateOnlyString = format(date, 'yyyy-MM-dd')
-  const activeStatuses = ['pending_payment', 'paid', 'confirmed', 'ongoing', 'pending_refund']
+  const activeStatuses = ['pending_payment', 'confirmed', 'ongoing', 'pending_refund']
 
   // Use timezone-aware date range (Asia/Manila = +08:00)
   // Query from midnight to end of day in the venue's timezone
@@ -94,12 +94,11 @@ export async function getAvailableTimeSlotsAction(
     // Get queue sessions
     adminDb
       .from('queue_sessions')
-      .select('start_time, end_time, status, approval_status')
+      .select('start_time, end_time, status')
       .eq('court_id', courtId)
       .lt('start_time', endOfDayLocal)
       .gt('end_time', startOfDayLocal)
-      .in('status', ['draft', 'active', 'pending_approval'])
-      .in('approval_status', ['pending', 'approved'])
+      .in('status', ['pending_payment', 'open', 'active'])
   ])
 
 
@@ -324,7 +323,7 @@ export async function validateBookingAvailabilityAction(data: {
   for (const slot of targetSlots) {
     const currentStartTimeISO = slot.start.toISOString()
     const currentEndTimeISO = slot.end.toISOString()
-    const conflictStatuses = ['pending_payment', 'paid', 'confirmed', 'ongoing', 'pending_refund']
+    const conflictStatuses = ['pending_payment', 'confirmed', 'ongoing', 'pending_refund']
 
     // A. Check Operating Hours
     const dayName = dayNames[slot.start.getDay()]
@@ -374,8 +373,7 @@ export async function validateBookingAvailabilityAction(data: {
         .from('queue_sessions')
         .select('id, start_time, end_time')
         .eq('court_id', data.courtId)
-        .in('status', ['draft', 'active', 'pending_approval'])
-        .in('approval_status', ['pending', 'approved'])
+        .in('status', ['pending_payment', 'open', 'active'])
         .lt('start_time', currentEndTimeISO)
         .gt('end_time', currentStartTimeISO)
     ])
@@ -386,7 +384,7 @@ export async function validateBookingAvailabilityAction(data: {
     }
 
     const realConflicts = reservationConflicts.data?.filter(conflict => {
-      if (conflict.status === 'confirmed' || conflict.status === 'paid') return true
+      if (conflict.status === 'confirmed') return true
       const isRecurring = recurrenceWeeks > 1 || selectedDays.length > 1 // Define if not defined in context, but wait, this variable was used in original code?
       // Ah, I see `isRecurring` used in original code line 302, but I don't see it defined in my replacement chunk yet.
       // It must be defined.

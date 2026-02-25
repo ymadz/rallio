@@ -51,7 +51,6 @@ interface Reservation {
   metadata?: any
   queue_session?: Array<{
     id: string
-    approval_status: 'pending' | 'approved' | 'rejected'
     status: string
     organizer_id: string
   }>

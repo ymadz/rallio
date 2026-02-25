@@ -92,7 +92,7 @@ export async function createReservation(
         const currentStartTimeISO = slot.start.toISOString()
         const currentEndTimeISO = slot.end.toISOString()
 
-        const conflictStatuses = ['pending_payment', 'paid', 'confirmed', 'ongoing', 'pending_refund']
+        const conflictStatuses = ['pending_payment', 'confirmed', 'ongoing', 'pending_refund']
 
         const [reservationConflicts, queueConflicts] = await Promise.all([
             adminDb
@@ -123,7 +123,7 @@ export async function createReservation(
 
         // Filter reservation conflicts
         const realConflicts = reservationConflicts.data?.filter(conflict => {
-            if (conflict.status === 'confirmed' || conflict.status === 'paid') return true
+            if (conflict.status === 'confirmed') return true
             if (conflict.user_id === data.userId && conflict.status === 'pending_payment' && !isRecurring) return false
             if (conflict.user_id !== data.userId) return true
             return isRecurring // If recurring, even own pending conflicts block it

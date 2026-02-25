@@ -25,7 +25,7 @@ export function BookingReviewButton({
 
   // Only show review button for confirmed bookings in the past
   const isPastBooking = new Date(bookingDate) < new Date()
-  const isConfirmed = bookingStatus === 'confirmed' || bookingStatus === 'paid'
+  const isConfirmed = bookingStatus === 'confirmed'
 
   if (!isPastBooking || !isConfirmed) {
     return null

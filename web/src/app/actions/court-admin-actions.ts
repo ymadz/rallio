@@ -300,7 +300,7 @@ export async function getMyVenueReservations(filters?: {
         // Get queue sessions that match these reservations by court and time
         const { data: queueSessions } = await supabase
           .from('queue_sessions')
-          .select('id, court_id, organizer_id, start_time, end_time, approval_status, status')
+          .select('id, court_id, organizer_id, start_time, end_time, status')
           .in(
             'court_id',
             queueReservations.map((r: any) => r.court_id)

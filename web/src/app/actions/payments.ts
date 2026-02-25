@@ -663,7 +663,7 @@ async function updateQueueSessionStatus(reservationId: string, supabase: any) {
     // Check if this reservation is for a queue session
     const { data: queueSession } = await supabase
       .from('queue_sessions')
-      .select('id, status, approval_status, metadata, start_time')
+      .select('id, status, metadata, start_time')
       .filter('metadata->>reservation_id', 'eq', reservationId)
       .single()
 
@@ -684,7 +684,6 @@ async function updateQueueSessionStatus(reservationId: string, supabase: any) {
           .from('queue_sessions')
           .update({
             status: newStatus,
-            approval_status: 'approved',
             metadata: {
               ...queueSession.metadata,
               payment_status: 'paid',
@@ -705,7 +704,6 @@ async function updateQueueSessionStatus(reservationId: string, supabase: any) {
         const { error: updateError } = await supabase
           .from('queue_sessions')
           .update({
-            approval_status: queueSession.approval_status === 'pending' ? 'approved' : queueSession.approval_status,
             metadata: {
               ...queueSession.metadata,
               payment_status: 'paid',

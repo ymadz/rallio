@@ -67,7 +67,7 @@ export function BookingCard({
     onReschedule,
     setBookings
 }: BookingCardProps) {
-    const activeStatuses = ['pending_payment', 'pending', 'paid', 'confirmed']
+    const activeStatuses = ['pending_payment', 'pending', 'confirmed']
     const startDate = new Date(booking.start_time)
     const endDate = new Date(booking.end_time)
 
@@ -82,7 +82,7 @@ export function BookingCard({
     const getPaymentStatus = (b: Booking) => {
         const isFullyPaid = b.amount_paid >= b.total_amount
 
-        if (b.status === 'paid' || (b.status === 'confirmed' && isFullyPaid)) {
+        if (b.status === 'confirmed' && isFullyPaid) {
             return { label: 'Paid', color: 'green', needsPayment: false }
         }
         if (b.status === 'confirmed' && !isFullyPaid) {
@@ -130,7 +130,7 @@ export function BookingCard({
             reserved: 'bg-blue-500 text-white',
             pending_payment: 'bg-amber-500 text-white',
             pending: 'bg-amber-500 text-white',
-            paid: 'bg-primary text-white',
+
             confirmed: 'bg-emerald-600 text-white',
             ongoing: 'bg-green-500 text-white animate-pulse',
             cancelled: 'bg-red-600 text-white',
@@ -146,7 +146,7 @@ export function BookingCard({
 
         // Display as Completed if end time has passed and status is confirmed or paid
         const isPastBooking = new Date(b.end_time) < (serverDate || new Date())
-        if ((status === 'confirmed' || status === 'paid') && isPastBooking) {
+        if (status === 'confirmed' && isPastBooking) {
             displayStatus = 'completed'
             displayLabel = 'Completed'
         } else if (status === 'pending_payment') {
@@ -291,7 +291,7 @@ export function BookingCard({
                         bookingStatus={booking.status}
                     />
 
-                    {['paid', 'confirmed'].includes(booking.status) && booking.amount_paid > 0 && (
+                    {booking.status === 'confirmed' && booking.amount_paid > 0 && (
                         <RefundRequestButton
                             reservationId={booking.id}
                             status={booking.status}

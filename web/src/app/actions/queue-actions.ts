@@ -975,7 +975,7 @@ export async function createQueueSession(data: {
         .from('reservations')
         .select('id')
         .eq('court_id', data.courtId)
-        .in('status', ['pending_payment', 'confirmed', 'paid', 'ongoing'])
+        .in('status', ['pending_payment', 'confirmed', 'ongoing'])
         .lt('start_time', sessionEnd.toISOString())
         .gt('end_time', sessionStart.toISOString())
 
@@ -2144,7 +2144,7 @@ export async function getMyQueueMasterSessions(filter?: {
           venueName: session.courts?.venues?.name || 'Unknown Venue',
           venueId: session.courts?.venues?.id || '',
           status: session.status,
-          approvalStatus: session.approval_status,
+
           currentPlayers: formattedParticipants.length,
           maxPlayers: session.max_players || 12,
           costPerGame: parseFloat(session.cost_per_game || '0'),

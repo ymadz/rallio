@@ -598,7 +598,7 @@ async function markReservationPaidAndConfirmed({
   try {
     const { data: queueSession } = await supabase
       .from('queue_sessions')
-      .select('id, status, approval_status, metadata, start_time, end_time')
+      .select('id, status, metadata, start_time, end_time')
       .filter('metadata->>reservation_id', 'eq', reservationId)
       .single()
 
@@ -613,9 +613,7 @@ async function markReservationPaidAndConfirmed({
         }
       }
 
-      if (queueSession.approval_status === 'pending' || queueSession.status === 'pending_approval') {
-        // Legacy: just clear it
-      }
+
 
       // Calculate correct status based on time lifecycle
       // pending_payment → open (if within 12h before start) or open (default after payment)

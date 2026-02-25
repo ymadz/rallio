@@ -79,7 +79,7 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
     }
 
     // Check reservation status allows refunds
-    const refundableStatuses = ['paid', 'confirmed', 'pending_payment']
+    const refundableStatuses = ['confirmed', 'pending_payment']
     if (!refundableStatuses.includes(reservation.status)) {
       return {
         success: false,
@@ -364,7 +364,7 @@ export async function cancelRefundRequestAction(refundId: string): Promise<Refun
     if (refund.reservations?.status === 'pending_refund') {
       await supabase
         .from('reservations')
-        .update({ status: 'paid' }) // Revert to paid
+        .update({ status: 'confirmed' }) // Revert to confirmed
         .eq('id', refund.reservation_id)
     }
 
@@ -442,7 +442,7 @@ export async function adminProcessRefundAction(
       // Revert reservation status
       await supabase
         .from('reservations')
-        .update({ status: 'paid' }) // Revert to paid
+        .update({ status: 'confirmed' }) // Revert to confirmed
         .eq('id', refund.reservation_id)
 
       // Notify user

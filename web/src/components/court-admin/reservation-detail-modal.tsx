@@ -48,7 +48,6 @@ interface ReservationDetailModalProps {
     metadata?: any
     queue_session?: Array<{
       id: string
-      approval_status: 'pending' | 'approved' | 'rejected'
       status: string
       organizer_id: string
     }>
@@ -139,11 +138,6 @@ export function ReservationDetailModal({
 
   // Helper to determine display status
   const getDisplayStatus = () => {
-    // Check for rejected queue session
-    if (reservation.metadata?.is_queue_session_reservation &&
-      reservation.queue_session?.[0]?.approval_status === 'rejected') {
-      return 'rejected'
-    }
     // Check for cancelled reservation with reason (implies rejection)
     if (reservation.status === 'cancelled' && (reservation as any).cancellation_reason) {
       return 'rejected'
@@ -165,18 +159,9 @@ export function ReservationDetailModal({
 
   // Helper to check if approval is needed
   const isPendingApproval = () => {
-    // If we are already in pending_payment, we are past the approval stage
+    // Approval flow is removed — only check for legacy 'pending' status
     if (reservation.status === 'pending_payment') return false
-
-    // Regular pending reservation
     if (reservation.status === 'pending') return true
-
-    // Queue session pending approval
-    if (reservation.metadata?.is_queue_session_reservation &&
-      reservation.queue_session?.[0]?.approval_status === 'pending') {
-      return true
-    }
-
     return false
   }
 

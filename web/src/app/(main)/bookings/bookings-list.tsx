@@ -34,7 +34,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
   // We will keep `activeTab` and sync it with Tabs onValueChange to keep logic simple without rewriting everything right away.
   const [activeTab, setActiveTab] = useState('upcoming')
 
-  const activeStatuses = ['pending_payment', 'pending', 'paid', 'confirmed']
+  const activeStatuses = ['pending_payment', 'pending', 'confirmed']
 
   const filteredBookings = bookings.filter((booking) => {
     const startTime = new Date(booking.start_time)
@@ -98,7 +98,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
   }
 
   const handleCancelBooking = async (booking: Booking) => {
-    const isPaid = ['paid', 'confirmed'].includes(booking.status) && booking.amount_paid > 0
+    const isPaid = booking.status === 'confirmed' && booking.amount_paid > 0
     const nowTime = serverDate ? serverDate.getTime() : Date.now()
     const hoursUntilStart = (new Date(booking.start_time).getTime() - nowTime) / (1000 * 60 * 60)
     const isWithin24Hours = hoursUntilStart < 24
@@ -167,7 +167,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     setCancellingId(null)
   }
 
-  const totalConfirmed = filteredBookings.filter((b) => ['paid', 'confirmed'].includes(b.status)).length
+  const totalConfirmed = filteredBookings.filter((b) => b.status === 'confirmed').length
   const awaitingPayment = filteredBookings.filter((b) => {
     const isFullyPaid = b.amount_paid >= b.total_amount
     return ['pending_payment', 'pending'].includes(b.status) || (b.status === 'confirmed' && !isFullyPaid)
