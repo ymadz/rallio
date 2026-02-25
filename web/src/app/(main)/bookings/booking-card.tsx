@@ -50,6 +50,11 @@ export interface Booking {
         recurrence_index?: number
         [key: string]: any
     }
+    // Queue session fields
+    type?: 'reservation' | 'queue_session'
+    queue_session_id?: string
+    game_format?: string
+    mode?: string
 }
 
 interface BookingCardProps {
@@ -216,6 +221,12 @@ export function BookingCard({
                 })()}
                 <div className="absolute top-3 right-3 flex gap-2">
                     {bookingStatusBadge(booking.status, booking)}
+                    {booking.type === 'queue_session' && (
+                        <span className="px-3 py-1.5 rounded-full text-xs font-bold shadow-lg bg-indigo-600 text-white flex items-center gap-1">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                            Queue Session
+                        </span>
+                    )}
                     {booking.metadata?.weeks_total && booking.metadata.weeks_total > 1 && (
                         <span className="px-3 py-1.5 rounded-full text-xs font-bold shadow-lg bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
@@ -381,62 +392,88 @@ export function BookingCard({
                     )}
 
                     <div className="flex gap-4 pt-2">
-                        <Link href={`/courts/${booking.courts.venues.id}`} className="flex-1">
-                            <Button variant="outline" className="w-full h-10 border-gray-300 hover:bg-gray-50 hover:text-primary hover:border-primary/50 transition-colors" size="sm">
-                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                </svg>
-                                View Court
-                            </Button>
-                        </Link>
-
-                        <Link href={`/bookings/${booking.id}/receipt`} className="flex-1">
-                            <Button variant="outline" className="w-full h-10 border-gray-300 hover:bg-gray-50 hover:text-primary hover:border-primary/50 transition-colors" size="sm">
-                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                                View Receipt
-                            </Button>
-                        </Link>
-
-                        {canCancelBooking(booking) && (
+                        {booking.type === 'queue_session' && booking.queue_session_id ? (
+                            /* Queue Session Actions */
                             <>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => onReschedule(booking)}
-                                    className="flex-1 h-10 border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 transition-colors"
-                                >
-                                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                    </svg>
-                                    Reschedule
-                                </Button>
+                                <Link href={`/queue-master/sessions/${booking.queue_session_id}`} className="flex-1">
+                                    <Button className="w-full h-10 bg-indigo-600 hover:bg-indigo-700 text-white" size="sm">
+                                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                        </svg>
+                                        Manage Queue
+                                    </Button>
+                                </Link>
+                                <Link href={`/courts/${booking.courts.venues.id}`} className="flex-1">
+                                    <Button variant="outline" className="w-full h-10 border-gray-300 hover:bg-gray-50 hover:text-primary hover:border-primary/50 transition-colors" size="sm">
+                                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                        </svg>
+                                        View Court
+                                    </Button>
+                                </Link>
+                            </>
+                        ) : (
+                            /* Regular Booking Actions */
+                            <>
+                                <Link href={`/courts/${booking.courts.venues.id}`} className="flex-1">
+                                    <Button variant="outline" className="w-full h-10 border-gray-300 hover:bg-gray-50 hover:text-primary hover:border-primary/50 transition-colors" size="sm">
+                                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                        </svg>
+                                        View Court
+                                    </Button>
+                                </Link>
 
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => onCancelBooking(booking)}
-                                    disabled={cancellingId === booking.id}
-                                    className="flex-1 h-10 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors"
-                                >
-                                    {cancellingId === booking.id ? (
-                                        <>
-                                            <Spinner className="w-4 h-4 mr-2" />
-                                            Please wait...
-                                        </>
-                                    ) : (
-                                        <>
+                                <Link href={`/bookings/${booking.id}/receipt`} className="flex-1">
+                                    <Button variant="outline" className="w-full h-10 border-gray-300 hover:bg-gray-50 hover:text-primary hover:border-primary/50 transition-colors" size="sm">
+                                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                        View Receipt
+                                    </Button>
+                                </Link>
+
+                                {canCancelBooking(booking) && (
+                                    <>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => onReschedule(booking)}
+                                            className="flex-1 h-10 border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 transition-colors"
+                                        >
                                             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                             </svg>
-                                            Cancel
-                                        </>
-                                    )}
-                                </Button>
+                                            Reschedule
+                                        </Button>
+
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => onCancelBooking(booking)}
+                                            disabled={cancellingId === booking.id}
+                                            className="flex-1 h-10 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors"
+                                        >
+                                            {cancellingId === booking.id ? (
+                                                <>
+                                                    <Spinner className="w-4 h-4 mr-2" />
+                                                    Please wait...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                    Cancel
+                                                </>
+                                            )}
+                                        </Button>
+                                    </>
+                                )}
                             </>
                         )}
                     </div>
-                    {canCancelBooking(booking) && (
+                    {booking.type !== 'queue_session' && canCancelBooking(booking) && (
                         <p className="text-[10px] text-gray-400 mt-2 text-center">
                             Free rescheduling/cancellation available up to 24 hours before booking.
                         </p>

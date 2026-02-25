@@ -96,9 +96,16 @@ export function SidebarNav({ user }: SidebarNavProps) {
                 }}
               />
               {isExpanded && (
-                <span className="text-xl font-bold text-primary tracking-wider whitespace-nowrap">
-                  Rallio
-                </span>
+                <div className="flex flex-col">
+                  <span className="text-xl font-bold text-primary tracking-wider whitespace-nowrap">
+                    Rallio
+                  </span>
+                  {hasQueueMasterRole && (
+                    <span className="text-[10px] font-bold text-white bg-primary px-2 py-0.5 rounded-md w-fit uppercase tracking-wider">
+                      Queue Master
+                    </span>
+                  )}
+                </div>
               )}
             </Link>
           </div>

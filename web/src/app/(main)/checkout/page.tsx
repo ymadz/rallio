@@ -204,11 +204,52 @@ export default function CheckoutPage() {
                                     </div>
                                 </div>
 
-                                {/* Split Payment Controls */}
-                                <SplitPaymentControls />
+                                {/* Split Payment Controls (hidden for queue sessions) */}
+                                {!bookingData.isQueueSession && <SplitPaymentControls />}
+
+                                {/* Queue Session Settings Card */}
+                                {bookingData.isQueueSession && bookingData.queueSessionData && (
+                                    <div className="bg-white border border-gray-200 rounded-xl p-6">
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                                                <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <h3 className="font-semibold text-gray-900 text-lg">Queue Session Settings</h3>
+                                                <p className="text-sm text-gray-500">Walk-in session configuration</p>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between py-3 border-b border-gray-100">
+                                                <span className="text-gray-600">Mode:</span>
+                                                <span className="font-medium text-gray-900 capitalize">{bookingData.queueSessionData.mode}</span>
+                                            </div>
+                                            <div className="flex justify-between py-3 border-b border-gray-100">
+                                                <span className="text-gray-600">Game Format:</span>
+                                                <span className="font-medium text-gray-900 capitalize">{bookingData.queueSessionData.gameFormat}</span>
+                                            </div>
+                                            <div className="flex justify-between py-3 border-b border-gray-100">
+                                                <span className="text-gray-600">Max Players:</span>
+                                                <span className="font-medium text-gray-900">{bookingData.queueSessionData.maxPlayers}</span>
+                                            </div>
+                                            <div className="flex justify-between py-3 border-b border-gray-100">
+                                                <span className="text-gray-600">Cost Per Game:</span>
+                                                <span className="font-medium text-gray-900">₱{bookingData.queueSessionData.costPerGame}</span>
+                                            </div>
+                                            <div className="flex justify-between py-3">
+                                                <span className="text-gray-600">Visibility:</span>
+                                                <span className={`font-medium ${bookingData.queueSessionData.isPublic ? 'text-green-600' : 'text-gray-600'}`}>
+                                                    {bookingData.queueSessionData.isPublic ? 'Public' : 'Private'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Split Payment Breakdown */}
-                                {isSplitPayment && (
+                                {!bookingData.isQueueSession && isSplitPayment && (
                                     <div className="bg-gradient-to-br from-primary to-primary/80 rounded-xl p-6 text-white">
                                         <div className="grid grid-cols-3 gap-4">
                                             <div>

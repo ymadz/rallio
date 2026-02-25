@@ -34,23 +34,55 @@ export async function ActiveBookingBanner() {
         .gte('end_time', nowIso)
         .single() // We assume only one active booking at a time for MVP
 
-    if (!booking) return null
+    // Also check for active queue sessions where user is the queue master
+    const { data: queueSession } = await supabase
+        .from('queue_sessions')
+        .select(`
+            id,
+            start_time,
+            end_time,
+            courts (
+                name,
+                venues (name)
+            )
+        `)
+        .eq('queue_master_id', user.id)
+        .in('status', ['open', 'active'])
+        .lte('start_time', nowIso)
+        .gte('end_time', nowIso)
+        .limit(1)
+        .single()
+
+    // Prioritize regular booking, fall back to queue session
+    const activeItem = booking || queueSession
+    if (!activeItem) return null
+
+    const isQueueSession = !booking && !!queueSession
 
     // Map the joined data safely
-    // Supabase types might be tricky with deep joins, so we cast specific fields if needed
-    // But basic select logic usually returns correct structure.
-    const courtName = (booking.court as any)?.name || 'Unknown Court'
-    const venueName = (booking.court as any)?.venue?.name || 'Unknown Venue'
+    const courtName = isQueueSession
+        ? (activeItem as any)?.courts?.name || 'Unknown Court'
+        : (activeItem as any)?.court?.name || 'Unknown Court'
+    const venueName = isQueueSession
+        ? (activeItem as any)?.courts?.venues?.name || 'Unknown Venue'
+        : (activeItem as any)?.court?.venue?.name || 'Unknown Venue'
 
     return (
         <Card className="mb-6 p-4 border-primary/50 bg-gradient-to-r from-primary/5 to-transparent border-t-4 border-t-primary shadow-sm hover:shadow-md transition-shadow">
             <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                     <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center animate-bounce">
-                        <span className="text-2xl">🏸</span>
+                        <span className="text-2xl">{isQueueSession ? '👥' : '🏸'}</span>
                     </div>
                     <div>
-                        <h3 className="font-bold text-lg text-foreground">Happening Now!</h3>
+                        <div className="flex items-center gap-2">
+                            <h3 className="font-bold text-lg text-foreground">Happening Now!</h3>
+                            {isQueueSession && (
+                                <span className="text-[10px] font-bold bg-indigo-600 text-white px-2 py-0.5 rounded-md uppercase">
+                                    Queue Session
+                                </span>
+                            )}
+                        </div>
                         <div className="flex items-center gap-1 text-muted-foreground">
                             <MapPin className="w-3 h-3" />
                             <span className="text-sm">{venueName} • {courtName}</span>
@@ -59,10 +91,10 @@ export async function ActiveBookingBanner() {
                 </div>
 
                 <div className="flex items-center gap-4">
-                    <BookingTimer endTime={booking.end_time} />
-                    <Button size="sm" variant="default" className="gap-2">
-                        <Link href="/bookings">
-                            View Details
+                    <BookingTimer endTime={activeItem.end_time} />
+                    <Button size="sm" variant="default" className={`gap-2 ${isQueueSession ? 'bg-indigo-600 hover:bg-indigo-700' : ''}`}>
+                        <Link href={isQueueSession ? `/queue-master/sessions/${activeItem.id}` : '/bookings'}>
+                            {isQueueSession ? 'Manage Queue' : 'View Details'}
                         </Link>
                     </Button>
                 </div>
