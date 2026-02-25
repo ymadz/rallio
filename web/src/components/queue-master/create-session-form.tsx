@@ -587,7 +587,13 @@ export function CreateSessionForm() {
                       <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col h-[400px]">
                         <div className="bg-blue-50 border-b border-blue-100 px-4 py-3 shrink-0">
                           <p className="text-xs text-blue-700">
-                            {!startTime ? "Tap a time to start" : "Tap another time to extend, or click start again to reset"}
+                            {!startTime ? (
+                              "Tap a time to start your booking"
+                            ) : duration <= 1 ? (
+                              "Tap another time to end your booking, or book 1 hour"
+                            ) : (
+                              `${duration} hours selected`
+                            )}
                           </p>
                         </div>
 
@@ -628,20 +634,19 @@ export function CreateSessionForm() {
 
                                       <div>
                                         <p className={cn(
-                                          "font-medium text-sm",
+                                          "font-medium",
                                           isSelected ? "text-white" : disabled ? "text-gray-400" : "text-gray-900"
                                         )}>
                                           {formatSlotTime(slot.time)} - {formatSlotTime(getNextHour(slot.time))}
                                         </p>
-                                        {disabled && <span className="text-[10px] text-red-500 font-medium uppercase">Reserved</span>}
+                                        {disabled && <span className="text-xs text-red-500 font-medium">Reserved</span>}
                                       </div>
                                     </div>
-                                    {/* Price/Selected Indicator */}
                                     <span className={cn(
-                                      "text-xs font-semibold",
+                                      "text-sm font-semibold",
                                       isSelected ? "text-white" : disabled ? "text-gray-400" : "text-gray-700"
                                     )}>
-                                      {isSelected || inRange ? 'Selected' : `₱${slot.price || selectedCourt?.hourly_rate || '-'}`}
+                                      ₱{slot.price || selectedCourt?.hourly_rate || '-'}
                                     </span>
                                   </div>
                                 </button>
