@@ -9,7 +9,6 @@ import { SplitPaymentControls } from '@/components/checkout/split-payment-contro
 import { PaymentMethodSelector } from '@/components/checkout/payment-method-selector'
 import { CancellationPolicy } from '@/components/checkout/cancellation-policy'
 import { PaymentProcessing } from '@/components/checkout/payment-processing'
-import { BookingConfirmation } from '@/components/checkout/booking-confirmation'
 import { CancelBookingModal } from '@/components/checkout/cancel-booking-modal'
 
 export default function CheckoutPage() {
@@ -377,11 +376,6 @@ export default function CheckoutPage() {
                         {/* Step 4: Processing */}
                         {currentStep === 'processing' && (
                             <PaymentProcessing />
-                        )}
-
-                        {/* Step 5: Confirmation */}
-                        {currentStep === 'confirmation' && (
-                            <BookingConfirmation />
                         )}
                     </div>
 

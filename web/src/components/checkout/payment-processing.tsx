@@ -580,7 +580,8 @@ export function PaymentProcessing() {
               if (reservationId) {
                 router.push(`/bookings/${reservationId}/receipt`)
               } else {
-                setCurrentStep('confirmation')
+                alert('We could not find your reservation ID. Please check your bookings page.')
+                router.push(`/bookings`)
               }
             }}
             disabled={paymentMethod === 'e-wallet' && paymentStatus !== 'success'}
@@ -737,7 +738,8 @@ export function PaymentProcessing() {
             if (reservationId) {
               router.push(`/bookings/${reservationId}/receipt`)
             } else {
-              setCurrentStep('confirmation')
+              alert('We could not find your reservation ID. Please check your bookings page.')
+              router.push(`/bookings`)
             }
           }}
           disabled={playerPayments.some(p => p.status !== 'paid')}
