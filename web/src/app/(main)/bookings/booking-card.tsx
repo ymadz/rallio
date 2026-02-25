@@ -88,10 +88,10 @@ export function BookingCard({
     const getPaymentStatus = (b: Booking) => {
         const isFullyPaid = b.amount_paid >= b.total_amount
 
-        if (b.status === 'confirmed' && isFullyPaid) {
+        if (['confirmed', 'ongoing', 'completed'].includes(b.status) && isFullyPaid) {
             return { label: 'Paid', color: 'green', needsPayment: false }
         }
-        if (b.status === 'confirmed' && !isFullyPaid) {
+        if (['confirmed', 'ongoing', 'completed'].includes(b.status) && !isFullyPaid) {
             return { label: 'Pay at Venue', color: 'orange', needsPayment: false }
         }
         if (isCashBooking(b) && b.status === 'pending_payment') {

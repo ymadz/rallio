@@ -61,7 +61,7 @@ export async function ActiveBookingBanner() {
                 <div className="flex items-center gap-4">
                     <BookingTimer endTime={booking.end_time} />
                     <Button size="sm" variant="default" className="gap-2">
-                        <Link href={`/bookings/${booking.id}`}>
+                        <Link href="/bookings">
                             View Details
                         </Link>
                     </Button>
