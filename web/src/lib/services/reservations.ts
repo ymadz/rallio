@@ -92,7 +92,7 @@ export async function createReservation(
         const currentStartTimeISO = slot.start.toISOString()
         const currentEndTimeISO = slot.end.toISOString()
 
-        const conflictStatuses = ['pending_payment', 'confirmed', 'ongoing', 'pending_refund']
+        const conflictStatuses = ['pending_payment', 'confirmed', 'ongoing', 'pending_refund', 'completed', 'no_show']
 
         const [reservationConflicts, queueConflicts] = await Promise.all([
             adminDb

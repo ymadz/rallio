@@ -136,7 +136,7 @@ export async function getAvailableTimeSlots(
 
   // Get existing reservations for this court on this date
   // Query for the entire day range to catch any overlapping reservations
-  const activeStatuses = ['pending_payment', 'confirmed', 'ongoing']
+  const activeStatuses = ['pending_payment', 'confirmed', 'ongoing', 'completed', 'no_show']
 
   const { data: reservations } = await supabase
     .from('reservations')
@@ -204,7 +204,7 @@ export async function checkBookingConflict(
     .from('reservations')
     .select('id')
     .eq('court_id', courtId)
-    .in('status', ['pending_payment', 'confirmed', 'ongoing'])
+    .in('status', ['pending_payment', 'confirmed', 'ongoing', 'completed', 'no_show'])
     .or(`and(start_time.lt.${endTime},end_time.gt.${startTime})`)
     .limit(1)
 

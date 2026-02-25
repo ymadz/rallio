@@ -69,7 +69,7 @@ export async function rescheduleReservationAction(
 
     // We can reuse the logic from getAvailableTimeSlots OR just query directly for conflicts
     // Query for conflicts excluding this ID
-    const conflictStatuses = ['pending_payment', 'confirmed', 'ongoing', 'pending_refund']
+    const conflictStatuses = ['pending_payment', 'confirmed', 'ongoing', 'pending_refund', 'completed', 'no_show']
 
     const { data: conflicts, error: conflictError } = await adminDb
         .from('reservations')
