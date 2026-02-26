@@ -211,8 +211,6 @@ export function PaymentProcessing() {
 
           // Redirect cash bookings directly to the receipt page
           router.push(`/bookings/${confirmedReservationId}/receipt`)
-          // Reset checkout state so user doesn't see stale processing step
-          resetCheckout()
           return
         }
 
