@@ -742,15 +742,42 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
               <h2 className="text-xl font-bold text-gray-900">
                 Participants ({session.players.length})
               </h2>
-              <button
-                onClick={handleAssignMatch}
-                disabled={waitingPlayers.length < (session.gameFormat === 'singles' ? 2 : 4)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Assign Match</span>
-              </button>
+              {(() => {
+                const now = serverDate || new Date()
+                const isStarted = new Date(session.startTime) <= now
+                return (
+                  <button
+                    onClick={handleAssignMatch}
+                    disabled={!isStarted || waitingPlayers.length < (session.gameFormat === 'singles' ? 2 : 4)}
+                    title={!isStarted ? 'Session has not started yet' : undefined}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Assign Match</span>
+                  </button>
+                )
+              })()}
             </div>
+
+            {/* Pre-start reminder */}
+            {(() => {
+              const now = serverDate || new Date()
+              const sessionStart = new Date(session.startTime)
+              if (sessionStart > now) {
+                return (
+                  <div className="mb-4 flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+                    <Clock className="w-5 h-5 flex-shrink-0" />
+                    <p>
+                      Match assignments will be available once the session starts at{' '}
+                      <span className="font-semibold">
+                        {sessionStart.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                      </span>. Players can join the queue in the meantime.
+                    </p>
+                  </div>
+                )
+              }
+              return null
+            })()}
 
             {/* Waiting Players */}
             {waitingPlayers.length > 0 && (

@@ -553,7 +553,7 @@ export function ReservationManagement() {
                               )
                             })()}
                             {reservation.metadata?.is_queue_session_reservation && (
-                              <span className="px-2 py-1 text-xs font-medium rounded-full bg-purple-50 text-purple-700">
+                              <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-50 text-green-700 border border-green-200">
                                 Queue
                               </span>
                             )}

@@ -223,7 +223,7 @@ export function BookingCard({
                 <div className="absolute top-3 right-3 flex gap-2">
                     {bookingStatusBadge(booking.status, booking)}
                     {booking.type === 'queue_session' && (
-                        <span className="px-3 py-1.5 rounded-full text-xs font-bold shadow-lg bg-indigo-600 text-white flex items-center gap-1">
+                        <span className="px-3 py-1.5 rounded-full text-xs font-bold shadow-lg bg-white text-green-700 border border-green-300 flex items-center gap-1">
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
                             Queue Session
                         </span>
@@ -409,20 +409,17 @@ export function BookingCard({
                             /* Queue Session Actions */
                             <>
                                 <Link href={`/queue/${booking.courts?.id}`} className="flex-1">
-                                    <Button className="w-full h-10 bg-indigo-600 hover:bg-indigo-700 text-white" size="sm">
+                                    <Button variant="outline" className="w-full h-10 text-green-700 border-green-300 bg-white hover:bg-green-50 hover:text-green-800 hover:border-green-400 transition-colors" size="sm">
                                         <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                                         </svg>
                                         Manage Queue
                                     </Button>
                                 </Link>
-                                <Link href={`/courts/${booking.courts.venues.id}`} className="flex-1">
+                                <Link href={`/bookings/${booking.id}/receipt`} className="flex-1">
                                     <Button variant="outline" className="w-full h-10 border-gray-300 hover:bg-gray-50 hover:text-primary hover:border-primary/50 transition-colors" size="sm">
-                                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                        </svg>
-                                        View Court
+                                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                        View Receipt
                                     </Button>
                                 </Link>
                             </>

@@ -193,12 +193,19 @@ export function ReservationDetailModal({
         <div className="p-6 space-y-6">
           {/* Status Badge */}
           <div className="flex items-center justify-between">
-            <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium ${getStatusColor(getDisplayStatus())}`}>
-              {getDisplayStatus() === 'confirmed' && <CheckCircle className="w-4 h-4" />}
-              {(getDisplayStatus() === 'pending' || getDisplayStatus() === 'pending_payment') && <Clock className="w-4 h-4" />}
-              {(getDisplayStatus() === 'cancelled' || getDisplayStatus() === 'rejected') && <XCircle className="w-4 h-4" />}
-              <span className="capitalize">{getDisplayStatus().replace('_', ' ')}</span>
-            </span>
+            <div className="flex items-center gap-2">
+              <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium ${getStatusColor(getDisplayStatus())}`}>
+                {getDisplayStatus() === 'confirmed' && <CheckCircle className="w-4 h-4" />}
+                {(getDisplayStatus() === 'pending' || getDisplayStatus() === 'pending_payment') && <Clock className="w-4 h-4" />}
+                {(getDisplayStatus() === 'cancelled' || getDisplayStatus() === 'rejected') && <XCircle className="w-4 h-4" />}
+                <span className="capitalize">{getDisplayStatus().replace('_', ' ')}</span>
+              </span>
+              {reservation.metadata?.is_queue_session_reservation && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-green-50 text-green-700 border border-green-200 text-sm font-medium">
+                  🎮 Queue
+                </span>
+              )}
+            </div>
             <span className="text-sm text-gray-500">
               Booked {new Date(reservation.created_at).toLocaleDateString('en-US', {
                 month: 'short',

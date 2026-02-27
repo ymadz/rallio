@@ -46,8 +46,8 @@ export function NearbyQueues() {
                 <p className="text-sm text-gray-500 truncate">{queue.venueName}</p>
               </div>
               <span className={`ml-2 px-2 py-1 text-xs font-medium rounded-full flex-shrink-0 ${queue.status === 'active' ? 'bg-green-100 text-green-700' :
-                  queue.status === 'waiting' ? 'bg-yellow-100 text-yellow-700' :
-                    'bg-gray-100 text-gray-700'
+                queue.status === 'waiting' ? 'bg-yellow-100 text-yellow-700' :
+                  'bg-gray-100 text-gray-700'
                 }`}>
                 {queue.status === 'active' ? 'Live' :
                   queue.status === 'waiting' ? 'Open' :
@@ -61,7 +61,7 @@ export function NearbyQueues() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
                 <span className="text-gray-600">
-                  {queue.players.filter(p => p.status === 'waiting').length} waiting
+                  {queue.currentPlayers || 0} waiting
                 </span>
               </div>
               <div className="flex items-center gap-1.5">

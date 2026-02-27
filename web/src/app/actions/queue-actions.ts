@@ -620,12 +620,30 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
       return { success: false, error: 'Failed to fetch queues' }
     }
 
+    // Fetch actual participant counts since current_players column can be stale
+    const sessionIds = (sessions || []).map((s: any) => s.id)
+    let participantCounts: Record<string, number> = {}
+
+    if (sessionIds.length > 0) {
+      const { data: participants } = await supabase
+        .from('queue_participants')
+        .select('queue_session_id')
+        .in('queue_session_id', sessionIds)
+        .is('left_at', null)
+
+      if (participants) {
+        participants.forEach((p: any) => {
+          participantCounts[p.queue_session_id] = (participantCounts[p.queue_session_id] || 0) + 1
+        })
+      }
+    }
+
     const queues = (sessions || []).map((session: any) => {
-      // Use the current_players column which is maintained by database triggers
-      const currentPlayers = session.current_players || 0
+      // Use actual participant count, falling back to current_players column
+      const currentPlayers = participantCounts[session.id] || session.current_players || 0
       const estimatedWaitTime = currentPlayers * 15
 
-      console.log(`[getNearbyQueues] 📊 Session ${session.id.slice(0, 8)}: current_players=${currentPlayers}`)
+      console.log(`[getNearbyQueues] 📊 Session ${session.id.slice(0, 8)}: actual_participants=${participantCounts[session.id] || 0}, current_players_col=${session.current_players || 0}`)
 
       return {
         id: session.id,

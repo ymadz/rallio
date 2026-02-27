@@ -103,7 +103,7 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
           <div>
             <p className="text-xs text-gray-500">Waiting</p>
             <p className="font-semibold text-gray-900">
-              {queue.players.filter(p => p.status === 'waiting').length}/{queue.maxPlayers}
+              {queue.currentPlayers || 0}/{queue.maxPlayers}
             </p>
           </div>
         </div>
