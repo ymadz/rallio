@@ -125,7 +125,7 @@ export function PricingManagement({ venueId }: PricingManagementProps) {
       {/* Loading State */}
       {isLoading && (
         <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
       )}
 
@@ -148,10 +148,10 @@ export function PricingManagement({ venueId }: PricingManagementProps) {
 
       {/* Empty State */}
       {!isLoading && !error && courts.length === 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-8 text-center">
-          <DollarSign className="w-12 h-12 text-blue-600 mx-auto mb-3" />
-          <h3 className="text-lg font-semibold text-blue-900 mb-2">No Courts Yet</h3>
-          <p className="text-sm text-blue-700 mb-4">
+        <div className="bg-primary/5 border border-primary/20 rounded-xl p-8 text-center">
+          <DollarSign className="w-12 h-12 text-primary mx-auto mb-3" />
+          <h3 className="text-lg font-semibold text-primary/80 mb-2">No Courts Yet</h3>
+          <p className="text-sm text-primary/70 mb-4">
             Add courts to your venue to start configuring pricing.
           </p>
         </div>
@@ -162,8 +162,8 @@ export function PricingManagement({ venueId }: PricingManagementProps) {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-white border border-gray-200 rounded-xl p-4">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <DollarSign className="w-5 h-5 text-blue-600" />
+              <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                <DollarSign className="w-5 h-5 text-primary" />
               </div>
               <div>
                 <p className="text-xs text-gray-500">Avg. Base Rate</p>
@@ -219,11 +219,10 @@ export function PricingManagement({ venueId }: PricingManagementProps) {
         <div className="bg-white border border-gray-200 rounded-xl p-2 mb-6 inline-flex gap-2">
           <button
             onClick={() => setActiveTab('courts')}
-            className={`px-6 py-2 rounded-lg font-medium transition-colors ${
-              activeTab === 'courts'
-                ? 'bg-blue-600 text-white shadow-sm'
+            className={`px-6 py-2 rounded-lg font-medium transition-colors ${activeTab === 'courts'
+                ? 'bg-primary text-white shadow-sm'
                 : 'text-gray-600 hover:bg-gray-100'
-            }`}
+              }`}
           >
             <div className="flex items-center gap-2">
               <DollarSign className="w-4 h-4" />
@@ -232,11 +231,10 @@ export function PricingManagement({ venueId }: PricingManagementProps) {
           </button>
           <button
             onClick={() => setActiveTab('rules')}
-            className={`px-6 py-2 rounded-lg font-medium transition-colors ${
-              activeTab === 'rules'
-                ? 'bg-blue-600 text-white shadow-sm'
+            className={`px-6 py-2 rounded-lg font-medium transition-colors ${activeTab === 'rules'
+                ? 'bg-primary text-white shadow-sm'
                 : 'text-gray-600 hover:bg-gray-100'
-            }`}
+              }`}
           >
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4" />
@@ -294,16 +292,15 @@ export function PricingManagement({ venueId }: PricingManagementProps) {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                          court.is_active
+                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${court.is_active
                             ? 'bg-green-100 text-green-700'
                             : 'bg-gray-100 text-gray-700'
-                        }`}>
+                          }`}>
                           {court.is_active ? 'Active' : 'Inactive'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <button 
+                        <button
                           onClick={() => handleEditPrice(court)}
                           className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                         >
@@ -318,9 +315,9 @@ export function PricingManagement({ venueId }: PricingManagementProps) {
           </div>
 
           {/* Pricing Tips */}
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-            <h3 className="font-semibold text-blue-900 mb-2">💡 Pricing Tips</h3>
-            <ul className="text-sm text-blue-700 space-y-1">
+          <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
+            <h3 className="font-semibold text-primary/80 mb-2">💡 Pricing Tips</h3>
+            <ul className="text-sm text-primary/70 space-y-1">
               <li>• Set competitive rates based on your location and facilities</li>
               <li>• Use peak pricing during high-demand hours (evenings, weekends)</li>
               <li>• Offer discounts during off-peak hours to maximize court utilization</li>
@@ -338,16 +335,16 @@ export function PricingManagement({ venueId }: PricingManagementProps) {
               <h2 className="text-xl font-bold text-gray-900">Dynamic Pricing Rules</h2>
               <p className="text-sm text-gray-500 mt-1">Automatic pricing based on time and day (Coming Soon)</p>
             </div>
-            <button className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors opacity-50 cursor-not-allowed" disabled>
+            <button className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors opacity-50 cursor-not-allowed" disabled>
               <Plus className="w-4 h-4" />
               <span>Add Rule</span>
             </button>
           </div>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-8 text-center">
-            <Clock className="w-12 h-12 text-blue-600 mx-auto mb-3" />
-            <h3 className="text-lg font-semibold text-blue-900 mb-2">Dynamic Pricing Coming Soon</h3>
-            <p className="text-sm text-blue-700">
+          <div className="bg-primary/5 border border-primary/20 rounded-xl p-8 text-center">
+            <Clock className="w-12 h-12 text-primary mx-auto mb-3" />
+            <h3 className="text-lg font-semibold text-primary/80 mb-2">Dynamic Pricing Coming Soon</h3>
+            <p className="text-sm text-primary/70">
               Set up advanced pricing rules based on time, day, and demand. This feature will be available in a future update.
             </p>
           </div>
@@ -407,12 +404,12 @@ export function PricingManagement({ venueId }: PricingManagementProps) {
                   step="50"
                   value={newRate}
                   onChange={(e) => setNewRate(parseFloat(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                 />
               </div>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <p className="text-sm text-blue-700">
+              <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
+                <p className="text-sm text-primary/70">
                   This will update the base hourly rate for {editingCourt.name}. The change will be reflected immediately for new bookings.
                 </p>
               </div>
@@ -427,7 +424,7 @@ export function PricingManagement({ venueId }: PricingManagementProps) {
                 </button>
                 <button
                   onClick={handleSavePrice}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50"
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? (

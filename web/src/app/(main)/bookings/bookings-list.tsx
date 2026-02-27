@@ -36,7 +36,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
   // We will keep `activeTab` and sync it with Tabs onValueChange to keep logic simple without rewriting everything right away.
   const [activeTab, setActiveTab] = useState('upcoming')
 
-  const activeStatuses = ['pending_payment', 'pending', 'confirmed']
+  const activeStatuses = ['pending_payment', 'pending', 'confirmed', 'partially_paid']
 
   const filteredBookings = bookings.filter((booking) => {
     const startTime = new Date(booking.start_time)
@@ -110,7 +110,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
   const totalConfirmed = filteredBookings.filter((b) => b.status === 'confirmed').length
   const awaitingPayment = filteredBookings.filter((b) => {
     const isFullyPaid = b.amount_paid >= b.total_amount
-    return ['pending_payment', 'pending'].includes(b.status) || (b.status === 'confirmed' && !isFullyPaid)
+    return ['pending_payment', 'pending', 'partially_paid'].includes(b.status) || (b.status === 'confirmed' && !isFullyPaid)
   }).length
 
   return (

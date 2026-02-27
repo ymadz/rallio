@@ -17,10 +17,11 @@ import {
   Edit,
   Loader2,
   AlertCircle,
+  Power,
 } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { getVenueById } from '@/app/actions/court-admin-actions'
+import { getVenueById, toggleVenueActiveStatus } from '@/app/actions/court-admin-actions'
 import { VenueCourts } from './venue-courts'
 import { PricingManagement } from './pricing-management'
 import { AvailabilityManagement } from './availability-management'
@@ -43,6 +44,7 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
+  const [isToggling, setIsToggling] = useState(false)
 
   useEffect(() => {
     loadVenue()
@@ -68,10 +70,30 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
       </div>
     )
+  }
+
+  const handleToggleActive = async () => {
+    const newState = !venue.is_active
+    const action = newState ? 'activate' : 'deactivate'
+    if (!confirm(`Are you sure you want to ${action} this venue? ${!newState ? 'It will no longer be visible to users.' : 'It will become visible to users again.'}`)) return
+
+    setIsToggling(true)
+    try {
+      const result = await toggleVenueActiveStatus(venueId, newState)
+      if (!result.success) {
+        alert('Error: ' + result.error)
+        return
+      }
+      await loadVenue()
+    } catch (err: any) {
+      alert('Error: ' + err.message)
+    } finally {
+      setIsToggling(false)
+    }
   }
 
   if (error || !venue) {
@@ -164,13 +186,31 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
             </div>
           </div>
 
-          <button
-            onClick={() => setShowEditModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <Edit className="w-4 h-4" />
-            <span>Edit Venue</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleToggleActive}
+              disabled={isToggling}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 ${venue.is_active
+                  ? 'border border-red-200 text-red-600 hover:bg-red-50'
+                  : 'border border-green-200 text-green-600 hover:bg-green-50'
+                }`}
+              title={venue.is_active ? 'Deactivate venue - will be hidden from users' : 'Activate venue - will be visible to users'}
+            >
+              {isToggling ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Power className="w-4 h-4" />
+              )}
+              <span>{venue.is_active ? 'Deactivate' : 'Activate'}</span>
+            </button>
+            <button
+              onClick={() => setShowEditModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <Edit className="w-4 h-4" />
+              <span>Edit Venue</span>
+            </button>
+          </div>
         </div>
 
         {/* Quick Stats */}

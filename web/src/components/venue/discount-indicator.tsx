@@ -70,8 +70,7 @@ export function DiscountIndicator({ discounts }: DiscountIndicatorProps) {
                                     )}
                                     {/* Conditions */}
                                     <div className="mt-2 text-xs text-gray-500 space-y-0.5">
-                                        {rule.min_hours && <p>• Min. {rule.min_hours} hours booking</p>}
-                                        {rule.min_players && <p>• Min. {rule.min_players} players</p>}
+                                        {rule.min_weeks && <p>• Min. {rule.min_weeks} weeks booking</p>}
                                         {rule.advance_days && <p>• Book {rule.advance_days} days in advance</p>}
                                     </div>
                                 </div>
@@ -80,8 +79,8 @@ export function DiscountIndicator({ discounts }: DiscountIndicatorProps) {
                             {/* Holiday Pricing */}
                             {discounts.holidays.map((holiday) => (
                                 <div key={holiday.id} className={`border rounded-lg p-3 ${holiday.price_multiplier < 1
-                                        ? 'bg-green-50 border-green-100'
-                                        : 'bg-orange-50 border-orange-100'
+                                    ? 'bg-green-50 border-green-100'
+                                    : 'bg-orange-50 border-orange-100'
                                     }`}>
                                     <div className="flex items-center gap-2 mb-1">
                                         <span className={`font-bold ${holiday.price_multiplier < 1 ? 'text-green-700' : 'text-orange-700'
@@ -91,8 +90,8 @@ export function DiscountIndicator({ discounts }: DiscountIndicatorProps) {
                                                 : `${Math.round((holiday.price_multiplier - 1) * 100)}% Extra`}
                                         </span>
                                         <span className={`text-xs bg-white border px-1.5 py-0.5 rounded capitalize ${holiday.price_multiplier < 1
-                                                ? 'border-green-200 text-green-700'
-                                                : 'border-orange-200 text-orange-700'
+                                            ? 'border-green-200 text-green-700'
+                                            : 'border-orange-200 text-orange-700'
                                             }`}>
                                             {holiday.price_multiplier < 1 ? 'Seasonal Offer' : 'Holiday Rate'}
                                         </span>

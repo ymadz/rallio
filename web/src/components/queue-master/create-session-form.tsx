@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createQueueSession } from '@/app/actions/queue-actions'
 import { createQueuePaymentIntent } from '@/app/actions/queue-payment-actions'
 // import { useCheckoutStore } from '@/stores/checkout-store' // No longer used for redirection
-import { getAvailableTimeSlotsAction, validateBookingAvailabilityAction, type TimeSlot } from '@/app/actions/reservations'
+import { getAvailableTimeSlotsAction, validateBookingAvailabilityAction, getVenueMetadataAction, type TimeSlot } from '@/app/actions/reservations'
 import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
 import { Calendar as CalendarIcon, Clock, Users, DollarSign, Settings, Loader2, ArrowLeft, CheckCircle, Info, TrendingUp, Target } from 'lucide-react'
@@ -61,6 +61,7 @@ export function CreateSessionForm() {
   const [costPerGame, setCostPerGame] = useState(50)
   const [isPublic, setIsPublic] = useState(true)
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'e-wallet'>('e-wallet')
+  const [downPaymentPercentage, setDownPaymentPercentage] = useState<number | undefined>(undefined)
 
   // Validation state
   const [validationState, setValidationState] = useState<{
@@ -280,6 +281,28 @@ export function CreateSessionForm() {
     fetchTimeSlots()
   }, [courtId, startDate])
 
+  // Load venue metadata when court changes
+  useEffect(() => {
+    const fetchVenueMetadata = async () => {
+      if (!courtId) return
+
+      const selectedVenue = venues.find(v => v.courts?.some(c => c.id === courtId))
+      if (!selectedVenue) return
+
+      try {
+        const result = await getVenueMetadataAction(selectedVenue.id)
+        if (result.success && result.metadata) {
+          const percentage = parseFloat((result.metadata as any).down_payment_percentage || '20')
+          setDownPaymentPercentage(percentage)
+        }
+      } catch (err) {
+        console.error('Error fetching venue metadata:', err)
+      }
+    }
+
+    fetchVenueMetadata()
+  }, [courtId, venues])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -353,7 +376,7 @@ export function CreateSessionForm() {
       }
 
       // Handle Payment Flow (Only if approval NOT required)
-      if (paymentMethod === 'e-wallet') {
+      if (paymentMethod === 'e-wallet' || result.downPaymentRequired) {
         const paymentResult = await createQueuePaymentIntent(sessionId, 'gcash')
         if (!paymentResult.success || !paymentResult.checkoutUrl) {
           throw new Error(paymentResult.error || 'Failed to initiate payment')
@@ -1034,7 +1057,11 @@ export function CreateSessionForm() {
                       {paymentMethod === 'e-wallet' ? (
                         <p>Instant confirmation. Refundable 24h before.</p>
                       ) : (
-                        <p>Pay at venue. Session pending until paid.</p>
+                        <p>
+                          {downPaymentPercentage && downPaymentPercentage > 0
+                            ? `Pay a ${downPaymentPercentage}% down payment (₱${((totalAmount * downPaymentPercentage) / 100).toFixed(2)}) online. Pay the rest at the venue.`
+                            : 'Pay at venue. Session pending until paid.'}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -1066,11 +1093,11 @@ export function CreateSessionForm() {
                         {isSubmitting ? (
                           <>
                             <Loader2 className="w-5 h-5 animate-spin" />
-                            <span>{paymentMethod === 'e-wallet' ? 'Redirecting...' : 'Creating...'}</span>
+                            <span>{(paymentMethod === 'e-wallet' || (paymentMethod === 'cash' && downPaymentPercentage && downPaymentPercentage > 0)) ? 'Redirecting...' : 'Creating...'}</span>
                           </>
                         ) : (
                           <>
-                            {paymentMethod === 'e-wallet' ? (
+                            {(paymentMethod === 'e-wallet' || (paymentMethod === 'cash' && downPaymentPercentage && downPaymentPercentage > 0)) ? (
                               <>
                                 <DollarSign className="w-5 h-5" />
                                 Pay & Create

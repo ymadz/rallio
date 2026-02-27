@@ -79,7 +79,7 @@ export function BookingCard({
     onReschedule,
     setBookings
 }: BookingCardProps) {
-    const activeStatuses = ['pending_payment', 'pending', 'confirmed']
+    const activeStatuses = ['pending_payment', 'pending', 'confirmed', 'partially_paid']
     const startDate = new Date(booking.start_time)
     const endDate = new Date(booking.end_time)
 
@@ -102,6 +102,10 @@ export function BookingCard({
         }
         if (isCashBooking(b) && b.status === 'pending_payment') {
             return { label: 'Pay at Venue', color: 'blue', needsPayment: false }
+        }
+        if (b.status === 'partially_paid') {
+            const remaining = b.total_amount - b.amount_paid
+            return { label: `₱${remaining.toFixed(0)} Due at Venue`, color: 'amber', needsPayment: false }
         }
         const payment = b.payments?.[0]
         if (!payment) return { label: 'Payment Pending', color: 'yellow', needsPayment: true }
@@ -142,6 +146,7 @@ export function BookingCard({
             reserved: 'bg-blue-500 text-white',
             pending_payment: 'bg-amber-500 text-white',
             pending: 'bg-amber-500 text-white',
+            partially_paid: 'bg-amber-600 text-white',
 
             confirmed: 'bg-emerald-600 text-white',
             ongoing: 'bg-green-500 text-white animate-pulse',
@@ -169,6 +174,8 @@ export function BookingCard({
             } else {
                 displayLabel = 'Pending Payment'
             }
+        } else if (status === 'partially_paid') {
+            displayLabel = 'Partially Paid'
         } else if (status === 'ongoing') {
             displayLabel = 'Ongoing'
         } else if (status === 'cancelled' && b.cancellation_reason) {
@@ -318,8 +325,13 @@ export function BookingCard({
                                 </span>
                             </div>
                             <div>
-                                <p className="text-gray-500 mb-1">Amount</p>
+                                <p className="text-gray-500 mb-1">Total Amount</p>
                                 <p className="font-bold text-gray-900">₱{booking.total_amount.toFixed(2)}</p>
+                                {booking.status === 'partially_paid' && booking.amount_paid > 0 && (
+                                    <p className="text-xs text-amber-600 font-medium mt-0.5">
+                                        ₱{booking.amount_paid.toFixed(2)} paid · ₱{(booking.total_amount - booking.amount_paid).toFixed(2)} due
+                                    </p>
+                                )}
                                 {(booking.metadata?.recurrence_total && booking.metadata.recurrence_total > 1) && (
                                     <p className="text-xs text-gray-400 mt-0.5">per session</p>
                                 )}
@@ -358,7 +370,7 @@ export function BookingCard({
                         </div>
                     )}
 
-                    {paymentStatus.needsPayment && !isCashBooking(booking) && (
+                    {paymentStatus.needsPayment && !isCashBooking(booking) && booking.status !== 'partially_paid' && (
                         <Button
                             className="w-full bg-primary hover:bg-primary/90"
                             size="sm"
@@ -381,7 +393,7 @@ export function BookingCard({
                         </Button>
                     )}
 
-                    {isCashBooking(booking) && booking.status === 'pending_payment' && (
+                    {isCashBooking(booking) && booking.status === 'pending_payment' && booking.amount_paid === 0 && booking.metadata?.down_payment_amount && (
                         <Button
                             className="w-full bg-primary hover:bg-primary/90 mt-2"
                             size="sm"
@@ -398,7 +410,30 @@ export function BookingCard({
                                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                                     </svg>
-                                    Pay via E-Wallet
+                                    Pay Down Payment (₱{Number(booking.metadata.down_payment_amount).toFixed(2)})
+                                </>
+                            )}
+                        </Button>
+                    )}
+
+                    {booking.status === 'partially_paid' && (
+                        <Button
+                            className="w-full bg-primary hover:bg-primary/90 mt-2"
+                            size="sm"
+                            onClick={() => onResumePayment(booking, 'gcash')}
+                            disabled={resumingPaymentId === booking.id}
+                        >
+                            {resumingPaymentId === booking.id ? (
+                                <>
+                                    <Spinner className="w-4 h-4 mr-2" />
+                                    Processing...
+                                </>
+                            ) : (
+                                <>
+                                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                                    </svg>
+                                    Pay Balance Online (₱{(booking.total_amount - booking.amount_paid).toFixed(2)})
                                 </>
                             )}
                         </Button>

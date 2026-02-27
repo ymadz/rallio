@@ -217,10 +217,11 @@ export function ReservationManagement() {
       case 'ongoing': return 'bg-purple-100 text-purple-700 border-purple-200 animate-pulse'
       case 'pending': return 'bg-yellow-100 text-yellow-700 border-yellow-200'
       case 'pending_payment': return 'bg-orange-100 text-orange-700 border-orange-200'
-      case 'reserved': return 'bg-blue-100 text-blue-700 border-blue-200'
+      case 'partially_paid': return 'bg-amber-100 text-amber-700 border-amber-200'
+      case 'reserved': return 'bg-primary/10 text-primary border-primary/20'
       case 'cancelled':
       case 'rejected': return 'bg-red-100 text-red-700 border-red-200'
-      case 'completed': return 'bg-blue-100 text-blue-700 border-blue-200'
+      case 'completed': return 'bg-primary/10 text-primary border-primary/20'
       case 'no_show': return 'bg-gray-100 text-gray-700 border-gray-200'
       default: return 'bg-gray-100 text-gray-700 border-gray-200'
     }
@@ -232,6 +233,7 @@ export function ReservationManagement() {
       case 'ongoing': return <Clock className="w-4 h-4 animate-spin-slow" />
       case 'pending':
       case 'pending_payment':
+      case 'partially_paid':
       case 'reserved': return <Clock className="w-4 h-4" />
       case 'cancelled':
       case 'rejected': return <XCircle className="w-4 h-4" />
@@ -247,6 +249,10 @@ export function ReservationManagement() {
    */
   const getDisplayStatus = (reservation: Reservation): { key: string, label: string } => {
     const effectiveStatus = getEffectiveStatus(reservation)
+
+    if (effectiveStatus === 'partially_paid') {
+      return { key: 'partially_paid', label: 'Partially Paid' }
+    }
 
     if (effectiveStatus === 'pending_payment') {
       const paymentMethod = reservation.metadata?.intended_payment_method ||
@@ -271,7 +277,7 @@ export function ReservationManagement() {
 
   const statusCounts = {
     all: reservations.length,
-    pending: reservations.filter(r => ['pending', 'pending_payment'].includes(getEffectiveStatus(r))).length,
+    pending: reservations.filter(r => ['pending', 'pending_payment', 'partially_paid'].includes(getEffectiveStatus(r))).length,
     confirmed: reservations.filter(r => getEffectiveStatus(r) === 'confirmed').length,
     ongoing: reservations.filter(r => getEffectiveStatus(r) === 'ongoing').length,
     completed: reservations.filter(r => getEffectiveStatus(r) === 'completed').length,
@@ -281,7 +287,7 @@ export function ReservationManagement() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
       </div>
     )
   }
@@ -295,7 +301,7 @@ export function ReservationManagement() {
           <p className="text-sm text-gray-500 mb-4">{error}</p>
           <button
             onClick={loadReservations}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
           >
             Try Again
           </button>
@@ -504,7 +510,7 @@ export function ReservationManagement() {
                       <tr key={reservation.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
-                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold">
+                            <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold">
                               {customerName.charAt(0).toUpperCase()}
                             </div>
                             <div className="ml-3">
@@ -558,7 +564,7 @@ export function ReservationManagement() {
                               </span>
                             )}
                             {reservation.metadata?.weeks_total > 1 && (
-                              <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-50 text-blue-700 flex items-center gap-1">
+                              <span className="px-2 py-1 text-xs font-medium rounded-full bg-primary/10 text-primary flex items-center gap-1">
                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                                 Week {(reservation.metadata.week_index ?? 0) + 1}/{reservation.metadata.weeks_total}
                               </span>
@@ -578,7 +584,7 @@ export function ReservationManagement() {
                         <td className="px-6 py-4 whitespace-nowrap text-right">
                           <button
                             onClick={() => handleViewDetails(reservation)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-primary hover:bg-primary/5 rounded-lg transition-colors"
                           >
                             <Eye className="w-4 h-4" />
                             <span>View</span>

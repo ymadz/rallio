@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { getMyVenues, createVenue } from '@/app/actions/court-admin-actions'
+import { createClient } from '@/lib/supabase/client'
 
 const LocationPicker = dynamic(
   () => import('@/components/map/location-picker'),
@@ -85,6 +86,23 @@ export function VenueList() {
         throw new Error(result.error)
       }
       setVenues(result.venues || [])
+
+      // Fetch user profile to prefill venue contact info
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('phone')
+          .eq('id', user.id)
+          .single()
+
+        setFormData(prev => ({
+          ...prev,
+          email: user.email || '',
+          phone: profile?.phone || ''
+        }))
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load venues')
     } finally {
@@ -125,14 +143,21 @@ export function VenueList() {
       if (!result.success) {
         throw new Error(result.error)
       }
-      // Reset form and close modal
+      // Reload venues and reset form safely keeping pre-filled info
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      let userPhone = ''
+      if (user) {
+        const { data: profile } = await supabase.from('profiles').select('phone').eq('id', user.id).single()
+        userPhone = profile?.phone || ''
+      }
       setFormData({
         name: '',
         description: '',
         address: '',
         city: 'Zamboanga City',
-        phone: '',
-        email: '',
+        phone: userPhone,
+        email: user?.email || '',
         website: '',
         latitude: '',
         longitude: '',

@@ -13,6 +13,25 @@ export interface TimeSlot {
 }
 
 /**
+ * Server Action: Get venue metadata (like down payment percentage)
+ */
+export async function getVenueMetadataAction(venueId: string) {
+  const supabase = createServiceClient()
+  const { data, error } = await supabase
+    .from('venues')
+    .select('metadata')
+    .eq('id', venueId)
+    .single()
+
+  if (error) {
+    console.error('Error fetching venue metadata:', error)
+    return { success: false, error: error.message }
+  }
+
+  return { success: true, metadata: data.metadata }
+}
+
+/**
  * Server Action: Get available time slots for a specific court on a given date
  */
 export async function getAvailableTimeSlotsAction(
@@ -424,7 +443,7 @@ export async function createReservationAction(data: {
   discountReason?: string
   recurrenceWeeks?: number
   selectedDays?: number[] // Array of day indices (0-6)
-}): Promise<{ success: boolean; reservationId?: string; error?: string; count?: number }> {
+}): Promise<{ success: boolean; reservationId?: string; error?: string; count?: number; downPaymentRequired?: boolean; downPaymentAmount?: number }> {
   const supabase = await createClient()
 
   // Use the shared service

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { Calendar as CalendarIcon, Clock, User, Phone, CheckCircle, XCircle } from 'lucide-react'
 import { Calendar } from '@/components/ui/calendar'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -75,7 +75,7 @@ export function CourtAdminCalendar({ reservations, onSelectReservation }: CourtA
         return slots
     }, [])
 
-    const getReservationsForDateAndCourt = (date: Date, courtId: string) => {
+    const getReservationsForDateAndCourt = useCallback((date: Date, courtId: string) => {
         const startOfDay = new Date(date)
         startOfDay.setHours(0, 0, 0, 0)
         const endOfDay = new Date(date)
@@ -88,11 +88,11 @@ export function CourtAdminCalendar({ reservations, onSelectReservation }: CourtA
             const isNotCancelled = !['cancelled', 'rejected'].includes(r.status)
             return isRightDate && isRightCourt && isNotCancelled
         })
-    }
+    }, [reservations])
 
     const dailyReservations = useMemo(
         () => getReservationsForDateAndCourt(selectedDate, selectedCourtId),
-        [reservations, selectedDate, selectedCourtId]
+        [getReservationsForDateAndCourt, selectedDate, selectedCourtId]
     )
 
     const formatTime = (time: string): string => {
@@ -106,7 +106,7 @@ export function CourtAdminCalendar({ reservations, onSelectReservation }: CourtA
         // Find if there is a reservation for this slot on this court
         const [slotHour, slotMin] = timeSlot.split(':').map(Number)
 
-        const reservation = dailyReservations.find(r => {
+        const reservation = dailyReservations.find((r: Reservation) => {
             if (r.court.id !== courtId) return false
 
             const rStart = new Date(r.start_time)
@@ -227,8 +227,8 @@ export function CourtAdminCalendar({ reservations, onSelectReservation }: CourtA
 
                                                 {/* Foreground: Render Reservations specific to this court and day as absolute positioned blocks */}
                                                 {dailyReservations
-                                                    .filter(r => r.court.id === court.id)
-                                                    .map(res => {
+                                                    .filter((r: Reservation) => r.court.id === court.id)
+                                                    .map((res: Reservation) => {
                                                         const resStart = new Date(res.start_time)
                                                         const resEnd = new Date(res.end_time)
 

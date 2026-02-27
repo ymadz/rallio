@@ -500,6 +500,7 @@ export async function markReservationAsPaid(reservationId: string) {
         id,
         status,
         total_amount,
+        amount_paid,
         metadata,
         user_id,
         start_time,
@@ -521,9 +522,16 @@ export async function markReservationAsPaid(reservationId: string) {
       return { success: false, error: 'Unauthorized' }
     }
 
-    if (reservation.status !== 'pending_payment') {
+    // Accept both pending_payment (full cash) and partially_paid (down payment already received)
+    if (reservation.status !== 'pending_payment' && reservation.status !== 'partially_paid') {
       return { success: false, error: 'Reservation is not pending payment' }
     }
+
+    // Calculate the amount being paid now (remaining balance)
+    const alreadyPaid = parseFloat(reservation.amount_paid || '0')
+    const totalAmount = parseFloat(reservation.total_amount)
+    const remainingAmount = totalAmount - alreadyPaid
+    const isPartiallyPaid = reservation.status === 'partially_paid'
 
     const isQueueSession = reservation.metadata?.is_queue_session_reservation === true
 
@@ -566,47 +574,50 @@ export async function markReservationAsPaid(reservationId: string) {
 
         if (qsError) throw qsError
 
-        // Create Payment Record for history
+        // Create Payment Record for history (remaining balance for partially_paid, full amount otherwise)
         await supabase.from('payments').insert({
           user_id: reservation.user_id,
           reservation_id: reservation.id,
-          amount: reservation.total_amount,
+          amount: remainingAmount,
           currency: 'PHP',
           payment_method: 'cash',
           status: 'completed',
           provider: 'manual',
           metadata: {
             marked_by: user.id,
-            queue_session_id: queueSession.id
+            queue_session_id: queueSession.id,
+            ...(isPartiallyPaid && { is_remaining_balance: true, down_payment_already_paid: alreadyPaid })
           }
         })
       }
     } else {
-      // Create Payment Record (for regular booking cash payment)
+      // Create Payment Record (remaining balance for partially_paid, full amount otherwise)
       await supabase.from('payments').insert({
         user_id: reservation.user_id,
         reservation_id: reservation.id,
-        amount: reservation.total_amount,
+        amount: remainingAmount,
         currency: 'PHP',
         payment_method: 'cash',
         status: 'completed',
         provider: 'manual',
         metadata: {
-          marked_by: user.id
+          marked_by: user.id,
+          ...(isPartiallyPaid && { is_remaining_balance: true, down_payment_already_paid: alreadyPaid })
         }
       })
     }
 
-    // Update Reservation to Confirmed
+    // Update Reservation to Confirmed (full amount now paid)
     const { error } = await supabase
       .from('reservations')
       .update({
         status: 'confirmed',
-        amount_paid: reservation.total_amount,
+        amount_paid: totalAmount,
         metadata: {
           ...reservation.metadata,
           payment_status: 'paid',
-          payment_method: 'cash'
+          payment_method: isPartiallyPaid ? 'cash_with_down_payment' : 'cash',
+          ...(isPartiallyPaid && { cash_balance_paid_at: new Date().toISOString(), cash_balance_amount: remainingAmount })
         }
       })
       .eq('id', reservationId)
@@ -911,6 +922,46 @@ export async function createVenue(venueData: {
     return { success: true, venue }
   } catch (error: any) {
     console.error('Error creating venue:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
+ * Toggle venue active/inactive (court admin)
+ */
+export async function toggleVenueActiveStatus(venueId: string, isActive: boolean) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { success: false, error: 'Not authenticated' }
+  }
+
+  try {
+    // Verify ownership
+    const { data: venue } = await supabase
+      .from('venues')
+      .select('owner_id')
+      .eq('id', venueId)
+      .single()
+
+    if (!venue || venue.owner_id !== user.id) {
+      return { success: false, error: 'Unauthorized - You do not own this venue' }
+    }
+
+    const { error } = await supabase
+      .from('venues')
+      .update({ is_active: isActive, updated_at: new Date().toISOString() })
+      .eq('id', venueId)
+
+    if (error) throw error
+
+    revalidatePath('/court-admin/venues')
+    revalidatePath(`/court-admin/venues/${venueId}`)
+
+    return { success: true, message: `Venue ${isActive ? 'activated' : 'deactivated'} successfully` }
+  } catch (error: any) {
+    console.error('Error toggling venue status:', error)
     return { success: false, error: error.message }
   }
 }

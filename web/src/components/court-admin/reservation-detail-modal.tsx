@@ -150,6 +150,7 @@ export function ReservationDetailModal({
       case 'confirmed': return 'bg-green-100 text-green-700 border-green-200'
       case 'pending': return 'bg-yellow-100 text-yellow-700 border-yellow-200'
       case 'pending_payment': return 'bg-orange-100 text-orange-700 border-orange-200'
+      case 'partially_paid': return 'bg-amber-100 text-amber-700 border-amber-200'
       case 'cancelled':
       case 'rejected': return 'bg-red-100 text-red-700 border-red-200'
       case 'completed': return 'bg-blue-100 text-blue-700 border-blue-200'
@@ -165,9 +166,9 @@ export function ReservationDetailModal({
     return false
   }
 
-  // Helper to check if payment is pending
+  // Helper to check if payment is pending (includes partially_paid — admin can collect remaining balance)
   const isPendingPayment = () => {
-    return reservation.status === 'pending_payment'
+    return reservation.status === 'pending_payment' || reservation.status === 'partially_paid'
   }
 
 
@@ -196,7 +197,7 @@ export function ReservationDetailModal({
             <div className="flex items-center gap-2">
               <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium ${getStatusColor(getDisplayStatus())}`}>
                 {getDisplayStatus() === 'confirmed' && <CheckCircle className="w-4 h-4" />}
-                {(getDisplayStatus() === 'pending' || getDisplayStatus() === 'pending_payment') && <Clock className="w-4 h-4" />}
+                {(getDisplayStatus() === 'pending' || getDisplayStatus() === 'pending_payment' || getDisplayStatus() === 'partially_paid') && <Clock className="w-4 h-4" />}
                 {(getDisplayStatus() === 'cancelled' || getDisplayStatus() === 'rejected') && <XCircle className="w-4 h-4" />}
                 <span className="capitalize">{getDisplayStatus().replace('_', ' ')}</span>
               </span>
@@ -297,24 +298,42 @@ export function ReservationDetailModal({
           <div className="bg-gray-50 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-2">
               <DollarSign className="w-5 h-5 text-gray-400" />
-              <h3 className="font-semibold text-gray-900">Amount</h3>
+              <h3 className="font-semibold text-gray-900">Amount Breakdown</h3>
             </div>
-            <div className="text-2xl font-bold text-gray-900">
-              ₱{parseFloat(reservation.total_amount).toFixed(2)}
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-gray-600">Total Amount:</span>
+              <span className="text-xl font-bold text-gray-900">₱{parseFloat(reservation.total_amount).toFixed(2)}</span>
             </div>
-            {parseFloat(reservation.amount_paid) > 0 && (
-              <div className="text-sm text-green-600 mt-1">
-                Paid: ₱{parseFloat(reservation.amount_paid).toFixed(2)}
+            {parseFloat(reservation.amount_paid) > 0 && reservation.status !== 'partially_paid' && (
+              <div className="flex justify-between items-center text-sm text-green-600">
+                <span>Total Paid:</span>
+                <span className="font-medium">₱{parseFloat(reservation.amount_paid).toFixed(2)}</span>
               </div>
             )}
+
+            {reservation.status === 'partially_paid' && (
+              <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="font-medium text-amber-800">Down Payment ({reservation.metadata?.down_payment_percentage || 20}%)</span>
+                  <span className="text-amber-700">₱{parseFloat(reservation.metadata?.down_payment_amount || reservation.amount_paid).toFixed(2)} (Paid)</span>
+                </div>
+                <div className="flex justify-between items-center text-sm font-bold pt-2 border-t border-amber-200/50">
+                  <span className="text-amber-900">Remaining Balance:</span>
+                  <span className="text-amber-900">₱{(parseFloat(reservation.total_amount) - parseFloat(reservation.amount_paid || '0')).toFixed(2)}</span>
+                </div>
+              </div>
+            )}
+
             {reservation.metadata?.payment_method && (
-              <div className="text-xs text-gray-500 mt-1 capitalize">
-                Method: {reservation.metadata.payment_method === 'gcash' ? 'GCash' : reservation.metadata.payment_method === 'paymaya' ? 'Maya' : reservation.metadata.payment_method.replace('_', ' ')}
+              <div className="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-200 capitalize flex justify-between">
+                <span>Payment Method:</span>
+                <span className="font-medium">{reservation.metadata.payment_method === 'gcash' ? 'GCash' : reservation.metadata.payment_method === 'paymaya' ? 'Maya' : reservation.metadata.payment_method.replace('_', ' ')}</span>
               </div>
             )}
             {!reservation.metadata?.payment_method && reservation.status === 'pending_payment' && (
-              <div className="text-xs text-gray-500 mt-1">
-                Method: Cash (Unpaid)
+              <div className="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-200 flex justify-between">
+                <span>Payment Method:</span>
+                <span className="font-medium">Cash (Unpaid)</span>
               </div>
             )}
           </div>
@@ -419,7 +438,7 @@ export function ReservationDetailModal({
               ) : (
                 <>
                   <DollarSign className="w-5 h-5" />
-                  <span>Mark as Paid (Cash Received)</span>
+                  <span>{reservation.status === 'partially_paid' ? 'Collect Remaining Balance' : 'Mark as Paid (Cash Received)'}</span>
                 </>
               )}
             </button>

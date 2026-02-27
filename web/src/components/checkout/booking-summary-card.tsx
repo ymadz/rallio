@@ -30,6 +30,10 @@ export function BookingSummaryCard({
     applicableDiscounts,
     platformFeePercentage,
     platformFeeEnabled,
+    paymentMethod,
+    downPaymentPercentage,
+    getDownPaymentAmount,
+    getRemainingBalance,
   } = useCheckoutStore()
 
   if (!bookingData) return null
@@ -38,6 +42,9 @@ export function BookingSummaryCard({
   const platformFee = getPlatformFeeAmount()
   const total = getTotalAmount()
   const perPlayer = getPerPlayerAmount()
+  const downPaymentAmount = getDownPaymentAmount()
+  const remainingBalance = getRemainingBalance()
+  const isCashWithDownpayment = paymentMethod === 'cash' && downPaymentPercentage && downPaymentPercentage > 0 && downPaymentAmount > 0
 
   let duration = 1
   try {
@@ -157,7 +164,7 @@ export function BookingSummaryCard({
         </div>
 
         {discountAmount !== 0 && (
-          <div className="space-y-1">
+          <div className="space-y-2 pt-2 border-t border-gray-100">
             {applicableDiscounts && applicableDiscounts.length > 0 ? (
               applicableDiscounts.map((discount, index) => (
                 <div key={index} className="flex justify-between text-sm">
@@ -179,13 +186,10 @@ export function BookingSummaryCard({
                 </span>
               </div>
             )}
-          </div>
-        )}
-
-        {discountAmount !== 0 && (
-          <div className="flex justify-between text-sm pt-1">
-            <span className="text-gray-600">Subtotal</span>
-            <span className="font-medium text-gray-900">₱{subtotal.toFixed(2)}</span>
+            <div className="flex justify-between text-sm pt-2">
+              <span className="text-gray-600 font-medium">Subtotal</span>
+              <span className="font-medium text-gray-900">₱{subtotal.toFixed(2)}</span>
+            </div>
           </div>
         )}
 
@@ -213,9 +217,20 @@ export function BookingSummaryCard({
             {isSplitPayment ? 'Your Share' : 'Total Amount'}
           </span>
           <span className="text-2xl font-bold text-primary">
-            ₱{(isSplitPayment ? perPlayer : total).toFixed(2)}
+            ₱{(isSplitPayment ? perPlayer : (isCashWithDownpayment ? downPaymentAmount : total)).toFixed(2)}
           </span>
         </div>
+
+        {isCashWithDownpayment && (
+          <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center bg-primary/5 -mx-6 px-6 py-3">
+            <div>
+              <p className="text-xs font-semibold text-primary uppercase tracking-wider">Remaining Balance</p>
+              <p className="text-xs text-gray-500">To be paid at the venue</p>
+            </div>
+            <p className="text-xl font-bold text-gray-900">₱{remainingBalance.toFixed(2)}</p>
+          </div>
+        )}
+
         {isSplitPayment && (
           <p className="text-xs text-gray-500 mt-1">
             Total: ₱{total.toFixed(2)} split among {playerCount} players

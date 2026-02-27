@@ -19,6 +19,7 @@ type ReservationWithRelations = {
   num_players?: number
   recurrence_group_id?: string | null
   metadata?: Record<string, any> | null
+  payment_method?: string
   courts: {
     name: string
     venues: {
@@ -93,9 +94,12 @@ export async function initiatePaymentAction(
       return { success: false, error: 'Unauthorized' }
     }
 
-    // Check if already paid
-    if (['paid', 'confirmed'].includes(reservation.status) || reservation.amount_paid >= reservation.total_amount) {
-      return { success: false, error: 'Reservation already paid' }
+    // Check if fully paid
+    if (reservation.status === 'completed' || reservation.status === 'confirmed' || reservation.amount_paid >= reservation.total_amount) {
+      // Allow partially_paid to be processed for the remaining balance
+      if (reservation.status !== 'partially_paid') {
+        return { success: false, error: 'Reservation already fully paid' }
+      }
     }
 
     // Generate unique payment reference
@@ -121,23 +125,53 @@ export async function initiatePaymentAction(
     // Check for recurrence group to handle bulk payment
     let amountToCharge = reservation.total_amount
     let recurrenceGroupId = reservation.recurrence_group_id
+    let isDownPayment = false
+
+    // If reservation is already partially paid, we are charging the remaining balance
+    if (reservation.status === 'partially_paid' && reservation.amount_paid > 0) {
+      amountToCharge = reservation.total_amount - reservation.amount_paid
+      description += ' (Remaining Balance)'
+    } else {
+      // Check intent: is this meant to be a cash booking (with a down payment)?
+      const isIntendedCash = reservation.metadata?.intended_payment_method === 'cash' ||
+        reservation.payment_type === 'cash' ||
+        reservation.payment_method === 'cash' ||
+        paymentMethod === 'cash'
+
+      // If it's a cash booking but requires a down payment, charge the down payment amount online.
+      if (isIntendedCash && reservation.metadata?.down_payment_amount && reservation.status === 'pending_payment') {
+        amountToCharge = Number(reservation.metadata.down_payment_amount)
+        isDownPayment = true
+        description += ' (Down Payment)'
+      }
+    }
 
     if (recurrenceGroupId) {
       // Fetch all reservations in this group
       const { data: groupReservations } = await supabase
         .from('reservations')
-        .select('total_amount, status')
+        .select('total_amount, status, metadata')
         .eq('recurrence_group_id', recurrenceGroupId)
         .in('status', ['pending_payment'])
 
       if (groupReservations && groupReservations.length > 0) {
-        // Sum up the total amount for all pending reservations in the group
-        amountToCharge = groupReservations.reduce((sum, res) => sum + (res.total_amount || 0), 0)
-        description += ` (Recurring: ${groupReservations.length} sessions)`
+        if (isDownPayment) {
+          // For down payments, sum the down_payment_amount from each reservation's metadata
+          amountToCharge = groupReservations.reduce((sum, res) => {
+            const meta = res.metadata as any
+            return sum + (meta?.down_payment_amount || 0)
+          }, 0)
+          description += ` (Down Payment - ${groupReservations.length} sessions)`
+        } else {
+          // For full payments, sum up the total amount
+          amountToCharge = groupReservations.reduce((sum, res) => sum + (res.total_amount || 0), 0)
+          description += ` (Recurring: ${groupReservations.length} sessions)`
+        }
         console.log('[initiatePaymentAction] 🔄 Detected recurring group:', {
           groupId: recurrenceGroupId,
           count: groupReservations.length,
-          totalBulkAmount: amountToCharge
+          totalBulkAmount: amountToCharge,
+          isDownPayment
         })
       }
     }
@@ -160,7 +194,11 @@ export async function initiatePaymentAction(
 
     // Create payment source based on method
     try {
-      if (paymentMethod === 'gcash') {
+      // Determine the actual method to use for PayMongo
+      // If it's a cash booking requiring down payment, default to GCash for the online portion.
+      const paymongoMethod = (paymentMethod === 'cash' && isDownPayment) ? 'gcash' : paymentMethod
+
+      if (paymongoMethod === 'gcash') {
         const result = await createGCashCheckout({
           amount: amountToCharge,
           description,
@@ -177,11 +215,12 @@ export async function initiatePaymentAction(
             payment_reference: paymentReference,
             payment_type: reservation.payment_type || 'full',
             player_count: reservation.num_players?.toString() || '1',
+            is_down_payment: isDownPayment ? 'true' : 'false'
           },
         })
         checkoutUrl = result.checkoutUrl
         sourceId = result.sourceId
-      } else if (paymentMethod === 'paymaya') {
+      } else if (paymongoMethod === 'paymaya') {
         const result = await createMayaCheckout({
           amount: amountToCharge,
           description,
@@ -198,12 +237,13 @@ export async function initiatePaymentAction(
             payment_reference: paymentReference,
             payment_type: reservation.payment_type || 'full',
             player_count: reservation.num_players?.toString() || '1',
+            is_down_payment: isDownPayment ? 'true' : 'false'
           },
         })
         checkoutUrl = result.checkoutUrl
         sourceId = result.sourceId
       } else {
-        return { success: false, error: 'Cash payment not yet supported' }
+        return { success: false, error: 'Cash payment without down payment not supported here' }
       }
     } catch (paymentError) {
       console.error('PayMongo API error:', paymentError)
@@ -257,6 +297,7 @@ export async function initiatePaymentAction(
         player_count: reservation.num_players || 1,
         is_split_payment: reservation.payment_type === 'split',
         recurrence_group_id: recurrenceGroupId,
+        is_down_payment: isDownPayment,
       },
     }
     console.log('[initiatePaymentAction] Payment data:', paymentData)
@@ -294,6 +335,7 @@ export async function initiatePaymentAction(
         status: 'pending_payment',
         payment_method: 'e-wallet',
         metadata: {
+          ...(reservation.metadata || {}),
           payment_initiated_at: new Date().toISOString(),
           payment_method: paymentMethod,
           payment_reference: paymentReference,
@@ -383,6 +425,9 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
       return { success: false, error: 'Payment record not found' }
     }
 
+    const isDownPayment = payment.metadata?.is_down_payment === true || payment.metadata?.is_down_payment === 'true'
+    const newReservationStatus = isDownPayment ? 'partially_paid' : 'confirmed'
+
     // Idempotency check: If payment is already completed
     if (payment.status === 'completed') {
       console.log('Payment already completed, verifying reservation status:', sourceId)
@@ -391,21 +436,23 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
       // This handles race conditions where payment completes but reservation update fails
       const { data: reservation } = await supabase
         .from('reservations')
-        .select('status, id')
+        .select('status, id, amount_paid')
         .eq('id', payment.reservation_id)
         .single()
 
-      if (reservation?.status !== 'confirmed') {
-        console.warn('⚠️ Payment completed but reservation not confirmed - fixing now')
+      if (reservation?.status !== newReservationStatus && reservation?.status !== 'confirmed') {
+        console.warn(`⚠️ Payment completed but reservation not ${newReservationStatus} - fixing now`)
         console.log('Reservation ID:', payment.reservation_id)
         console.log('Current status:', reservation?.status)
 
-        // Update the reservation to confirmed
+        // Update the reservation to the correct status
         const { error: updateError } = await supabase
           .from('reservations')
           .update({
-            status: 'confirmed',
-            amount_paid: payment.amount,
+            status: newReservationStatus,
+            amount_paid: newReservationStatus === 'confirmed' && !isDownPayment
+              ? (reservation?.amount_paid || 0) + payment.amount
+              : payment.amount,
           })
           .eq('id', payment.reservation_id)
 
@@ -507,12 +554,23 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
     }
 
     // Update reservation with comprehensive error handling
-    console.log('Updating reservation to confirmed:', payment.reservation_id)
+    console.log(`Updating reservation to ${newReservationStatus}:`, payment.reservation_id)
+    // Fetch latest reservation first to get current amount_paid
+    const { data: currentRes } = await supabase
+      .from('reservations')
+      .select('amount_paid')
+      .eq('id', payment.reservation_id)
+      .single()
+
+    const newAmountPaid = newReservationStatus === 'confirmed' && !isDownPayment
+      ? (currentRes?.amount_paid || 0) + payment.amount
+      : payment.amount
+
     const { data: updatedReservation, error: reservationError } = await supabase
       .from('reservations')
       .update({
-        status: 'confirmed',
-        amount_paid: payment.amount,
+        status: newReservationStatus,
+        amount_paid: newAmountPaid,
       })
       .eq('id', payment.reservation_id)
       .select('id, status')
@@ -554,15 +612,15 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
         .eq('id', payment.reservation_id)
         .single()
 
-      if (verification?.status !== 'confirmed') {
-        console.error('CRITICAL: Reservation not confirmed after update!')
-        console.error('Expected: confirmed, Got:', verification?.status)
+      if (verification?.status !== newReservationStatus && verification?.status !== 'confirmed') {
+        console.error(`CRITICAL: Reservation not ${newReservationStatus} after update!`)
+        console.error(`Expected: ${newReservationStatus}, Got:`, verification?.status)
 
         // Retry once
         console.log('Retrying reservation update...')
         await supabase
           .from('reservations')
-          .update({ status: 'confirmed', amount_paid: payment.amount })
+          .update({ status: newReservationStatus, amount_paid: payment.amount })
           .eq('id', payment.reservation_id)
       }
     }
@@ -586,19 +644,24 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
       } else if (groupReservations && groupReservations.length > 0) {
         console.log(`🔄 Confirming ${groupReservations.length} additional recurring reservations...`)
 
-        // Confirm all of them
-        // We set amount_paid = total_amount for them because the SINGLE payment record covers the WHOLE group.
-        // Logic: The payment record tracks the TOTAL paid. The reservations track their individual "paid" status.
-        // Usually, `amount_paid` on reservation matches the logic. 
-        // If we split the payment amount access them? 
-        // In the webhook logic, we set `amount_paid: res.total_amount` for each.
-
         for (const res of groupReservations) {
+          // If original payment was a down payment, set each reservation to partially_paid
+          // with amount_paid = each reservation's down_payment_amount.
+          // Otherwise, mark as fully confirmed.
+          let resStatus = 'confirmed'
+          let resAmountPaid = res.total_amount
+
+          if (isDownPayment) {
+            const resMeta = (res as any).metadata as any
+            resStatus = 'partially_paid'
+            resAmountPaid = resMeta?.down_payment_amount || 0
+          }
+
           const { error: bulkUpdateError } = await supabase
             .from('reservations')
             .update({
-              status: 'confirmed',
-              amount_paid: res.total_amount, // Mark fully paid
+              status: resStatus,
+              amount_paid: resAmountPaid,
             })
             .eq('id', res.id)
 
@@ -783,22 +846,27 @@ export async function processPaymentByReservationAction(reservationId: string): 
 
       const { data: reservation } = await supabase
         .from('reservations')
-        .select('status')
+        .select('status, id, amount_paid')
         .eq('id', reservationId)
         .single()
 
-      if (reservation?.status === 'confirmed') {
-        console.log('[processPaymentByReservationAction] Reservation already confirmed')
-        return { success: true, status: 'confirmed' }
+      const isDownPaymentAction = payment.metadata?.is_down_payment === true || payment.metadata?.is_down_payment === 'true'
+      const targetStatus = isDownPaymentAction ? 'partially_paid' : 'confirmed'
+
+      if (reservation?.status === 'confirmed' || (reservation?.status === 'partially_paid' && targetStatus === 'partially_paid')) {
+        console.log(`[processPaymentByReservationAction] Reservation already ${reservation.status}`)
+        return { success: true, status: reservation.status }
       }
 
-      // Payment completed but reservation not confirmed - fix it
-      console.warn('[processPaymentByReservationAction] Payment completed but reservation not confirmed - fixing')
+      // Payment completed but reservation not in target state - fix it
+      console.warn(`[processPaymentByReservationAction] Payment completed but reservation not ${targetStatus} - fixing`)
       const { error: updateError } = await supabase
         .from('reservations')
         .update({
-          status: 'confirmed',
-          amount_paid: payment.amount,
+          status: targetStatus,
+          amount_paid: targetStatus === 'confirmed' && !isDownPaymentAction
+            ? (reservation?.amount_paid || 0) + payment.amount
+            : payment.amount,
         })
         .eq('id', reservationId)
 
@@ -813,12 +881,13 @@ export async function processPaymentByReservationAction(reservationId: string): 
       // Check if linked to Queue Session and update
       await updateQueueSessionStatus(reservationId, supabase)
 
-      return { success: true, status: 'confirmed' }
+      return { success: true, status: targetStatus }
     }
 
-    // For cash payments, no processing needed - just return pending status
-    if (payment.payment_method === 'cash') {
-      console.log('[processPaymentByReservationAction] Cash payment - no processing needed')
+    // For pure cash payments (no down payment), no processing needed
+    const isDownPaymentAction = payment.metadata?.is_down_payment === true || payment.metadata?.is_down_payment === 'true'
+    if (payment.payment_method === 'cash' && !isDownPaymentAction) {
+      console.log('[processPaymentByReservationAction] Pure cash payment - no processing needed')
       return { success: true, status: 'pending' }
     }
 

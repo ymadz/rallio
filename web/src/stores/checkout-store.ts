@@ -72,6 +72,7 @@ interface CheckoutState {
   // Confirmation
   bookingReference?: string
   reservationId?: string
+  downPaymentPercentage?: number
 
   // Actions
   setBookingData: (data: BookingData) => void
@@ -85,12 +86,15 @@ interface CheckoutState {
   setDiscountDetails: (details: { amount: number; type?: string; reason?: string; discounts?: any[] }) => void
   setPlatformFee: (percentage: number, enabled: boolean) => void
   setBookingReference: (reference: string, reservationId: string) => void
+  setDownPaymentPercentage: (percentage: number) => void
   resetCheckout: () => void
 
   // Computed values
   getSubtotal: () => number
   getPlatformFeeAmount: () => number
   getTotalAmount: () => number
+  getDownPaymentAmount: () => number
+  getRemainingBalance: () => number
   getPerPlayerAmount: () => number
   getAllPlayersPaid: () => boolean
 }
@@ -206,6 +210,8 @@ export const useCheckoutStore = create<CheckoutState>()(
       setBookingReference: (reference, reservationId) =>
         set({ bookingReference: reference, reservationId }),
 
+      setDownPaymentPercentage: (percentage) => set({ downPaymentPercentage: percentage }),
+
       resetCheckout: () => set(initialState),
 
       // Computed values
@@ -269,6 +275,20 @@ export const useCheckoutStore = create<CheckoutState>()(
         const subtotal = state.getSubtotal()
         const platformFee = state.getPlatformFeeAmount()
         return Math.round((subtotal + platformFee) * 100) / 100
+      },
+
+      getDownPaymentAmount: () => {
+        const state = get()
+        if (state.paymentMethod !== 'cash' || !state.downPaymentPercentage) return 0
+        const total = state.getTotalAmount()
+        return Math.round((total * (state.downPaymentPercentage / 100)) * 100) / 100
+      },
+
+      getRemainingBalance: () => {
+        const state = get()
+        const total = state.getTotalAmount()
+        const downPayment = state.getDownPaymentAmount()
+        return Math.round((total - downPayment) * 100) / 100
       },
 
       getPerPlayerAmount: () => {

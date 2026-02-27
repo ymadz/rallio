@@ -6,7 +6,7 @@ import { DayPicker } from 'react-day-picker'
 import { format } from 'date-fns'
 import 'react-day-picker/dist/style.css'
 import { useCheckoutStore } from '@/stores/checkout-store'
-import { getAvailableTimeSlotsAction, validateBookingAvailabilityAction } from '@/app/actions/reservations'
+import { getAvailableTimeSlotsAction, validateBookingAvailabilityAction, getVenueMetadataAction } from '@/app/actions/reservations'
 import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
 import { cn } from '@/lib/utils'
 import { Label } from '@/components/ui/label'
@@ -50,7 +50,7 @@ export function AvailabilityModal({
   capacity
 }: AvailabilityModalProps) {
   const router = useRouter()
-  const { setBookingData, setDiscountDetails, setDiscount } = useCheckoutStore()
+  const { setBookingData, setDiscountDetails, setDiscount, setDownPaymentPercentage } = useCheckoutStore()
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [recurrenceWeeks, setRecurrenceWeeks] = useState<number>(1)
   const [selectedDays, setSelectedDays] = useState<number[]>([]) // [0-6] for Sun-Sat
@@ -108,6 +108,25 @@ export function AvailabilityModal({
 
     fetchTimeSlots()
   }, [selectedDate, courtId, isOpen])
+
+  // Fetch venue metadata (down payment percentage)
+  useEffect(() => {
+    async function fetchVenueMetadata() {
+      if (!venueId || !isOpen) return
+
+      try {
+        const result = await getVenueMetadataAction(venueId)
+        if (result.success && result.metadata) {
+          const percentage = parseFloat((result.metadata as any).down_payment_percentage || '20')
+          setDownPaymentPercentage(percentage)
+        }
+      } catch (error) {
+        console.error('Error fetching venue metadata:', error)
+      }
+    }
+
+    fetchVenueMetadata()
+  }, [venueId, isOpen, setDownPaymentPercentage])
 
   // Helpers needed for effects
   const getDuration = (): number => {
@@ -186,8 +205,7 @@ export function AvailabilityModal({
           courtId,
           startDate: startDateTime,
           endDate: endDateTime,
-          numberOfDays: recurrenceWeeks,
-          numberOfPlayers: 1,
+          recurrenceWeeks: Number(recurrenceWeeks),
           basePrice
         })
 
@@ -630,7 +648,7 @@ export function AvailabilityModal({
           </div>
 
           {/* Footer */}
-          <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex items-center justify-between">
+          <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex items-center justify-between shrink-0">
             <div>
               {startSlot && (
                 <div className="text-sm">
@@ -712,21 +730,20 @@ export function AvailabilityModal({
                   <p className="text-gray-600">
                     {formatTime(startSlot.time)} - {formatTime(getEndTime())}
                   </p>
-                  <p className="text-lg font-bold text-primary mt-1 flex items-center gap-2">
+                  <div className="mt-1 flex items-baseline gap-2">
                     {isCalculatingPrice ? (
                       <span className="text-sm font-normal text-gray-400">Calculating...</span>
                     ) : calculatedPrice ? (
                       <>
-                        <span>₱{calculatedPrice.final.toLocaleString()}</span>
-                        {calculatedPrice.discount !== 0 && (
-                          <span className={`text-xs font-normal ${calculatedPrice.discount > 0 ? 'text-green-600' : 'text-orange-600'}`}>
-                            ({calculatedPrice.discount > 0 ? '-' : '+'}₱{Math.abs(calculatedPrice.discount).toLocaleString()})
+                        <span className="text-lg font-bold text-primary">₱{Number(calculatedPrice.final || 0).toLocaleString()}</span>
+                        {Number(calculatedPrice.discount) !== 0 && (
+                          <span className={`text-xs font-normal ${Number(calculatedPrice.discount) > 0 ? 'text-green-600' : 'text-orange-600'}`}>
+                            ({Number(calculatedPrice.discount) > 0 ? '-' : '+'}₱{Math.abs(Number(calculatedPrice.discount)).toLocaleString()})
                           </span>
                         )}
                       </>
                     ) : (
                       (() => {
-                        // Calculate ACTUAL base price for initial display (when not calculated yet)
                         const getDisplayBasePrice = () => {
                           const initialStartTime = new Date(selectedDate)
                           const [startH, startM] = startSlot.time.split(':')
@@ -739,19 +756,17 @@ export function AvailabilityModal({
                           let actualSlotCount = 0
                           for (let i = 0; i < recurrenceWeeks; i++) {
                             for (const dayIndex of uniqueSelectedDays) {
-                              // We don't actually need to calculate the date, since every generated combination is valid!
-                              // Without filtering past dates in the first week, actualSlotCount is simply recurrences * uniqueSelectedDays
                               actualSlotCount++
                             }
                           }
-                          return ((startSlot.price || hourlyRate) * duration * actualSlotCount).toLocaleString()
+                          return Number((startSlot.price || hourlyRate) * duration * actualSlotCount).toLocaleString()
                         }
-                        return <span>₱{getDisplayBasePrice()}</span>
+                        return <span className="text-lg font-bold text-primary">₱{getDisplayBasePrice()}</span>
                       })()
                     )}
-                    {recurrenceWeeks > 1 && <span className="text-xs font-normal text-gray-500 ml-1">({recurrenceWeeks} weeks)</span>}
-                    {selectedDays.length > 1 && <span className="text-xs font-normal text-gray-500 ml-1">({selectedDays.length} days/week)</span>}
-                  </p>
+                    {Number(recurrenceWeeks) > 1 && <span className="text-xs font-normal text-gray-500">({recurrenceWeeks} weeks)</span>}
+                    {selectedDays.length > 1 && <span className="text-xs font-normal text-gray-500">({selectedDays.length} days/week)</span>}
+                  </div>
                 </div>
               )}
             </div>
@@ -774,6 +789,6 @@ export function AvailabilityModal({
           </div>
         </div>
       </div>
-    </div >
+    </div>
   )
 }

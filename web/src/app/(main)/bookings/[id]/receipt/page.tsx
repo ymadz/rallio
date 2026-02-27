@@ -155,6 +155,44 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
                                         <span>Total Amount</span>
                                         <span>₱{booking.total_amount.toFixed(2)}</span>
                                     </div>
+
+                                    {/* Down Payment / Partially Paid Info */}
+                                    {booking.metadata?.down_payment_amount && (
+                                        <div className="mt-3 p-4 bg-amber-50 rounded-lg border border-amber-200 space-y-2">
+                                            <div className="flex justify-between py-1">
+                                                <span className="text-amber-800 font-medium">Down Payment Paid Online ({booking.metadata.down_payment_percentage || 20}%)</span>
+                                                <span className="font-bold text-amber-900">₱{parseFloat(booking.metadata.down_payment_amount).toFixed(2)}</span>
+                                            </div>
+
+                                            {booking.status === 'partially_paid' ? (
+                                                <>
+                                                    <div className="flex justify-between py-1">
+                                                        <span className="text-amber-800 font-medium">Remaining Balance ({booking.payment_type === 'cash' ? 'Pay at Venue' : 'Pending'})</span>
+                                                        <span className="font-bold text-amber-900">₱{(booking.total_amount - booking.amount_paid).toFixed(2)}</span>
+                                                    </div>
+                                                    <p className="text-xs text-amber-700 mt-1">
+                                                        Please pay the remaining balance in cash at the venue before your session.
+                                                    </p>
+                                                </>
+                                            ) : booking.status === 'confirmed' && booking.amount_paid >= booking.total_amount ? (
+                                                <>
+                                                    <div className="flex justify-between py-1">
+                                                        <span className="text-green-800 font-medium">Remaining Balance (Paid)</span>
+                                                        <span className="font-bold text-green-900">₱{(booking.total_amount - parseFloat(booking.metadata.down_payment_amount)).toFixed(2)}</span>
+                                                    </div>
+                                                    <p className="text-xs text-green-700 mt-1">
+                                                        ✅ Full payment received.
+                                                        {booking.metadata?.cash_balance_paid_at && ` Balance paid at venue on ${format(new Date(booking.metadata.cash_balance_paid_at), 'MMM d, yyyy h:mm a')}.`}
+                                                    </p>
+                                                </>
+                                            ) : (
+                                                <div className="flex justify-between py-1">
+                                                    <span className="text-amber-800 font-medium">Remaining Balance</span>
+                                                    <span className="font-bold text-amber-900">₱{(booking.total_amount - booking.amount_paid).toFixed(2)}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

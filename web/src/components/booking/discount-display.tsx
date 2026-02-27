@@ -9,8 +9,7 @@ interface DiscountDisplayProps {
   courtId: string;
   startDate: string;
   endDate: string;
-  numberOfDays: number;
-  numberOfPlayers: number;
+  recurrenceWeeks: number;
   basePrice: number;
   onDiscountCalculated?: (totalDiscount: number, finalPrice: number, discountType?: string, discountReason?: string) => void;
 }
@@ -20,8 +19,7 @@ export function DiscountDisplay({
   courtId,
   startDate,
   endDate,
-  numberOfDays,
-  numberOfPlayers,
+  recurrenceWeeks,
   basePrice,
   onDiscountCalculated,
 }: DiscountDisplayProps) {
@@ -47,8 +45,7 @@ export function DiscountDisplay({
           courtId,
           startDate,
           endDate,
-          numberOfDays,
-          numberOfPlayers,
+          recurrenceWeeks,
           basePrice,
         });
 
@@ -72,7 +69,7 @@ export function DiscountDisplay({
     };
 
     calculateDiscounts();
-  }, [venueId, courtId, startDate, endDate, numberOfDays, numberOfPlayers, basePrice]);
+  }, [venueId, courtId, startDate, endDate, recurrenceWeeks, basePrice, onDiscountCalculated]);
 
   if (loading) {
     return (
@@ -90,9 +87,8 @@ export function DiscountDisplay({
   const hasSurcharge = discounts.some(d => d.isIncrease);
 
   return (
-    <div className={`border rounded-lg p-4 space-y-3 ${
-      hasSurcharge ? 'bg-orange-50 border-orange-200' : 'bg-green-50 border-green-200'
-    }`}>
+    <div className={`border rounded-lg p-4 space-y-3 ${hasSurcharge ? 'bg-orange-50 border-orange-200' : 'bg-green-50 border-green-200'
+      }`}>
       <div className="flex items-center gap-2">
         {hasSurcharge ? (
           <TrendingUp className="h-5 w-5 text-orange-600" />
@@ -108,42 +104,35 @@ export function DiscountDisplay({
         {discounts.map((discount, index) => (
           <div key={index} className="flex items-start justify-between text-sm">
             <div className="flex items-start gap-2">
-              <Tag className={`h-4 w-4 mt-0.5 flex-shrink-0 ${
-                discount.isIncrease ? 'text-orange-600' : 'text-green-600'
-              }`} />
+              <Tag className={`h-4 w-4 mt-0.5 flex-shrink-0 ${discount.isIncrease ? 'text-orange-600' : 'text-green-600'
+                }`} />
               <div>
-                <p className={`font-medium ${
-                  discount.isIncrease ? 'text-orange-900' : 'text-green-900'
-                }`}>
+                <p className={`font-medium ${discount.isIncrease ? 'text-orange-900' : 'text-green-900'
+                  }`}>
                   {discount.name}
                 </p>
-                <p className={`text-xs ${
-                  discount.isIncrease ? 'text-orange-700' : 'text-green-700'
-                }`}>
+                <p className={`text-xs ${discount.isIncrease ? 'text-orange-700' : 'text-green-700'
+                  }`}>
                   {discount.description}
                 </p>
               </div>
             </div>
-            <span className={`font-semibold whitespace-nowrap ${
-              discount.isIncrease ? 'text-orange-900' : 'text-green-900'
-            }`}>
+            <span className={`font-semibold whitespace-nowrap ${discount.isIncrease ? 'text-orange-900' : 'text-green-900'
+              }`}>
               {discount.isIncrease ? '+' : '-'}₱{discount.amount.toFixed(2)}
             </span>
           </div>
         ))}
       </div>
 
-      <div className={`pt-3 border-t flex items-center justify-between ${
-        hasSurcharge ? 'border-orange-200' : 'border-green-200'
-      }`}>
-        <span className={`font-semibold ${
-          hasSurcharge ? 'text-orange-900' : 'text-green-900'
+      <div className={`pt-3 border-t flex items-center justify-between ${hasSurcharge ? 'border-orange-200' : 'border-green-200'
         }`}>
+        <span className={`font-semibold ${hasSurcharge ? 'text-orange-900' : 'text-green-900'
+          }`}>
           {totalDiscount < 0 ? 'Additional Charge' : 'Total Savings'}
         </span>
-        <span className={`text-lg font-bold ${
-          hasSurcharge ? 'text-orange-900' : 'text-green-900'
-        }`}>
+        <span className={`text-lg font-bold ${hasSurcharge ? 'text-orange-900' : 'text-green-900'
+          }`}>
           {totalDiscount < 0 ? '+' : '-'}₱{Math.abs(totalDiscount).toFixed(2)}
         </span>
       </div>
