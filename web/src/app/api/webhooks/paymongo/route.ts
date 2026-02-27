@@ -436,9 +436,9 @@ async function markReservationPaidAndConfirmed({
     // 1. Fetch ALL pending reservations in this group
     const { data: groupReservations, error: groupFetchError } = await supabase
       .from('reservations')
-      .select('id, status, total_amount, metadata')
+      .select('id, status, total_amount, metadata, amount_paid')
       .eq('recurrence_group_id', recurrenceGroupId)
-      .in('status', ['pending_payment', 'paid']) // Include 'paid' just in case
+      .in('status', ['pending_payment', 'paid', 'partially_paid']) // Include partially_paid for balance payment
 
     if (groupFetchError) {
       console.error('[markReservationPaidAndConfirmed] ❌ Failed to fetch recurrence group:', groupFetchError)
@@ -459,12 +459,16 @@ async function markReservationPaidAndConfirmed({
       // 2. Mark ALL as confirmed/partially_paid based on down payment status
       const updates = groupReservations.map(res => {
         const resMeta = (res.metadata || {}) as any
-        let resAmountPaid = res.total_amount
+        let resAmountPaid: number;
         let resStatus = 'confirmed'
 
         if (isDownPayment) {
           resStatus = 'partially_paid'
-          resAmountPaid = resMeta?.down_payment_amount || payment.amount / groupReservations.length
+          resAmountPaid = resMeta?.down_payment_amount ? parseFloat(resMeta.down_payment_amount) : payment.amount / groupReservations.length
+        } else {
+          // If paying full/remaining balance
+          const newPaymentShare = payment.amount / groupReservations.length
+          resAmountPaid = (res.amount_paid || 0) + newPaymentShare
         }
 
         return {
