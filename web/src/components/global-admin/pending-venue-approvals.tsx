@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import {
   getAllVenues,
   toggleVenueVerified,
+  toggleVenueActive,
   getVenueDetails
 } from '@/app/actions/global-admin-venue-actions'
 import { createNotification } from '@/app/actions/notification-actions'
@@ -146,7 +147,7 @@ export function PendingVenueApprovals({ onApprovalComplete }: Props) {
     setProcessingId(venue.id)
     try {
       // For rejection, we keep is_verified as false and set is_active to false
-      const result = await toggleVenueVerified(venue.id, false)
+      const result = await toggleVenueActive(venue.id, false)
       if (result.success) {
         toast.success(`${venue.name} has been rejected`)
 
@@ -214,15 +215,15 @@ export function PendingVenueApprovals({ onApprovalComplete }: Props) {
         {venues.map((venue) => (
           <div
             key={venue.id}
-            className="bg-white border border-yellow-200 rounded-xl overflow-hidden shadow-sm"
+            className="bg-white border border-primary/20 rounded-xl overflow-hidden shadow-sm"
           >
             {/* Venue Header */}
             <div className="p-6">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-                      <Building2 className="w-6 h-6 text-yellow-600" />
+                    <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                      <Building2 className="w-6 h-6 text-primary" />
                     </div>
                     <div>
                       <h3 className="text-lg font-bold text-gray-900">{venue.name}</h3>
@@ -323,10 +324,10 @@ export function PendingVenueApprovals({ onApprovalComplete }: Props) {
 
             {/* Expanded Details */}
             {expandedVenue === venue.id && (
-              <div className="border-t border-yellow-200 bg-yellow-50 p-6">
+              <div className="border-t border-primary/20 bg-primary/5 p-6">
                 {loadingDetails ? (
                   <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-yellow-600" />
+                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
                   </div>
                 ) : venueDetails ? (
                   <div className="space-y-4">

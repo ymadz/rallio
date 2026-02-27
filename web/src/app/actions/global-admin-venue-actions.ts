@@ -105,7 +105,7 @@ export async function getAllVenues(options: {
   } else if (options.statusFilter === 'verified') {
     query = query.eq('is_verified', true)
   } else if (options.statusFilter === 'unverified') {
-    query = query.eq('is_verified', false)
+    query = query.eq('is_verified', false).eq('is_active', true)
   }
 
   // City filter
@@ -472,6 +472,7 @@ export async function getPendingCourts(options: {
       )
     `, { count: 'exact' })
     .eq('is_verified', false)
+    .eq('is_active', true)
     .order('created_at', { ascending: false })
     .range(from, to)
 

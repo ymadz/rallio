@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import {
     getPendingCourts,
-    toggleCourtVerified
+    toggleCourtVerified,
+    toggleCourtActive
 } from '@/app/actions/global-admin-venue-actions'
 import { createNotification } from '@/app/actions/notification-actions'
 import {
@@ -112,23 +113,13 @@ export function PendingCourtApprovals({ onApprovalComplete }: Props) {
 
         setProcessingId(court.id)
         try {
-            // Rejecting usually involves communicating why. 
             // For now we just 'unverify' (keep it false) and maybe deactivate it?
             // Or we can delete it? The venue one kept it but deactivated.
             // Let's assume we keep it unverified but maybe mark as inactive?
             // toggleCourtVerified only handles verified bool.
             // Let's just use it to ensure it stays false, but we can't easily deactivate with this action without another call.
-            // Actually, toggleCourtVerified returns success message, let's trust that.
-            // Ideally we should also deactivate it. But let's stick to verify = false.
-
-            // Sending notification is key.
-            if (court.venue?.owner?.email) {
-                // We'd need the owner ID to send a notification, which is nested.
-                // Assuming we can't easily get owner ID for notification without fetching full venue details or fixing the type above.
-                // Let's skip notification for this MVP step or just log it.
-            }
-
-            const result = await toggleCourtVerified(court.id, false)
+            // Actually, toggleCourtActive returns success message, let's trust that.
+            const result = await toggleCourtActive(court.id, false)
 
             if (result.success) {
                 toast.success(`${court.name} rejected.`)
@@ -184,14 +175,14 @@ export function PendingCourtApprovals({ onApprovalComplete }: Props) {
                 {courts.map((court) => (
                     <div
                         key={court.id}
-                        className="bg-white border border-blue-200 rounded-xl overflow-hidden shadow-sm"
+                        className="bg-white border border-primary/20 rounded-xl overflow-hidden shadow-sm"
                     >
                         <div className="p-6">
                             <div className="flex items-start justify-between">
                                 <div className="flex-1">
                                     <div className="flex items-center gap-3 mb-2">
-                                        <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                                            <LayoutGrid className="w-6 h-6 text-blue-600" />
+                                        <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                                            <LayoutGrid className="w-6 h-6 text-primary" />
                                         </div>
                                         <div>
                                             <h3 className="text-lg font-bold text-gray-900">{court.name}</h3>

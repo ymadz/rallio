@@ -13,6 +13,7 @@ import {
   Phone,
   Mail,
   CheckCircle,
+  XCircle,
   Edit,
   Loader2,
   AlertCircle,
@@ -124,12 +125,17 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-3">
               <h1 className="text-3xl font-bold text-gray-900">{venue.name}</h1>
-              {venue.is_verified && (
-                <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
+              {venue.is_verified ? (
+                <span className="inline-flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
                   <CheckCircle className="w-4 h-4" />
                   Verified
                 </span>
-              )}
+              ) : !venue.is_active ? (
+                <span className="inline-flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-medium">
+                  <XCircle className="w-4 h-4" />
+                  Not Approved
+                </span>
+              ) : null}
             </div>
             {venue.description && (
               <p className="text-gray-600 mb-4">{venue.description}</p>
@@ -187,10 +193,12 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
               </div>
               <div className="flex items-center justify-center gap-2">
                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${venue.is_verified
-                  ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                  : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
+                  ? 'bg-primary/10 text-primary border border-primary/20'
+                  : !venue.is_active
+                    ? 'bg-red-100 text-red-700 border border-red-200'
+                    : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
                   }`}>
-                  {venue.is_verified ? 'Verified' : 'Pending Verification'}
+                  {venue.is_verified ? 'Verified' : !venue.is_active ? 'Not Approved' : 'Pending Verification'}
                 </span>
               </div>
             </div>
@@ -211,7 +219,7 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
                 className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-colors whitespace-nowrap ${isActive
-                  ? 'bg-blue-600 text-white shadow-sm'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'text-gray-600 hover:bg-gray-100'
                   }`}
               >
