@@ -225,7 +225,7 @@ export function BookingSummaryCard({
 
       {/* Navigation Buttons */}
       {
-        showButtons && currentStep !== 'processing' && currentStep !== 'confirmation' && (
+        showButtons && currentStep !== 'processing' && (
           <div className="pt-4 mt-4 border-t border-gray-200 flex flex-col gap-3">
             <button
               onClick={onContinue}

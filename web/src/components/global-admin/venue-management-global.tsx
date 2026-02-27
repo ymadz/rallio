@@ -422,19 +422,35 @@ export function VenueManagementGlobal() {
         </div>
       </div>
 
-      {/* Results count */}
-      <div className="text-sm text-gray-600">
-        Showing {venues.length} of {totalCount} venues
+      {/* Results count & Actions */}
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-gray-600">
+          Showing {venues.length} of {totalCount} venues
+        </div>
+        {venues.length > 0 && (
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="selectAll"
+              checked={selectedVenues.size === venues.length && venues.length > 0}
+              onChange={toggleAllVenues}
+              className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary cursor-pointer"
+            />
+            <label htmlFor="selectAll" className="text-sm text-gray-700 cursor-pointer select-none">
+              Select All on Page
+            </label>
+          </div>
+        )}
       </div>
 
-      {/* Table Container */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      {/* Venues List Container */}
+      <div className="space-y-4">
         {loading ? (
-          <div className="flex items-center justify-center py-12">
+          <div className="bg-white rounded-xl border border-gray-200 p-12 flex items-center justify-center">
             <Loader2 className="w-8 h-8 text-primary animate-spin" />
           </div>
         ) : venues.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12">
+          <div className="bg-white rounded-xl border border-gray-200 p-12 flex flex-col items-center justify-center">
             <Building2 className="w-16 h-16 text-gray-300 mb-4" />
             <p className="text-gray-500 text-lg font-medium">No venues found</p>
             <p className="text-gray-400 text-sm mt-1">
@@ -445,201 +461,198 @@ export function VenueManagementGlobal() {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200 bg-gray-50">
-                    <th className="px-6 py-3 text-left">
-                      <input
-                        type="checkbox"
-                        checked={selectedVenues.size === venues.length && venues.length > 0}
-                        onChange={toggleAllVenues}
-                        className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-                      />
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Venue
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Owner
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Location
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Courts
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {venues.map((venue, index) => (
-                    <tr key={venue.id} className="hover:bg-gray-50 cursor-pointer">
-                      <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+            <div className="space-y-4">
+              {venues.map((venue, index) => (
+                <div
+                  key={venue.id}
+                  className={`bg-white border rounded-xl overflow-hidden shadow-sm transition-colors cursor-pointer ${selectedVenues.has(venue.id) ? 'border-primary ring-1 ring-primary/10' : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  onClick={() => handleRowClick(venue)}
+                >
+                  <div className="p-6">
+                    <div className="flex items-start gap-4">
+                      {/* Checkbox */}
+                      <div className="pt-1.5" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={selectedVenues.has(venue.id)}
                           onChange={() => toggleVenueSelection(venue.id)}
-                          className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                          className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary cursor-pointer"
                         />
-                      </td>
-                      <td className="px-6 py-4" onClick={() => handleRowClick(venue)}>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">{venue.name}</div>
-                          {venue.phone && (
-                            <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                              <Phone className="w-3 h-3" />
-                              {venue.phone}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4" onClick={() => handleRowClick(venue)}>
-                        {venue.owner ? (
-                          <div>
-                            <div className="text-sm text-gray-900">{venue.owner.display_name}</div>
-                            <div className="text-xs text-gray-500">{venue.owner.email}</div>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-gray-400">No owner</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4" onClick={() => handleRowClick(venue)}>
-                        <div className="text-sm text-gray-900">{venue.city || 'N/A'}</div>
-                        {venue.address && (
-                          <div className="text-xs text-gray-500 max-w-xs truncate">{venue.address}</div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4" onClick={() => handleRowClick(venue)}>
-                        <span className="text-sm text-gray-600">{venue.court_count} courts</span>
-                      </td>
-                      <td className="px-6 py-4" onClick={() => handleRowClick(venue)}>
-                        {getStatusBadge(venue)}
-                      </td>
-                      <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                        <div className="relative">
-                          <button
-                            onClick={() => setOpenDropdown(openDropdown === venue.id ? null : venue.id)}
-                            className="p-1 hover:bg-gray-100 rounded transition-colors"
-                          >
-                            <MoreVertical className="w-5 h-5 text-gray-400" />
-                          </button>
+                      </div>
 
-                          {openDropdown === venue.id && (
-                            <>
-                              <div
-                                className="fixed inset-0 z-10"
-                                onClick={() => setOpenDropdown(null)}
-                              />
-                              <div className={`absolute right-0 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1 ${index >= venues.length - 2 ? 'bottom-full mb-1' : 'mt-1'
-                                }`}>
-                                <button
-                                  onClick={() => {
-                                    loadVenueDetails(venue.id)
-                                    setOpenDropdown(null)
-                                  }}
-                                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                  View Details
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setSelectedVenue(venue)
-                                    setShowEditModal(true)
-                                    setOpenDropdown(null)
-                                  }}
-                                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                                >
-                                  <Edit className="w-4 h-4" />
-                                  Edit Venue
-                                </button>
-                                <button
-                                  onClick={() => handleToggleActive(venue.id, venue.is_active)}
-                                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                                >
-                                  {venue.is_active ? (
-                                    <>
-                                      <Ban className="w-4 h-4" />
-                                      Deactivate
-                                    </>
-                                  ) : (
-                                    <>
-                                      <CheckCircle className="w-4 h-4" />
-                                      Activate
-                                    </>
-                                  )}
-                                </button>
-                                <button
-                                  onClick={() => handleToggleVerified(venue.id, venue.is_verified)}
-                                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                                >
-                                  {venue.is_verified ? (
-                                    <>
-                                      <XCircle className="w-4 h-4" />
-                                      Unverify
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Shield className="w-4 h-4" />
-                                      Verify
-                                    </>
-                                  )}
-                                </button>
-                                <div className="my-1 border-t border-gray-200" />
-                                <button
-                                  onClick={() => {
-                                    setVenueToDelete(venue.id)
-                                    setShowDeleteModal(true)
-                                    setOpenDropdown(null)
-                                  }}
-                                  className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                  Delete
-                                </button>
+                      {/* Icon */}
+                      <div className="hidden sm:flex w-12 h-12 bg-primary/10 rounded-xl items-center justify-center shrink-0">
+                        <Building2 className="w-6 h-6 text-primary" />
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                          <div className="space-y-4 flex-1">
+                            <div className="flex items-center gap-3">
+                              <h3 className="text-lg font-bold text-gray-900 truncate">{venue.name}</h3>
+                              {getStatusBadge(venue)}
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                              {/* Location */}
+                              <div className="flex flex-col gap-1">
+                                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Location</span>
+                                <div className="flex items-start gap-2 text-sm text-gray-900">
+                                  <MapPin className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                                  <span className="truncate">{venue.city || 'N/A'}{venue.address ? ` • ${venue.address}` : ''}</span>
+                                </div>
                               </div>
-                            </>
-                          )}
+
+                              {/* Owner */}
+                              <div className="flex flex-col gap-1">
+                                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Owner</span>
+                                <div className="flex items-center gap-2 text-sm text-gray-900">
+                                  <User className="w-4 h-4 text-gray-400 shrink-0" />
+                                  <span className="truncate">
+                                    {venue.owner ? (venue.owner.display_name || venue.owner.email) : 'No owner'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Courts */}
+                              <div className="flex flex-col gap-1">
+                                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Courts</span>
+                                <div className="flex items-center gap-2 text-sm text-gray-900">
+                                  <span className="px-2.5 py-1 bg-gray-50 rounded-md font-medium text-gray-700 border border-gray-100">
+                                    {venue.court_count} court{venue.court_count !== 1 ? 's' : ''}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Contact */}
+                              {venue.phone && (
+                                <div className="flex flex-col gap-1">
+                                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Contact</span>
+                                  <div className="flex items-center gap-2 text-sm text-gray-900">
+                                    <Phone className="w-4 h-4 text-gray-400 shrink-0" />
+                                    <span className="truncate">{venue.phone}</span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Quick Actions */}
+                          <div className="flex items-center gap-1 shrink-0 bg-gray-50 p-1 rounded-lg border border-gray-100" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={() => loadVenueDetails(venue.id)}
+                              className="p-2 text-gray-500 hover:text-primary hover:bg-primary/10 rounded-md transition-colors"
+                              title="View Details"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedVenue(venue)
+                                setShowEditModal(true)
+                              }}
+                              className="p-2 text-gray-500 hover:text-primary hover:bg-primary/10 rounded-md transition-colors"
+                              title="Edit Venue"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+
+                            <div className="relative">
+                              <button
+                                onClick={() => setOpenDropdown(openDropdown === venue.id ? null : venue.id)}
+                                className={`p-2 rounded-md transition-colors ${openDropdown === venue.id ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200'}`}
+                              >
+                                <MoreVertical className="w-4 h-4" />
+                              </button>
+
+                              {openDropdown === venue.id && (
+                                <>
+                                  <div
+                                    className="fixed inset-0 z-10"
+                                    onClick={() => setOpenDropdown(null)}
+                                  />
+                                  <div className={`absolute right-0 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1 ${index >= venues.length - 2 ? 'bottom-full mb-1' : 'mt-1'}`}>
+                                    <button
+                                      onClick={() => handleToggleActive(venue.id, venue.is_active)}
+                                      className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                    >
+                                      {venue.is_active ? (
+                                        <>
+                                          <Ban className="w-4 h-4" />
+                                          Deactivate
+                                        </>
+                                      ) : (
+                                        <>
+                                          <CheckCircle className="w-4 h-4" />
+                                          Activate
+                                        </>
+                                      )}
+                                    </button>
+                                    <button
+                                      onClick={() => handleToggleVerified(venue.id, venue.is_verified)}
+                                      className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                    >
+                                      {venue.is_verified ? (
+                                        <>
+                                          <XCircle className="w-4 h-4" />
+                                          Unverify
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Shield className="w-4 h-4" />
+                                          Verify
+                                        </>
+                                      )}
+                                    </button>
+                                    <div className="my-1 border-t border-gray-200" />
+                                    <button
+                                      onClick={() => {
+                                        setVenueToDelete(venue.id)
+                                        setShowDeleteModal(true)
+                                        setOpenDropdown(null)
+                                      }}
+                                      className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                      Delete
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
 
-            {/* Pagination */}
-            <div className="flex-none border-t border-gray-200 px-6 py-4 bg-gray-50">
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-700">
-                  Showing <span className="font-medium">{venues.length > 0 ? ((currentPage - 1) * 20) + 1 : 0}</span> to{' '}
-                  <span className="font-medium">{Math.min(currentPage * 20, totalCount)}</span> of{' '}
-                  <span className="font-medium">{totalCount}</span> results
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                    Previous
-                  </button>
-                  <button
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                    className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Next
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
+            {/* Pagination Box */}
+            <div className="bg-white border border-gray-200 rounded-xl px-6 py-4 flex items-center justify-between">
+              <div className="text-sm text-gray-700">
+                Page <span className="font-medium">{currentPage}</span> of <span className="font-medium">{totalPages}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-sm text-gray-700"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Previous
+                </button>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-sm text-gray-700"
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
             </div>
           </>

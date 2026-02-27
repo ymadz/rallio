@@ -242,7 +242,7 @@ export function PendingCourtApprovals({ onApprovalComplete }: Props) {
                                     <button
                                         onClick={() => handleApprove(court)}
                                         disabled={processingId === court.id}
-                                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                                        className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
                                     >
                                         {processingId === court.id ? (
                                             <Loader2 className="w-4 h-4 animate-spin" />
