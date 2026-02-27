@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card'
 import { cancelReservationAction } from '@/app/actions/reservations'
 
 import { RescheduleModal } from '@/components/booking/reschedule-modal'
+import { CancelBookingModal } from '@/components/booking/cancel-booking-modal'
 import { useServerTime } from '@/hooks/use-server-time'
 import Link from 'next/link'
 
@@ -26,6 +27,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
   const [bookings, setBookings] = useState(initialBookings)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [reschedulingBooking, setReschedulingBooking] = useState<Booking | null>(null)
+  const [cancelModalBooking, setCancelModalBooking] = useState<Booking | null>(null)
   const [resumingPaymentId, setResumingPaymentId] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'today' | 'week'>('all')
   // activeTab state is now managed by the Tabs component, but we can track it if needed for filtering logic separate from rendering
@@ -97,74 +99,12 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     }
   }
 
-  const handleCancelBooking = async (booking: Booking) => {
-    const isPaid = booking.status === 'confirmed' && booking.amount_paid > 0
-    const nowTime = serverDate ? serverDate.getTime() : Date.now()
-    const hoursUntilStart = (new Date(booking.start_time).getTime() - nowTime) / (1000 * 60 * 60)
-    const isWithin24Hours = hoursUntilStart < 24
+  const handleCancelBooking = (booking: Booking) => {
+    setCancelModalBooking(booking)
+  }
 
-    // Different confirmation messages based on status
-    let confirmMessage = 'Are you sure you want to cancel this booking?'
-    if (isPaid && !isWithin24Hours) {
-      confirmMessage = 'This booking is paid. Cancelling will automatically request a refund. Continue?'
-    } else if (isPaid && isWithin24Hours) {
-      confirmMessage = 'Warning: Refunds are not available within 24 hours of booking time. Cancel anyway?'
-    }
-
-    if (!confirm(confirmMessage)) {
-      return
-    }
-
-    setCancellingId(booking.id)
-
-    try {
-      // If paid and eligible for refund, request refund first
-      if (isPaid && !isWithin24Hours) {
-        const { requestRefundAction } = await import('@/app/actions/refund-actions')
-        const refundResult = await requestRefundAction({
-          reservationId: booking.id,
-          reason: 'Cancelled by user',
-          reasonCode: 'requested_by_customer'
-        })
-
-        if (refundResult.success) {
-          // Refund requested successfully! Status is now pending_refund.
-          setBookings(prev => prev.map(b =>
-            b.id === booking.id ? { ...b, status: 'pending_refund' } : b
-          ))
-          setCancellingId(null)
-          return
-        } else {
-          console.warn('Refund request failed:', refundResult.error)
-          // If refund fails, we might still want to cancel? 
-          // Or alert user? Let's alert.
-          alert(`Refund request failed: ${refundResult.error || 'Unknown error'}.`)
-        }
-      }
-
-      // Cancel the booking (if not refunding or if refund failed but we proceed? No, stop if refund intent failed usually)
-      if (isPaid && !isWithin24Hours) {
-        // If we are here, refund action was attempted but logic above `return`ed if success.
-        // If failed, we probably stopped or continued? 
-        // Let's assume if refund failed components didn't return, we try to cancel reservation anyway?
-        // No, if refund failed, we should probably stop.
-        setCancellingId(null)
-        return
-      }
-
-      const result = await cancelReservationAction(booking.id)
-
-      if (result.success) {
-        setBookings((prev) => prev.map((b) => b.id === booking.id ? { ...b, status: 'cancelled' } : b))
-      } else {
-        alert(result.error || 'Failed to cancel booking')
-      }
-    } catch (error) {
-      console.error('Error cancelling booking:', error)
-      alert('Failed to cancel booking. Please try again.')
-    }
-
-    setCancellingId(null)
+  const handleRefundBooking = (booking: Booking) => {
+    setCancelModalBooking(booking)
   }
 
   const totalConfirmed = filteredBookings.filter((b) => b.status === 'confirmed').length
@@ -296,6 +236,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                   cancellingId={cancellingId}
                   onResumePayment={handleResumePayment}
                   onCancelBooking={handleCancelBooking}
+                  onRefundBooking={handleRefundBooking}
                   onReschedule={setReschedulingBooking}
                   setBookings={setBookings}
                 />
@@ -328,6 +269,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                   cancellingId={cancellingId}
                   onResumePayment={handleResumePayment}
                   onCancelBooking={handleCancelBooking}
+                  onRefundBooking={handleRefundBooking}
                   onReschedule={setReschedulingBooking}
                   setBookings={setBookings}
                 />
@@ -345,6 +287,26 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
           onSuccess={() => {
             setReschedulingBooking(null)
             router.refresh()
+          }}
+        />
+      )}
+
+      {cancelModalBooking && (
+        <CancelBookingModal
+          booking={cancelModalBooking}
+          isOpen={!!cancelModalBooking}
+          onClose={() => setCancelModalBooking(null)}
+          onCancelSuccess={() => {
+            setBookings((prev) => prev.map((b) =>
+              b.id === cancelModalBooking.id ? { ...b, status: 'cancelled' } : b
+            ))
+            setCancelModalBooking(null)
+          }}
+          onRefundSuccess={() => {
+            setBookings((prev) => prev.map((b) =>
+              b.id === cancelModalBooking.id ? { ...b, status: 'pending_refund' } : b
+            ))
+            setCancelModalBooking(null)
           }}
         />
       )}

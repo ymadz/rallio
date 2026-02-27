@@ -47,6 +47,12 @@ export async function rescheduleReservationAction(
         return { success: false, error: `Cannot reschedule a booking with status: ${booking.status}` }
     }
 
+    // 3b. 24-hour policy — cannot reschedule within 24 hours of start time
+    const hoursUntilStart = (new Date(booking.start_time).getTime() - Date.now()) / (1000 * 60 * 60)
+    if (hoursUntilStart < 24) {
+        return { success: false, error: 'Cannot reschedule within 24 hours of booking start time' }
+    }
+
     // 4. Calculate new time range
     const oldStart = new Date(booking.start_time)
     const oldEnd = new Date(booking.end_time)
@@ -121,7 +127,16 @@ export async function rescheduleReservationAction(
         .update({
             start_time: newStartISO,
             end_time: newEndISO,
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            metadata: {
+                ...booking.metadata,
+                rescheduled: true,
+                rescheduled_from: {
+                    start_time: booking.start_time,
+                    end_time: booking.end_time,
+                    rescheduled_at: new Date().toISOString()
+                }
+            }
         })
         .eq('id', bookingId)
 

@@ -123,8 +123,8 @@ async function getUserQueueSessions(userId: string) {
       start_time: qs.start_time,
       end_time: qs.end_time,
       status: mapQueueStatus(qs.status),
-      total_amount: 0,
-      amount_paid: 0,
+      total_amount: qs.metadata?.payment_required || 0,
+      amount_paid: qs.metadata?.payment_status === 'paid' ? (qs.metadata?.payment_required || 0) : 0,
       num_players: qs.max_players || 0,
       payment_type: 'full',
       notes: null,
@@ -138,6 +138,8 @@ async function getUserQueueSessions(userId: string) {
         queue_game_format: qs.game_format,
         queue_cost_per_game: qs.cost_per_game,
         queue_is_public: qs.is_public,
+        intended_payment_method: qs.metadata?.payment_method || 'cash',
+        is_queue_session_reservation: true,
       },
       // Queue session specific fields
       type: 'queue_session' as const,
@@ -155,6 +157,8 @@ function mapQueueStatus(queueStatus: string): string {
     case 'open':
     case 'active':
       return 'confirmed'
+    case 'pending_payment':
+      return 'pending_payment'
     case 'closed':
       return 'completed'
     case 'cancelled':
@@ -181,11 +185,20 @@ export default async function BookingsPage() {
   // Process queue sessions to ensure they have unique IDs if needed, but we use the reservation ID to deduplicate
   const queueSessionReservationIds = new Set(queueSessions.map(qs => qs.id))
 
+  // Enrich queue sessions with payments from the main reservations query
+  const enrichedQueueSessions = queueSessions.map(qs => {
+    const matchingBooking = bookings.find(b => b.id === qs.id)
+    return {
+      ...qs,
+      payments: matchingBooking?.payments || []
+    }
+  })
+
   // Filter out reservations that already exist as queue sessions
   const regularBookings = bookings.filter(b => !queueSessionReservationIds.has(b.id))
 
   // Merge and sort by start_time descending
-  const allBookings = [...regularBookings, ...queueSessions].sort(
+  const allBookings = [...regularBookings, ...enrichedQueueSessions].sort(
     (a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
   )
 

@@ -440,10 +440,45 @@ export async function createReservationAction(data: {
 
 /**
  * Server Action: Cancel a reservation
+ * Validates auth, ownership, status, and 24-hour policy
  */
 export async function cancelReservationAction(reservationId: string) {
   const supabase = await createClient()
 
+  // 1. Auth check
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return { success: false, error: 'Not authenticated' }
+  }
+
+  // 2. Fetch reservation and verify ownership
+  const { data: booking, error: fetchError } = await supabase
+    .from('reservations')
+    .select('id, user_id, status, start_time')
+    .eq('id', reservationId)
+    .single()
+
+  if (fetchError || !booking) {
+    return { success: false, error: 'Booking not found' }
+  }
+
+  if (booking.user_id !== user.id) {
+    return { success: false, error: 'You do not have permission to cancel this booking' }
+  }
+
+  // 3. Status check — only active bookings can be cancelled
+  const cancellableStatuses = ['pending_payment', 'pending', 'confirmed']
+  if (!cancellableStatuses.includes(booking.status)) {
+    return { success: false, error: `Cannot cancel a booking with status: ${booking.status}` }
+  }
+
+  // 4. 24-hour policy — cannot cancel within 24 hours of start time
+  const hoursUntilStart = (new Date(booking.start_time).getTime() - Date.now()) / (1000 * 60 * 60)
+  if (hoursUntilStart < 24) {
+    return { success: false, error: 'Cannot cancel within 24 hours of booking start time' }
+  }
+
+  // 5. Perform cancellation
   const { error } = await supabase
     .from('reservations')
     .update({

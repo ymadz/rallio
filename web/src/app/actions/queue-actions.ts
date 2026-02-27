@@ -82,10 +82,10 @@ export async function getQueueDetails(courtId: string) {
         )
       `)
       .eq('court_id', courtId)
-      .in('status', ['open', 'active'])
+      .in('status', ['open', 'active', 'pending_payment'])
       .order('created_at', { ascending: false })
       .limit(1)
-      .single()
+      .maybeSingle()
 
     if (sessionError) {
       console.error('[getQueueDetails] ❌ Database error:', sessionError)
@@ -192,6 +192,7 @@ export async function getQueueDetails(courtId: string) {
       players: QueueParticipantData[]
       userPosition: number | null
       estimatedWaitTime: number
+      organizerId: string
     } = {
       id: session.id,
       courtId: session.court_id,
@@ -210,6 +211,7 @@ export async function getQueueDetails(courtId: string) {
       players: formattedParticipants,
       userPosition,
       estimatedWaitTime,
+      organizerId: session.organizer_id,
     }
 
     console.log('[getQueueDetails] ✅ Queue fetched successfully:', {

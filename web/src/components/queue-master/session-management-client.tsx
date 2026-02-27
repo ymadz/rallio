@@ -397,7 +397,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         setSessionSummary(result.summary)
         setShowSummaryModal(true)
       } else {
-        router.push('/queue-master')
+        router.push('/bookings')
       }
     } catch (err: any) {
       alert(err.message || 'Failed to close session')
@@ -491,11 +491,11 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
           <h3 className="font-semibold text-gray-900 mb-2">Failed to Load Session</h3>
           <p className="text-sm text-gray-500 mb-4">{error}</p>
           <Link
-            href="/queue-master"
+            href="/bookings"
             className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to Dashboard
+            Back to Bookings
           </Link>
         </div>
       </div>
@@ -543,11 +543,11 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
       {/* Header */}
       <div className="mb-6">
         <Link
-          href="/queue-master"
+          href="/bookings"
           className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Dashboard</span>
+          <span>Back to Bookings</span>
         </Link>
 
         {/* Payment Required Alert */}
@@ -624,7 +624,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         <div className="flex items-center gap-3 mt-6 pt-6 border-t border-white/20">
           {(session.status === 'completed' || session.status === 'cancelled') ? (
             <Link
-              href={`/queue-master/sessions/${sessionId}/summary`}
+              href={`/bookings`}
               className="flex items-center gap-2 px-4 py-2 bg-white text-primary rounded-lg hover:bg-white/90 transition-colors font-medium"
             >
               <Trophy className="w-4 h-4" />
@@ -998,10 +998,10 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                   )}
 
                   <button
-                    onClick={() => router.push('/queue-master')}
+                    onClick={() => router.push('/bookings')}
                     className="w-full py-3 bg-primary text-white font-medium rounded-xl hover:bg-primary/90 transition-colors"
                   >
-                    Back to Dashboard
+                    Back to Bookings
                   </button>
                 </div>
               </div>

@@ -38,6 +38,7 @@ export interface QueueSession {
   currentPlayers: number
   startTime: Date  // Added startTime
   endTime: Date // Added endTime
+  organizerId?: string // Queue session organizer
   userGamesPlayed?: number // Games played by current user
   userAmountOwed?: number // Amount owed by current user
   currentMatch?: {
@@ -137,6 +138,7 @@ export function useQueue(courtId: string) {
         currentPlayers: queueData.currentPlayers,
         startTime: queueData.startTime,
         endTime: queueData.endTime,
+        organizerId: queueData.organizerId,
       }
 
       setQueue(transformedQueue)

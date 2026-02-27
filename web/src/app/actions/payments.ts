@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { createGCashCheckout, createMayaCheckout, getSource, createPayment } from '@/lib/paymongo'
 import { revalidatePath } from 'next/cache'
 import { getServerNow } from '@/lib/time-server'
@@ -151,10 +152,7 @@ export async function initiatePaymentAction(
 
     // Generate success/failed URLs
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    const isQueueSessionReservation = reservation.metadata?.is_queue_session_reservation === true
-    const successUrl = isQueueSessionReservation
-      ? `${baseUrl}/queue-master/payment/success?reservation=${reservationId}`
-      : `${baseUrl}/checkout/success?reservation=${reservationId}`
+    const successUrl = `${baseUrl}/checkout/success?reservation=${reservationId}`
     const failedUrl = `${baseUrl}/checkout/failed?reservation=${reservationId}`
 
     let checkoutUrl: string
@@ -370,7 +368,9 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
   error?: string
 }> {
   try {
-    const supabase = await createClient()
+    // Use service client to bypass RLS for payment fulfillment
+    // This ensures status updates always succeed regardless of policies
+    const supabase = createServiceClient()
 
     // Get the payment record
     const { data: payment, error: paymentError } = await supabase
@@ -626,7 +626,7 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
     console.error('Charge processing error:', error)
 
     // Clear processing flag on error
-    const supabase = await createClient()
+    const supabase = createServiceClient()
     const { data: payment } = await supabase
       .from('payments')
       .select('metadata')
@@ -658,17 +658,28 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
 /**
  * Helper to update associated Queue Session if it exists
  */
-async function updateQueueSessionStatus(reservationId: string, supabase: any) {
+async function updateQueueSessionStatus(reservationId: string, supabaseParam: any) {
   try {
+    console.log('[updateQueueSessionStatus] 🔄 Checking for Queue Session linked to reservation:', reservationId)
+
+    // Use service client for fulfillment to bypass RLS and ensure success
+    const supabase = createServiceClient()
+
     // Check if this reservation is for a queue session
-    const { data: queueSession } = await supabase
+    // Using a more robust JSON search
+    const { data: queueSession, error: fetchError } = await supabase
       .from('queue_sessions')
-      .select('id, status, metadata, start_time')
+      .select('id, status, metadata, start_time, court_id')
       .filter('metadata->>reservation_id', 'eq', reservationId)
-      .single()
+      .maybeSingle()
+
+    if (fetchError) {
+      console.error('[updateQueueSessionStatus] ❌ Error fetching queue session:', fetchError)
+      return
+    }
 
     if (queueSession) {
-      console.log('[updateQueueSessionStatus] 🔄 Found linked Queue Session:', queueSession.id)
+      console.log('[updateQueueSessionStatus] 🔄 Found linked Queue Session:', queueSession.id, 'Current status:', queueSession.status)
 
       // Activate and approve when payment is confirmed
       if (['pending_payment', 'pending_approval'].includes(queueSession.status)) {
@@ -697,9 +708,11 @@ async function updateQueueSessionStatus(reservationId: string, supabase: any) {
         } else {
           console.log(`[updateQueueSessionStatus] ✅ Queue Session set to '${newStatus}' successfully`)
           revalidatePath('/queue')
-          revalidatePath('/queue-master')
+          revalidatePath('/bookings')
+          revalidatePath(`/queue/${queueSession.court_id}`)
         }
       } else {
+        console.log('[updateQueueSessionStatus] ℹ️ Queue Session status is not pending_payment, just updating payment flags')
         // Just update payment status if already active (or other status)
         const { error: updateError } = await supabase
           .from('queue_sessions')
@@ -714,11 +727,16 @@ async function updateQueueSessionStatus(reservationId: string, supabase: any) {
 
         if (!updateError) {
           console.log('[updateQueueSessionStatus] ✅ Queue Session payment status updated')
+          revalidatePath('/bookings')
+        } else {
+          console.error('[updateQueueSessionStatus] ❌ Failed to update payment status:', updateError)
         }
       }
+    } else {
+      console.log('[updateQueueSessionStatus] ℹ️ No linked Queue Session found for reservation:', reservationId)
     }
   } catch (err) {
-    console.error('[updateQueueSessionStatus] Error checking queue session:', err)
+    console.error('[updateQueueSessionStatus] 🧨 Exception checking queue session:', err)
   }
 }
 
@@ -735,7 +753,8 @@ export async function processPaymentByReservationAction(reservationId: string): 
   console.log('[processPaymentByReservationAction] Starting for reservation:', reservationId)
 
   try {
-    const supabase = await createClient()
+    // Use service client to bypass RLS for payment fulfillment
+    const supabase = createServiceClient()
 
     // Get the most recent payment record for this reservation
     const { data: payment, error: paymentError } = await supabase

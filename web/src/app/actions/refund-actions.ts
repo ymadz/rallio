@@ -124,25 +124,6 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
       }
     }
 
-    if (paymentsError || !payments || payments.length === 0) {
-      // FALLBACK: If no direct payments, check for recurring group payments
-      if (reservation.recurrence_group_id) {
-        console.log('🔍 [requestRefundAction] No direct payment found, checking recurrence group:', reservation.recurrence_group_id)
-
-        const { data: groupPayments, error: groupError } = await supabase
-          .from('payments')
-          .select('*')
-          .contains('metadata', { recurrence_group_id: reservation.recurrence_group_id })
-          .in('status', ['paid', 'completed'])
-
-        if (groupPayments && groupPayments.length > 0) {
-          console.log('✅ [requestRefundAction] Found group payment:', groupPayments[0].id)
-          payments = groupPayments
-          // Clear error since we found a payment
-          paymentsError = null
-        }
-      }
-    }
 
     if (paymentsError || !payments || payments.length === 0) {
       console.error('❌ [requestRefundAction] No paid payments found:', paymentsError)
@@ -192,7 +173,9 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
     const paymongoPaymentId = paymentToRefund.external_id || paymentToRefund.metadata?.paymongo_payment?.id
 
     // For bulk payments, ensure we don't refund more than the reservation amount
-    const actualRefundAmount = Math.min(refundableAmount, reservation.amount_paid)
+    // reservation.amount_paid is in pesos, refundableAmount is in centavos — convert to same unit
+    const amountPaidCentavos = Math.round(reservation.amount_paid * 100)
+    const actualRefundAmount = Math.min(refundableAmount, amountPaidCentavos)
 
     // Create refund record form in database first
     const { data: refundRecord, error: insertError } = await supabase

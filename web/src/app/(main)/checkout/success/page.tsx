@@ -13,6 +13,7 @@ export default function PaymentSuccessPage() {
   const reservationId = searchParams.get('reservation')
   const [isQueueSession, setIsQueueSession] = useState(false)
   const [queueSessionId, setQueueSessionId] = useState<string | null>(null)
+  const [queueCourtId, setQueueCourtId] = useState<string | null>(null)
 
   const [processing, setProcessing] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -100,7 +101,7 @@ export default function PaymentSuccessPage() {
         // Check if reservation is linked to a queue session
         const { data: queueSession } = await supabase
           .from('queue_sessions')
-          .select('id')
+          .select('id, court_id')
           .filter('metadata->>reservation_id', 'eq', reservationId)
           .single()
 
@@ -108,6 +109,7 @@ export default function PaymentSuccessPage() {
           console.log('Found linked queue session:', queueSession.id)
           setIsQueueSession(true)
           setQueueSessionId(queueSession.id)
+          setQueueCourtId(queueSession.court_id)
         }
       } catch (err) {
         console.error('Error checking queue session:', err)
@@ -119,13 +121,13 @@ export default function PaymentSuccessPage() {
 
   // Auto-redirect for Queue Sessions
   useEffect(() => {
-    if (isQueueSession && queueSessionId && !processing && !error) {
+    if (isQueueSession && queueCourtId && !processing && !error) {
       const timer = setTimeout(() => {
-        router.push(`/queue-master/sessions/${queueSessionId}`)
+        router.push(`/queue/${queueCourtId}`)
       }, 2000) // 2 second delay to show success message
       return () => clearTimeout(timer)
     }
-  }, [isQueueSession, queueSessionId, processing, error, router])
+  }, [isQueueSession, queueCourtId, processing, error, router])
 
   if (processing) {
     return (
@@ -174,7 +176,7 @@ export default function PaymentSuccessPage() {
 
         <div className="space-y-3">
           {isQueueSession ? (
-            <Link href={queueSessionId ? `/queue-master/sessions/${queueSessionId}` : '/queue-master/sessions'} className="block">
+            <Link href={queueCourtId ? `/queue/${queueCourtId}` : '/bookings'} className="block">
               <Button className="w-full">Manage Session</Button>
             </Link>
           ) : (

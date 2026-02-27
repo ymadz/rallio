@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import { BookingReviewButton } from '@/components/venue/booking-review-button'
-import { RefundRequestButton } from '@/components/reservations/refund-request-button'
 
 // Redefining interface to avoid circular deps or complex exports for now
 export interface Booking {
@@ -63,6 +62,7 @@ interface BookingCardProps {
     cancellingId: string | null
     resumingPaymentId: string | null
     onCancelBooking: (booking: Booking) => void
+    onRefundBooking: (booking: Booking) => void
     onResumePayment: (booking: Booking, paymentMethod?: 'gcash' | 'paymaya') => void
     onReschedule: (booking: Booking) => void
     setBookings: React.Dispatch<React.SetStateAction<Booking[]>>
@@ -74,6 +74,7 @@ export function BookingCard({
     cancellingId,
     resumingPaymentId,
     onCancelBooking,
+    onRefundBooking,
     onResumePayment,
     onReschedule,
     setBookings
@@ -233,6 +234,18 @@ export function BookingCard({
                             Week {(booking.metadata.week_index ?? 0) + 1}/{booking.metadata.weeks_total}
                         </span>
                     )}
+                    {booking.metadata?.rescheduled && (
+                        <span className="px-3 py-1.5 rounded-full text-xs font-bold shadow-lg bg-blue-100 text-blue-700 border border-blue-200 flex items-center gap-1">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                            Rescheduled
+                        </span>
+                    )}
+                    {booking.status === 'refunded' && (
+                        <span className="px-3 py-1.5 rounded-full text-xs font-bold shadow-lg bg-gray-100 text-gray-600 border border-gray-200 flex items-center gap-1">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                            Refunded
+                        </span>
+                    )}
                 </div>
             </div>
 
@@ -326,17 +339,17 @@ export function BookingCard({
                         bookingStatus={booking.status}
                     />
 
-                    {booking.status === 'confirmed' && booking.amount_paid > 0 && (
-                        <RefundRequestButton
-                            reservationId={booking.id}
-                            status={booking.status}
-                            amountPaid={booking.amount_paid * 100}
-                            totalAmount={booking.total_amount * 100}
-                            startTime={booking.start_time}
-                            onRefundRequested={() => {
-                                setBookings((prev) => prev.map((b) => b.id === booking.id ? { ...b, status: 'pending_refund' } : b))
-                            }}
-                        />
+                    {/* Refund button for paid confirmed bookings (>24h) */}
+                    {booking.status === 'confirmed' && booking.amount_paid > 0 && canCancelBooking(booking) && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onRefundBooking(booking)}
+                            className="w-full text-orange-600 border-orange-200 hover:bg-orange-50 hover:text-orange-700"
+                        >
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                            Request Refund
+                        </Button>
                     )}
 
                     {booking.status === 'pending_refund' && (
@@ -395,7 +408,7 @@ export function BookingCard({
                         {booking.type === 'queue_session' && booking.queue_session_id ? (
                             /* Queue Session Actions */
                             <>
-                                <Link href={`/queue-master/sessions/${booking.queue_session_id}`} className="flex-1">
+                                <Link href={`/queue/${booking.courts?.id}`} className="flex-1">
                                     <Button className="w-full h-10 bg-indigo-600 hover:bg-indigo-700 text-white" size="sm">
                                         <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -447,27 +460,30 @@ export function BookingCard({
                                             Reschedule
                                         </Button>
 
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => onCancelBooking(booking)}
-                                            disabled={cancellingId === booking.id}
-                                            className="flex-1 h-10 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors"
-                                        >
-                                            {cancellingId === booking.id ? (
-                                                <>
-                                                    <Spinner className="w-4 h-4 mr-2" />
-                                                    Please wait...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                    </svg>
-                                                    Cancel
-                                                </>
-                                            )}
-                                        </Button>
+                                        {/* Show Cancel for unpaid, nothing extra for paid (refund button is above) */}
+                                        {!(booking.status === 'confirmed' && booking.amount_paid > 0) && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => onCancelBooking(booking)}
+                                                disabled={cancellingId === booking.id}
+                                                className="flex-1 h-10 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors"
+                                            >
+                                                {cancellingId === booking.id ? (
+                                                    <>
+                                                        <Spinner className="w-4 h-4 mr-2" />
+                                                        Please wait...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                        </svg>
+                                                        Cancel
+                                                    </>
+                                                )}
+                                            </Button>
+                                        )}
                                     </>
                                 )}
                             </>
@@ -480,7 +496,7 @@ export function BookingCard({
                     )}
                 </div>
 
-                {!canCancelBooking(booking) && booking.status !== 'cancelled' && (
+                {!canCancelBooking(booking) && !['cancelled', 'refunded', 'pending_refund', 'completed'].includes(booking.status) && (
                     <p className="text-xs text-gray-500 mt-2 text-center">
                         Cannot cancel or reschedule within 24 hours of booking
                     </p>

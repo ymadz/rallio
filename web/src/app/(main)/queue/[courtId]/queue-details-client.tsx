@@ -9,6 +9,7 @@ import { QueueStatusBadge } from '@/components/queue/queue-status-badge'
 import { QueuePositionTracker } from '@/components/queue/queue-position-tracker'
 import { PaymentSummaryWidget } from '@/components/queue/payment-summary-widget'
 import { MatchHistoryViewer } from '@/components/queue/match-history-viewer'
+import { SessionManagementClient } from '@/components/queue-master/session-management-client'
 
 import { Users, Clock, Activity, Loader2, AlertCircle, Trophy, Calendar } from 'lucide-react'
 import { useState, useEffect } from 'react'
@@ -156,6 +157,20 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
         </button>
       </div>
     )
+  }
+
+  // Wait for both queue data AND user ID before deciding which view to show
+  if (!currentUserId) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    )
+  }
+
+  // If the current user is the organizer, show the full session management UI
+  if (queue.organizerId === currentUserId) {
+    return <SessionManagementClient sessionId={queue.id} />
   }
 
   const isUserInQueue = queue.userPosition !== null
@@ -367,11 +382,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
             </div>
           )}
         </div>
-
-        {/* Join/Leave Queue Form */}
-
-
-        {/* Join/Leave Queue Form */}
+        {/* Join/Leave Queue Form - hidden from organizer */}
         {!isUserInQueue ? (
           <div className="bg-white border border-gray-200 rounded-xl p-6">
             <h3 className="font-semibold text-gray-900 mb-3">Join Queue</h3>

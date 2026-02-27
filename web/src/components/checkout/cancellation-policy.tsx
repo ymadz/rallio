@@ -8,19 +8,19 @@ export function CancellationPolicy() {
   const activeTab = paymentMethod || 'e-wallet'
 
   const eWalletPolicy = [
-    'You can cancel your booking anytime.',
-    'Refunds are only available within 7 days after full payment.',
-    'After 7 days, no refund will be issued.',
+    'Free cancellation up to 24 hours before your booking.',
+    'Cancellations within 24 hours of the booking start time are not eligible for a refund.',
+    'Refund requests require admin approval and are typically processed within 5-10 business days.',
     'For partial payments, only the amount paid will be refunded.',
-    "If the court manager cancels your booking, you'll receive a full refund regardless of the 7-day limit.",
+    "If the court manager cancels your booking, you'll receive a full refund regardless of the time limit.",
   ]
 
   const cashPolicy = [
-    'You can cancel your booking anytime before the scheduled time.',
-    'Refunds are only available within 7 days after full payment.',
-    'After 7 days, no refund will be issued.',
+    'Free cancellation up to 24 hours before your booking.',
+    'Cancellations within 24 hours of the booking start time are not eligible for a refund.',
+    'Refund requests require admin approval and are typically processed within 5-10 business days.',
     'For partial payments, only the amount paid will be refunded.',
-    "If the court manager cancels your booking, you'll receive a full refund regardless of the 7-day limit.",
+    "If the court manager cancels your booking, you'll receive a full refund regardless of the time limit.",
     'Cash refunds must be collected in person at the venue.',
   ]
 

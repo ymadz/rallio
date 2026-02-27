@@ -144,7 +144,7 @@ export function PaymentProcessing() {
 
           // If session requires approval, we stop here (no payment yet)
           if (sessionResult.requiresApproval) {
-            router.push('/queue-master/sessions') // Or success page?
+            router.push('/bookings')
             return
           }
 

@@ -57,6 +57,9 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
         }
     }
 
+    const isQueueSession = booking.metadata?.is_queue_session_reservation === true
+    const durationHours = (new Date(booking.end_time).getTime() - new Date(booking.start_time).getTime()) / 3600000
+
     return (
         <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
             <div className="max-w-2xl mx-auto">
@@ -67,8 +70,10 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
                 {/* Receipt Card */}
                 <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm print:border-none print:shadow-none">
                     {/* Header */}
-                    <div className="bg-gradient-to-r from-primary to-primary/80 text-white p-8 text-center print:bg-none print:text-black">
-                        <h1 className="text-2xl font-bold mb-2">Booking Receipt</h1>
+                    <div className={`bg-gradient-to-r ${isQueueSession ? 'from-indigo-500 to-indigo-600' : 'from-primary to-primary/80'} text-white p-8 text-center print:bg-none print:text-black`}>
+                        <h1 className="text-2xl font-bold mb-2">
+                            {isQueueSession ? 'Queue Session Receipt' : 'Booking Receipt'}
+                        </h1>
                         <p className="opacity-90">Thank you for your reservation</p>
                     </div>
 
@@ -115,7 +120,9 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
 
                             {/* Payment Info */}
                             <div>
-                                <h3 className="text-lg font-semibold text-gray-900 mb-3">Payment Details</h3>
+                                <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                                    {isQueueSession ? 'Queue Session Details' : 'Payment Details'}
+                                </h3>
                                 <div className="space-y-2 text-sm">
                                     <div className="flex justify-between py-2 border-b border-gray-100">
                                         <span className="text-gray-600">Rate per hour</span>
@@ -123,15 +130,28 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
                                     </div>
                                     <div className="flex justify-between py-2 border-b border-gray-100">
                                         <span className="text-gray-600">Duration</span>
-                                        <span className="font-medium">
-                                            {(new Date(booking.end_time).getTime() - new Date(booking.start_time).getTime()) / 3600000} hours
-                                        </span>
+                                        <span className="font-medium">{durationHours} hours</span>
                                     </div>
                                     <div className="flex justify-between py-2 border-b border-gray-100">
                                         <span className="text-gray-600">Payment Method</span>
                                         <span className="font-medium capitalize">{booking.payment_type || 'Cash'}</span>
                                     </div>
-                                    <div className="flex justify-between py-2 text-lg font-bold text-gray-900 mt-2">
+
+                                    {/* Queue Session Specific Details */}
+                                    {isQueueSession && (
+                                        <div className="my-4 p-4 bg-indigo-50/50 rounded-lg border border-indigo-100/50 space-y-2">
+                                            <div className="flex justify-between py-1">
+                                                <span className="text-gray-500">Mode</span>
+                                                <span className="font-medium capitalize text-gray-900">{booking.notes?.match(/Queue Session \((.*?)\)/)?.[1] || 'Casual'}</span>
+                                            </div>
+                                            <div className="flex justify-between py-1">
+                                                <span className="text-gray-500">Max Players</span>
+                                                <span className="font-medium text-gray-900">{booking.num_players} players</span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="flex justify-between py-2 border-t border-gray-200 text-lg font-bold text-gray-900 mt-2">
                                         <span>Total Amount</span>
                                         <span>₱{booking.total_amount.toFixed(2)}</span>
                                     </div>
