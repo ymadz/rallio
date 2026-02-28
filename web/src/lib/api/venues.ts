@@ -895,14 +895,16 @@ export function formatDistance(km: number): string {
 export function isVenueOpen(openingHours: Record<string, { open: string; close: string }> | null): boolean {
   if (!openingHours) return false
 
-  const now = new Date()
+  // Get current time in Manila timezone
+  const manilaNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }))
+
   const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
-  const today = dayNames[now.getDay()]
+  const today = dayNames[manilaNow.getDay()]
 
   const todayHours = openingHours[today]
   if (!todayHours) return false
 
-  const currentTime = now.getHours() * 100 + now.getMinutes()
+  const currentTime = manilaNow.getHours() * 100 + manilaNow.getMinutes()
   const openTime = parseInt(todayHours.open.replace(':', ''))
   const closeTime = parseInt(todayHours.close.replace(':', ''))
 
@@ -915,9 +917,9 @@ export function isVenueOpen(openingHours: Record<string, { open: string; close: 
 export function formatOperatingHours(openingHours: Record<string, { open: string; close: string }> | null): string {
   if (!openingHours) return 'Hours not available'
 
-  const now = new Date()
+  const manilaNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }))
   const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
-  const today = dayNames[now.getDay()]
+  const today = dayNames[manilaNow.getDay()]
 
   const todayHours = openingHours[today]
   if (!todayHours) return 'Closed today'
