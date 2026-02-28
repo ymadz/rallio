@@ -115,17 +115,37 @@ async function getUserQueueSessions(userId: string) {
     return []
   }
 
+  // Fetch linked reservations to get accurate status
+  const reservationIds = (data || [])
+    .map((qs: any) => qs.metadata?.reservation_id)
+    .filter(Boolean)
+
+  const { data: linkedReservations } = await supabase
+    .from('reservations')
+    .select('id, status, total_amount, amount_paid, payment_method')
+    .in('id', reservationIds)
+
+  const reservationMap = new Map(
+    (linkedReservations || []).map((r: any) => [r.id, r])
+  )
+
   // Normalize queue sessions into the Booking shape
-  // reservation_id is inside metadata JSON, not a top-level column
   const queueSessions = (data || []).map((qs: any) => {
     const reservationId = qs.metadata?.reservation_id || null
+    const linkedReservation = reservationId ? reservationMap.get(reservationId) : null
+
+    // Use the actual reservation status if available, otherwise map from queue session status
+    const actualStatus = linkedReservation?.status || mapQueueStatus(qs.status)
+    const actualTotalAmount = linkedReservation?.total_amount || qs.metadata?.payment_required || 0
+    const actualAmountPaid = linkedReservation?.amount_paid || (qs.metadata?.payment_status === 'paid' ? actualTotalAmount : 0)
+
     return {
       id: reservationId || qs.id,
       start_time: qs.start_time,
       end_time: qs.end_time,
-      status: mapQueueStatus(qs.status),
-      total_amount: qs.metadata?.payment_required || 0,
-      amount_paid: qs.metadata?.payment_status === 'paid' ? (qs.metadata?.payment_required || 0) : 0,
+      status: actualStatus,
+      total_amount: actualTotalAmount,
+      amount_paid: actualAmountPaid,
       num_players: qs.max_players || 0,
       payment_type: 'full',
       notes: null,
@@ -139,7 +159,7 @@ async function getUserQueueSessions(userId: string) {
         queue_game_format: qs.game_format,
         queue_cost_per_game: qs.cost_per_game,
         queue_is_public: qs.is_public,
-        intended_payment_method: qs.metadata?.payment_method || 'cash',
+        intended_payment_method: linkedReservation?.payment_method || qs.metadata?.payment_method || 'cash',
         is_queue_session_reservation: true,
       },
       // Queue session specific fields

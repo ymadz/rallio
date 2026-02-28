@@ -19,7 +19,7 @@ export interface QueueSessionData {
   courtName: string
   venueName: string
   venueId: string
-  status: 'pending_payment' | 'open' | 'active' | 'completed' | 'cancelled'
+  status: 'pending_payment' | 'open' | 'active' | 'paused' | 'completed' | 'cancelled'
   currentPlayers: number
   maxPlayers: number
   costPerGame: number
@@ -550,7 +550,7 @@ export async function getMyQueueHistory() {
     const history = (participations || [])
       .filter((p: any) => {
         const isLeft = p.status === 'left'
-        const isSessionClosed = ['closed', 'cancelled'].includes(p.queue_sessions?.status)
+        const isSessionClosed = ['completed', 'cancelled'].includes(p.queue_sessions?.status)
         const isSessionEnded = new Date(p.queue_sessions?.end_time) < serverNow
         return isLeft || isSessionClosed || isSessionEnded
       })
@@ -928,16 +928,22 @@ export async function createQueueSession(data: {
     const targetDates: Date[] = []
 
     // Interpret the input strings as Manila time
-    // Data passed from checkout-store is typically an ISO string or similar, but let's ensure it's treated correctly
-    // If it's pure ISO without TZ, we might need to append +08:00. Let's assume it has +08:00 based on checkout logic.
-    // If it doesn't, we append it.
-    const startStr = data.startTime.endsWith('Z') || data.startTime.includes('+')
-      ? data.startTime
-      : `${data.startTime}+08:00`
+    // Data passed from checkout-store can be either Date objects or ISO strings
+    // Convert to ISO string first if needed, then ensure timezone suffix
+    const startTimeStr = data.startTime instanceof Date 
+      ? data.startTime.toISOString() 
+      : data.startTime
+    const endTimeStr = data.endTime instanceof Date 
+      ? data.endTime.toISOString() 
+      : data.endTime
 
-    const endStr = data.endTime.endsWith('Z') || data.endTime.includes('+')
-      ? data.endTime
-      : `${data.endTime}+08:00`
+    const startStr = startTimeStr.endsWith('Z') || startTimeStr.includes('+')
+      ? startTimeStr
+      : `${startTimeStr}+08:00`
+
+    const endStr = endTimeStr.endsWith('Z') || endTimeStr.includes('+')
+      ? endTimeStr
+      : `${endTimeStr}+08:00`
 
     const startObj = new Date(startStr)
     const endObj = new Date(endStr)
@@ -1172,8 +1178,18 @@ export async function createQueueSession(data: {
 
       if (insertError || !session) {
         console.error('[createQueueSession] ❌ DB Insert Error:', insertError)
-        // Rollback reservation
-        await supabase.from('reservations').delete().eq('id', reservation.id)
+        // Rollback reservation using service client to bypass RLS policies
+        try {
+          const serviceClient = await createServiceClient()
+          const { error: deleteError } = await serviceClient.from('reservations').delete().eq('id', reservation.id)
+          if (deleteError) {
+            console.error('[createQueueSession] ❌ CRITICAL: Failed to rollback reservation after session insert error:', deleteError)
+          } else {
+            console.log(`[createQueueSession] ♻️ Successfully rolled back reservation ${reservation.id}`)
+          }
+        } catch (rollbackError) {
+          console.error('[createQueueSession] ❌ CRITICAL: Exception during reservation rollback:', rollbackError)
+        }
         return { success: false, error: `Failed to create session for ${sessionStart.toLocaleDateString()}: ${insertError?.message || 'Unknown error'}` }
       }
 
@@ -1634,11 +1650,19 @@ export async function closeQueueSession(sessionId: string): Promise<{
     // 5b. Also complete the linked reservation (belt-and-suspenders with DB trigger)
     const linkedReservationId = session.metadata?.reservation_id
     if (linkedReservationId) {
+      // Fetch existing reservation metadata so we can merge, not overwrite
+      const { data: existingRes } = await supabase
+        .from('reservations')
+        .select('metadata')
+        .eq('id', linkedReservationId)
+        .single()
+
       const { error: resError } = await supabase
         .from('reservations')
         .update({
           status: 'completed',
           metadata: {
+            ...(existingRes?.metadata || {}),
             auto_completed: {
               at: new Date().toISOString(),
               by: 'queue_master',
@@ -1648,7 +1672,7 @@ export async function closeQueueSession(sessionId: string): Promise<{
           },
         })
         .eq('id', linkedReservationId)
-        .in('status', ['confirmed', 'ongoing'])
+        .in('status', ['confirmed', 'partially_paid', 'ongoing'])
 
       if (resError) {
         console.error('[closeQueueSession] ⚠️ Failed to complete linked reservation:', resError)
@@ -1746,7 +1770,14 @@ export async function cancelQueueSession(
       return { success: false, error: 'Can only cancel pending or open sessions' }
     }
 
-    if (session.current_players > 0) {
+    // Check actual active participants (current_players column can get out of sync)
+    const { count: activeParticipantCount } = await supabase
+      .from('queue_participants')
+      .select('id', { count: 'exact', head: true })
+      .eq('queue_session_id', sessionId)
+      .is('left_at', null)
+
+    if ((activeParticipantCount ?? 0) > 0) {
       return {
         success: false,
         error: 'Cannot cancel session with active participants. Close the session instead.',
@@ -1776,14 +1807,22 @@ export async function cancelQueueSession(
     if (reservationId) {
       console.log('[cancelQueueSession] 🔄 Syncing cancellation with reservation:', reservationId)
       const adminDb = createServiceClient()
+
+      // Fetch existing reservation metadata so we can merge, not overwrite
+      const { data: existingRes } = await adminDb
+        .from('reservations')
+        .select('metadata')
+        .eq('id', reservationId)
+        .single()
+
       const { error: resError } = await adminDb
         .from('reservations')
         .update({
           status: 'cancelled',
-          updated_at: new Date().toISOString(),
+          cancelled_at: new Date().toISOString(),
+          cancellation_reason: reason,
           metadata: {
-            // Include cancellation info in reservation metadata too
-            ...(session.metadata || {}),
+            ...(existingRes?.metadata || {}),
             cancelled_at: new Date().toISOString(),
             cancellation_reason: reason,
             cancelled_by: user.id

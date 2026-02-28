@@ -94,6 +94,12 @@ export function BookingCard({
     const getPaymentStatus = (b: Booking) => {
         const isFullyPaid = b.amount_paid >= b.total_amount
 
+        // Check partially_paid status FIRST before other statuses
+        if (b.status === 'partially_paid') {
+            const remaining = b.total_amount - b.amount_paid
+            return { label: `Remaining Balance`, color: 'amber', needsPayment: true }
+        }
+
         if (['confirmed', 'ongoing', 'completed'].includes(b.status) && isFullyPaid) {
             return { label: 'Paid', color: 'green', needsPayment: false }
         }
@@ -102,10 +108,6 @@ export function BookingCard({
         }
         if (isCashBooking(b) && b.status === 'pending_payment') {
             return { label: 'Pay at Venue', color: 'blue', needsPayment: false }
-        }
-        if (b.status === 'partially_paid') {
-            const remaining = b.total_amount - b.amount_paid
-            return { label: `₱${remaining.toFixed(0)} Due at Venue`, color: 'amber', needsPayment: false }
         }
         const payment = b.payments?.[0]
         if (!payment) return { label: 'Payment Pending', color: 'yellow', needsPayment: true }
@@ -325,7 +327,7 @@ export function BookingCard({
                                 </span>
                             </div>
                             <div>
-                                <p className="text-gray-500 mb-1">Total Amount</p>
+                                <p className="text-gray-500 mb-1">Amount</p>
                                 <p className="font-bold text-gray-900">₱{booking.total_amount.toFixed(2)}</p>
                                 {booking.status === 'partially_paid' && booking.amount_paid > 0 && (
                                     <p className="text-xs text-amber-600 font-medium mt-0.5">
@@ -370,7 +372,7 @@ export function BookingCard({
                         </div>
                     )}
 
-                    {paymentStatus.needsPayment && !isCashBooking(booking) && booking.status !== 'partially_paid' && (
+                    {paymentStatus.needsPayment && (!isCashBooking(booking) || booking.status === 'partially_paid') && (
                         <Button
                             className="w-full bg-primary hover:bg-primary/90"
                             size="sm"
@@ -393,7 +395,7 @@ export function BookingCard({
                         </Button>
                     )}
 
-                    {isCashBooking(booking) && booking.status === 'pending_payment' && booking.amount_paid === 0 && booking.metadata?.down_payment_amount && (
+                    {isCashBooking(booking) && booking.status === 'pending_payment' && (
                         <Button
                             className="w-full bg-primary hover:bg-primary/90 mt-2"
                             size="sm"
@@ -410,30 +412,7 @@ export function BookingCard({
                                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                                     </svg>
-                                    Pay Down Payment (₱{Number(booking.metadata.down_payment_amount).toFixed(2)})
-                                </>
-                            )}
-                        </Button>
-                    )}
-
-                    {booking.status === 'partially_paid' && (
-                        <Button
-                            className="w-full bg-primary hover:bg-primary/90 mt-2"
-                            size="sm"
-                            onClick={() => onResumePayment(booking, 'gcash')}
-                            disabled={resumingPaymentId === booking.id}
-                        >
-                            {resumingPaymentId === booking.id ? (
-                                <>
-                                    <Spinner className="w-4 h-4 mr-2" />
-                                    Processing...
-                                </>
-                            ) : (
-                                <>
-                                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                                    </svg>
-                                    Pay Balance Online (₱{(booking.total_amount - booking.amount_paid).toFixed(2)})
+                                    Pay via E-Wallet
                                 </>
                             )}
                         </Button>
@@ -484,12 +463,7 @@ export function BookingCard({
                                             variant="outline"
                                             size="sm"
                                             onClick={() => onReschedule(booking)}
-                                            disabled={booking.metadata?.rescheduled === true}
-                                            title={booking.metadata?.rescheduled === true ? "This booking has already been rescheduled once" : undefined}
-                                            className={`flex-1 h-10 transition-colors ${booking.metadata?.rescheduled === true
-                                                    ? "border-gray-200 text-gray-400 bg-gray-50 hover:bg-gray-50 cursor-not-allowed"
-                                                    : "border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300"
-                                                }`}
+                                            className="flex-1 h-10 border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 transition-colors"
                                         >
                                             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />

@@ -73,28 +73,39 @@ BEGIN
 END;
 $$;
 
--- 4. Update reservation-queue conflict trigger to include 'partially_paid'
+-- 4. Update queue→reservation conflict trigger to include 'partially_paid'
+--    IMPORTANT: Must exclude reservations flagged as queue session reservations
+--    (is_queue_session_reservation = true) to prevent self-conflict when the
+--    queue session's own reservation is detected as an overlap.
 CREATE OR REPLACE FUNCTION prevent_queue_reservation_conflicts()
 RETURNS TRIGGER AS $$
 DECLARE
   conflict_count INTEGER;
   conflict_time TEXT;
 BEGIN
+  -- Check if queue session conflicts with any confirmed/pending reservations
+  -- EXCLUDE reservations that are for queue sessions (they have metadata flag)
   SELECT COUNT(*)
   INTO conflict_count
   FROM reservations
   WHERE court_id = NEW.court_id
-    AND status IN ('pending_payment', 'partially_paid', 'confirmed')
-    AND (start_time, end_time) OVERLAPS (NEW.start_time, NEW.end_time);
+    AND status IN ('pending_payment', 'partially_paid', 'confirmed', 'ongoing')
+    AND (start_time, end_time) OVERLAPS (NEW.start_time, NEW.end_time)
+    AND (metadata->>'is_queue_session_reservation' IS NULL 
+         OR metadata->>'is_queue_session_reservation' != 'true');
 
   IF conflict_count > 0 THEN
+    -- Get the conflicting time for better error message (with Manila timezone)
     SELECT
-      to_char(start_time, 'HH12:MI AM') || ' - ' || to_char(end_time, 'HH12:MI AM')
+      to_char(start_time AT TIME ZONE 'Asia/Manila', 'HH12:MI AM') || ' - ' || 
+      to_char(end_time AT TIME ZONE 'Asia/Manila', 'HH12:MI AM')
     INTO conflict_time
     FROM reservations
     WHERE court_id = NEW.court_id
-      AND status IN ('pending_payment', 'partially_paid', 'confirmed')
+      AND status IN ('pending_payment', 'partially_paid', 'confirmed', 'ongoing')
       AND (start_time, end_time) OVERLAPS (NEW.start_time, NEW.end_time)
+      AND (metadata->>'is_queue_session_reservation' IS NULL 
+           OR metadata->>'is_queue_session_reservation' != 'true')
     LIMIT 1;
 
     RAISE EXCEPTION 'Queue session conflicts with existing reservation (%). Court already booked during this time.', conflict_time
@@ -106,32 +117,44 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 5. Update reservation-queue conflict trigger (reservation side)
+-- 5. Update reservation→queue conflict trigger (reservation side)
+--    IMPORTANT: Must exclude the queue session that THIS reservation belongs to
+--    (identified by metadata->>'reservation_id' matching this reservation's ID)
+--    to allow the queue session's own reservation to be confirmed.
 CREATE OR REPLACE FUNCTION prevent_reservation_queue_conflicts()
 RETURNS TRIGGER AS $$
 DECLARE
   conflict_count INTEGER;
   conflict_time TEXT;
 BEGIN
-  IF NEW.status NOT IN ('pending_payment', 'partially_paid', 'confirmed') THEN
+  -- Only check for active/pending statuses
+  IF NEW.status NOT IN ('pending', 'confirmed', 'pending_payment', 'partially_paid') THEN
     RETURN NEW;
   END IF;
 
+  -- Check if reservation conflicts with any queue sessions
+  -- EXCLUDE the queue session that THIS reservation belongs to
+  -- (identified by metadata->>'reservation_id' matching this reservation's ID)
   SELECT COUNT(*)
   INTO conflict_count
   FROM queue_sessions
   WHERE court_id = NEW.court_id
     AND status IN ('pending_payment', 'open', 'active')
-    AND (start_time, end_time) OVERLAPS (NEW.start_time, NEW.end_time);
+    AND (start_time, end_time) OVERLAPS (NEW.start_time, NEW.end_time)
+    AND (metadata->>'reservation_id' IS NULL 
+         OR metadata->>'reservation_id' != NEW.id::text);
 
   IF conflict_count > 0 THEN
     SELECT
-      to_char(start_time, 'HH12:MI AM') || ' - ' || to_char(end_time, 'HH12:MI AM')
+      to_char(start_time AT TIME ZONE 'Asia/Manila', 'HH12:MI AM') || ' - ' || 
+      to_char(end_time AT TIME ZONE 'Asia/Manila', 'HH12:MI AM')
     INTO conflict_time
     FROM queue_sessions
     WHERE court_id = NEW.court_id
       AND status IN ('pending_payment', 'open', 'active')
       AND (start_time, end_time) OVERLAPS (NEW.start_time, NEW.end_time)
+      AND (metadata->>'reservation_id' IS NULL 
+           OR metadata->>'reservation_id' != NEW.id::text)
     LIMIT 1;
 
     RAISE EXCEPTION 'Reservation conflicts with existing queue session (%). Time slot reserved for queue.', conflict_time
