@@ -51,6 +51,7 @@ export interface VenueWithDetails {
   image_url?: string | null
   activeDiscountCount?: number
   hasActiveDiscounts?: boolean
+  activeDiscountLabels?: string[]
 }
 
 export interface CourtWithDetails {
@@ -439,27 +440,37 @@ async function processVenuesList(supabase: any, rawVenues: any[], latitude?: num
   // We can't easily join in the main query because discount_rules is not directly related to courts but venues
   // and we are already doing complex joins. A separate query is safer.
   let activeDiscountMap: Record<string, number> = {}
+  let activeDiscountLabelsMap: Record<string, string[]> = {}
   if (rawVenues.length > 0) {
     const venueIds = rawVenues.map(v => v.id)
 
-    // Count active discount rules per venue
+    // Fetch active discount rules per venue
     const { data: rules } = await supabase
       .from('discount_rules')
-      .select('venue_id')
+      .select('venue_id, name, discount_value, discount_unit')
       .in('venue_id', venueIds)
       .eq('is_active', true)
 
-    // Count active holiday pricing per venue
+    // Fetch active holiday pricing per venue
     const { data: holidays } = await supabase
       .from('holiday_pricing')
-      .select('venue_id')
+      .select('venue_id, name, price_multiplier')
       .in('venue_id', venueIds)
       .eq('is_active', true)
 
     venueIds.forEach(id => {
-      const ruleCount = rules?.filter((r: any) => r.venue_id === id).length || 0
-      const holidayCount = holidays?.filter((h: any) => h.venue_id === id).length || 0
-      activeDiscountMap[id] = ruleCount + holidayCount
+      const venueRules = rules?.filter((r: any) => r.venue_id === id) || []
+      const venueHolidays = holidays?.filter((h: any) => h.venue_id === id) || []
+      activeDiscountMap[id] = venueRules.length + venueHolidays.length
+      activeDiscountLabelsMap[id] = [
+        ...venueRules.map((r: any) =>
+          r.discount_unit === 'percent' ? `${r.discount_value}% OFF` : `₱${r.discount_value} OFF`
+        ),
+        ...venueHolidays.map((h: any) => {
+          if (h.price_multiplier < 1) return `${Math.round((1 - h.price_multiplier) * 100)}% OFF`
+          return `+${Math.round((h.price_multiplier - 1) * 100)}%`
+        }),
+      ]
     })
   }
 
@@ -524,6 +535,7 @@ async function processVenuesList(supabase: any, rawVenues: any[], latitude?: num
       location: venue.city || venue.address,
       activeDiscountCount: activeDiscountMap[venue.id] || 0,
       hasActiveDiscounts: (activeDiscountMap[venue.id] || 0) > 0,
+      activeDiscountLabels: activeDiscountLabelsMap[venue.id] || [],
     }
 
     // Calculate distance if coordinates provided
