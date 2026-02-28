@@ -42,7 +42,7 @@ export async function rescheduleReservationAction(
     }
 
     // 3. Verify status
-    const allowedStatuses = ['pending_payment', 'confirmed']
+    const allowedStatuses = ['pending_payment', 'partially_paid', 'confirmed']
     if (!allowedStatuses.includes(booking.status)) {
         return { success: false, error: `Cannot reschedule a booking with status: ${booking.status}` }
     }
@@ -75,7 +75,7 @@ export async function rescheduleReservationAction(
 
     // We can reuse the logic from getAvailableTimeSlots OR just query directly for conflicts
     // Query for conflicts excluding this ID
-    const conflictStatuses = ['pending_payment', 'confirmed', 'ongoing', 'pending_refund', 'completed', 'no_show']
+    const conflictStatuses = ['pending_payment', 'partially_paid', 'confirmed', 'ongoing', 'pending_refund', 'completed', 'no_show']
 
     const { data: conflicts, error: conflictError } = await adminDb
         .from('reservations')

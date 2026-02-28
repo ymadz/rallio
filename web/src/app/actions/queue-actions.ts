@@ -999,7 +999,7 @@ export async function createQueueSession(data: {
         .from('reservations')
         .select('id')
         .eq('court_id', data.courtId)
-        .in('status', ['pending_payment', 'confirmed', 'ongoing'])
+        .in('status', ['pending_payment', 'partially_paid', 'confirmed', 'ongoing'])
         .lt('start_time', sessionEnd.toISOString())
         .gt('end_time', sessionStart.toISOString())
 
