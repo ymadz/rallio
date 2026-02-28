@@ -498,7 +498,7 @@ export async function cancelReservationAction(reservationId: string) {
   }
 
   // 3. Status check — only active bookings can be cancelled
-  const cancellableStatuses = ['pending_payment', 'pending', 'confirmed']
+  const cancellableStatuses = ['pending_payment', 'pending', 'confirmed', 'partially_paid']
   if (!cancellableStatuses.includes(booking.status)) {
     return { success: false, error: `Cannot cancel a booking with status: ${booking.status}` }
   }

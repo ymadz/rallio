@@ -126,8 +126,8 @@ export async function rescheduleReservationAction(
     // However, direct API calls could bypass.
     // MVP: Skip.
 
-    // 7. Update Reservation
-    const { error: updateError } = await supabase
+    // 7. Update Reservation using SERVICE CLIENT to bypass RLS
+    const { error: updateError } = await adminDb
         .from('reservations')
         .update({
             start_time: newStartISO,

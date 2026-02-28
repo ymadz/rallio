@@ -133,8 +133,8 @@ export function PaymentProcessing() {
 
           const sessionResult = await createQueueSession({
             courtId: bookingData.courtId,
-            startTime: startDateTime,
-            endTime: endDateTime,
+            startTime: startTimeISO,
+            endTime: endTimeISO,
             mode: bookingData.queueSessionData.mode,
             gameFormat: bookingData.queueSessionData.gameFormat,
             maxPlayers: bookingData.queueSessionData.maxPlayers,

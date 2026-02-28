@@ -806,8 +806,8 @@ export async function getQueueMasterHistory() {
  */
 export async function createQueueSession(data: {
   courtId: string
-  startTime: Date
-  endTime: Date
+  startTime: string
+  endTime: string
   mode: 'casual' | 'competitive'
   gameFormat: 'singles' | 'doubles' | 'mixed'
   maxPlayers: number
@@ -875,7 +875,7 @@ export async function createQueueSession(data: {
     }
 
     // 3. Validate inputs (Basic)
-    if (new Date(data.endTime) <= new Date(data.startTime)) {
+    if (new Date(data.endTime).getTime() <= new Date(data.startTime).getTime()) {
       return { success: false, error: 'End time must be after start time' }
     }
     if (data.costPerGame < 0) {
@@ -926,24 +926,38 @@ export async function createQueueSession(data: {
     // --- LOOP START ---
     // Generate all target dates first
     const targetDates: Date[] = []
-    const startObj = new Date(data.startTime)
-    // Normalize to start of day for safer comparisons if needed, 
-    // but here we need exact times.
+
+    // Interpret the input strings as Manila time
+    // Data passed from checkout-store is typically an ISO string or similar, but let's ensure it's treated correctly
+    // If it's pure ISO without TZ, we might need to append +08:00. Let's assume it has +08:00 based on checkout logic.
+    // If it doesn't, we append it.
+    const startStr = data.startTime.endsWith('Z') || data.startTime.includes('+')
+      ? data.startTime
+      : `${data.startTime}+08:00`
+
+    const endStr = data.endTime.endsWith('Z') || data.endTime.includes('+')
+      ? data.endTime
+      : `${data.endTime}+08:00`
+
+    const startObj = new Date(startStr)
+    const endObj = new Date(endStr)
+    const durationMs = endObj.getTime() - startObj.getTime()
 
     // Determine the "anchored" days
-    // If selectedDays is provided, use it. Otherwise default to the start day.
+    // Get the Manila-equivalent representation to correctly find the day of the week
+    const manilaStartObj = new Date(startObj.getTime() + 8 * 60 * 60 * 1000)
+    const startDayIndex = manilaStartObj.getUTCDay() // 0-6 (Sun-Sat) in Manila
+
     const daysToBook = data.selectedDays && data.selectedDays.length > 0
       ? data.selectedDays
-      : [startObj.getDay()]
-
-    const startDayIndex = startObj.getDay()
+      : [startDayIndex]
 
     for (let i = 0; i < recurrenceWeeks; i++) {
       for (const dayIndex of daysToBook) {
         const dayOffset = (dayIndex - startDayIndex + 7) % 7
 
-        const targetStart = new Date(startObj.getTime())
-        targetStart.setDate(targetStart.getDate() + (i * 7) + dayOffset)
+        // Use precise ms offsets rather than error-prone local Date methods
+        const targetStart = new Date(startObj.getTime() + dayOffset * 24 * 60 * 60 * 1000 + i * 7 * 24 * 60 * 60 * 1000)
 
         targetDates.push(targetStart)
       }
@@ -953,31 +967,35 @@ export async function createQueueSession(data: {
       return { success: false, error: 'No valid future dates selected.' }
     }
 
-
     // Pre-validation Loop
     for (const sessionStart of targetDates) {
-      const sessionEnd = new Date(sessionStart)
-      sessionEnd.setTime(sessionStart.getTime() + (new Date(data.endTime).getTime() - new Date(data.startTime).getTime()))
+      const sessionEnd = new Date(sessionStart.getTime() + durationMs)
 
       // Validate against venue hours
       const openingHours = venue?.opening_hours as Record<string, { open: string; close: string }> | null
+
+      // Calculate Manila time instances for this specific session iteration
+      const manilaStart = new Date(sessionStart.getTime() + 8 * 60 * 60 * 1000)
+      const manilaEnd = new Date(sessionEnd.getTime() + 8 * 60 * 60 * 1000)
+
       if (openingHours) {
         const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
-        const dayOfWeek = dayNames[sessionStart.getDay()]
+        const dayOfWeek = dayNames[manilaStart.getUTCDay()]
         const dayHours = openingHours[dayOfWeek]
 
         if (!dayHours) {
-          return { success: false, error: `Venue is closed on ${dayOfWeek} (${sessionStart.toLocaleDateString()})` }
+          const formattedDate = `${manilaStart.getUTCMonth() + 1}/${manilaStart.getUTCDate()}/${manilaStart.getUTCFullYear()}`
+          return { success: false, error: `Venue is closed on ${dayOfWeek} (${formattedDate})` }
         }
 
         // Parse open/close times
         const [openH, openM] = dayHours.open.split(':').map(Number)
         const [closeH, closeM] = dayHours.close.split(':').map(Number)
 
-        const sessionStartH = sessionStart.getHours()
-        const sessionStartM = sessionStart.getMinutes()
-        const sessionEndH = sessionEnd.getHours()
-        const sessionEndM = sessionEnd.getMinutes()
+        const sessionStartH = manilaStart.getUTCHours()
+        const sessionStartM = manilaStart.getUTCMinutes()
+        const sessionEndH = manilaEnd.getUTCHours()
+        const sessionEndM = manilaEnd.getUTCMinutes()
 
         const sessionStartMinutes = sessionStartH * 60 + sessionStartM
         const sessionEndMinutes = sessionEndH * 60 + sessionEndM
@@ -986,7 +1004,7 @@ export async function createQueueSession(data: {
 
         // Allow tight fitting? Usually yes.
         if (sessionStartMinutes < openMinutes || sessionEndMinutes > closeMinutes) {
-          const timeStr = sessionStart.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+          const timeStr = `${sessionStartH % 12 || 12}:${sessionStartM.toString().padStart(2, '0')} ${sessionStartH >= 12 ? 'PM' : 'AM'}`
           return {
             success: false,
             error: `Venue is closed at ${timeStr} on ${dayOfWeek}s (Open: ${dayHours.open} - ${dayHours.close})`
@@ -1004,17 +1022,27 @@ export async function createQueueSession(data: {
         .gt('end_time', sessionStart.toISOString())
 
       if (conflicts && conflicts.length > 0) {
-        return { success: false, error: `Conflict detected for ${sessionStart.toLocaleDateString()} at ${sessionStart.toLocaleTimeString()}` }
+        const formattedDate = `${manilaStart.getUTCMonth() + 1}/${manilaStart.getUTCDate()}/${manilaStart.getUTCFullYear()}`
+
+        const sh = manilaStart.getUTCHours()
+        const sm = manilaStart.getUTCMinutes()
+        const startTimeStr = `${sh % 12 || 12}:${sm.toString().padStart(2, '0')} ${sh >= 12 ? 'PM' : 'AM'}`
+
+        const eh = manilaEnd.getUTCHours()
+        const em = manilaEnd.getUTCMinutes()
+        const endTimeStr = `${eh % 12 || 12}:${em.toString().padStart(2, '0')} ${eh >= 12 ? 'PM' : 'AM'}`
+
+        return { success: false, error: `Conflict detected for ${formattedDate}: Queue session overlaps with existing reservation (${startTimeStr} - ${endTimeStr}). Court already booked during this time.` }
       }
     }
 
     // Creation Loop
+    let isDownPaymentRequired = false;
+
     for (const sessionStart of targetDates) {
-      const sessionEnd = new Date(sessionStart)
-      sessionEnd.setTime(sessionStart.getTime() + (new Date(data.endTime).getTime() - new Date(data.startTime).getTime()))
+      const sessionEnd = new Date(sessionStart.getTime() + durationMs)
 
       // Calculate base payment amounts
-      const durationMs = sessionEnd.getTime() - sessionStart.getTime()
       const durationHours = durationMs / (1000 * 60 * 60)
       const baseCourtRental = court.hourly_rate * durationHours
 
@@ -1054,6 +1082,10 @@ export async function createQueueSession(data: {
       const venueMetadata = venueData ? (Array.isArray(venueData) ? venueData[0]?.metadata : venueData.metadata) : null;
       const downPaymentPercentage = parseFloat(venueMetadata?.down_payment_percentage || '20')
       const downPaymentAmount = data.paymentMethod === 'cash' ? (totalAmount * downPaymentPercentage) / 100 : undefined;
+
+      if (downPaymentAmount && downPaymentAmount > 0 && data.paymentMethod === 'cash') {
+        isDownPaymentRequired = true;
+      }
 
       // Calculate cash payment deadline for queue session reservations
       let cashPaymentDeadline: string | null = null
@@ -1208,7 +1240,7 @@ export async function createQueueSession(data: {
       session: firstSessionData,
       sessions: createdSessions,
       // For queue sessions, payment is always required initially, but we specify if a down payment applies to cash
-      downPaymentRequired: data.paymentMethod === 'cash' && (firstSessionData.totalCost || 0) > 0 && firstSessionData.paymentStatus !== 'paid',
+      downPaymentRequired: isDownPaymentRequired && firstSessionData.paymentStatus !== 'paid',
       // Note: we'd need downPaymentAmount from the metadata to return it cleanly, but we can extract it or pass it.
       // Wait, let's just grab it from the metadata.
       // Actually queue session `totalCost` isn't the down payment. Let's return what we know.
@@ -1320,7 +1352,6 @@ export async function updateQueueSession(
         )
       `)
       .single()
-
     if (updateError || !updatedSession) {
       console.error('[updateQueueSession] ❌ Failed to update session:', updateError)
       return { success: false, error: updateError?.message || 'Failed to update queue session' }
@@ -1342,6 +1373,23 @@ export async function updateQueueSession(
       createdAt: new Date(updatedSession.created_at),
       mode: updatedSession.mode,
       gameFormat: updatedSession.game_format,
+    }
+
+    // 7b. Sync with linked reservation if time was updated
+    if (updates.startTime || updates.endTime) {
+      const reservationId = updatedSession.metadata?.reservation_id
+      if (reservationId) {
+        console.log('[updateQueueSession] 🔄 Syncing time with reservation:', reservationId)
+        const adminDb = createServiceClient()
+        await adminDb
+          .from('reservations')
+          .update({
+            start_time: updatedSession.start_time,
+            end_time: updatedSession.end_time,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', reservationId)
+      }
     }
 
     console.log('[updateQueueSession] ✅ Queue session updated successfully')
@@ -1721,6 +1769,31 @@ export async function cancelQueueSession(
     if (updateError) {
       console.error('[cancelQueueSession] ❌ Failed to cancel session:', updateError)
       return { success: false, error: 'Failed to cancel queue session' }
+    }
+
+    // 4b. Sync with linked reservation
+    const reservationId = session.metadata?.reservation_id
+    if (reservationId) {
+      console.log('[cancelQueueSession] 🔄 Syncing cancellation with reservation:', reservationId)
+      const adminDb = createServiceClient()
+      const { error: resError } = await adminDb
+        .from('reservations')
+        .update({
+          status: 'cancelled',
+          updated_at: new Date().toISOString(),
+          metadata: {
+            // Include cancellation info in reservation metadata too
+            ...(session.metadata || {}),
+            cancelled_at: new Date().toISOString(),
+            cancellation_reason: reason,
+            cancelled_by: user.id
+          }
+        })
+        .eq('id', reservationId)
+
+      if (resError) {
+        console.error('[cancelQueueSession] ⚠️ Failed to sync reservation cancellation:', resError)
+      }
     }
 
     console.log('[cancelQueueSession] ✅ Queue session cancelled successfully')

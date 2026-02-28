@@ -346,7 +346,7 @@ export function AvailabilityModal({
   }
 
   const handleBook = () => {
-    if (startSlot && !isBooking && validationState.valid) {
+    if (startSlot && !isBooking && validationState.valid && !isCalculatingPrice) {
       setIsBooking(true)
 
       try {
@@ -665,21 +665,6 @@ export function AvailabilityModal({
                     </div>
                   )}
 
-                  {calculatedPrice && calculatedPrice.discount !== 0 && (
-                    <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium mb-2 ${calculatedPrice.discount > 0
-                      ? 'bg-green-100 text-green-700 border border-green-200'
-                      : 'bg-orange-100 text-orange-700 border border-orange-200'
-                      }`}>
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={
-                          calculatedPrice.discount > 0
-                            ? "M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
-                            : "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                        } />
-                      </svg>
-                      {calculatedPrice.discount > 0 ? 'Discount Applied:' : 'Surcharge Applied:'} {calculatedPrice.appliedDiscountName}
-                    </div>
-                  )}
                   <div className="text-gray-600">
                     <span className="font-medium text-gray-900">Selected:</span>{' '}
                     {(() => {
@@ -722,18 +707,25 @@ export function AvailabilityModal({
                       }
                     })()}
                   </div>
-                  <p className="text-gray-600">
-                    {formatTime(startSlot.time)} - {formatTime(getEndTime())}
-                  </p>
-                  <div className="mt-1 flex items-baseline gap-2">
+                  {/* Price + Discount inline */}
+                  <div className="mt-1 flex items-center gap-2 flex-wrap">
                     {isCalculatingPrice ? (
-                      <span className="text-sm font-normal text-gray-400">Calculating...</span>
+                      <span className="text-sm font-normal text-gray-400 flex items-center gap-1.5">
+                        <span className="animate-spin inline-block w-3 h-3 border-2 border-gray-300 border-t-primary rounded-full" />
+                        Calculating price...
+                      </span>
                     ) : calculatedPrice ? (
                       <>
-                        <span className="text-lg font-bold text-primary">₱{Number(calculatedPrice.final || 0).toLocaleString()}</span>
                         {Number(calculatedPrice.discount) !== 0 && (
-                          <span className={`text-xs font-normal ${Number(calculatedPrice.discount) > 0 ? 'text-green-600' : 'text-orange-600'}`}>
-                            ({Number(calculatedPrice.discount) > 0 ? '-' : '+'}₱{Math.abs(Number(calculatedPrice.discount)).toLocaleString()})
+                          <span className="text-sm text-gray-400 line-through">₱{Number(calculatedPrice.original || 0).toLocaleString()}</span>
+                        )}
+                        <span className="text-lg font-bold text-primary">₱{Number(calculatedPrice.final || 0).toLocaleString()}</span>
+                        {calculatedPrice.discount !== 0 && calculatedPrice.appliedDiscountName && (
+                          <span className={`text-xs font-medium px-1.5 py-0.5 rounded inline-flex items-center gap-1 ${Number(calculatedPrice.discount) > 0 ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                            </svg>
+                            {calculatedPrice.appliedDiscountName}
                           </span>
                         )}
                       </>
@@ -775,7 +767,7 @@ export function AvailabilityModal({
               </button>
               <button
                 onClick={handleBook}
-                disabled={!startSlot || isBooking || !validationState.valid || validationState.validating}
+                disabled={!startSlot || isBooking || !validationState.valid || validationState.validating || isCalculatingPrice}
                 className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isBooking ? 'Processing...' : `Book (${duration} hr${duration > 1 ? 's' : ''})`}

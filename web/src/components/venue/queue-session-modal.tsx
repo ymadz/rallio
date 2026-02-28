@@ -6,7 +6,8 @@ import { DayPicker } from 'react-day-picker'
 import { format } from 'date-fns'
 import 'react-day-picker/dist/style.css'
 import { useCheckoutStore } from '@/stores/checkout-store'
-import { getAvailableTimeSlotsAction, validateBookingAvailabilityAction } from '@/app/actions/reservations'
+import { getAvailableTimeSlotsAction, validateBookingAvailabilityAction, getVenueMetadataAction } from '@/app/actions/reservations'
+import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
 import { cn } from '@/lib/utils'
 import { Label } from '@/components/ui/label'
 import {
@@ -45,7 +46,7 @@ export function QueueSessionModal({
     capacity
 }: QueueSessionModalProps) {
     const router = useRouter()
-    const { setBookingData } = useCheckoutStore()
+    const { setBookingData, setDiscountDetails, setDiscount, setDownPaymentPercentage } = useCheckoutStore()
     const [selectedDate, setSelectedDate] = useState<Date>(new Date())
     const [recurrenceWeeks, setRecurrenceWeeks] = useState<number>(1)
     const [selectedDays, setSelectedDays] = useState<number[]>([])
@@ -66,6 +67,15 @@ export function QueueSessionModal({
 
     // UI step: 'schedule' or 'settings'
     const [step, setStep] = useState<'schedule' | 'settings'>('schedule')
+
+    // Pricing state
+    const [calculatedPrice, setCalculatedPrice] = useState<{
+        original: number
+        final: number
+        discount: number
+        appliedDiscountName?: string
+    } | null>(null)
+    const [isCalculatingPrice, setIsCalculatingPrice] = useState(false)
 
     // Validation state
     const [validationState, setValidationState] = useState<{
@@ -101,6 +111,25 @@ export function QueueSessionModal({
         fetchTimeSlots()
     }, [selectedDate, courtId, isOpen])
 
+    // Fetch venue metadata (down payment percentage)
+    useEffect(() => {
+        async function fetchVenueMetadata() {
+            if (!venueId || !isOpen) return
+
+            try {
+                const result = await getVenueMetadataAction(venueId)
+                if (result.success && result.metadata) {
+                    const percentage = parseFloat((result.metadata as any).down_payment_percentage || '20')
+                    setDownPaymentPercentage(percentage)
+                }
+            } catch (error) {
+                console.error('Error fetching venue metadata:', error)
+            }
+        }
+
+        fetchVenueMetadata()
+    }, [venueId, isOpen, setDownPaymentPercentage])
+
     // Helpers
     const getDuration = (): number => {
         if (!startSlot) return 0
@@ -131,6 +160,82 @@ export function QueueSessionModal({
         const nextHour = hours + 1
         return `${nextHour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
     }
+
+    // Calculate pricing whenever slots or recurrence changes
+    useEffect(() => {
+        async function calculatePrice() {
+            if (!startSlot) {
+                setCalculatedPrice(null)
+                return
+            }
+
+            setIsCalculatingPrice(true)
+            const duration = getDuration()
+            const endTime = getEndTime()
+
+            // Calculate actual slots that will be created
+            const initialStartTime = new Date(selectedDate)
+            const [startH, startM] = startSlot.time.split(':')
+            initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
+            const startDayIndex = initialStartTime.getDay()
+
+            const uniqueSelectedDays = selectedDays.length > 0
+                ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
+                : [startDayIndex]
+
+            let actualSlotCount = 0
+            for (let i = 0; i < recurrenceWeeks; i++) {
+                for (const dayIndex of uniqueSelectedDays) {
+                    actualSlotCount++
+                }
+            }
+
+            const basePrice = (startSlot.price || hourlyRate) * duration * actualSlotCount
+
+            try {
+                const dateStr = format(selectedDate, 'yyyy-MM-dd')
+                const startDateTime = `${dateStr}T${startSlot.time}:00+08:00`
+                const endDateTime = `${dateStr}T${endTime}:00+08:00`
+
+                const result = await calculateApplicableDiscounts({
+                    venueId,
+                    courtId,
+                    startDate: startDateTime,
+                    endDate: endDateTime,
+                    recurrenceWeeks: Number(recurrenceWeeks),
+                    basePrice
+                })
+
+                if (result.success) {
+                    const discountName = result.discounts.length > 0 ? result.discounts[0].name : 'Seasonal Offer'
+
+                    setCalculatedPrice({
+                        original: basePrice,
+                        final: result.finalPrice,
+                        discount: result.totalDiscount,
+                        appliedDiscountName: discountName
+                    })
+                } else {
+                    setCalculatedPrice({
+                        original: basePrice,
+                        final: basePrice,
+                        discount: 0
+                    })
+                }
+            } catch (err) {
+                console.error("Price calc error", err)
+                setCalculatedPrice({
+                    original: basePrice,
+                    final: basePrice,
+                    discount: 0
+                })
+            } finally {
+                setIsCalculatingPrice(false)
+            }
+        }
+
+        calculatePrice()
+    }, [startSlot, endSlot, recurrenceWeeks, selectedDate, courtId, venueId, hourlyRate, selectedDays])
 
     // Validate recurring availability
     useEffect(() => {
@@ -252,6 +357,17 @@ export function QueueSessionModal({
                     isPublic,
                 },
             })
+
+            // Set discount details if calculated
+            if (calculatedPrice) {
+                setDiscountDetails({
+                    amount: calculatedPrice.discount,
+                    type: undefined,
+                    reason: calculatedPrice.discount > 0 ? 'Discount applied' : 'Surcharge applied'
+                })
+            } else {
+                setDiscount(0)
+            }
 
             router.push('/checkout')
         } catch (error) {
@@ -748,26 +864,53 @@ export function QueueSessionModal({
                                     <p className="text-gray-600">
                                         {formatTime(startSlot.time)} - {formatTime(getEndTime())}
                                     </p>
-                                    <p className="text-lg font-bold text-primary mt-1">
-                                        {(() => {
-                                            const initialStartTime = new Date(selectedDate)
-                                            const [startH, startM] = startSlot.time.split(':')
-                                            initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
-                                            const startDayIndex = initialStartTime.getDay()
-                                            const uniqueSelectedDays = selectedDays.length > 0
-                                                ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
-                                                : [startDayIndex]
+                                    {/* Price + Discount inline */}
+                                    <div className="mt-1 flex items-center gap-2 flex-wrap">
+                                        {isCalculatingPrice ? (
+                                            <span className="text-sm font-normal text-gray-400 flex items-center gap-1.5">
+                                                <span className="animate-spin inline-block w-3 h-3 border-2 border-gray-300 border-t-primary rounded-full" />
+                                                Calculating price...
+                                            </span>
+                                        ) : calculatedPrice ? (
+                                            <>
+                                                {Number(calculatedPrice.discount) !== 0 && (
+                                                    <span className="text-sm text-gray-400 line-through">₱{Number(calculatedPrice.original || 0).toLocaleString()}</span>
+                                                )}
+                                                <span className="text-lg font-bold text-primary">₱{Number(calculatedPrice.final || 0).toLocaleString()}</span>
+                                                {calculatedPrice.discount !== 0 && calculatedPrice.appliedDiscountName && (
+                                                    <span className={`text-xs font-medium px-1.5 py-0.5 rounded inline-flex items-center gap-1 ${Number(calculatedPrice.discount) > 0 ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                                                        </svg>
+                                                        {calculatedPrice.appliedDiscountName}
+                                                    </span>
+                                                )}
+                                            </>
+                                        ) : (
+                                            (() => {
+                                                const getDisplayBasePrice = () => {
+                                                    const initialStartTime = new Date(selectedDate)
+                                                    const [startH, startM] = startSlot.time.split(':')
+                                                    initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
+                                                    const startDayIndex = initialStartTime.getDay()
+                                                    const uniqueSelectedDays = selectedDays.length > 0
+                                                        ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
+                                                        : [startDayIndex]
 
-                                            let actualSlotCount = 0
-                                            for (let i = 0; i < recurrenceWeeks; i++) {
-                                                for (const dayIndex of uniqueSelectedDays) {
-                                                    actualSlotCount++
+                                                    let actualSlotCount = 0
+                                                    for (let i = 0; i < recurrenceWeeks; i++) {
+                                                        for (const dayIndex of uniqueSelectedDays) {
+                                                            actualSlotCount++
+                                                        }
+                                                    }
+                                                    return Number(hourlyRate * duration * actualSlotCount).toLocaleString()
                                                 }
-                                            }
-                                            return `₱${(hourlyRate * duration * actualSlotCount).toLocaleString()}`
-                                        })()}
-                                        {recurrenceWeeks > 1 && <span className="text-xs font-normal text-gray-500 ml-1">({recurrenceWeeks} weeks)</span>}
-                                    </p>
+                                                return <span className="text-lg font-bold text-primary">₱{getDisplayBasePrice()}</span>
+                                            })()
+                                        )}
+                                        {Number(recurrenceWeeks) > 1 && <span className="text-xs font-normal text-gray-500">({recurrenceWeeks} weeks)</span>}
+                                        {selectedDays.length > 1 && <span className="text-xs font-normal text-gray-500">({selectedDays.length} days/week)</span>}
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -790,7 +933,7 @@ export function QueueSessionModal({
                             {step === 'schedule' ? (
                                 <button
                                     onClick={handleContinueToSettings}
-                                    disabled={!startSlot || !validationState.valid || validationState.validating}
+                                    disabled={!startSlot || !validationState.valid || validationState.validating || isCalculatingPrice}
                                     className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                                 >
                                     Next: Game Settings
@@ -798,7 +941,7 @@ export function QueueSessionModal({
                             ) : (
                                 <button
                                     onClick={handleBook}
-                                    disabled={isBooking}
+                                    disabled={isBooking || isCalculatingPrice}
                                     className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                                 >
                                     {isBooking ? 'Processing...' : `Book Queue Session (${duration} hr${duration > 1 ? 's' : ''})`}

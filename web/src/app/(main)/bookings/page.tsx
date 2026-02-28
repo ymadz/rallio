@@ -61,10 +61,11 @@ async function getUserBookings(userId: string) {
     return []
   }
 
-  // Mark all as regular reservations
+  // Mark bookings accurately evaluating metadata for queue_sessions
   const reservations = (data || []).map((r: any) => ({
     ...r,
-    type: 'reservation' as const,
+    type: r.metadata?.is_queue_session_reservation ? 'queue_session' : ('reservation' as const),
+    queue_session_id: r.metadata?.queue_session_id || null, // fallback if needed
   }))
 
   return reservations

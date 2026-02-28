@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { createRefund, getRefund, getPayment } from '@/lib/paymongo'
 import { createNotification, NotificationTemplates } from '@/lib/notifications'
 import { revalidatePath } from 'next/cache'
@@ -177,14 +177,14 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
     const amountPaidCentavos = Math.round(reservation.amount_paid * 100)
     const actualRefundAmount = Math.min(refundableAmount, amountPaidCentavos)
 
-    // Create refund record form in database first
+    // 5. Create refund record
     const { data: refundRecord, error: insertError } = await supabase
       .from('refunds')
       .insert({
         payment_id: paymentToRefund.id,
         reservation_id: params.reservationId,
         user_id: user.id,
-        amount: Math.round(actualRefundAmount * 100), // Store in centavos
+        amount: Math.round(actualRefundAmount), // actualRefundAmount is already in centavos
         currency: 'PHP',
         status: 'pending',
         payment_external_id: paymongoPaymentId,
@@ -703,15 +703,22 @@ async function handleSuccessfulRefund(
   const supabase = createServiceClient()
 
   // Update reservation status
+  const { data: reservation } = await supabase
+    .from('reservations')
+    .select('metadata')
+    .eq('id', reservationId)
+    .single()
+
+  const currentMetadata = reservation?.metadata || {}
+
   await supabase
     .from('reservations')
     .update({
       status: 'refunded',
-      metadata: supabase.rpc('jsonb_set', {
-        target: 'metadata',
-        path: '{refunded_at}',
-        new_value: JSON.stringify(new Date().toISOString()),
-      })
+      metadata: {
+        ...currentMetadata,
+        refunded_at: new Date().toISOString()
+      }
     })
     .eq('id', reservationId)
 

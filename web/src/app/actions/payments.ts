@@ -447,14 +447,24 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
         console.log('Reservation ID:', payment.reservation_id)
         console.log('Current status:', reservation?.status)
 
-        // Update the reservation to the correct status
+        // For recurring down payments, use per-reservation share, not total payment
+        const { data: firstResMeta } = await supabase
+          .from('reservations')
+          .select('metadata')
+          .eq('id', payment.reservation_id)
+          .single()
+
+        const perResDownPayment = isDownPayment && firstResMeta?.metadata?.down_payment_amount
+          ? Number(firstResMeta.metadata.down_payment_amount)
+          : payment.amount
+
         const { error: updateError } = await supabase
           .from('reservations')
           .update({
             status: newReservationStatus,
-            amount_paid: newReservationStatus === 'confirmed' && !isDownPayment
-              ? (reservation?.amount_paid || 0) + payment.amount
-              : payment.amount,
+            amount_paid: isDownPayment
+              ? perResDownPayment
+              : (reservation?.amount_paid || 0) + payment.amount,
           })
           .eq('id', payment.reservation_id)
 
@@ -564,9 +574,21 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
       .eq('id', payment.reservation_id)
       .single()
 
-    const newAmountPaid = newReservationStatus === 'confirmed' && !isDownPayment
-      ? (currentRes?.amount_paid || 0) + payment.amount
-      : payment.amount
+    // For recurring down payments, use per-reservation share, not total payment
+    let newAmountPaid: number
+    if (isDownPayment) {
+      // Get the reservation metadata for this specific reservation's down payment share
+      const { data: firstResForMeta } = await supabase
+        .from('reservations')
+        .select('metadata')
+        .eq('id', payment.reservation_id)
+        .single()
+      newAmountPaid = firstResForMeta?.metadata?.down_payment_amount
+        ? Number(firstResForMeta.metadata.down_payment_amount)
+        : payment.amount
+    } else {
+      newAmountPaid = (currentRes?.amount_paid || 0) + payment.amount
+    }
 
     const { data: updatedReservation, error: reservationError } = await supabase
       .from('reservations')
@@ -636,7 +658,7 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
       // Fetch all other pending reservations in this group
       const { data: groupReservations, error: groupFetchError } = await supabase
         .from('reservations')
-        .select('id, total_amount')
+        .select('id, total_amount, metadata')
         .eq('recurrence_group_id', recurrenceGroupId)
         .neq('id', payment.reservation_id) // Exclude the one we just updated
         .in('status', ['pending_payment'])
