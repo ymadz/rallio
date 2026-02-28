@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { BookingTutorial } from '@/components/venue/booking-tutorial'
 
 interface TimeSlot {
   time: string
@@ -445,7 +446,7 @@ export function AvailabilityModal({
               {/* Calendar */}
               <div>
                 <h4 className="font-semibold text-gray-900 mb-3">Choose Date</h4>
-                <div className="border border-gray-200 rounded-xl p-4">
+                <div data-tutorial-step="1" className="border border-gray-200 rounded-xl p-4">
                   <DayPicker
                     mode="single"
                     selected={selectedDate}
@@ -476,7 +477,7 @@ export function AvailabilityModal({
                 </div>
 
                 {/* Recurrence Selection */}
-                <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <div data-tutorial-step="3" className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
                   <div className="flex items-center gap-2 mb-2">
                     <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -513,7 +514,7 @@ export function AvailabilityModal({
 
                 {/* Multi-Day Selection */}
                 {recurrenceWeeks >= 1 && (
-                  <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <div data-tutorial-step="4" className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-xl">📅</span>
                       <Label className="text-sm font-semibold text-gray-900">Include Days</Label>
@@ -560,7 +561,7 @@ export function AvailabilityModal({
                   Select Time Range
                 </h4>
 
-                <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col h-[400px]">
+                <div data-tutorial-step="2" className="border border-gray-200 rounded-xl overflow-hidden flex flex-col h-[400px]">
                   {loading ? (
                     <div className="flex-1 flex flex-col items-center justify-center p-8">
                       <div className="animate-spin rounded-full h-8 w-8 border-4 border-gray-200 border-t-primary" />
@@ -766,6 +767,7 @@ export function AvailabilityModal({
                 Cancel
               </button>
               <button
+                data-tutorial-step="5"
                 onClick={handleBook}
                 disabled={!startSlot || isBooking || !validationState.valid || validationState.validating || isCalculatingPrice}
                 className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
@@ -776,6 +778,9 @@ export function AvailabilityModal({
           </div>
         </div>
       </div>
+
+      {/* Booking Tutorial Overlay */}
+      <BookingTutorial isOpen={isOpen} />
     </div>
   )
 }
