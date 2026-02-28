@@ -435,8 +435,8 @@ export function RefundManagement({ hideHeader = false }: { hideHeader?: boolean 
                 <p className="text-gray-700">{selectedRefund.reason || 'No reason provided'}</p>
               </div>
 
-              {/* Admin Notes (for pending refunds) */}
-              {selectedRefund.status === 'pending' && (
+              {/* Admin Notes (for pending and failed refunds) */}
+              {(selectedRefund.status === 'pending' || selectedRefund.status === 'failed') && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Admin Notes (optional)
@@ -465,7 +465,7 @@ export function RefundManagement({ hideHeader = false }: { hideHeader?: boolean 
                 Close
               </Button>
 
-              {selectedRefund.status === 'pending' && (
+              {(selectedRefund.status === 'pending' || selectedRefund.status === 'failed') && (
                 <>
                   <Button
                     variant="outline"

@@ -79,7 +79,7 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
     }
 
     // Check reservation status allows refunds
-    const refundableStatuses = ['confirmed', 'pending_payment']
+    const refundableStatuses = ['confirmed', 'pending_payment', 'partially_paid']
     if (!refundableStatuses.includes(reservation.status)) {
       return {
         success: false,
@@ -406,7 +406,7 @@ export async function adminProcessRefundAction(
       return { success: false, error: 'Refund not found' }
     }
 
-    if (refund.status !== 'pending') {
+    if (refund.status !== 'pending' && refund.status !== 'failed') {
       return { success: false, error: `Cannot process refund with status: ${refund.status}` }
     }
 

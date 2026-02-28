@@ -294,7 +294,7 @@ export async function createRefund(params: CreateRefundParams): Promise<PayMongo
             amount: params.amount,
             payment_id: params.payment_id,
             reason: params.reason,
-            notes: params.notes,
+            ...(params.notes ? { notes: params.notes } : {}),
             metadata: params.metadata,
           },
         },

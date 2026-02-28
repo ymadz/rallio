@@ -215,7 +215,8 @@ export async function initiatePaymentAction(
             payment_reference: paymentReference,
             payment_type: reservation.payment_type || 'full',
             player_count: reservation.num_players?.toString() || '1',
-            is_down_payment: isDownPayment ? 'true' : 'false'
+            is_down_payment: isDownPayment ? 'true' : 'false',
+            recurrence_group_id: recurrenceGroupId || undefined
           },
         })
         checkoutUrl = result.checkoutUrl
@@ -237,7 +238,8 @@ export async function initiatePaymentAction(
             payment_reference: paymentReference,
             payment_type: reservation.payment_type || 'full',
             player_count: reservation.num_players?.toString() || '1',
-            is_down_payment: isDownPayment ? 'true' : 'false'
+            is_down_payment: isDownPayment ? 'true' : 'false',
+            recurrence_group_id: recurrenceGroupId || undefined
           },
         })
         checkoutUrl = result.checkoutUrl

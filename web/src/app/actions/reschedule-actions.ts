@@ -53,6 +53,11 @@ export async function rescheduleReservationAction(
         return { success: false, error: 'Cannot reschedule within 24 hours of booking start time' }
     }
 
+    // 3c. Check if already rescheduled
+    if (booking.metadata?.rescheduled === true) {
+        return { success: false, error: 'This booking has already been rescheduled once.' }
+    }
+
     // 4. Calculate new time range
     const oldStart = new Date(booking.start_time)
     const oldEnd = new Date(booking.end_time)

@@ -569,6 +569,11 @@ export function ReservationManagement() {
                                 Week {(reservation.metadata.week_index ?? 0) + 1}/{reservation.metadata.weeks_total}
                               </span>
                             )}
+                            {reservation.metadata?.rescheduled === true && (
+                              <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                                Rescheduled
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">

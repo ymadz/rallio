@@ -139,8 +139,9 @@ export async function POST(request: NextRequest) {
         await handlePaymentFailed(eventData, eventId)
         break
 
+      case 'refund.updated':
       case 'refund.succeeded':
-        console.log('[PayMongo Webhook] 💸 Handling refund.succeeded event')
+        console.log('[PayMongo Webhook] 💸 Handling refund.succeeded/updated event')
         await handleRefundEvent(eventData, eventType)
         break
 
@@ -373,7 +374,15 @@ async function markReservationPaidAndConfirmed({
   console.log('[markReservationPaidAndConfirmed] 🔍 Checking current reservation status')
   if (reservationRecord.status === 'confirmed' || (reservationRecord.status === 'partially_paid' && targetStatus === 'partially_paid')) {
     console.log('[markReservationPaidAndConfirmed] ℹ️ Reservation already at target status')
-    // Already confirmed - just ensure amount_paid is synced
+    // We already passed the target status.
+    const recurrenceGroupId = payment.metadata?.recurrence_group_id
+
+    if (recurrenceGroupId) {
+      console.log('[markReservationPaidAndConfirmed] 💰 Bulk payment already synced. Skipping duplicate total dump.')
+      return
+    }
+
+    // Already confirmed (single booking) - just ensure amount_paid is synced
     if ((reservationRecord.amount_paid ?? 0) < payment.amount) {
       console.log('[markReservationPaidAndConfirmed] 💰 Syncing amount_paid:', {
         current: reservationRecord.amount_paid,
@@ -1284,7 +1293,7 @@ async function handleRefundEvent(data: any, eventType: string) {
 
   const processedAt = new Date().toISOString()
 
-  if (eventType === 'refund.succeeded') {
+  if (eventType === 'refund.succeeded' || (eventType === 'refund.updated' && status === 'succeeded')) {
     // Update refund record as succeeded
     await supabase
       .from('refunds')
@@ -1335,7 +1344,7 @@ async function handleRefundEvent(data: any, eventType: string) {
 
     console.log('[handleRefundEvent] ✅ Refund succeeded:', refundRecord.id)
 
-  } else if (eventType === 'refund.failed') {
+  } else if (eventType === 'refund.failed' || (eventType === 'refund.updated' && status === 'failed')) {
     // Update refund record as failed
     await supabase
       .from('refunds')

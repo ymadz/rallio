@@ -40,7 +40,7 @@ export function CancelBookingModal({
     const [reason, setReason] = useState('')
     const [error, setError] = useState<string | null>(null)
 
-    const isPaid = booking.status === 'confirmed' && booking.amount_paid > 0
+    const isPaid = (booking.status === 'confirmed' || booking.status === 'partially_paid') && booking.amount_paid > 0
     const mode = isPaid ? 'refund' : 'cancel'
 
     useEffect(() => {
@@ -116,8 +116,8 @@ export function CancelBookingModal({
             <div className="relative z-10 w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden">
                 {/* Header */}
                 <div className={`px-6 py-4 flex items-center justify-between ${mode === 'refund'
-                        ? 'bg-gradient-to-r from-orange-500 to-orange-600'
-                        : 'bg-gradient-to-r from-red-500 to-red-600'
+                    ? 'bg-gradient-to-r from-orange-500 to-orange-600'
+                    : 'bg-gradient-to-r from-red-500 to-red-600'
                     } text-white`}>
                     <h3 className="text-lg font-bold">
                         {mode === 'refund' ? 'Request Refund' : 'Cancel Booking'}
@@ -217,8 +217,8 @@ export function CancelBookingModal({
                             onClick={handleConfirm}
                             disabled={isLoading || (mode === 'refund' && !reason.trim())}
                             className={`flex-1 ${mode === 'refund'
-                                    ? 'bg-orange-600 hover:bg-orange-700'
-                                    : 'bg-red-600 hover:bg-red-700'
+                                ? 'bg-orange-600 hover:bg-orange-700'
+                                : 'bg-red-600 hover:bg-red-700'
                                 }`}
                         >
                             {isLoading ? (
