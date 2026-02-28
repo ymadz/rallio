@@ -846,7 +846,7 @@ export async function processPaymentByReservationAction(reservationId: string): 
 
       const { data: reservation } = await supabase
         .from('reservations')
-        .select('status, id, amount_paid')
+        .select('status, id, amount_paid, recurrence_group_id, metadata')
         .eq('id', reservationId)
         .single()
 
@@ -860,19 +860,62 @@ export async function processPaymentByReservationAction(reservationId: string): 
 
       // Payment completed but reservation not in target state - fix it
       console.warn(`[processPaymentByReservationAction] Payment completed but reservation not ${targetStatus} - fixing`)
-      const { error: updateError } = await supabase
-        .from('reservations')
-        .update({
-          status: targetStatus,
-          amount_paid: targetStatus === 'confirmed' && !isDownPaymentAction
-            ? (reservation?.amount_paid || 0) + payment.amount
-            : payment.amount,
-        })
-        .eq('id', reservationId)
 
-      if (updateError) {
-        console.error('[processPaymentByReservationAction] Failed to confirm reservation:', updateError)
-        return { success: false, error: 'Failed to confirm reservation' }
+      if (reservation?.recurrence_group_id) {
+        console.log(`[processPaymentByReservationAction] Bulk Confirmation: Found recurrence group ${reservation.recurrence_group_id}`)
+
+        const { data: groupReservations, error: groupFetchError } = await supabase
+          .from('reservations')
+          .select('id, status, metadata, amount_paid')
+          .eq('recurrence_group_id', reservation.recurrence_group_id)
+          .in('status', ['pending_payment', 'paid', 'partially_paid'])
+
+        if (!groupFetchError && groupReservations && groupReservations.length > 0) {
+          const updates = groupReservations.map(res => {
+            const resMeta = (res.metadata || {}) as any
+            let resAmountPaid: number;
+
+            if (isDownPaymentAction) {
+              resAmountPaid = resMeta?.down_payment_amount ? parseFloat(resMeta.down_payment_amount) : payment.amount / groupReservations.length
+            } else {
+              const newPaymentShare = payment.amount / groupReservations.length
+              resAmountPaid = (res.amount_paid || 0) + newPaymentShare
+            }
+
+            return {
+              id: res.id,
+              status: targetStatus,
+              amount_paid: resAmountPaid,
+            }
+          })
+
+          for (const update of updates) {
+            const { error: updateError } = await supabase
+              .from('reservations')
+              .update({
+                status: update.status,
+                amount_paid: update.amount_paid,
+              })
+              .eq('id', update.id)
+
+            if (updateError) console.error(`Failed to update bulk instance ${update.id}:`, updateError)
+          }
+        }
+      } else {
+        const { error: updateError } = await supabase
+          .from('reservations')
+          .update({
+            status: targetStatus,
+            amount_paid: targetStatus === 'confirmed' && !isDownPaymentAction
+              ? (reservation?.amount_paid || 0) + payment.amount
+              : payment.amount,
+          })
+          .eq('id', reservationId)
+
+        if (updateError) {
+          console.error('[processPaymentByReservationAction] Failed to confirm reservation:', updateError)
+          return { success: false, error: 'Failed to confirm reservation' }
+        }
       }
 
       revalidatePath('/reservations')
