@@ -43,7 +43,13 @@ export async function createReservation(
     }
 
     const durationMs = initialEndTime.getTime() - initialStartTime.getTime()
-    const startDayIndex = initialStartTime.getDay() // 0-6
+    // Handle Manila Timezone correctly (+08:00)
+    // Add 8 hours to UTC time to query Manila days correctly
+    const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000
+    const initialManilaTime = new Date(initialStartTime.getTime() + MANILA_OFFSET_MS)
+
+    // Check if the current booking crosses into the next day relative to start time? No, getUTCDay acts as if it's in Manila.
+    const startDayIndex = initialManilaTime.getUTCDay() // 0-6
 
     console.log(`[createReservation] Starting ${isRecurring ? 'recurring' : 'single'} booking check. Weeks: ${recurrenceWeeks}, Days: ${selectedDays.join(',')}`)
 
@@ -57,9 +63,7 @@ export async function createReservation(
         for (const dayIndex of uniqueSelectedDays) {
             const dayOffset = (dayIndex - startDayIndex + 7) % 7
 
-            const slotStartTime = new Date(initialStartTime.getTime())
-            slotStartTime.setDate(slotStartTime.getDate() + (i * 7) + dayOffset)
-
+            const slotStartTime = new Date(initialStartTime.getTime() + (i * 7 * 24 * 60 * 60 * 1000) + (dayOffset * 24 * 60 * 60 * 1000))
             const slotEndTime = new Date(slotStartTime.getTime() + durationMs)
 
             targetSlots.push({
@@ -90,12 +94,9 @@ export async function createReservation(
     // Use adminDb for strict validation to prevent double bookings
     const adminDb = createServiceClient()
 
-    const manilaNowStr = new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' })
-    const manilaNow = new Date(manilaNowStr)
-
     for (const slot of targetSlots) {
-        // A. Check Past Time
-        if (slot.start.getTime() < manilaNow.getTime() - 60000) {
+        // A. Check Past Time using absolute UNIX timestamps completely isolated from Vercel timezones
+        if (slot.start.getTime() < Date.now() - 60000) {
             return {
                 success: false,
                 error: `Booking Request Invalid: Cannot book a time in the past.`

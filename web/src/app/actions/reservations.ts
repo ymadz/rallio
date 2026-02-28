@@ -233,12 +233,13 @@ export async function getAvailableTimeSlotsAction(
   }
 
   // Filter out past time slots if date is today (in Asia/Manila timezone)
-  const manilaNowStr = new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' })
-  const manilaNow = new Date(manilaNowStr)
-  const isToday = dateString === format(manilaNow, 'yyyy-MM-dd')
+  const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000
+  const manilaNow = new Date(Date.now() + MANILA_OFFSET_MS)
+  const todayString = manilaNow.toISOString().split('T')[0]
+  const isToday = dateString === todayString
 
   if (isToday) {
-    const currentHour = manilaNow.getHours()
+    const currentHour = manilaNow.getUTCHours()
     return allSlots.filter((slot) => {
       const slotHour = parseInt(slot.time.split(':')[0])
       return slotHour > currentHour
@@ -285,7 +286,11 @@ export async function validateBookingAvailabilityAction(data: {
   }
 
   const durationMs = initialEndTime.getTime() - initialStartTime.getTime()
-  const startDayIndex = initialStartTime.getDay() // 0-6
+
+  // Handle Manila Timezone correctly (+08:00)
+  const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000
+  const initialManilaTime = new Date(initialStartTime.getTime() + MANILA_OFFSET_MS)
+  const startDayIndex = initialManilaTime.getUTCDay() // 0-6
 
   // 0. FETCH OPERATING HOURS
   const { data: court, error: courtError } = await supabase
@@ -316,9 +321,7 @@ export async function validateBookingAvailabilityAction(data: {
     for (const dayIndex of uniqueSelectedDays) {
       const dayOffset = (dayIndex - startDayIndex + 7) % 7
 
-      const slotStartTime = new Date(initialStartTime.getTime())
-      slotStartTime.setDate(slotStartTime.getDate() + (i * 7) + dayOffset)
-
+      const slotStartTime = new Date(initialStartTime.getTime() + (i * 7 * 24 * 60 * 60 * 1000) + (dayOffset * 24 * 60 * 60 * 1000))
       const slotEndTime = new Date(slotStartTime.getTime() + durationMs)
 
       targetSlots.push({ start: slotStartTime, end: slotEndTime, weekIndex: i })
@@ -340,13 +343,10 @@ export async function validateBookingAvailabilityAction(data: {
   }
 
   // 2. VALIDATION PHASE
-  const manilaNowStr = new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' })
-  const manilaNow = new Date(manilaNowStr)
-
   for (const slot of targetSlots) {
     // A. Check Past Time
-    // slot.start acts as a floating time (UTC implicitly on server). manilaNow acts as current Manila time in same floating offset.
-    if (slot.start.getTime() < manilaNow.getTime() - 60000) { // Add 1 minute grace period
+    // Strict absolute offset independent of server parsing logic.
+    if (slot.start.getTime() < Date.now() - 60000) { // Add 1 minute grace period
       const dateStr = slot.start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
       return { available: false, conflictDate: dateStr, error: `Cannot book a time in the past: ${dateStr}` }
     }
@@ -355,8 +355,11 @@ export async function validateBookingAvailabilityAction(data: {
     const currentEndTimeISO = slot.end.toISOString()
     const conflictStatuses = ['pending_payment', 'partially_paid', 'confirmed', 'ongoing', 'pending_refund', 'completed', 'no_show']
 
-    // B. Check Operating Hours
-    const dayName = dayNames[slot.start.getDay()]
+    // B. Check Operating Hours using UTC-safe Manila offset
+    const manilaSlotStart = new Date(slot.start.getTime() + MANILA_OFFSET_MS)
+    const manilaSlotEnd = new Date(slot.end.getTime() + MANILA_OFFSET_MS)
+
+    const dayName = dayNames[manilaSlotStart.getUTCDay()]
     const dayHours = openingHours?.[dayName]
 
     if (!dayHours) {
@@ -369,13 +372,11 @@ export async function validateBookingAvailabilityAction(data: {
     const [openH, openM] = dayHours.open.split(':').map(Number)
     const [closeH, closeM] = dayHours.close.split(':').map(Number)
 
-    // Parse slot times (in local venue time - assuming generic logical comparison or keeping consistent timezone)
-    // Ideally we'd use timezone-aware comparison, but for now using getHours() matches existing logic if local
-    // To be safer, we compare HH:MM values directly
-    const slotStartH = slot.start.getHours()
-    const slotStartM = slot.start.getMinutes()
-    const slotEndH = slot.end.getHours()
-    const slotEndM = slot.end.getMinutes()
+    // Parse slot times using explicitly offset UTC methods to bypass Vercel timezones
+    const slotStartH = manilaSlotStart.getUTCHours()
+    const slotStartM = manilaSlotStart.getUTCMinutes()
+    const slotEndH = manilaSlotEnd.getUTCHours()
+    const slotEndM = manilaSlotEnd.getUTCMinutes()
 
     const slotStartMinutes = slotStartH * 60 + slotStartM
     const slotEndMinutes = slotEndH * 60 + slotEndM
