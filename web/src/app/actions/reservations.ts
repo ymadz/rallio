@@ -232,12 +232,13 @@ export async function getAvailableTimeSlotsAction(
     }
   }
 
-  // Filter out past time slots if date is today
-  const now = new Date()
-  const isToday = format(date, 'yyyy-MM-dd') === format(now, 'yyyy-MM-dd')
+  // Filter out past time slots if date is today (in Asia/Manila timezone)
+  const manilaNowStr = new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' })
+  const manilaNow = new Date(manilaNowStr)
+  const isToday = dateString === format(manilaNow, 'yyyy-MM-dd')
 
   if (isToday) {
-    const currentHour = now.getHours()
+    const currentHour = manilaNow.getHours()
     return allSlots.filter((slot) => {
       const slotHour = parseInt(slot.time.split(':')[0])
       return slotHour > currentHour
@@ -339,12 +340,22 @@ export async function validateBookingAvailabilityAction(data: {
   }
 
   // 2. VALIDATION PHASE
+  const manilaNowStr = new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' })
+  const manilaNow = new Date(manilaNowStr)
+
   for (const slot of targetSlots) {
+    // A. Check Past Time
+    // slot.start acts as a floating time (UTC implicitly on server). manilaNow acts as current Manila time in same floating offset.
+    if (slot.start.getTime() < manilaNow.getTime() - 60000) { // Add 1 minute grace period
+      const dateStr = slot.start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+      return { available: false, conflictDate: dateStr, error: `Cannot book a time in the past: ${dateStr}` }
+    }
+
     const currentStartTimeISO = slot.start.toISOString()
     const currentEndTimeISO = slot.end.toISOString()
     const conflictStatuses = ['pending_payment', 'confirmed', 'ongoing', 'pending_refund', 'completed', 'no_show']
 
-    // A. Check Operating Hours
+    // B. Check Operating Hours
     const dayName = dayNames[slot.start.getDay()]
     const dayHours = openingHours?.[dayName]
 

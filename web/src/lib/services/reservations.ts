@@ -90,7 +90,18 @@ export async function createReservation(
     // Use adminDb for strict validation to prevent double bookings
     const adminDb = createServiceClient()
 
+    const manilaNowStr = new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' })
+    const manilaNow = new Date(manilaNowStr)
+
     for (const slot of targetSlots) {
+        // A. Check Past Time
+        if (slot.start.getTime() < manilaNow.getTime() - 60000) {
+            return {
+                success: false,
+                error: `Booking Request Invalid: Cannot book a time in the past.`
+            }
+        }
+
         const currentStartTimeISO = slot.start.toISOString()
         const currentEndTimeISO = slot.end.toISOString()
 
