@@ -806,8 +806,8 @@ export async function getQueueMasterHistory() {
  */
 export async function createQueueSession(data: {
   courtId: string
-  startTime: string
-  endTime: string
+  startTime: string | Date
+  endTime: string | Date
   mode: 'casual' | 'competitive'
   gameFormat: 'singles' | 'doubles' | 'mixed'
   maxPlayers: number
@@ -930,11 +930,11 @@ export async function createQueueSession(data: {
     // Interpret the input strings as Manila time
     // Data passed from checkout-store can be either Date objects or ISO strings
     // Convert to ISO string first if needed, then ensure timezone suffix
-    const startTimeStr = data.startTime instanceof Date 
-      ? data.startTime.toISOString() 
+    const startTimeStr = data.startTime instanceof Date
+      ? data.startTime.toISOString()
       : data.startTime
-    const endTimeStr = data.endTime instanceof Date 
-      ? data.endTime.toISOString() 
+    const endTimeStr = data.endTime instanceof Date
+      ? data.endTime.toISOString()
       : data.endTime
 
     const startStr = startTimeStr.endsWith('Z') || startTimeStr.includes('+')
