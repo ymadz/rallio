@@ -148,8 +148,8 @@ export function QueueSessionModal({
 
             try {
                 const dateStr = format(selectedDate, 'yyyy-MM-dd')
-                const startDateTime = `${dateStr}T${startSlot.time}:00`
-                const endDateTime = `${dateStr}T${endTime}:00`
+                const startDateTime = `${dateStr}T${startSlot.time}:00+08:00`
+                const endDateTime = `${dateStr}T${endTime}:00+08:00`
 
                 const result = await validateBookingAvailabilityAction({
                     courtId,

@@ -97,8 +97,8 @@ export function CreateSessionForm() {
 
       try {
         const dateStr = format(startDate, 'yyyy-MM-dd')
-        const startDateTime = `${dateStr}T${startTime}:00`
-        const endDateTime = `${dateStr}T${endTime}:00`
+        const startDateTime = `${dateStr}T${startTime}:00+08:00`
+        const endDateTime = `${dateStr}T${endTime}:00+08:00`
 
         const result = await validateBookingAvailabilityAction({
           courtId,

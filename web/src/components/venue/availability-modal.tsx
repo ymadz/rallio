@@ -190,10 +190,10 @@ export function AvailabilityModal({
       const basePrice = (startSlot.price || hourlyRate) * duration * actualSlotCount
 
       try {
-        // Construct ISO strings for start/end
+        // Construct ISO strings for start/end with explicit Manila offset
         const dateStr = format(selectedDate, 'yyyy-MM-dd')
-        const startDateTime = `${dateStr}T${startSlot.time}:00`
-        const endDateTime = `${dateStr}T${endTime}:00`
+        const startDateTime = `${dateStr}T${startSlot.time}:00+08:00`
+        const endDateTime = `${dateStr}T${endTime}:00+08:00`
 
         const result = await calculateApplicableDiscounts({
           venueId,
@@ -251,8 +251,8 @@ export function AvailabilityModal({
 
       try {
         const dateStr = format(selectedDate, 'yyyy-MM-dd')
-        const startDateTime = `${dateStr}T${startSlot.time}:00`
-        const endDateTime = `${dateStr}T${endTime}:00`
+        const startDateTime = `${dateStr}T${startSlot.time}:00+08:00`
+        const endDateTime = `${dateStr}T${endTime}:00+08:00`
 
         const result = await validateBookingAvailabilityAction({
           courtId,
