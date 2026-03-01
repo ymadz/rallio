@@ -122,9 +122,11 @@ export interface AvailabilitySlot {
 // ============================================================
 
 /**
- * Get venues with filtering, sorting, and pagination
+ * Get venues with filtering, sorting, and pagination.
+ * Includes retry logic to handle Supabase auth session race conditions
+ * (e.g. expired JWT being refreshed on initial page load).
  */
-export async function getVenues(filters: VenueFilters = {}): Promise<{
+export async function getVenues(filters: VenueFilters = {}, retries = 2): Promise<{
   venues: VenueWithDetails[]
   total: number
   hasMore: boolean
@@ -415,6 +417,13 @@ export async function getVenues(filters: VenueFilters = {}): Promise<{
       hasMore,
     }
   } catch (error) {
+    // Retry on failure - handles Supabase auth session race condition
+    // where the JWT token may still be refreshing on initial page load
+    if (retries > 0) {
+      console.warn(`[getVenues] Fetch failed, retrying in ${(3 - retries) * 500}ms... (${retries} retries left)`, error)
+      await new Promise(resolve => setTimeout(resolve, (3 - retries) * 500))
+      return getVenues(filters, retries - 1)
+    }
     console.error('Error fetching venues:', error)
     throw error
   }

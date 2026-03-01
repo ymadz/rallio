@@ -10,7 +10,8 @@ import {
   type VenueFilters,
   type VenueWithDetails,
 } from '@/lib/api/venues';
-import { createClient } from '@/lib/supabase/client';
+import { useAuthStore } from '@/stores/auth-store';
+import { Sparkles } from 'lucide-react';
 
 // Filter options
 const amenityOptions = [
@@ -34,6 +35,8 @@ export default function CourtsPage() {
   const [venues, setVenues] = useState<VenueWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
+  const { user } = useAuthStore();
   const [search, setSearch] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [total, setTotal] = useState(0);
@@ -64,6 +67,7 @@ export default function CourtsPage() {
     if (reset) {
       setLoading(true);
       setOffset(0);
+      setFetchError(false);
     } else {
       setLoadingMore(true);
     }
@@ -85,9 +89,85 @@ export default function CourtsPage() {
 
     try {
       const result = await getVenues(filters);
+      let targetVenues = result.venues;
 
       if (reset) {
-        setVenues(result.venues);
+        let finalVenues = result.venues;
+
+        // Only inject recommendations on the default un-filtered feed!
+        const isDefaultFeed = !search && !category && !courtType && minRating === 0 && selectedAmenities.length === 0;
+
+        if (isDefaultFeed) {
+          // Fetch ML Recommendations to inject at the top of the grid
+          try {
+            // Temporarily hardcode for demo exactly like RecommendedCourts
+            const testUserId = user?.id || '85ac56b1-fd7a-4f63-9d29-b01bcde1dcd0';
+            const recRes = await fetch(`/api/recommendations/${testUserId}`);
+
+            if (recRes.ok) {
+              const recommendedData = await recRes.json();
+              if (Array.isArray(recommendedData) && recommendedData.length > 0) {
+                // Deduplicate multiple recommended courts belonging to the same venue
+                const uniqueVenuesMap = new Map();
+                recommendedData.forEach((court: any) => {
+                  const vId = court.venue?.id || court.venue_id;
+                  if (vId && !uniqueVenuesMap.has(vId)) {
+                    uniqueVenuesMap.set(vId, court);
+                  }
+                });
+
+                // Convert raw courts from ML response back into VenueWithDetails format
+                // so the standard grid can render them seamlessly
+                const recVenues: VenueWithDetails[] = Array.from(uniqueVenuesMap.values()).map((court: any) => {
+                  const venueObj = court.venue || {};
+
+                  return {
+                    id: venueObj.id || court.venue_id, // Use actual venue ID for /courts/{id} routing!
+                    name: venueObj.name || court.venue_name || 'Recommended Venue',
+                    description: venueObj.description || null,
+                    address: venueObj.address || '',
+                    city: venueObj.city || '',
+                    latitude: venueObj.latitude || 0,
+                    longitude: venueObj.longitude || 0,
+                    phone: null,
+                    email: null,
+                    website: null,
+                    opening_hours: null,
+                    is_active: true,
+                    is_verified: true,
+                    metadata: null,
+                    created_at: new Date().toISOString(),
+                    courts: [court],
+                    minPrice: court.hourly_rate || 0,
+                    maxPrice: court.hourly_rate || 0,
+                    totalCourts: 1,
+                    activeCourtCount: 1,
+                    amenities: court.amenities || [],
+                    averageRating: court.average_rating,
+                    totalReviews: court.review_count || 0,
+                    category: 'Recommended for You',
+                    location: venueObj.city || venueObj.address,
+                    image_url: court.images?.[0]?.url || venueObj.image_url || 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?q=80&w=2670&auto=format&fit=crop',
+                    is_ml_recommendation: true // The flag for the sparkbadge!
+                  };
+                });
+
+                // Push the raw ML data into the main generic UI list!
+                // Filter out duplicates from finalVenues to avoid React key collisions
+                const recVenueIds = new Set(recVenues.map(v => v.id));
+                finalVenues = [
+                  ...recVenues,
+                  ...finalVenues.filter((v: any) => !recVenueIds.has(v.id))
+                ];
+              }
+            }
+          } catch (e) {
+            console.error('Failed to load inline recommendations', e);
+          }
+        } // Close isDefaultFeed block!
+
+        targetVenues = finalVenues;
+        setVenues(finalVenues);
         setOffset(LIMIT);
       } else {
         setVenues((prev) => [...prev, ...result.venues]);
@@ -97,33 +177,20 @@ export default function CourtsPage() {
       setTotal(result.total);
       setHasMore(result.hasMore);
 
-      // Fetch ratings for all courts in batch
-      const venueIds = result.venues.map((v) => v.id);
+      // Use the averageRating and totalReviews that is already calculated efficiently by the getVenues API
       const ratingsMap: Record<string, { avg: number; count: number }> = {};
 
-      // We need to fetch ratings for each venue's courts
-      // Ideally this should be done in the getVenues API but for now we do it here
-      const supabase = createClient();
-      for (const venue of result.venues) {
-        let totalRating = 0;
-        let totalCount = 0;
-        // Cache bust: force new build
-
-        for (const court of venue.courts) {
-          const { averageRating, totalReviews } = await getCourtAverageRating(court.id);
-          totalRating += averageRating * totalReviews;
-          totalCount += totalReviews;
-        }
-
+      for (const venue of targetVenues) {
         ratingsMap[venue.id] = {
-          avg: totalCount > 0 ? totalRating / totalCount : 0,
-          count: totalCount,
+          avg: venue.averageRating || 0,
+          count: venue.totalReviews || 0,
         };
       }
 
       setVenueRatings((prev) => ({ ...prev, ...ratingsMap }));
     } catch (error) {
       console.error('Error fetching venues:', error);
+      setFetchError(true);
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -466,6 +533,8 @@ export default function CourtsPage() {
       </header>
 
       <div className="container mx-auto px-4 py-8">
+        {/* ML Recommendations are now injected directly into the venues grid via state */}
+
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-5">
             {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -527,6 +596,13 @@ export default function CourtsPage() {
 
                       {/* Badges - Stacked on mobile */}
                       <div className="absolute top-2 left-2 md:top-3 md:left-3 flex flex-col md:flex-row gap-1 md:gap-2">
+                        {/* ML Recommended Badge */}
+                        {(venue as any).is_ml_recommendation && (
+                          <span className="px-1.5 py-0.5 md:px-2.5 md:py-1 bg-amber-500 text-white text-[10px] md:text-xs font-bold rounded md:rounded-md shadow-sm flex items-center gap-1">
+                            <Sparkles className="w-2.5 h-2.5 md:w-3 md:h-3" />
+                            Recommended
+                          </span>
+                        )}
                         <span
                           className={`px-1.5 py-0.5 md:px-2.5 md:py-1 text-white text-[10px] md:text-xs font-bold rounded md:rounded-md shadow-sm ${isOpen ? 'bg-green-500' : 'bg-gray-500'
                             }`}
@@ -669,33 +745,54 @@ export default function CourtsPage() {
                 stroke="currentColor"
                 viewBox="0 0 24 24"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-                />
+                {fetchError ? (
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"
+                  />
+                ) : (
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                  />
+                )}
               </svg>
             </div>
-            <h3 className="text-lg md:text-xl font-bold text-gray-900 mb-2">No venues found</h3>
+            <h3 className="text-lg md:text-xl font-bold text-gray-900 mb-2">
+              {fetchError ? 'Failed to load venues' : 'No venues found'}
+            </h3>
             <p className="text-sm md:text-base text-gray-500 max-w-sm mx-auto">
-              We couldn't find any venues matching your criteria. Try adjusting your filters or search
-              term.
+              {fetchError
+                ? 'Something went wrong while loading venues. Please try again.'
+                : 'We couldn\'t find any venues matching your criteria. Try adjusting your filters or search term.'}
             </p>
-            <button
-              onClick={() => {
-                setSearch('');
-                setPriceRange([0, 2000]);
-                setSelectedAmenities([]);
-                setCourtType(null);
-                setCategory(null);
-                setSortBy('newest');
-                setMinRating(0);
-              }}
-              className="mt-6 text-primary hover:text-primary/80 font-medium text-sm md:text-base"
-            >
-              Clear all filters
-            </button>
+            {fetchError ? (
+              <button
+                onClick={() => fetchVenues(true)}
+                className="mt-6 bg-primary text-white hover:bg-primary/90 font-medium text-sm md:text-base px-6 py-2 rounded-lg"
+              >
+                Try again
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setSearch('');
+                  setPriceRange([0, 2000]);
+                  setSelectedAmenities([]);
+                  setCourtType(null);
+                  setCategory(null);
+                  setSortBy('newest');
+                  setMinRating(0);
+                }}
+                className="mt-6 text-primary hover:text-primary/80 font-medium text-sm md:text-base"
+              >
+                Clear all filters
+              </button>
+            )}
           </div>
         )}
       </div>
