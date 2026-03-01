@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import { useCheckoutStore } from '@/stores/checkout-store'
 
 export function CancellationPolicy() {
@@ -32,8 +31,6 @@ export function CancellationPolicy() {
       <p className="text-sm text-gray-600">
         Guidelines on booking cancellations, refunds, and applicable fees.
       </p>
-
-      {/* Tabs Removed */}
 
       {/* Policy Content */}
       <div className="bg-gray-50 rounded-xl border border-gray-200 p-6">

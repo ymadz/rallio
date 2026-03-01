@@ -7,6 +7,7 @@ import { checkRateLimit, createRateLimitConfig } from '@/lib/rate-limiter'
 import { createBulkNotifications, createNotification, NotificationTemplates } from '@/lib/notifications'
 import { getServerNow } from '@/lib/time-server'
 import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
+import { writeAuditLog } from '@/lib/audit'
 
 /**
  * Queue Management Server Actions
@@ -295,6 +296,45 @@ export async function joinQueue(sessionId: string) {
     revalidatePath(`/queue/${session.courts.id}`)
     revalidatePath('/queue')
 
+    // Audit: log queue join/rejoin
+    await writeAuditLog({
+      userId: user.id,
+      action: 'queue.joined',
+      resourceType: 'queue_participant',
+      resourceId: rpcResult.participant_id,
+      newValues: {
+        sessionId,
+        rpcAction: rpcResult.action,
+        courtId: session.courts.id,
+      },
+    })
+
+    // 9. Notify Queue Master
+    try {
+      const { data: venue } = await supabase
+        .from('courts')
+        .select('name, venues(name)')
+        .eq('id', session.courts.id)
+        .single()
+        
+      const venueData = venue?.venues ? (Array.isArray(venue.venues) ? venue.venues[0] : venue.venues) : null
+      const venueName = (venueData as any)?.name || 'Venue'
+
+      await createNotification({
+        userId: session.organizer_id,
+        type: 'new_booking_request', // Reusing this type for "player joined" context
+        title: '👤 Player Joined Queue',
+        message: `${user.email} has joined your queue at ${venueName} (${venue?.name}).`,
+        actionUrl: `/queue-master/sessions/${sessionId}`,
+        metadata: {
+          session_id: sessionId,
+          user_id: user.id
+        }
+      })
+    } catch (notifyError) {
+      console.error('[joinQueue] ⚠️ Notification failed:', notifyError)
+    }
+
     return {
       success: true,
       participant: { id: rpcResult.participant_id } // Return minimal info needed
@@ -394,6 +434,19 @@ export async function leaveQueue(sessionId: string) {
       revalidatePath(`/queue/${courtId}`)
     }
     revalidatePath('/queue')
+
+    // Audit: log queue leave
+    await writeAuditLog({
+      userId: user.id,
+      action: 'queue.left',
+      resourceType: 'queue_participant',
+      resourceId: participant.id,
+      newValues: {
+        sessionId,
+        gamesPlayed,
+        amountOwed,
+      },
+    })
 
     return { success: true }
   } catch (error: any) {
@@ -1239,6 +1292,34 @@ export async function createQueueSession(data: {
         }
       })
       console.log('[createQueueSession] 📬 Sent payment notification to Queue Master')
+
+      // 🔔 Notify Venue Owner (Court Admin)
+      const { data: courtData } = await supabase
+        .from('courts')
+        .select('name, venues(name, owner_id)')
+        .eq('id', data.courtId)
+        .single()
+
+      if (courtData) {
+        const venueInfo = courtData.venues ? (Array.isArray(courtData.venues) ? courtData.venues[0] : courtData.venues) : null
+        const ownerId = (venueInfo as any)?.owner_id
+        const venueName = (venueInfo as any)?.name || 'Venue'
+
+        if (ownerId && ownerId !== user.id) {
+          await createNotification({
+            userId: ownerId,
+            type: 'new_booking_request',
+            title: '🆕 New Queue Session Request',
+            message: `${user.email} has requested a queue session at ${venueName} (${courtData.name}). Status: Pending Payment.`,
+            actionUrl: `/court-admin/bookings/${createdSessions[0].reservationId}`,
+            metadata: {
+              reservation_id: createdSessions[0].reservationId,
+              venue_name: venueName,
+              court_name: courtData.name
+            }
+          })
+        }
+      }
     } catch (notificationError) {
       // Non-critical error - log but don't fail
       console.error('[createQueueSession] ⚠️ Failed to send notifications (non-critical):', notificationError)
@@ -1248,6 +1329,24 @@ export async function createQueueSession(data: {
     revalidatePath('/queue')
     revalidatePath('/queue-master')
     revalidatePath(`/queue/${data.courtId}`)
+
+    // Audit: log queue session creation
+    if (createdSessions.length > 0) {
+      await writeAuditLog({
+        userId: user.id,
+        action: 'queue.session_created',
+        resourceType: 'queue_session',
+        resourceId: createdSessions[0].id,
+        newValues: {
+          count: createdSessions.length,
+          courtId: data.courtId,
+          mode: data.mode,
+          startTime: data.startTime,
+          endTime: data.endTime,
+          recurrenceWeeks: data.recurrenceWeeks,
+        },
+      })
+    }
 
     // Return the first session as primary, but include all
     const firstSessionData = createdSessions[0]
@@ -1682,6 +1781,15 @@ export async function closeQueueSession(sessionId: string): Promise<{
       }
     }
 
+    // Audit: log manual close by queue master
+    await writeAuditLog({
+      userId: user.id,
+      action: 'queue.session_closed',
+      resourceType: 'queue_session',
+      resourceId: sessionId,
+      newValues: summary,
+    })
+
     // 6. Send notifications to all participants
     try {
       const { data: venue } = await supabase
@@ -1837,6 +1945,34 @@ export async function cancelQueueSession(
 
     console.log('[cancelQueueSession] ✅ Queue session cancelled successfully')
 
+    // 4c. Notify Venue Owner (Court Admin)
+    try {
+      const { data: court } = await supabase
+        .from('courts')
+        .select('name, venues(name, owner_id)')
+        .eq('id', session.court_id)
+        .single()
+
+      if (court) {
+        const venueData = court.venues ? (Array.isArray(court.venues) ? court.venues[0] : court.venues) : null
+        const venueName = (venueData as any)?.name || 'Venue'
+        const ownerId = (venueData as any)?.owner_id
+
+        if (ownerId) {
+          await createNotification({
+            userId: ownerId,
+            type: 'booking_cancelled',
+            title: '🏸 Queue Session Cancelled',
+            message: `The queue session at ${venueName} (${court.name}) has been cancelled by the organizer. Reason: ${reason}`,
+            actionUrl: `/court-admin/reservations`,
+            metadata: { session_id: sessionId, court_name: court.name, reason }
+          })
+        }
+      }
+    } catch (notificationError) {
+      console.error('[cancelQueueSession] ⚠️ Failed to notify venue owner:', notificationError)
+    }
+
     // 5. Revalidate paths
     revalidatePath('/queue')
     revalidatePath('/queue-master')
@@ -1960,6 +2096,33 @@ export async function removeParticipant(
     revalidatePath(`/queue/${session.court_id}`)
     revalidatePath(`/queue-master/sessions/${sessionId}`)
 
+    // 9. Notify participant
+    try {
+      const { data: venue } = await supabase
+        .from('courts')
+        .select('name, venues(name)')
+        .eq('id', session.court_id)
+        .single()
+
+      const venueData = venue?.venues ? (Array.isArray(venue.venues) ? venue.venues[0] : venue.venues) : null
+      const venueName = (venueData as any)?.name || 'Venue'
+
+      await createNotification({
+        userId: userId,
+        type: 'queue_session_ended', // Or create a new specific type, but cancelled/ended fits
+        title: '🚫 Removed from Queue',
+        message: `You have been removed from the queue session at ${venueName} (${venue?.name}). Reason: ${reason}`,
+        actionUrl: `/queue/${session.court_id}`,
+        metadata: {
+          session_id: sessionId,
+          venue_name: venueName,
+          reason
+        }
+      })
+    } catch (notifyError) {
+      console.error('[removeParticipant] ⚠️ Notification failed:', notifyError)
+    }
+
     return { success: true, amountOwed }
   } catch (error: any) {
     console.error('[removeParticipant] ❌ Error:', error)
@@ -2049,6 +2212,33 @@ export async function waiveFee(
     revalidatePath('/queue')
     revalidatePath('/queue-master')
     revalidatePath(`/queue/${queueSession.court_id}`)
+
+    // 7. Notify participant
+    try {
+      const { data: venue } = await supabase
+        .from('courts')
+        .select('name, venues(name)')
+        .eq('id', queueSession.court_id)
+        .single()
+
+      const venueData = venue?.venues ? (Array.isArray(venue.venues) ? venue.venues[0] : venue.venues) : null
+      const venueName = (venueData as any)?.name || 'Venue'
+
+      await createNotification({
+        userId: participant.user_id,
+        type: 'payment_received',
+        title: '✅ Fee Waived',
+        message: `Your fee for the queue session at ${venueName} has been waived. Reason: ${reason}`,
+        actionUrl: `/queue/${queueSession.court_id}`,
+        metadata: {
+          session_id: queueSession.id,
+          venue_name: venueName,
+          reason
+        }
+      })
+    } catch (notifyError) {
+      console.error('[waiveFee] ⚠️ Notification failed:', notifyError)
+    }
 
     return { success: true }
   } catch (error: any) {
@@ -2166,6 +2356,28 @@ export async function markAsPaid(
     revalidatePath('/queue-master')
     revalidatePath(`/queue-master/sessions/${queueSession.id}`)
     revalidatePath(`/queue/${queueSession.court_id}`)
+
+    // 8. Notify participant
+    try {
+      const { data: venue } = await supabase
+        .from('courts')
+        .select('name, venues(name)')
+        .eq('id', queueSession.court_id)
+        .single()
+
+      const venueData = venue?.venues ? (Array.isArray(venue.venues) ? venue.venues[0] : venue.venues) : null
+      const venueName = (venueData as any)?.name || 'Venue'
+
+      await createNotification({
+        userId: participant.user_id,
+        ...NotificationTemplates.paymentReceived(
+          parseFloat(participant.amount_owed || '0'),
+          queueSession.id // Using session ID since it's a queue payment
+        )
+      })
+    } catch (notifyError) {
+      console.error('[markAsPaid] ⚠️ Notification failed:', notifyError)
+    }
 
     return { success: true }
   } catch (error: any) {

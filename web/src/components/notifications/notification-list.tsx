@@ -13,7 +13,10 @@ export function NotificationList({ onClose }: NotificationListProps) {
     notifications,
     unreadCount,
     loading,
+    loadMoreLoading,
+    hasMore,
     error,
+    loadMore,
     markAsRead,
     markAllAsRead
   } = useNotifications()
@@ -23,7 +26,7 @@ export function NotificationList({ onClose }: NotificationListProps) {
   }
 
   return (
-    <div className="flex flex-col max-h-[600px]">
+    <div className="flex flex-col max-h-[600px] w-96">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200">
         <div>
@@ -45,9 +48,9 @@ export function NotificationList({ onClose }: NotificationListProps) {
         )}
       </div>
 
-      {/* Notification List */}
-      <div className="overflow-y-auto flex-1">
-        {loading && (
+      {/* Notification List Container */}
+      <div className="overflow-y-auto flex-1 min-h-[300px]">
+        {loading && !loadMoreLoading && (
           <div className="flex items-center justify-center p-8">
             <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
           </div>
@@ -60,17 +63,13 @@ export function NotificationList({ onClose }: NotificationListProps) {
         )}
 
         {!loading && !error && notifications.length === 0 && (
-          <div className="flex flex-col items-center justify-center p-8 text-center">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-              <CheckCheck className="w-8 h-8 text-gray-400" />
-            </div>
-            <p className="text-sm font-medium text-gray-900">All caught up!</p>
-            <p className="text-sm text-gray-500 mt-1">You have no notifications</p>
+          <div className="flex flex-col items-center justify-center p-8 text-center text-gray-500">
+            <p>No notifications yet</p>
           </div>
         )}
 
-        {!loading && !error && notifications.length > 0 && (
-          <div>
+        {notifications.length > 0 && (
+          <div className="flex flex-col">
             {notifications.map((notification) => (
               <NotificationItem
                 key={notification.id}
@@ -81,19 +80,34 @@ export function NotificationList({ onClose }: NotificationListProps) {
             ))}
           </div>
         )}
+
+        {/* Load More Button - "See previous notifications" */}
+        {hasMore && (
+          <div className="p-2 border-t border-gray-100">
+            <button
+              onClick={loadMore}
+              disabled={loadMoreLoading}
+              className="w-full py-2 px-4 rounded-md bg-gray-50 hover:bg-gray-100 text-gray-700 font-semibold text-sm transition-colors flex items-center justify-center gap-2"
+            >
+              {loadMoreLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                'See previous notifications'
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Footer */}
-      {notifications.length > 0 && (
-        <div className="p-3 border-t border-gray-200 bg-gray-50">
-          <button
-            onClick={onClose}
-            className="w-full text-center text-sm text-gray-600 hover:text-gray-900 font-medium"
-          >
-            Close
-          </button>
-        </div>
-      )}
+      <div className="p-3 border-t border-gray-200 bg-gray-50">
+        <button
+          onClick={onClose}
+          className="w-full text-center text-sm text-gray-600 hover:text-gray-900 font-medium"
+        >
+          Close
+        </button>
+      </div>
     </div>
   )
 }

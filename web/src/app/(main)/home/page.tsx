@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
+import { notFound, redirect } from 'next/navigation'
 import { ProfileCompletionBanner } from '@/components/profile-completion-banner'
 import { ActiveBookingBanner } from '@/components/booking/active-booking-banner'
 import { NearbyVenues } from '@/components/home/nearby-venues'
@@ -19,12 +20,16 @@ export default async function HomePage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
+  if (!user) {
+    redirect('/login')
+  }
+
   // Get user profile - with fresh data to show correct banner state
   const { data: userProfile } = await supabase
     .from('profiles')
     .select('display_name, avatar_url, phone, profile_completed')
-    .eq('id', user?.id)
-    .single()
+    .eq('id', user.id)
+    .maybeSingle()
 
   // Get suggested venues with full details
   const { data: suggestedVenues } = await supabase
@@ -58,8 +63,8 @@ export default async function HomePage() {
   const { data: playerProfile } = await supabase
     .from('players')
     .select('skill_level, birth_date')
-    .eq('user_id', user?.id)
-    .single()
+    .eq('user_id', user.id)
+    .maybeSingle()
 
 
 
