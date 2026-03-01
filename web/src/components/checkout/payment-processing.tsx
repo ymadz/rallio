@@ -98,20 +98,18 @@ export function PaymentProcessing() {
           throw new Error('Invalid booking date. Please select your time slot again.')
         }
 
-        // Parse time in Manila offset
-        const MANILA_OFFSET_HOURS = 8
         const [startHour, startMinute] = bookingData.startTime.split(':').map(Number)
         const [endHour, endMinute] = bookingData.endTime.split(':').map(Number)
 
         const startDateTime = new Date(bookingDate.getTime())
-        startDateTime.setUTCHours(startHour - MANILA_OFFSET_HOURS, startMinute ?? 0, 0, 0)
+        startDateTime.setHours(startHour, startMinute ?? 0, 0, 0)
 
         const endDateTime = new Date(bookingDate.getTime())
-        endDateTime.setUTCHours(endHour - MANILA_OFFSET_HOURS, endMinute ?? 0, 0, 0)
+        endDateTime.setHours(endHour, endMinute ?? 0, 0, 0)
 
-        // Handle overnight bookings gracefully
+        // Handle overnight bookings gracefully (should not typically happen but avoids zero-length ranges)
         if (endDateTime <= startDateTime) {
-          endDateTime.setUTCDate(endDateTime.getUTCDate() + 1)
+          endDateTime.setDate(endDateTime.getDate() + 1)
         }
 
         const startTimeISO = startDateTime.toISOString()
@@ -133,8 +131,8 @@ export function PaymentProcessing() {
 
           const sessionResult = await createQueueSession({
             courtId: bookingData.courtId,
-            startTime: startTimeISO,
-            endTime: endTimeISO,
+            startTime: startDateTime,
+            endTime: endDateTime,
             mode: bookingData.queueSessionData.mode,
             gameFormat: bookingData.queueSessionData.gameFormat,
             maxPlayers: bookingData.queueSessionData.maxPlayers,

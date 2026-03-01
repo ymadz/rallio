@@ -139,9 +139,8 @@ export async function POST(request: NextRequest) {
         await handlePaymentFailed(eventData, eventId)
         break
 
-      case 'refund.updated':
       case 'refund.succeeded':
-        console.log('[PayMongo Webhook] 💸 Handling refund.succeeded/updated event')
+        console.log('[PayMongo Webhook] 💸 Handling refund.succeeded event')
         await handleRefundEvent(eventData, eventType)
         break
 
@@ -372,17 +371,9 @@ async function markReservationPaidAndConfirmed({
 
   // Check if already in final state
   console.log('[markReservationPaidAndConfirmed] 🔍 Checking current reservation status')
-  if (reservationRecord.status === 'confirmed' || (reservationRecord.status === 'partially_paid' && targetStatus === 'partially_paid')) {
-    console.log('[markReservationPaidAndConfirmed] ℹ️ Reservation already at target status')
-    // We already passed the target status.
-    const recurrenceGroupId = payment.metadata?.recurrence_group_id
-
-    if (recurrenceGroupId) {
-      console.log('[markReservationPaidAndConfirmed] 💰 Bulk payment already synced. Skipping duplicate total dump.')
-      return
-    }
-
-    // Already confirmed (single booking) - just ensure amount_paid is synced
+  if (reservationRecord.status === 'confirmed' || reservationRecord.status === 'partially_paid') {
+    console.log('[markReservationPaidAndConfirmed] ℹ️ Reservation already confirmed')
+    // Already confirmed - just ensure amount_paid is synced
     if ((reservationRecord.amount_paid ?? 0) < payment.amount) {
       console.log('[markReservationPaidAndConfirmed] 💰 Syncing amount_paid:', {
         current: reservationRecord.amount_paid,
@@ -445,9 +436,9 @@ async function markReservationPaidAndConfirmed({
     // 1. Fetch ALL pending reservations in this group
     const { data: groupReservations, error: groupFetchError } = await supabase
       .from('reservations')
-      .select('id, status, total_amount, metadata, amount_paid')
+      .select('id, status, total_amount, metadata')
       .eq('recurrence_group_id', recurrenceGroupId)
-      .in('status', ['pending_payment', 'paid', 'partially_paid']) // Include partially_paid for balance payment
+      .in('status', ['pending_payment', 'paid']) // Include 'paid' just in case
 
     if (groupFetchError) {
       console.error('[markReservationPaidAndConfirmed] ❌ Failed to fetch recurrence group:', groupFetchError)
@@ -468,16 +459,12 @@ async function markReservationPaidAndConfirmed({
       // 2. Mark ALL as confirmed/partially_paid based on down payment status
       const updates = groupReservations.map(res => {
         const resMeta = (res.metadata || {}) as any
-        let resAmountPaid: number;
+        let resAmountPaid = res.total_amount
         let resStatus = 'confirmed'
 
         if (isDownPayment) {
           resStatus = 'partially_paid'
-          resAmountPaid = resMeta?.down_payment_amount ? parseFloat(resMeta.down_payment_amount) : payment.amount / groupReservations.length
-        } else {
-          // If paying full/remaining balance
-          const newPaymentShare = payment.amount / groupReservations.length
-          resAmountPaid = (res.amount_paid || 0) + newPaymentShare
+          resAmountPaid = resMeta?.down_payment_amount || payment.amount / groupReservations.length
         }
 
         return {
@@ -523,9 +510,7 @@ async function markReservationPaidAndConfirmed({
     .from('reservations')
     .update({
       status: targetStatus,
-      amount_paid: targetStatus === 'confirmed' && !isDownPayment
-        ? (reservationRecord.amount_paid || 0) + payment.amount
-        : payment.amount,
+      amount_paid: payment.amount,
       updated_at: nowISO,
       metadata: {
         ...confirmationMetadata,
@@ -1293,7 +1278,7 @@ async function handleRefundEvent(data: any, eventType: string) {
 
   const processedAt = new Date().toISOString()
 
-  if (eventType === 'refund.succeeded' || (eventType === 'refund.updated' && status === 'succeeded')) {
+  if (eventType === 'refund.succeeded') {
     // Update refund record as succeeded
     await supabase
       .from('refunds')
@@ -1344,7 +1329,7 @@ async function handleRefundEvent(data: any, eventType: string) {
 
     console.log('[handleRefundEvent] ✅ Refund succeeded:', refundRecord.id)
 
-  } else if (eventType === 'refund.failed' || (eventType === 'refund.updated' && status === 'failed')) {
+  } else if (eventType === 'refund.failed') {
     // Update refund record as failed
     await supabase
       .from('refunds')

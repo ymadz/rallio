@@ -43,13 +43,7 @@ export async function createReservation(
     }
 
     const durationMs = initialEndTime.getTime() - initialStartTime.getTime()
-    // Handle Manila Timezone correctly (+08:00)
-    // Add 8 hours to UTC time to query Manila days correctly
-    const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000
-    const initialManilaTime = new Date(initialStartTime.getTime() + MANILA_OFFSET_MS)
-
-    // Check if the current booking crosses into the next day relative to start time? No, getUTCDay acts as if it's in Manila.
-    const startDayIndex = initialManilaTime.getUTCDay() // 0-6
+    const startDayIndex = initialStartTime.getDay() // 0-6
 
     console.log(`[createReservation] Starting ${isRecurring ? 'recurring' : 'single'} booking check. Weeks: ${recurrenceWeeks}, Days: ${selectedDays.join(',')}`)
 
@@ -63,7 +57,9 @@ export async function createReservation(
         for (const dayIndex of uniqueSelectedDays) {
             const dayOffset = (dayIndex - startDayIndex + 7) % 7
 
-            const slotStartTime = new Date(initialStartTime.getTime() + (i * 7 * 24 * 60 * 60 * 1000) + (dayOffset * 24 * 60 * 60 * 1000))
+            const slotStartTime = new Date(initialStartTime.getTime())
+            slotStartTime.setDate(slotStartTime.getDate() + (i * 7) + dayOffset)
+
             const slotEndTime = new Date(slotStartTime.getTime() + durationMs)
 
             targetSlots.push({
@@ -95,18 +91,10 @@ export async function createReservation(
     const adminDb = createServiceClient()
 
     for (const slot of targetSlots) {
-        // A. Check Past Time using absolute UNIX timestamps completely isolated from Vercel timezones
-        if (slot.start.getTime() < Date.now() - 60000) {
-            return {
-                success: false,
-                error: `Booking Request Invalid: Cannot book a time in the past.`
-            }
-        }
-
         const currentStartTimeISO = slot.start.toISOString()
         const currentEndTimeISO = slot.end.toISOString()
 
-        const conflictStatuses = ['pending_payment', 'partially_paid', 'confirmed', 'ongoing', 'pending_refund', 'completed', 'no_show']
+        const conflictStatuses = ['pending_payment', 'confirmed', 'ongoing', 'pending_refund', 'completed', 'no_show']
 
         const [reservationConflicts, queueConflicts] = await Promise.all([
             adminDb
