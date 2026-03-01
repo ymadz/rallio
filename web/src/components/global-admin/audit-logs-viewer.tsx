@@ -284,7 +284,9 @@ export default function AuditLogsViewer() {
             <div className="space-y-2">
               {stats.topActions?.map((action: any, i: number) => (
                 <div key={i} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-700">{action.action}</span>
+                  <span className="text-gray-700">
+                    {action.action.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                  </span>
                   <span className="font-semibold text-gray-900">{action.count}</span>
                 </div>
               ))}
