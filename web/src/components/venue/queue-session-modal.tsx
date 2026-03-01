@@ -9,6 +9,7 @@ import { useCheckoutStore } from '@/stores/checkout-store'
 import { getAvailableTimeSlotsAction, validateBookingAvailabilityAction, getVenueMetadataAction } from '@/app/actions/reservations'
 import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
 import { cn } from '@/lib/utils'
+import { QueueTutorial } from './queue-tutorial'
 import { Label } from '@/components/ui/label'
 import {
     Select,
@@ -399,11 +400,12 @@ export function QueueSessionModal({
 
     return (
         <div className="fixed inset-0 z-50 overflow-y-auto">
-            {/* Backdrop */}
             <div
                 className="fixed inset-0 bg-black/50 transition-opacity"
                 onClick={onClose}
             />
+
+            <QueueTutorial isOpen={isOpen} view={step} />
 
             {/* Modal */}
             <div className="flex min-h-full items-center justify-center p-4">
@@ -438,8 +440,9 @@ export function QueueSessionModal({
                             <div className="grid md:grid-cols-2 gap-6">
                                 {/* Calendar */}
                                 <div>
-                                    <h4 className="font-semibold text-gray-900 mb-3">Choose Date</h4>
-                                    <div className="border border-gray-200 rounded-xl p-4">
+                                    <div id="qm-tour-calendar">
+                                        <h4 className="font-semibold text-gray-900 mb-3">Choose Date</h4>
+                                        <div className="border border-gray-200 rounded-xl p-4">
                                         <DayPicker
                                             mode="single"
                                             selected={selectedDate}
@@ -468,9 +471,10 @@ export function QueueSessionModal({
                                             </div>
                                         </div>
                                     </div>
+                                    </div>
 
                                     {/* Recurrence */}
-                                    <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                                    <div id="qm-tour-repeat" className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
                                         <div className="flex items-center gap-2 mb-2">
                                             <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -505,7 +509,7 @@ export function QueueSessionModal({
 
                                     {/* Multi-Day Selection */}
                                     {recurrenceWeeks >= 1 && (
-                                        <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                                        <div id="qm-tour-days" className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
                                             <div className="flex items-center gap-2 mb-2">
                                                 <span className="text-xl">📅</span>
                                                 <Label className="text-sm font-semibold text-gray-900">Include Days</Label>
@@ -552,7 +556,7 @@ export function QueueSessionModal({
                                         Select Time Range
                                     </h4>
 
-                                    <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col h-[400px]">
+                                    <div id="qm-tour-time" className="border border-gray-200 rounded-xl overflow-hidden flex flex-col h-[400px]">
                                         {loading ? (
                                             <div className="flex-1 flex flex-col items-center justify-center p-8">
                                                 <div className="animate-spin rounded-full h-8 w-8 border-4 border-gray-200 border-t-primary" />
@@ -690,7 +694,7 @@ export function QueueSessionModal({
                                 </div>
 
                                 {/* Session Mode */}
-                                <div>
+                                <div id="qm-tour-mode">
                                     <label className="block text-sm font-medium text-gray-700 mb-3">
                                         Session Mode <span className="text-red-500">*</span>
                                     </label>
@@ -721,7 +725,7 @@ export function QueueSessionModal({
                                 </div>
 
                                 {/* Game Format */}
-                                <div>
+                                <div id="qm-tour-format">
                                     <label className="block text-sm font-medium text-gray-700 mb-3">
                                         Game Format <span className="text-red-500">*</span>
                                     </label>
@@ -746,7 +750,7 @@ export function QueueSessionModal({
                                 </div>
 
                                 {/* Max Players */}
-                                <div>
+                                <div id="qm-tour-players">
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Max Players <span className="text-red-500">*</span>
                                     </label>
@@ -767,7 +771,7 @@ export function QueueSessionModal({
                                 </div>
 
                                 {/* Cost Per Game */}
-                                <div>
+                                <div id="qm-tour-cost">
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Cost Per Game (₱) <span className="text-red-500">*</span>
                                     </label>
@@ -782,7 +786,7 @@ export function QueueSessionModal({
                                 </div>
 
                                 {/* Visibility */}
-                                <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                <div id="qm-tour-public" className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-4">
                                     <div>
                                         <p className="font-medium text-gray-900">Public Session</p>
                                         <p className="text-xs text-gray-500">Allow anyone to find and join</p>
@@ -932,6 +936,7 @@ export function QueueSessionModal({
                             </button>
                             {step === 'schedule' ? (
                                 <button
+                                    id="qm-tour-next"
                                     onClick={handleContinueToSettings}
                                     disabled={!startSlot || !validationState.valid || validationState.validating || isCalculatingPrice}
                                     className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
@@ -940,6 +945,7 @@ export function QueueSessionModal({
                                 </button>
                             ) : (
                                 <button
+                                    id="qm-tour-book"
                                     onClick={handleBook}
                                     disabled={isBooking || isCalculatingPrice}
                                     className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
