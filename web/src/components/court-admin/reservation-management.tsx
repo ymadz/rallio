@@ -284,6 +284,79 @@ export function ReservationManagement() {
     cancelled: reservations.filter(r => ['cancelled', 'rejected'].includes(getEffectiveStatus(r))).length,
   }
 
+  const handleExportCSV = () => {
+    if (filteredReservations.length === 0) return
+
+    const headers = [
+      'Booking ID',
+      'Customer Name',
+      'Customer Phone',
+      'Court Name',
+      'Venue Name',
+      'Date',
+      'Start Time',
+      'End Time',
+      'Status',
+      'Total Amount',
+      'Amount Paid',
+      'Number of Players',
+      'Notes'
+    ]
+
+    const customFormatDate = (dateString: string) => {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      })
+    }
+
+    const customFormatTime = (dateString: string) => {
+      return new Date(dateString).toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      })
+    }
+
+    const csvData = filteredReservations.map(r => {
+      const customerName = r.user?.display_name ||
+        `${r.user?.first_name || ''} ${r.user?.last_name || ''}`.trim() || 'Unknown'
+
+      const { label: statusLabel } = getDisplayStatus(r)
+
+      return [
+        r.id,
+        `"${customerName.replace(/"/g, '""')}"`,
+        `"${r.user?.phone || ''}"`,
+        `"${r.court?.name?.replace(/"/g, '""') || ''}"`,
+        `"${r.court?.venue?.name?.replace(/"/g, '""') || ''}"`,
+        `"${customFormatDate(r.start_time)}"`,
+        `"${customFormatTime(r.start_time)}"`,
+        `"${customFormatTime(r.end_time)}"`,
+        `"${statusLabel}"`,
+        r.total_amount,
+        r.amount_paid,
+        r.num_players,
+        `"${(r.notes || '').replace(/"/g, '""')}"`
+      ]
+    })
+
+    const csvContent = [
+      headers.join(','),
+      ...csvData.map(row => row.join(','))
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.setAttribute('href', url)
+    link.setAttribute('download', `reservations_export_${new Date().toISOString().split('T')[0]}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -420,7 +493,11 @@ export function ReservationManagement() {
             </select>
 
             {/* Export Button */}
-            <button className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            <button
+              onClick={handleExportCSV}
+              disabled={filteredReservations.length === 0}
+              className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               <Download className="w-4 h-4" />
               <span>Export</span>
             </button>
