@@ -1,3 +1,7 @@
+import { createClient } from '@/lib/supabase/server'
+import { notFound, redirect } from 'next/navigation'
+import { format } from 'date-fns'
+import Link from 'next/link'
 import { DownloadReceiptButton } from '@/components/shared/download-receipt-button'
 
 export default async function BookingReceiptPage({ params }: { params: Promise<{ id: string }> }) {

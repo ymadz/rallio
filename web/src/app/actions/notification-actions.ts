@@ -4,7 +4,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import type { Notification } from '@/types/notifications'
 
-export type NotificationType =
+export type NotificationType = 
   | 'booking_confirmed'
   | 'booking_cancelled'
   | 'payment_received'
@@ -68,7 +68,7 @@ export async function createNotification(data: CreateNotificationData) {
 /**
  * Get all notifications for the current user
  */
-export async function getNotifications(limit: number = 50, offset: number = 0, filter: 'all' | 'unread' = 'all') {
+export async function getNotifications(limit: number = 50) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -77,18 +77,12 @@ export async function getNotifications(limit: number = 50, offset: number = 0, f
   }
 
   try {
-    let query = supabase
+    const { data: notifications, error } = await supabase
       .from('notifications')
       .select('*')
       .eq('user_id', user.id)
-
-    if (filter === 'unread') {
-      query = query.eq('is_read', false)
-    }
-
-    const { data: notifications, error } = await query
       .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1)
+      .limit(limit)
 
     if (error) throw error
 

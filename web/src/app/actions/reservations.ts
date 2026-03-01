@@ -5,9 +5,6 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { format } from 'date-fns'
 import { revalidatePath } from 'next/cache'
 import { createReservation } from '@/lib/services/reservations'
-import { writeAuditLog } from '@/lib/audit'
-import { createNotification, NotificationTemplates } from '@/lib/notifications'
-import { createServiceClient as createAdminClient } from '@/lib/supabase/service'
 
 export interface TimeSlot {
   time: string
@@ -467,74 +464,6 @@ export async function createReservationAction(data: {
   if (result.success) {
     revalidatePath('/reservations')
     revalidatePath('/bookings')
-    // Audit: log reservation creation
-    await writeAuditLog({
-      userId: data.userId,
-      action: 'reservation.created',
-      resourceType: 'reservation',
-      resourceId: result.reservationId ?? 'unknown',
-      newValues: {
-        courtId: data.courtId,
-        startTime: data.startTimeISO,
-        endTime: data.endTimeISO,
-        totalAmount: data.totalAmount,
-        paymentMethod: data.paymentMethod,
-        paymentType: data.paymentType,
-      },
-    })
-
-    // --- NOTIFICATIONS ---
-    try {
-      const adminDb = createAdminClient()
-
-      // 1. Get venue and court details for the notification message
-      const { data: court } = await adminDb
-        .from('courts')
-        .select(`
-          name,
-          venues (
-            id,
-            name,
-            owner_id
-          )
-        `)
-        .eq('id', data.courtId)
-        .single()
-
-      if (court) {
-        const venue = Array.isArray(court.venues) ? court.venues[0] : court.venues
-        const venueName = (venue as any)?.name || 'Venue'
-        const courtName = court.name || 'Court'
-        const ownerId = (venue as any)?.owner_id
-        const formattedDate = format(new Date(data.startTimeISO), 'MMM d, h:mm a')
-
-        // 2. Notify Player: Request Received
-        await createNotification({
-          userId: data.userId,
-          type: 'booking_confirmed', // Using confirmed for now but template message stays neutral
-          title: '📅 Booking Received',
-          message: `Your booking request at ${venueName} (${courtName}) for ${formattedDate} has been received.`,
-          actionUrl: `/bookings/${result.reservationId}`,
-          metadata: { booking_id: result.reservationId }
-        })
-
-        // 3. Notify Court Admin: New Booking Request
-        if (ownerId) {
-          await createNotification({
-            userId: ownerId,
-            ...NotificationTemplates.newBookingRequest(
-              venueName,
-              courtName,
-              formattedDate,
-              result.reservationId!
-            )
-          })
-        }
-      }
-    } catch (notifyError) {
-      console.error('⚠️ [createReservationAction] Notification failed:', notifyError)
-      // Don't fail the action if notification fails
-    }
   }
 
   return result
@@ -594,70 +523,8 @@ export async function cancelReservationAction(reservationId: string) {
     return { success: false, error: 'Failed to cancel reservation' }
   }
 
-  // 6. Notify Venue Owner
-  try {
-    const { data: details } = await supabase
-      .from('reservations')
-      .select(`
-        id,
-        start_time,
-        profiles!inner (first_name, last_name),
-        courts!inner (
-          name,
-          venues!inner (
-            name,
-            owner_id
-          )
-        )
-      `)
-      .eq('id', reservationId)
-      .single()
-
-    if (details?.courts) {
-      const court = details.courts as any
-      const venue = court.venues
-      const ownerId = venue.owner_id
-      const profile = Array.isArray(details.profiles) ? details.profiles[0] : details.profiles as any
-      const userName = `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || 'A player'
-      const formattedDate = new Date(details.start_time).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit'
-      })
-
-      if (ownerId) {
-        const { createNotification, NotificationTemplates } = await import('@/lib/notifications')
-        await createNotification({
-          userId: ownerId,
-          ...NotificationTemplates.userCancelledBookingForAdmin(
-            userName,
-            venue.name,
-            court.name,
-            formattedDate,
-            reservationId
-          )
-        })
-      }
-    }
-  } catch (notifyError) {
-    console.error('⚠️ [cancelReservationAction] Notification failed:', notifyError)
-  }
-
-  // Audit: log reservation cancellation
-  await writeAuditLog({
-    userId: user.id,
-    action: 'reservation.cancelled',
-    resourceType: 'reservation',
-    resourceId: reservationId,
-    oldValues: { status: booking.status },
-    newValues: { status: 'cancelled' },
-  })
-
   revalidatePath('/reservations')
   revalidatePath('/bookings')
-  revalidatePath(`/bookings/${reservationId}`)
 
   return { success: true }
 }

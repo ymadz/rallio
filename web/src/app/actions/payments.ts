@@ -702,33 +702,6 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
     console.log('Reservation ID:', payment.reservation_id)
     console.log('Reservation status:', updatedReservation?.[0]?.status || 'unknown')
 
-    // 🔔 Notify Venue Owner of payment success
-    try {
-      const { data: reservation } = await supabase
-        .from('reservations')
-        .select('*, courts(name, venues(name, owner_id))')
-        .eq('id', payment.reservation_id)
-        .single()
-
-      if (reservation) {
-        const venueInfo = reservation.courts?.venues ? (Array.isArray(reservation.courts.venues) ? reservation.courts.venues[0] : reservation.courts.venues) : null
-        const ownerId = (venueInfo as any)?.owner_id
-        const venueName = (venueInfo as any)?.name || 'Venue'
-
-        if (ownerId) {
-          await createNotification({
-            userId: ownerId,
-            ...NotificationTemplates.paymentReceived(
-              payment.amount,
-              payment.reservation_id
-            )
-          })
-        }
-      }
-    } catch (notifyError) {
-      console.error('[processChargeableSourceAction] ⚠️ Notification failed:', notifyError)
-    }
-
     revalidatePath('/reservations')
     revalidatePath('/bookings')
 

@@ -4,7 +4,6 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { createNotification, NotificationTemplates } from '@/lib/notifications'
 import { getServerNow } from '@/lib/time-server'
-import { writeAuditLog } from '@/lib/audit'
 
 /**
  * Get all venues owned by the current user (Court Admin)
@@ -473,18 +472,6 @@ export async function approveReservation(reservationId: string) {
       })
     }
 
-    // Audit: log admin approval
-    await writeAuditLog({
-      userId: user.id,
-      action: 'reservation.approved',
-      resourceType: 'reservation',
-      resourceId: reservationId,
-      newValues: {
-        isQueueSession,
-        queueSessionId,
-      },
-    })
-
     revalidatePath('/court-admin/reservations')
     revalidatePath('/court-admin')
     return { success: true }
@@ -646,19 +633,6 @@ export async function markReservationAsPaid(reservationId: string) {
       )
     })
 
-    // Audit: log admin confirming cash payment
-    await writeAuditLog({
-      userId: user.id,
-      action: 'reservation.payment_confirmed',
-      resourceType: 'reservation',
-      resourceId: reservationId,
-      newValues: {
-        amount: totalAmount,
-        method: isPartiallyPaid ? 'cash_with_down_payment' : 'cash',
-        isQueueSession,
-      },
-    })
-
     revalidatePath('/court-admin/reservations')
     revalidatePath('/court-admin')
     return { success: true }
@@ -741,12 +715,15 @@ export async function rejectReservation(reservationId: string, reason: string) {
       // Notify User about rejection
       await createNotification({
         userId: reservation.user_id,
-        ...NotificationTemplates.bookingRejected(
-          (reservation.court as any).venue.name,
-          (reservation.court as any).name,
+        type: 'booking_cancelled',
+        title: '❌ Booking Rejected',
+        message: `Your booking at ${(reservation.court as any).venue.name} (${(reservation.court as any).name}) was rejected. Reason: ${reason}`,
+        actionUrl: `/bookings/${reservation.id}`,
+        metadata: {
+          booking_id: reservation.id,
           reason,
-          reservation.id
-        )
+          venue_name: (reservation.court as any).venue.name
+        }
       })
     }
 
@@ -761,18 +738,6 @@ export async function rejectReservation(reservationId: string, reason: string) {
       .eq('id', reservationId)
 
     if (error) throw error
-
-    // Audit: log booking rejection as admin cancellation
-    await writeAuditLog({
-      userId: user.id,
-      action: 'reservation.admin_cancelled',
-      resourceType: 'reservation',
-      resourceId: reservationId,
-      newValues: {
-        reason,
-        isQueueSession,
-      },
-    })
 
     revalidatePath('/court-admin/reservations')
     revalidatePath('/court-admin')
