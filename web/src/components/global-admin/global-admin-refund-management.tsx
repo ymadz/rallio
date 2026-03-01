@@ -14,7 +14,7 @@ import {
   Clock,
   RefreshCw,
   Eye,
-  PhilippinePeso,
+  DollarSign,
   TrendingUp
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -261,7 +261,7 @@ export function GlobalAdminRefundManagement() {
         
         <Card className="p-4 bg-green-50 text-green-700">
           <div className="flex items-center gap-2 mb-1">
-            <PhilippinePeso className="w-4 h-4" />
+            <DollarSign className="w-4 h-4" />
             <p className="text-sm font-medium">Total Refunded</p>
           </div>
           <p className="text-2xl font-bold">₱{(totalRefundedAmount / 100).toLocaleString()}</p>

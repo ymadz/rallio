@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { waiveFee, markAsPaid } from '@/app/actions/queue-actions'
 import { initiateQueuePaymentAction } from '@/app/actions/payments'
-import { X, PhilippinePeso, CreditCard, Loader2, CheckCircle, AlertCircle, QrCode } from 'lucide-react'
+import { X, DollarSign, CreditCard, Loader2, CheckCircle, AlertCircle, QrCode } from 'lucide-react'
 
 type PaymentMethod = 'gcash' | 'paymaya'
 
@@ -142,7 +142,7 @@ export function PaymentManagementModal({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
-                <PhilippinePeso className="w-5 h-5" />
+                <DollarSign className="w-5 h-5" />
               </div>
               <div>
                 <h2 className="text-xl font-bold">Payment Management</h2>
@@ -330,7 +330,7 @@ export function PaymentManagementModal({
                 className="w-full flex items-center gap-3 p-4 border-2 border-orange-200 rounded-xl hover:bg-orange-50 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <PhilippinePeso className="w-5 h-5 text-orange-600" />
+                  <DollarSign className="w-5 h-5 text-orange-600" />
                 </div>
                 <div className="flex-1">
                   <p className="font-semibold text-gray-900">Waive Payment</p>
@@ -385,7 +385,7 @@ export function PaymentManagementModal({
                   Waive <strong>₱{participant.amountOwed.toLocaleString()}</strong> for <strong>{participant.playerName}</strong>?
                 </p>
                 <p className="text-xs text-gray-600">
-                  This action cannot be undone. The amount will be marked as paid with a ₱0 charge.
+                  This action cannot be undone. The amount will be marked as paid with a $0 charge.
                 </p>
               </div>
               <div className="flex items-center gap-3">

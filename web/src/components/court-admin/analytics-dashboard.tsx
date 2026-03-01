@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import {
   TrendingUp,
   TrendingDown,
-  PhilippinePeso,
+  DollarSign,
   Calendar,
   Users,
   Clock,
@@ -279,7 +279,7 @@ export function AnalyticsDashboard({ venueId }: AnalyticsDashboardProps) {
           <div className="bg-white border border-gray-200 rounded-xl p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <PhilippinePeso className="w-6 h-6 text-green-600" />
+                <DollarSign className="w-6 h-6 text-green-600" />
               </div>
               {analytics.revenue_change > 0 && (
                 <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">

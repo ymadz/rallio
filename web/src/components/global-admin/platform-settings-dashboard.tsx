@@ -12,7 +12,7 @@ import {
 } from '@/app/actions/global-admin-settings-actions'
 import {
   Settings,
-  PhilippinePeso,
+  DollarSign,
   FileText,
   Bell,
   CreditCard,
@@ -278,7 +278,7 @@ export default function PlatformSettingsDashboard() {
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
-            <PhilippinePeso className="w-4 h-4" />
+            <DollarSign className="w-4 h-4" />
             <span className="font-medium">Platform Fees</span>
           </button>
 
@@ -424,7 +424,7 @@ export default function PlatformSettingsDashboard() {
         <div className="space-y-6">
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <PhilippinePeso className="w-5 h-5 text-purple-600" />
+              <DollarSign className="w-5 h-5 text-purple-600" />
               Platform Service Fee
             </h2>
 
@@ -537,7 +537,7 @@ export default function PlatformSettingsDashboard() {
           {/* Refund Policy */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <PhilippinePeso className="w-5 h-5 text-purple-600" />
+              <DollarSign className="w-5 h-5 text-purple-600" />
               Refund Policy
             </h2>
 

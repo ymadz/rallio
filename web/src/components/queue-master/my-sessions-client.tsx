@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Calendar, Users, PhilippinePeso, Clock, ArrowRight, Filter, PlayCircle, History } from 'lucide-react'
+import { Calendar, Users, DollarSign, Clock, ArrowRight, Filter, PlayCircle, History } from 'lucide-react'
 import Link from 'next/link'
 import { QueueMasterHistoryClient } from './queue-master-history-client'
 import { getStatusBadgeClasses, getStatusLabel, getStatusIcon, type QueueSessionStatus } from '@/lib/queue-status'
@@ -160,7 +160,7 @@ export function MySessionsClient({ initialSessions, initialHistory }: MySessions
                                                     <span>{session.currentPlayers} / {session.maxPlayers} Players</span>
                                                 </div>
                                                 <div className="flex items-center gap-1.5">
-                                                    <PhilippinePeso className="w-4 h-4 text-gray-400" />
+                                                    <DollarSign className="w-4 h-4 text-gray-400" />
                                                     <span>₱{session.costPerGame} / game</span>
                                                 </div>
                                             </div>

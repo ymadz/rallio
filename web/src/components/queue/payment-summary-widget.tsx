@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { PhilippinePeso, CreditCard, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
+import { DollarSign, CreditCard, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
 import { initiateQueuePaymentAction } from '@/app/actions/payments'
 import { useRouter } from 'next/navigation'
 
@@ -107,7 +107,7 @@ export function PaymentSummaryWidget({
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-          <PhilippinePeso className="w-5 h-5 text-primary" />
+          <DollarSign className="w-5 h-5 text-primary" />
           Payment Summary
         </h3>
         <div className={`px-3 py-1 ${config.bg} ${config.border} border rounded-full flex items-center gap-1.5`}>

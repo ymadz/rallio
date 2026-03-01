@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Building2,
-  PhilippinePeso,
+  DollarSign,
   Clock,
   BarChart3,
   Star,
@@ -119,8 +119,8 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
 
   const tabs = [
     { id: 'courts', label: 'Courts', icon: Building2 },
-    { id: 'pricing', label: 'Pricing', icon: PhilippinePeso },
-    { id: 'discounts', label: 'Discounts', icon: PhilippinePeso },
+    { id: 'pricing', label: 'Pricing', icon: DollarSign },
+    { id: 'discounts', label: 'Discounts', icon: DollarSign },
     { id: 'availability', label: 'Availability', icon: Clock },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'reviews', label: 'Reviews', icon: Star },
@@ -191,8 +191,8 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
               onClick={handleToggleActive}
               disabled={isToggling}
               className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 ${venue.is_active
-                ? 'border border-red-200 text-red-600 hover:bg-red-50'
-                : 'border border-green-200 text-green-600 hover:bg-green-50'
+                  ? 'border border-red-200 text-red-600 hover:bg-red-50'
+                  : 'border border-green-200 text-green-600 hover:bg-green-50'
                 }`}
               title={venue.is_active ? 'Deactivate venue - will be hidden from users' : 'Activate venue - will be visible to users'}
             >
