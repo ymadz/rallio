@@ -9,7 +9,7 @@ import {
   LayoutDashboard,
   Calendar,
   Building2,
-  DollarSign,
+  PhilippinePeso,
   BarChart3,
   Star,
   Settings,
