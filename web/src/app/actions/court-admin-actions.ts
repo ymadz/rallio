@@ -763,7 +763,6 @@ export async function updateVenue(venueId: string, updates: {
   longitude?: number
   opening_hours?: any
   image_url?: string
-  metadata?: any
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -858,7 +857,6 @@ export async function createVenue(venueData: {
   website?: string
   opening_hours?: Record<string, { open: string; close: string }>
   image_url?: string
-  metadata?: any
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -900,7 +898,6 @@ export async function createVenue(venueData: {
         email: venueData.email,
         website: venueData.website,
         image_url: venueData.image_url,
-        metadata: venueData.metadata || {},
 
         opening_hours: venueData.opening_hours || {
           monday: { open: '06:00', close: '22:00' },

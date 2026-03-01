@@ -1,82 +1,65 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Loader2, Upload, X, Image as ImageIcon } from 'lucide-react'
 import Image from 'next/image'
 
 interface VenuePhotoUploadProps {
     venueId: string
-    currentImages?: string[]
-    onImagesChange: (urls: string[]) => void
-    maxImages?: number
+    currentImage?: string | null
+    onImageChange: (url: string | null) => void
 }
 
-export function VenuePhotoUpload({ venueId, currentImages = [], onImagesChange, maxImages = 10 }: VenuePhotoUploadProps) {
+export function VenuePhotoUpload({ venueId, currentImage, onImageChange }: VenuePhotoUploadProps) {
     const [isUploading, setIsUploading] = useState(false)
-    const [previewUrls, setPreviewUrls] = useState<string[]>(currentImages || [])
+    const [previewUrl, setPreviewUrl] = useState<string | null>(currentImage || null)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
     const supabase = createClient()
 
-    useEffect(() => {
-        setPreviewUrls(currentImages || [])
-    }, [currentImages])
-
     const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || [])
-        if (files.length === 0) return
+        const file = e.target.files?.[0]
+        if (!file) return
 
-        if (previewUrls.length + files.length > maxImages) {
-            alert(`You can only upload up to ${maxImages} images in total.`)
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            alert('Please upload an image file')
+            return
+        }
+
+        // Validate file size (e.g., 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+            alert('File size must be less than 5MB')
             return
         }
 
         setIsUploading(true)
-        const newUrls: string[] = []
-
         try {
-            for (const file of files) {
-                // Validate file type
-                if (!file.type.startsWith('image/')) {
-                    alert(`File ${file.name} is not an image and was skipped.`)
-                    continue
-                }
+            const fileExt = file.name.split('.').pop()
+            const fileName = `${venueId}-${Date.now()}.${fileExt}`
+            const filePath = `${fileName}`
 
-                // Validate file size (e.g., 5MB)
-                if (file.size > 5 * 1024 * 1024) {
-                    alert(`File ${file.name} size exceeds 5MB and was skipped.`)
-                    continue
-                }
+            // Upload to Supabase Storage
+            const { error: uploadError } = await supabase.storage
+                .from('venue-images')
+                .upload(filePath, file)
 
-                const fileExt = file.name.split('.').pop()
-                const fileName = `${venueId}-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
-                const filePath = `${fileName}`
-
-                // Upload to Supabase Storage
-                const { error: uploadError } = await supabase.storage
-                    .from('venue-images')
-                    .upload(filePath, file)
-
-                if (uploadError) {
-                    throw uploadError
-                }
-
-                // Get Public URL
-                const { data: { publicUrl } } = supabase.storage
-                    .from('venue-images')
-                    .getPublicUrl(filePath)
-
-                newUrls.push(publicUrl)
+            if (uploadError) {
+                throw uploadError
             }
 
-            const updatedUrls = [...previewUrls, ...newUrls]
-            setPreviewUrls(updatedUrls)
-            onImagesChange(updatedUrls)
+            // Get Public URL
+            const { data: { publicUrl } } = supabase.storage
+                .from('venue-images')
+                .getPublicUrl(filePath)
+
+            setPreviewUrl(publicUrl)
+            onImageChange(publicUrl)
 
         } catch (error: any) {
-            console.error('Error uploading images:', error)
-            alert(error.message || 'Failed to upload images')
+            console.error('Error uploading image:', error)
+            alert(error.message || 'Failed to upload image')
         } finally {
             setIsUploading(false)
             // Reset input
@@ -86,11 +69,10 @@ export function VenuePhotoUpload({ venueId, currentImages = [], onImagesChange, 
         }
     }
 
-    const handleRemoveImage = (indexToRemove: number) => {
+    const handleRemoveImage = () => {
         if (confirm('Are you sure you want to remove this image?')) {
-            const updatedUrls = previewUrls.filter((_, index) => index !== indexToRemove)
-            setPreviewUrls(updatedUrls)
-            onImagesChange(updatedUrls)
+            setPreviewUrl(null)
+            onImageChange(null)
         }
     }
 
@@ -98,55 +80,45 @@ export function VenuePhotoUpload({ venueId, currentImages = [], onImagesChange, 
         <div className="space-y-4">
             <div className="flex items-center justify-between">
                 <label className="block text-sm font-medium text-gray-700">
-                    Venue Images <span className="text-gray-500 font-normal text-xs">({previewUrls.length}/{maxImages})</span>
+                    Venue Cover Image
                 </label>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {previewUrls.map((url, index) => (
-                    <div key={url} className="relative aspect-video w-full overflow-hidden rounded-lg border border-gray-200 bg-gray-100 group">
+            <div className="relative group">
+                {previewUrl ? (
+                    <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-gray-200 bg-gray-100">
                         <Image
-                            src={url}
-                            alt={`Venue image ${index + 1}`}
+                            src={previewUrl}
+                            alt="Venue cover"
                             fill
                             className="object-cover"
                         />
                         <button
-                            type="button"
-                            onClick={() => handleRemoveImage(index)}
-                            className="absolute top-2 right-2 p-1.5 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700 shadow-sm"
+                            onClick={handleRemoveImage}
+                            className="absolute top-2 right-2 p-1.5 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"
                             title="Remove image"
                         >
                             <X className="w-4 h-4" />
                         </button>
-                        {index === 0 && (
-                            <span className="absolute bottom-2 left-2 px-2 py-1 bg-black/60 text-white text-xs rounded-md backdrop-blur-sm shadow-sm">
-                                Cover
-                            </span>
-                        )}
                     </div>
-                ))}
-
-                {previewUrls.length < maxImages && (
-                    <div className="relative group">
-                        <div
-                            onClick={() => !isUploading && fileInputRef.current?.click()}
-                            className={`aspect-video w-full flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 transition-colors ${isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100 cursor-pointer'}`}
-                        >
-                            <div className="flex flex-col items-center justify-center p-4 text-center">
-                                <Upload className="w-6 h-6 text-gray-400 mb-2" />
-                                <p className="mb-1 text-xs text-gray-500 font-medium">
-                                    Click to upload
-                                </p>
-                                <p className="text-[10px] text-gray-400">Max {maxImages} images</p>
-                            </div>
+                ) : (
+                    <div
+                        onClick={() => fileInputRef.current?.click()}
+                        className="aspect-video w-full flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer"
+                    >
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                            <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                            <p className="mb-1 text-sm text-gray-500">
+                                <span className="font-semibold">Click to upload</span> or drag and drop
+                            </p>
+                            <p className="text-xs text-gray-500">SVG, PNG, JPG or GIF (MAX. 5MB)</p>
                         </div>
+                    </div>
+                )}
 
-                        {isUploading && (
-                            <div className="absolute inset-0 bg-white/50 backdrop-blur-sm flex items-center justify-center rounded-lg">
-                                <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                            </div>
-                        )}
+                {isUploading && (
+                    <div className="absolute inset-0 bg-white/80 flex items-center justify-center rounded-lg">
+                        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
                     </div>
                 )}
             </div>
@@ -155,11 +127,9 @@ export function VenuePhotoUpload({ venueId, currentImages = [], onImagesChange, 
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                multiple
                 onChange={handleFileSelect}
                 className="hidden"
             />
         </div>
     )
 }
-
