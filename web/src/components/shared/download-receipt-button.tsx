@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import html2canvas from 'html2canvas'
+import html2canvas from 'html2canvas-pro'
 import jsPDF from 'jspdf'
 
 export function DownloadReceiptButton() {
@@ -30,21 +30,35 @@ export function DownloadReceiptButton() {
             // Restore original classes
             receiptElement.className = originalClasses
 
-            const imgWidth = 210 // A4 width in mm
+            const pdfWidth = 210 // A4 width in mm
             const pageHeight = 297 // A4 height in mm
+            const marginX = 25 // 25mm margins on left and right edges (makes it visibly smaller on paper)
+            const marginTop = 20
+
+            const imgWidth = pdfWidth - (marginX * 2)
             const imgHeight = (canvas.height * imgWidth) / canvas.width
             let heightLeft = imgHeight
 
-            const doc = new jsPDF('p', 'mm', 'a4')
-            let position = 0
+            // Initialize jsPDF with compression enabled
+            const doc = new jsPDF({
+                orientation: 'p',
+                unit: 'mm',
+                format: 'a4',
+                compress: true 
+            })
+            
+            let position = marginTop
 
-            doc.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, imgWidth, imgHeight)
+            // Convert to JPEG instead of PNG for much smaller file size
+            const imgData = canvas.toDataURL('image/jpeg', 0.85)
+
+            doc.addImage(imgData, 'JPEG', marginX, position, imgWidth, imgHeight)
             heightLeft -= pageHeight
 
             while (heightLeft >= 0) {
-                position = heightLeft - imgHeight
+                position = position - pageHeight
                 doc.addPage()
-                doc.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, imgWidth, imgHeight)
+                doc.addImage(imgData, 'JPEG', marginX, position, imgWidth, imgHeight)
                 heightLeft -= pageHeight
             }
 
