@@ -40,7 +40,7 @@ export interface AuditLog {
   created_at: string
   admin: {
     id: string
-    full_name: string
+    display_name: string
     email: string
   }
 }
@@ -83,7 +83,7 @@ export async function getAuditLogs(params: GetAuditLogsParams = {}) {
         *,
         admin:profiles!admin_id (
           id,
-          full_name,
+          display_name,
           email
         )
       `, { count: 'exact' })
@@ -175,7 +175,7 @@ export async function getAuditStats() {
     // Most active admins
     const { data: topAdmins } = await supabase
       .from('admin_audit_logs')
-      .select('admin_id, admin:profiles!admin_id(full_name, email)')
+      .select('admin_id, admin:profiles!admin_id(display_name, email)')
       .gte('created_at', sevenDaysAgo.toISOString())
 
     const adminCounts = topAdmins?.reduce((acc: any, log: any) => {
@@ -183,7 +183,7 @@ export async function getAuditStats() {
       if (!acc[adminId]) {
         acc[adminId] = {
           admin_id: adminId,
-          full_name: log.admin?.full_name || 'Unknown',
+          display_name: log.admin?.display_name || 'Unknown',
           email: log.admin?.email || '',
           count: 0
         }
@@ -298,7 +298,7 @@ export async function getAdminList() {
         user_id,
         profiles!inner (
           id,
-          full_name,
+          display_name,
           email
         )
       `)
@@ -306,7 +306,7 @@ export async function getAdminList() {
 
     const adminList = admins?.map((a: any) => ({
       id: a.profiles.id,
-      full_name: a.profiles.full_name,
+      display_name: a.profiles.display_name,
       email: a.profiles.email,
     })) || []
 
@@ -335,7 +335,7 @@ export async function exportAuditLogs(params: GetAuditLogsParams = {}) {
       .select(`
         *,
         admin:profiles!admin_id (
-          full_name,
+          display_name,
           email
         )
       `)
@@ -357,7 +357,7 @@ export async function exportAuditLogs(params: GetAuditLogsParams = {}) {
     const headers = ['Timestamp', 'Admin', 'Action', 'Target Type', 'Target ID', 'Details']
     const rows = logs?.map((log: any) => [
       new Date(log.created_at).toISOString(),
-      log.admin?.full_name || 'Unknown',
+      log.admin?.display_name || 'Unknown',
       log.action_type,
       log.target_type || '-',
       log.target_id || '-',

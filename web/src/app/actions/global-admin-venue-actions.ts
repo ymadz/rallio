@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { headers } from 'next/headers'
 
 // Verify user is a global admin
 async function verifyGlobalAdmin() {
@@ -38,13 +39,21 @@ async function logAdminAction(params: {
 
   if (!user) return
 
+  const headersList = await headers()
+  const ip_address = headersList.get('x-forwarded-for')?.split(',')[0]?.trim()
+    || headersList.get('x-real-ip')
+    || null
+  const user_agent = headersList.get('user-agent') || null
+
   await supabase.from('admin_audit_logs').insert({
     action_type: params.actionType,
     target_type: params.targetType,
     target_id: params.targetId,
     old_value: params.oldValue || null,
     new_value: params.newValue || null,
-    performed_by: user.id
+    admin_id: user.id,
+    ip_address,
+    user_agent,
   })
 }
 

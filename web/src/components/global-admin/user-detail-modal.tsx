@@ -13,6 +13,7 @@ import {
   verifyPlayer,
   unverifyPlayer,
   deactivateUser,
+  reactivateUser,
   resetUserPassword
 } from '@/app/actions/global-admin-user-actions'
 import {
@@ -28,7 +29,8 @@ import {
   Key,
   Trash2,
   BadgeCheck,
-  XCircle
+  XCircle,
+  UserCheck
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
@@ -246,6 +248,20 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
       toast({ title: 'Success', description: 'message' in result ? result.message : 'Action completed' })
       setShowPasswordModal(false)
       setNewPassword('')
+    } else {
+      toast({ title: 'Error', description: 'error' in result ? result.error : 'Action failed', variant: 'destructive' })
+    }
+    setActionLoading(false)
+  }
+
+  const handleReactivate = async () => {
+    setActionLoading(true)
+    const result = await reactivateUser(userId)
+
+    if (result.success) {
+      toast({ title: 'Success', description: 'message' in result ? result.message : 'Action completed' })
+      await loadUserDetails()
+      onUpdate()
     } else {
       toast({ title: 'Error', description: 'error' in result ? result.error : 'Action failed', variant: 'destructive' })
     }
@@ -735,17 +751,31 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                         <UserX className="w-5 h-5 text-red-600" />
                       </button>
 
-                      <button
-                        onClick={() => setShowDeactivateModal(true)}
-                        disabled={actionLoading}
-                        className="w-full flex items-center justify-between p-4 border-2 border-gray-300 rounded-lg hover:border-gray-400 transition-colors disabled:opacity-50"
-                      >
-                        <div className="text-left">
-                          <h4 className="font-medium text-gray-900">Deactivate Account</h4>
-                          <p className="text-sm text-gray-700">Disable user login (reversible)</p>
-                        </div>
-                        <Trash2 className="w-5 h-5 text-gray-600" />
-                      </button>
+                      {user.is_active !== false ? (
+                        <button
+                          onClick={() => setShowDeactivateModal(true)}
+                          disabled={actionLoading}
+                          className="w-full flex items-center justify-between p-4 border-2 border-gray-300 rounded-lg hover:border-gray-400 transition-colors disabled:opacity-50"
+                        >
+                          <div className="text-left">
+                            <h4 className="font-medium text-gray-900">Deactivate Account</h4>
+                            <p className="text-sm text-gray-700">Disable user login (reversible)</p>
+                          </div>
+                          <Trash2 className="w-5 h-5 text-gray-600" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={handleReactivate}
+                          disabled={actionLoading}
+                          className="w-full flex items-center justify-between p-4 border-2 border-green-200 rounded-lg hover:border-green-300 transition-colors disabled:opacity-50"
+                        >
+                          <div className="text-left">
+                            <h4 className="font-medium text-green-900">Reactivate Account</h4>
+                            <p className="text-sm text-green-700">Restore user login access</p>
+                          </div>
+                          <UserCheck className="w-5 h-5 text-green-600" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}

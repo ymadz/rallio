@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { headers } from 'next/headers'
 import { type User } from '@supabase/supabase-js'
 
 type VerifyAdminResult =
@@ -183,6 +184,11 @@ export async function logAdminAction(params: {
   if (!auth.success) return { success: false, error: auth.error }
 
   const supabase = await createClient()
+  const headersList = await headers()
+  const ip_address = headersList.get('x-forwarded-for')?.split(',')[0]?.trim()
+    || headersList.get('x-real-ip')
+    || null
+  const user_agent = headersList.get('user-agent') || null
 
   try {
     await supabase.from('admin_audit_logs').insert({
@@ -192,6 +198,8 @@ export async function logAdminAction(params: {
       target_id: params.targetId,
       old_value: params.oldValue,
       new_value: params.newValue,
+      ip_address,
+      user_agent,
     })
 
     return { success: true }

@@ -24,6 +24,7 @@ import {
   TrendingUp,
   Clock,
   Shield,
+  X,
 } from 'lucide-react'
 
 export default function AuditLogsViewer() {
@@ -261,7 +262,7 @@ export default function AuditLogsViewer() {
             <div className="space-y-2">
               {stats.topAdmins?.map((admin: any, i: number) => (
                 <div key={i} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-700">{admin.full_name}</span>
+                  <span className="text-gray-700">{admin.display_name}</span>
                   <span className="font-semibold text-gray-900">{admin.count} actions</span>
                 </div>
               ))}
@@ -451,7 +452,7 @@ export default function AuditLogsViewer() {
                     <td className="px-4 py-3">
                       <div>
                         <div className="text-sm font-medium text-gray-900">
-                          {log.admin?.full_name || 'Unknown'}
+                          {log.admin?.display_name || 'Unknown'}
                         </div>
                         <div className="text-xs text-gray-500">
                           {log.admin?.email}
@@ -529,17 +530,23 @@ export default function AuditLogsViewer() {
       {/* Details Modal */}
       {selectedLog && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
           onClick={() => setSelectedLog(null)}
         >
           <div
-            className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto"
+            className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-6 border-b border-gray-200">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between shrink-0">
               <h2 className="text-xl font-bold text-gray-900">Audit Log Details</h2>
+              <button
+                onClick={() => setSelectedLog(null)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 overflow-y-auto">
               <div>
                 <label className="text-sm font-semibold text-gray-700">Timestamp</label>
                 <p className="text-sm text-gray-900 mt-1">{formatDate(selectedLog.created_at)}</p>
@@ -547,7 +554,7 @@ export default function AuditLogsViewer() {
               <div>
                 <label className="text-sm font-semibold text-gray-700">Admin</label>
                 <p className="text-sm text-gray-900 mt-1">
-                  {selectedLog.admin?.full_name} ({selectedLog.admin?.email})
+                  {selectedLog.admin?.display_name} ({selectedLog.admin?.email})
                 </p>
               </div>
               <div>
@@ -595,14 +602,15 @@ export default function AuditLogsViewer() {
                 </div>
               )}
             </div>
-            <div className="p-6 border-t border-gray-200 flex justify-end">
+            <div className="p-6 border-t border-gray-200 flex justify-end shrink-0">
               <button
                 onClick={() => setSelectedLog(null)}
-                className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-400"
               >
                 Close
               </button>
             </div>
+
           </div>
         </div>
       )}

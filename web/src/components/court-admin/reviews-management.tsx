@@ -75,13 +75,16 @@ export function ReviewsManagement({ venueId }: ReviewsManagementProps) {
     }
   }
 
-  const averageRating = stats?.average_rating || 0
+  const averageRating = stats?.averageRating || 0
   const totalReviews = reviews.length
   const ratingDistribution = [5, 4, 3, 2, 1].map(rating => ({
     rating,
     count: reviews.filter(r => r.rating === rating).length,
     percentage: totalReviews > 0 ? (reviews.filter(r => r.rating === rating).length / totalReviews) * 100 : 0
   }))
+  const responseRate = stats?.totalReviews > 0
+    ? (stats.reviewsWithResponse / stats.totalReviews) * 100
+    : 0
 
   const filteredReviews = filterRating === 'all'
     ? reviews
@@ -210,7 +213,7 @@ export function ReviewsManagement({ venueId }: ReviewsManagementProps) {
               <div>
                 <p className="text-sm text-gray-500">Response Rate</p>
                 <p className="text-3xl font-bold text-gray-900">
-                  {stats?.response_rate ? `${Math.round(stats.response_rate)}%` : 'N/A'}
+                  {stats?.totalReviews > 0 ? `${Math.round(responseRate)}%` : 'N/A'}
                 </p>
               </div>
             </div>

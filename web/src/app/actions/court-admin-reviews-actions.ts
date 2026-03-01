@@ -74,9 +74,36 @@ export async function getVenueReviews(
     if (error) throw error
 
     // Filter by hasResponse if specified
-    let reviews = ratings || []
+    const rawReviews = ratings || []
+
+    // Map to the structure expected by the UI
+    let reviews = rawReviews.map(r => {
+      // Postgres returns array for one-to-many joins unless specified as single
+      const responseArr = Array.isArray(r.response) ? r.response : (r.response ? [r.response] : [])
+      const latestResponse = responseArr.length > 0 ? responseArr[0] : null
+
+      const userObj = Array.isArray(r.user) ? r.user[0] : r.user
+      const courtObj = Array.isArray(r.court) ? r.court[0] : r.court
+
+      return {
+        id: r.id,
+        rating: r.overall_rating,
+        comment: r.comment,
+        customerName: userObj?.display_name || (userObj?.first_name ? `${userObj.first_name} ${userObj.last_name || ''}`.trim() : 'Anonymous Player'),
+        customerAvatar: userObj?.avatar_url,
+        courtName: courtObj?.name || 'Unknown Court',
+        date: r.created_at,
+        helpful: 0, // Not in schema yet
+        isReported: r.metadata?.flagged === true,
+        response: latestResponse ? {
+          text: latestResponse.response,
+          date: latestResponse.created_at
+        } : undefined
+      }
+    })
+
     if (filters?.hasResponse !== undefined) {
-      reviews = reviews.filter(r => filters.hasResponse ? r.response !== null : r.response === null)
+      reviews = reviews.filter(r => filters.hasResponse ? r.response !== undefined : r.response === undefined)
     }
 
     return { success: true, reviews }

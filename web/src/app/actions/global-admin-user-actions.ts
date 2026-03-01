@@ -134,6 +134,7 @@ export async function getUserDetails(userId: string) {
       created_at,
       updated_at,
       is_banned,
+      is_active,
       banned_reason,
       banned_until,
       banned_by,
@@ -161,7 +162,7 @@ export async function getUserDetails(userId: string) {
   // Get player stats if they have a player profile
   const { data: playerStats } = await supabase
     .from('players')
-    .select('skill_level, rating, total_games_played, total_wins')
+    .select('skill_level, rating, total_games_played, total_wins, verified_player, birth_date, gender, play_style, bio')
     .eq('user_id', userId)
     .single()
 
