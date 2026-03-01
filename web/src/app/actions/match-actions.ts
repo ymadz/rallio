@@ -621,6 +621,35 @@ export async function recordMatchScore(
     revalidatePath(`/queue/${match.queue_sessions.court_id}`)
     revalidatePath('/queue')
 
+    // 🔔 Notify all players of the final score
+    try {
+      const { data: court } = await supabase
+        .from('courts')
+        .select('name, venues(name)')
+        .eq('id', match.queue_sessions.court_id)
+        .single()
+
+      const venueName = (court?.venues as any)?.name || 'Venue'
+
+      await createBulkNotifications(
+        allPlayers.map(playerId => ({
+          userId: playerId,
+          type: 'queue_match_assigned', // Reusing this for "match result"
+          title: '📊 Match Result Recorded',
+          message: `Match #${match.match_number} at ${venueName} (${court?.name}) finished. Score: ${scores.teamAScore} - ${scores.teamBScore}.`,
+          actionUrl: `/queue/${match.queue_sessions.court_id}`,
+          metadata: {
+            match_id: matchId,
+            score_a: scores.teamAScore,
+            score_b: scores.teamBScore,
+            winner: scores.winner
+          }
+        }))
+      )
+    } catch (notifyError) {
+      console.error('[recordMatchScore] ⚠️ Notification failed:', notifyError)
+    }
+
     return { success: true }
   } catch (error: any) {
     console.error('[recordMatchScore] ❌ Error:', error)

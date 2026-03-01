@@ -1,8 +1,6 @@
 'use client'
 
 import React, { useState } from 'react'
-import html2canvas from 'html2canvas'
-import jsPDF from 'jspdf'
 
 export function DownloadReceiptButton() {
     const [isGenerating, setIsGenerating] = useState(false)
@@ -13,6 +11,11 @@ export function DownloadReceiptButton() {
 
         try {
             setIsGenerating(true)
+            
+            // Dynamically import libraries only when needed on the client
+            const html2canvas = (await import('html2canvas')).default
+            const jsPDF = (await import('jspdf')).default || (await import('jspdf')).jsPDF || (await import('jspdf'))
+
             // Save the original classes
             const originalClasses = receiptElement.className
 

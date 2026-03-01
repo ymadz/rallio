@@ -9,22 +9,41 @@ export function useNotifications() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [loadMoreLoading, setLoadMoreLoading] = useState(false)
+  const [hasMore, setHasMore] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [filter, setFilter] = useState<'all' | 'unread'>('all')
+  const [offset, setOffset] = useState(0)
   const supabase = createClient()
 
-  // Fetch initial notifications
-  const fetchNotifications = async () => {
-    setLoading(true)
+  const LIMIT = 10
+
+  // Fetch notifications
+  const fetchNotifications = async (initial = true) => {
+    if (initial) {
+      setLoading(true)
+      setOffset(0)
+    } else {
+      setLoadMoreLoading(true)
+    }
+
     setError(null)
 
     try {
+      const currentOffset = initial ? 0 : offset + LIMIT
       const [notificationsResult, countResult] = await Promise.all([
-        getNotifications(50),
-        getUnreadCount()
+        getNotifications(LIMIT, currentOffset, filter),
+        initial ? getUnreadCount() : Promise.resolve({ success: true, count: unreadCount })
       ])
 
       if (notificationsResult.success && notificationsResult.notifications) {
-        setNotifications(notificationsResult.notifications)
+        if (initial) {
+          setNotifications(notificationsResult.notifications)
+        } else {
+          setNotifications(prev => [...prev, ...notificationsResult.notifications!])
+          setOffset(currentOffset)
+        }
+        setHasMore(notificationsResult.notifications.length === LIMIT)
       } else {
         setError(notificationsResult.error || 'Failed to load notifications')
       }
@@ -36,7 +55,14 @@ export function useNotifications() {
       setError(err.message || 'An error occurred')
     } finally {
       setLoading(false)
+      setLoadMoreLoading(false)
     }
+  }
+
+  // Load more notifications
+  const loadMore = () => {
+    if (!hasMore || loadMoreLoading) return
+    fetchNotifications(false)
   }
 
   // Mark a single notification as read
@@ -52,6 +78,11 @@ export function useNotifications() {
         )
       )
       setUnreadCount(prev => Math.max(0, prev - 1))
+
+      // If we're on unread filter, remove it from the list
+      if (filter === 'unread') {
+        setNotifications(prev => prev.filter(n => n.id !== notificationId))
+      }
     }
 
     return result
@@ -66,6 +97,11 @@ export function useNotifications() {
         prev.map(n => ({ ...n, is_read: true, read_at: new Date().toISOString() }))
       )
       setUnreadCount(0)
+
+      if (filter === 'unread') {
+        setNotifications([])
+        setHasMore(false)
+      }
     }
 
     return result
@@ -73,16 +109,19 @@ export function useNotifications() {
 
   // Refresh notifications
   const refresh = () => {
-    fetchNotifications()
+    fetchNotifications(true)
   }
+
+  // Change filter
+  useEffect(() => {
+    fetchNotifications(true)
+  }, [filter])
 
   // Set up real-time subscription
   useEffect(() => {
-    fetchNotifications()
-
     // Subscribe to new notifications
     const channel = supabase
-      .channel('notifications')
+      .channel('notifications-realtime')
       .on(
         'postgres_changes',
         {
@@ -90,17 +129,14 @@ export function useNotifications() {
           schema: 'public',
           table: 'notifications',
         },
-        (payload) => {
+        async (payload) => {
           const newNotification = payload.new as Notification
 
-          // Get current user ID from the payload
-          // Only add if it's for the current user
-          supabase.auth.getUser().then(({ data: { user } }) => {
-            if (user && newNotification.user_id === user.id) {
-              setNotifications(prev => [newNotification, ...prev])
-              setUnreadCount(prev => prev + 1)
-            }
-          })
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user && newNotification.user_id === user.id) {
+            setNotifications(prev => [newNotification, ...prev])
+            setUnreadCount(prev => prev + 1)
+          }
         }
       )
       .on(
@@ -110,45 +146,23 @@ export function useNotifications() {
           schema: 'public',
           table: 'notifications',
         },
-        (payload) => {
+        async (payload) => {
           const updatedNotification = payload.new as Notification
 
-          setNotifications(prev =>
-            prev.map(n =>
-              n.id === updatedNotification.id ? updatedNotification : n
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user && updatedNotification.user_id === user.id) {
+            setNotifications(prev =>
+              prev.map(n =>
+                n.id === updatedNotification.id ? updatedNotification : n
+              )
             )
-          )
 
-          // Recalculate unread count
-          supabase.auth.getUser().then(({ data: { user } }) => {
-            if (user && updatedNotification.user_id === user.id) {
-              getUnreadCount().then(result => {
-                if (result.success) {
-                  setUnreadCount(result.count || 0)
-                }
-              })
-            }
-          })
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'notifications',
-        },
-        (payload) => {
-          const deletedId = payload.old.id
-
-          setNotifications(prev => prev.filter(n => n.id !== deletedId))
-
-          // Recalculate unread count
-          getUnreadCount().then(result => {
+            // Recalculate unread count
+            const result = await getUnreadCount()
             if (result.success) {
               setUnreadCount(result.count || 0)
             }
-          })
+          }
         }
       )
       .subscribe()
@@ -162,7 +176,12 @@ export function useNotifications() {
     notifications,
     unreadCount,
     loading,
+    loadMoreLoading,
+    hasMore,
     error,
+    filter,
+    setFilter,
+    loadMore,
     markAsRead,
     markAllAsRead,
     refresh

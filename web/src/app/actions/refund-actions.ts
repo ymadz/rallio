@@ -6,6 +6,7 @@ import { createRefund, getRefund, getPayment } from '@/lib/paymongo'
 import { createNotification, NotificationTemplates } from '@/lib/notifications'
 import { revalidatePath } from 'next/cache'
 import type { RefundReason } from '@/lib/paymongo/types'
+import { writeAuditLog } from '@/lib/audit'
 
 // =============================================
 // TYPES
@@ -217,6 +218,36 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
 
     revalidatePath('/bookings')
     revalidatePath(`/bookings/${params.reservationId}`)
+
+    // Audit: log refund request by the user
+    await writeAuditLog({
+      userId: user.id,
+      action: 'refund.requested',
+      resourceType: 'refund',
+      resourceId: refundRecord.id,
+      newValues: {
+        reservationId: params.reservationId,
+        reason: params.reason,
+        reasonCode: params.reasonCode,
+        amount: Math.round(actualRefundAmount),
+      },
+    })
+
+    // --- NOTIFICATIONS ---
+    try {
+      const ownerId = (reservation.courts as any)?.venues?.owner_id
+      if (ownerId) {
+        await createNotification({
+          userId: ownerId,
+          ...NotificationTemplates.refundRequested(
+            Math.round(actualRefundAmount),
+            params.reservationId
+          )
+        })
+      }
+    } catch (notifyError) {
+      console.error('⚠️ [requestRefundAction] Notification failed:', notifyError)
+    }
 
     return {
       success: true,
@@ -431,10 +462,22 @@ export async function adminProcessRefundAction(
       // Notify user
       await createNotification({
         userId: refund.user_id,
-        type: 'refund_processed',
-        title: 'Refund Request Rejected',
-        message: adminNotes || 'Your refund request has been rejected.',
-        metadata: { refund_id: refundId },
+        ...NotificationTemplates.refundRejected(
+          adminNotes || 'Your refund request has been rejected.',
+          refund.reservation_id
+        )
+      })
+
+      // Audit: log admin rejection
+      await writeAuditLog({
+        userId: user.id,
+        action: 'refund.rejected',
+        resourceType: 'refund',
+        resourceId: refundId,
+        newValues: {
+          adminNotes: adminNotes || 'Rejected by admin',
+          reservationId: refund.reservation_id,
+        },
       })
 
       revalidatePath('/bookings')
@@ -474,6 +517,30 @@ export async function adminProcessRefundAction(
       if (paymongoRefund.attributes.status === 'succeeded') {
         await handleSuccessfulRefund(refundId, refund.reservation_id, refund.user_id)
       }
+
+      // Audit: log admin approval
+      await writeAuditLog({
+        userId: user.id,
+        action: 'refund.approved',
+        resourceType: 'refund',
+        resourceId: refundId,
+        newValues: {
+          paymongoRefundId: paymongoRefund.id,
+          paymongoStatus: paymongoRefund.attributes.status,
+          adminNotes: adminNotes,
+          reservationId: refund.reservation_id,
+        },
+      })
+
+      // Notify user of approval
+      await createNotification({
+        userId: refund.user_id,
+        ...NotificationTemplates.refundApproved(
+          refund.amount,
+          refund.reservation_id
+        )
+      })
+
 
       revalidatePath('/bookings')
       return { success: true, refundId }

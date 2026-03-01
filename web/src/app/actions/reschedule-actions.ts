@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service' // Use service client for admin updates
 import { revalidatePath } from 'next/cache'
 import { differenceInMinutes, addMinutes } from 'date-fns'
+import { writeAuditLog } from '@/lib/audit'
 
 interface RescheduleResult {
     success: boolean
@@ -149,6 +150,22 @@ export async function rescheduleReservationAction(
         console.error('Error updating reservation:', updateError)
         return { success: false, error: 'Failed to update booking' }
     }
+
+    // Audit: log reschedule with before/after time snapshot
+    await writeAuditLog({
+        userId: user.id,
+        action: 'reservation.rescheduled',
+        resourceType: 'reservation',
+        resourceId: bookingId,
+        oldValues: {
+            start_time: booking.start_time,
+            end_time: booking.end_time,
+        },
+        newValues: {
+            start_time: newStartISO,
+            end_time: newEndISO,
+        },
+    })
 
     // 8. Revalidate paths
     revalidatePath('/bookings')
