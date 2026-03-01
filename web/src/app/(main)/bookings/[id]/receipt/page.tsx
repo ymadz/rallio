@@ -68,7 +68,7 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
                 </div>
 
                 {/* Receipt Card */}
-                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm print:border-none print:shadow-none">
+                <div id="receipt-content" className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm print:border-none print:shadow-none">
                     {/* Header */}
                     <div className={`bg-gradient-to-r ${isQueueSession ? 'from-indigo-500 to-indigo-600' : 'from-primary to-primary/80'} text-white p-8 text-center print:bg-none print:text-black`}>
                         <h1 className="text-2xl font-bold mb-2">
@@ -205,7 +205,7 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="border-t border-gray-200 p-6 bg-gray-50 grid grid-cols-2 gap-3 print:hidden">
+                    <div data-html2canvas-ignore className="border-t border-gray-200 p-6 bg-gray-50 grid grid-cols-2 gap-3 print:hidden">
                         <DownloadReceiptButton />
                         <Link
                             href="/bookings"
