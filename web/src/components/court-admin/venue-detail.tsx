@@ -29,7 +29,6 @@ import { AnalyticsDashboard } from './analytics-dashboard'
 import { ReviewsManagement } from './reviews-management'
 import DiscountManagement from './discount-management'
 import { VenueEditModal } from './venue-edit-modal'
-import { ImageGallery } from '@/components/venue/image-gallery'
 
 interface VenueDetailProps {
   venueId: string
@@ -131,17 +130,6 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
     router.push(`/court-admin/venues/${venueId}?tab=${tabId}`)
   }
 
-  // Mix venue images
-  const uniqueVenueImages = new Set<string>()
-
-  if (venue.metadata?.images && Array.isArray(venue.metadata.images)) {
-    venue.metadata.images.forEach((img: string) => uniqueVenueImages.add(img))
-  } else if (venue.image_url) {
-    uniqueVenueImages.add(venue.image_url)
-  }
-
-  const venueImages = Array.from(uniqueVenueImages)
-
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Back Button */}
@@ -152,13 +140,6 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
         <ArrowLeft className="w-4 h-4" />
         <span>Back to My Venues</span>
       </Link>
-
-      {/* Image Gallery */}
-      {venueImages.length > 0 && (
-        <div className="mb-6 rounded-xl overflow-hidden shadow-sm border border-gray-200">
-          <ImageGallery images={venueImages} venueName={venue.name} />
-        </div>
-      )}
 
       {/* Venue Header */}
       <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6">

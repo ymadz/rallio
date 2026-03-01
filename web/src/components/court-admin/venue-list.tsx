@@ -68,7 +68,7 @@ export function VenueList() {
     website: '',
     latitude: '',
     longitude: '',
-    image_urls: [] as string[]
+    image_url: ''
   })
   const [showMapPicker, setShowMapPicker] = useState(false)
 
@@ -128,8 +128,7 @@ export function VenueList() {
         phone: formData.phone || undefined,
         email: formData.email || undefined,
         website: formData.website || undefined,
-        image_url: formData.image_urls.length > 0 ? formData.image_urls[0] : undefined,
-        metadata: { images: formData.image_urls }
+        image_url: formData.image_url || undefined
       }
 
       // Add coordinates if provided
@@ -162,7 +161,7 @@ export function VenueList() {
         website: '',
         latitude: '',
         longitude: '',
-        image_urls: []
+        image_url: ''
       })
       setShowCreateModal(false)
       // Reload venues
@@ -445,8 +444,8 @@ export function VenueList() {
               {/* Cover Image Upload */}
               <VenuePhotoUpload
                 venueId="new-venue"
-                currentImages={formData.image_urls}
-                onImagesChange={(urls) => setFormData({ ...formData, image_urls: urls })}
+                currentImage={formData.image_url}
+                onImageChange={(url) => setFormData({ ...formData, image_url: url || '' })}
               />
 
               {/* Venue Name */}
