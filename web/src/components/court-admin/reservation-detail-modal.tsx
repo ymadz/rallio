@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { approveReservation, rejectReservation } from '@/app/actions/court-admin-actions'
+import { useState, useEffect, useRef } from 'react'
+import { approveReservation, rejectReservation, markReservationAsPaid } from '@/app/actions/court-admin-actions'
 import {
   X,
   CheckCircle,
@@ -45,6 +45,12 @@ interface ReservationDetailModalProps {
     num_players: number
     notes?: string
     created_at: string
+    metadata?: any
+    queue_session?: Array<{
+      id: string
+      status: string
+      organizer_id: string
+    }>
   }
 }
 
@@ -55,8 +61,19 @@ export function ReservationDetailModal({
 }: ReservationDetailModalProps) {
   const [isApproving, setIsApproving] = useState(false)
   const [isRejecting, setIsRejecting] = useState(false)
+  const [isMarkingPaid, setIsMarkingPaid] = useState(false)
   const [showRejectForm, setShowRejectForm] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
+
+  const rejectFormRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (showRejectForm && rejectFormRef.current) {
+      setTimeout(() => {
+        rejectFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 100)
+    }
+  }, [showRejectForm])
 
   if (!isOpen) return null
 
@@ -103,15 +120,58 @@ export function ReservationDetailModal({
     }
   }
 
+  const handleMarkAsPaid = async () => {
+    setIsMarkingPaid(true)
+    try {
+      const result = await markReservationAsPaid(reservation.id)
+      if (result.success) {
+        onClose()
+      } else {
+        alert(result.error || 'Failed to mark as paid')
+      }
+    } catch (error: any) {
+      alert(error.message || 'Failed to mark as paid')
+    } finally {
+      setIsMarkingPaid(false)
+    }
+  }
+
+  // Helper to determine display status
+  const getDisplayStatus = () => {
+    // Check for cancelled reservation with reason (implies rejection)
+    if (reservation.status === 'cancelled' && (reservation as any).cancellation_reason) {
+      return 'rejected'
+    }
+    return reservation.status
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'confirmed': return 'bg-green-100 text-green-700 border-green-200'
       case 'pending': return 'bg-yellow-100 text-yellow-700 border-yellow-200'
-      case 'cancelled': return 'bg-red-100 text-red-700 border-red-200'
+      case 'pending_payment': return 'bg-orange-100 text-orange-700 border-orange-200'
+      case 'partially_paid': return 'bg-amber-100 text-amber-700 border-amber-200'
+      case 'cancelled':
+      case 'rejected': return 'bg-red-100 text-red-700 border-red-200'
       case 'completed': return 'bg-blue-100 text-blue-700 border-blue-200'
       default: return 'bg-gray-100 text-gray-700 border-gray-200'
     }
   }
+
+  // Helper to check if approval is needed
+  const isPendingApproval = () => {
+    // Approval flow is removed — only check for legacy 'pending' status
+    if (reservation.status === 'pending_payment') return false
+    if (reservation.status === 'pending') return true
+    return false
+  }
+
+  // Helper to check if payment is pending (includes partially_paid — admin can collect remaining balance)
+  const isPendingPayment = () => {
+    return reservation.status === 'pending_payment' || reservation.status === 'partially_paid'
+  }
+
+
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -134,12 +194,19 @@ export function ReservationDetailModal({
         <div className="p-6 space-y-6">
           {/* Status Badge */}
           <div className="flex items-center justify-between">
-            <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium ${getStatusColor(reservation.status)}`}>
-              {reservation.status === 'confirmed' && <CheckCircle className="w-4 h-4" />}
-              {reservation.status === 'pending' && <Clock className="w-4 h-4" />}
-              {reservation.status === 'cancelled' && <XCircle className="w-4 h-4" />}
-              <span className="capitalize">{reservation.status}</span>
-            </span>
+            <div className="flex items-center gap-2">
+              <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium ${getStatusColor(getDisplayStatus())}`}>
+                {getDisplayStatus() === 'confirmed' && <CheckCircle className="w-4 h-4" />}
+                {(getDisplayStatus() === 'pending' || getDisplayStatus() === 'pending_payment' || getDisplayStatus() === 'partially_paid') && <Clock className="w-4 h-4" />}
+                {(getDisplayStatus() === 'cancelled' || getDisplayStatus() === 'rejected') && <XCircle className="w-4 h-4" />}
+                <span className="capitalize">{getDisplayStatus().replace('_', ' ')}</span>
+              </span>
+              {reservation.metadata?.is_queue_session_reservation && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-green-50 text-green-700 border border-green-200 text-sm font-medium">
+                  🎮 Queue
+                </span>
+              )}
+            </div>
             <span className="text-sm text-gray-500">
               Booked {new Date(reservation.created_at).toLocaleDateString('en-US', {
                 month: 'short',
@@ -228,29 +295,47 @@ export function ReservationDetailModal({
           </div>
 
           {/* Booking Details */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-gray-50 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Users className="w-5 h-5 text-gray-400" />
-                <h3 className="font-semibold text-gray-900">Players</h3>
-              </div>
-              <div className="text-2xl font-bold text-gray-900">{reservation.num_players}</div>
+          <div className="bg-gray-50 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <DollarSign className="w-5 h-5 text-gray-400" />
+              <h3 className="font-semibold text-gray-900">Amount Breakdown</h3>
             </div>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-gray-600">Total Amount:</span>
+              <span className="text-xl font-bold text-gray-900">₱{parseFloat(reservation.total_amount).toFixed(2)}</span>
+            </div>
+            {parseFloat(reservation.amount_paid) > 0 && reservation.status !== 'partially_paid' && (
+              <div className="flex justify-between items-center text-sm text-green-600">
+                <span>Total Paid:</span>
+                <span className="font-medium">₱{parseFloat(reservation.amount_paid).toFixed(2)}</span>
+              </div>
+            )}
 
-            <div className="bg-gray-50 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <PhilippinePeso className="w-5 h-5 text-gray-400" />
-                <h3 className="font-semibold text-gray-900">Amount</h3>
-              </div>
-              <div className="text-2xl font-bold text-gray-900">
-                ₱{parseFloat(reservation.total_amount).toFixed(2)}
-              </div>
-              {parseFloat(reservation.amount_paid) > 0 && (
-                <div className="text-sm text-green-600 mt-1">
-                  Paid: ₱{parseFloat(reservation.amount_paid).toFixed(2)}
+            {reservation.status === 'partially_paid' && (
+              <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="font-medium text-amber-800">Down Payment ({reservation.metadata?.down_payment_percentage || 20}%)</span>
+                  <span className="text-amber-700">₱{parseFloat(reservation.metadata?.down_payment_amount || reservation.amount_paid).toFixed(2)} (Paid)</span>
                 </div>
-              )}
-            </div>
+                <div className="flex justify-between items-center text-sm font-bold pt-2 border-t border-amber-200/50">
+                  <span className="text-amber-900">Remaining Balance:</span>
+                  <span className="text-amber-900">₱{(parseFloat(reservation.total_amount) - parseFloat(reservation.amount_paid || '0')).toFixed(2)}</span>
+                </div>
+              </div>
+            )}
+
+            {reservation.metadata?.payment_method && (
+              <div className="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-200 capitalize flex justify-between">
+                <span>Payment Method:</span>
+                <span className="font-medium">{reservation.metadata.payment_method === 'gcash' ? 'GCash' : reservation.metadata.payment_method === 'paymaya' ? 'Maya' : reservation.metadata.payment_method.replace('_', ' ')}</span>
+              </div>
+            )}
+            {!reservation.metadata?.payment_method && reservation.status === 'pending_payment' && (
+              <div className="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-200 flex justify-between">
+                <span>Payment Method:</span>
+                <span className="font-medium">Cash (Unpaid)</span>
+              </div>
+            )}
           </div>
 
           {/* Notes */}
@@ -265,8 +350,8 @@ export function ReservationDetailModal({
           )}
 
           {/* Reject Form */}
-          {showRejectForm && reservation.status === 'pending' && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          {showRejectForm && (isPendingApproval() || isPendingPayment()) && (
+            <div ref={rejectFormRef} className="bg-red-50 border border-red-200 rounded-lg p-4">
               <h3 className="font-semibold text-gray-900 mb-2">Reason for Rejection</h3>
               <textarea
                 value={rejectReason}
@@ -308,7 +393,7 @@ export function ReservationDetailModal({
         </div>
 
         {/* Footer Actions */}
-        {reservation.status === 'pending' && !showRejectForm && (
+        {isPendingApproval() && !showRejectForm && (
           <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 flex items-center gap-3">
             <button
               onClick={handleApprove}
@@ -324,6 +409,36 @@ export function ReservationDetailModal({
                 <>
                   <CheckCircle className="w-5 h-5" />
                   <span>Approve Reservation</span>
+                </>
+              )}
+            </button>
+            <button
+              onClick={() => setShowRejectForm(true)}
+              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 border-2 border-red-600 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+            >
+              <XCircle className="w-5 h-5" />
+              <span>Reject</span>
+            </button>
+          </div>
+        )}
+
+        {/* Pending Payment Actions */}
+        {isPendingPayment() && (
+          <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 flex items-center gap-3">
+            <button
+              onClick={handleMarkAsPaid}
+              disabled={isMarkingPaid}
+              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isMarkingPaid ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Processing...</span>
+                </>
+              ) : (
+                <>
+                  <DollarSign className="w-5 h-5" />
+                  <span>{reservation.status === 'partially_paid' ? 'Collect Remaining Balance' : 'Mark as Paid (Cash Received)'}</span>
                 </>
               )}
             </button>

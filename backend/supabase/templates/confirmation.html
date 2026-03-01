@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,51 +15,29 @@
       padding: 20px;
       background-color: #f5f5f5;
     }
+
     .container {
       background-color: #ffffff;
       border-radius: 12px;
       padding: 40px;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
-    .logo {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-    .logo-icon {
-      width: 60px;
-      height: 60px;
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-      border-radius: 12px;
-      transform: rotate(45deg);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 10px;
-    }
-    .logo-icon svg {
-      transform: rotate(-45deg);
-      width: 32px;
-      height: 32px;
-      fill: white;
-    }
-    .brand-name {
-      font-size: 28px;
-      font-weight: bold;
-      color: #10b981;
-    }
+
     h1 {
       color: #1f2937;
       font-size: 24px;
       margin-bottom: 20px;
       text-align: center;
     }
+
     p {
       color: #4b5563;
       margin-bottom: 15px;
     }
+
     .button {
       display: inline-block;
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      background-color: #10b981;
       color: white !important;
       text-decoration: none;
       padding: 14px 32px;
@@ -67,13 +46,16 @@
       font-size: 16px;
       margin: 20px 0;
     }
+
     .button:hover {
-      background: linear-gradient(135deg, #059669 0%, #047857 100%);
+      background-color: #059669;
     }
+
     .button-container {
       text-align: center;
       margin: 30px 0;
     }
+
     .footer {
       text-align: center;
       color: #9ca3af;
@@ -82,49 +64,47 @@
       padding-top: 20px;
       border-top: 1px solid #e5e7eb;
     }
+
     .highlight {
       background-color: #d1fae5;
       padding: 15px;
       border-radius: 8px;
       margin: 20px 0;
     }
+
     .highlight p {
       margin: 0;
       color: #065f46;
     }
+
     .features {
       background-color: #f9fafb;
       padding: 20px;
       border-radius: 8px;
       margin: 25px 0;
     }
+
     .features h3 {
       color: #1f2937;
       margin-top: 0;
       font-size: 16px;
     }
+
     .features ul {
       margin: 0;
       padding-left: 20px;
       color: #4b5563;
     }
+
     .features li {
       margin-bottom: 8px;
     }
   </style>
 </head>
+
 <body>
   <div class="container">
-    <div class="logo">
-      <div class="logo-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M9 5l7 7-7 7" stroke="white" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </div>
-      <div class="brand-name">Rallio</div>
-    </div>
-
-    <h1>🏸 Welcome to Rallio!</h1>
+    <h1>Welcome to Rallio!</h1>
 
     <p>Hi there!</p>
 
@@ -137,17 +117,17 @@
     </div>
 
     <div class="highlight">
-      <p>⏰ This link will expire in 24 hours.</p>
+      <p>This link will expire in 24 hours.</p>
     </div>
 
     <div class="features">
       <h3>With Rallio, you can:</h3>
       <ul>
-        <li>🔍 Find badminton courts near you</li>
-        <li>📅 Book courts instantly online</li>
-        <li>🎮 Join queue sessions with other players</li>
-        <li>⭐ Rate and review venues</li>
-        <li>💳 Pay securely with GCash or Maya</li>
+        <li>Find badminton courts near you</li>
+        <li>Book courts instantly online</li>
+        <li>Join queue sessions with other players</li>
+        <li>Rate and review venues</li>
+        <li>Pay securely with GCash or Maya</li>
       </ul>
     </div>
 
@@ -166,10 +146,11 @@
       <p>© {{ .SiteURL }} Rallio - Badminton Court Finder</p>
       <p>Zamboanga City, Philippines</p>
       <p>
-        <a href="{{ .SiteURL }}/terms" style="color: #10b981;">Terms of Service</a> • 
+        <a href="{{ .SiteURL }}/terms" style="color: #10b981;">Terms of Service</a> •
         <a href="{{ .SiteURL }}/privacy" style="color: #10b981;">Privacy Policy</a>
       </p>
     </div>
   </div>
 </body>
+
 </html>

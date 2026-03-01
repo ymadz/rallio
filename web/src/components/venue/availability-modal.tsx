@@ -6,7 +6,7 @@ import { DayPicker } from 'react-day-picker'
 import { format } from 'date-fns'
 import 'react-day-picker/dist/style.css'
 import { useCheckoutStore } from '@/stores/checkout-store'
-import { getAvailableTimeSlotsAction, validateBookingAvailabilityAction } from '@/app/actions/reservations'
+import { getAvailableTimeSlotsAction, validateBookingAvailabilityAction, getVenueMetadataAction } from '@/app/actions/reservations'
 import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
 import { cn } from '@/lib/utils'
 import { Label } from '@/components/ui/label'
@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { BookingTutorial } from '@/components/venue/booking-tutorial'
 
 interface TimeSlot {
   time: string
@@ -50,7 +51,7 @@ export function AvailabilityModal({
   capacity
 }: AvailabilityModalProps) {
   const router = useRouter()
-  const { setBookingData, setDiscountDetails, setDiscount } = useCheckoutStore()
+  const { setBookingData, setDiscountDetails, setDiscount, setDownPaymentPercentage } = useCheckoutStore()
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [recurrenceWeeks, setRecurrenceWeeks] = useState<number>(1)
   const [selectedDays, setSelectedDays] = useState<number[]>([]) // [0-6] for Sun-Sat
@@ -109,6 +110,25 @@ export function AvailabilityModal({
     fetchTimeSlots()
   }, [selectedDate, courtId, isOpen])
 
+  // Fetch venue metadata (down payment percentage)
+  useEffect(() => {
+    async function fetchVenueMetadata() {
+      if (!venueId || !isOpen) return
+
+      try {
+        const result = await getVenueMetadataAction(venueId)
+        if (result.success && result.metadata) {
+          const percentage = parseFloat((result.metadata as any).down_payment_percentage || '20')
+          setDownPaymentPercentage(percentage)
+        }
+      } catch (error) {
+        console.error('Error fetching venue metadata:', error)
+      }
+    }
+
+    fetchVenueMetadata()
+  }, [venueId, isOpen, setDownPaymentPercentage])
+
   // Helpers needed for effects
   const getDuration = (): number => {
     if (!startSlot) return 0
@@ -144,23 +164,44 @@ export function AvailabilityModal({
       const duration = getDuration()
       const endTime = getEndTime() // "HH:MM"
 
-      // Basic base price calculation
-      const numSessionsPerWeek = selectedDays.length
-      const basePrice = (startSlot.price || hourlyRate) * duration * recurrenceWeeks * numSessionsPerWeek
+      // Calculate actual slots that will be created (matching checkout-store logic)
+      const initialStartTime = new Date(selectedDate)
+      const [startH, startM] = startSlot.time.split(':')
+      initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
+      const startDayIndex = initialStartTime.getDay()
+
+      // Deduplicate selected days
+      const uniqueSelectedDays = selectedDays.length > 0
+        ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
+        : [startDayIndex]
+
+      // Count only FUTURE slots
+      let actualSlotCount = 0
+      for (let i = 0; i < recurrenceWeeks; i++) {
+        for (const dayIndex of uniqueSelectedDays) {
+          const dayOffset = (dayIndex - startDayIndex + 7) % 7
+
+          const slotStartTime = new Date(initialStartTime.getTime())
+          slotStartTime.setDate(slotStartTime.getDate() + (i * 7) + dayOffset)
+
+          actualSlotCount++
+        }
+      }
+
+      const basePrice = (startSlot.price || hourlyRate) * duration * actualSlotCount
 
       try {
-        // Construct ISO strings for start/end
+        // Construct ISO strings for start/end with explicit Manila offset
         const dateStr = format(selectedDate, 'yyyy-MM-dd')
-        const startDateTime = `${dateStr}T${startSlot.time}:00`
-        const endDateTime = `${dateStr}T${endTime}:00`
+        const startDateTime = `${dateStr}T${startSlot.time}:00+08:00`
+        const endDateTime = `${dateStr}T${endTime}:00+08:00`
 
         const result = await calculateApplicableDiscounts({
           venueId,
           courtId,
           startDate: startDateTime,
           endDate: endDateTime,
-          numberOfDays: recurrenceWeeks,
-          numberOfPlayers: 1,
+          recurrenceWeeks: Number(recurrenceWeeks),
           basePrice
         })
 
@@ -211,8 +252,8 @@ export function AvailabilityModal({
 
       try {
         const dateStr = format(selectedDate, 'yyyy-MM-dd')
-        const startDateTime = `${dateStr}T${startSlot.time}:00`
-        const endDateTime = `${dateStr}T${endTime}:00`
+        const startDateTime = `${dateStr}T${startSlot.time}:00+08:00`
+        const endDateTime = `${dateStr}T${endTime}:00+08:00`
 
         const result = await validateBookingAvailabilityAction({
           courtId,
@@ -306,7 +347,7 @@ export function AvailabilityModal({
   }
 
   const handleBook = () => {
-    if (startSlot && !isBooking && validationState.valid) {
+    if (startSlot && !isBooking && validationState.valid && !isCalculatingPrice) {
       setIsBooking(true)
 
       try {
@@ -405,7 +446,7 @@ export function AvailabilityModal({
               {/* Calendar */}
               <div>
                 <h4 className="font-semibold text-gray-900 mb-3">Choose Date</h4>
-                <div className="border border-gray-200 rounded-xl p-4">
+                <div data-tutorial-step="1" className="border border-gray-200 rounded-xl p-4">
                   <DayPicker
                     mode="single"
                     selected={selectedDate}
@@ -436,7 +477,7 @@ export function AvailabilityModal({
                 </div>
 
                 {/* Recurrence Selection */}
-                <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <div data-tutorial-step="3" className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
                   <div className="flex items-center gap-2 mb-2">
                     <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -473,7 +514,7 @@ export function AvailabilityModal({
 
                 {/* Multi-Day Selection */}
                 {recurrenceWeeks >= 1 && (
-                  <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <div data-tutorial-step="4" className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-xl">📅</span>
                       <Label className="text-sm font-semibold text-gray-900">Include Days</Label>
@@ -520,7 +561,7 @@ export function AvailabilityModal({
                   Select Time Range
                 </h4>
 
-                <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col h-[400px]">
+                <div data-tutorial-step="2" className="border border-gray-200 rounded-xl overflow-hidden flex flex-col h-[400px]">
                   {loading ? (
                     <div className="flex-1 flex flex-col items-center justify-center p-8">
                       <div className="animate-spin rounded-full h-8 w-8 border-4 border-gray-200 border-t-primary" />
@@ -603,7 +644,7 @@ export function AvailabilityModal({
           </div>
 
           {/* Footer */}
-          <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex items-center justify-between">
+          <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex items-center justify-between shrink-0">
             <div>
               {startSlot && (
                 <div className="text-sm">
@@ -625,46 +666,95 @@ export function AvailabilityModal({
                     </div>
                   )}
 
-                  {calculatedPrice && calculatedPrice.discount !== 0 && (
-                    <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium mb-2 ${calculatedPrice.discount > 0
-                      ? 'bg-green-100 text-green-700 border border-green-200'
-                      : 'bg-orange-100 text-orange-700 border border-orange-200'
-                      }`}>
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={
-                          calculatedPrice.discount > 0
-                            ? "M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
-                            : "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                        } />
-                      </svg>
-                      {calculatedPrice.discount > 0 ? 'Discount Applied:' : 'Surcharge Applied:'} {calculatedPrice.appliedDiscountName}
-                    </div>
-                  )}
-                  <p className="text-gray-600">
+                  <div className="text-gray-600">
                     <span className="font-medium text-gray-900">Selected:</span>{' '}
-                    {format(selectedDate, 'MMM d, yyyy')}
-                  </p>
-                  <p className="text-gray-600">
-                    {formatTime(startSlot.time)} - {formatTime(getEndTime())}
-                  </p>
-                  <p className="text-lg font-bold text-primary mt-1 flex items-center gap-2">
+                    {(() => {
+                      if (selectedDays.length <= 1 && recurrenceWeeks === 1) {
+                        return format(selectedDate, 'MMM d, yyyy')
+                      }
+
+                      // Generate exact dates
+                      const initialStartTime = new Date(selectedDate)
+                      const [startH, startM] = startSlot.time.split(':')
+                      initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
+                      const startDayIndex = initialStartTime.getDay()
+
+                      const uniqueSelectedDays = selectedDays.length > 0
+                        ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
+                        : [startDayIndex]
+
+                      const bookedDates: Date[] = []
+
+                      for (let i = 0; i < recurrenceWeeks; i++) {
+                        for (const dayIndex of uniqueSelectedDays) {
+                          const dayOffset = (dayIndex - startDayIndex + 7) % 7
+
+                          const slotStartTime = new Date(initialStartTime.getTime())
+                          slotStartTime.setDate(slotStartTime.getDate() + (i * 7) + dayOffset)
+
+                          bookedDates.push(slotStartTime)
+                        }
+                      }
+
+                      // Sort dates
+                      bookedDates.sort((a, b) => a.getTime() - b.getTime())
+
+                      const formattedDates = bookedDates.map(d => format(d, 'MMM d'))
+
+                      if (formattedDates.length <= 3) {
+                        return formattedDates.join(', ') + (formattedDates.length > 0 ? `, ${format(bookedDates[0], 'yyyy')}` : '')
+                      } else {
+                        return `${formattedDates[0]}, ${formattedDates[1]} + ${formattedDates.length - 2} more (${format(bookedDates[0], 'yyyy')})`
+                      }
+                    })()}
+                  </div>
+                  {/* Price + Discount inline */}
+                  <div className="mt-1 flex items-center gap-2 flex-wrap">
                     {isCalculatingPrice ? (
-                      <span className="text-sm font-normal text-gray-400">Calculating...</span>
+                      <span className="text-sm font-normal text-gray-400 flex items-center gap-1.5">
+                        <span className="animate-spin inline-block w-3 h-3 border-2 border-gray-300 border-t-primary rounded-full" />
+                        Calculating price...
+                      </span>
                     ) : calculatedPrice ? (
                       <>
-                        <span>₱{calculatedPrice.final.toLocaleString()}</span>
-                        {calculatedPrice.discount !== 0 && (
-                          <span className={`text-xs font-normal ${calculatedPrice.discount > 0 ? 'text-green-600' : 'text-orange-600'}`}>
-                            ({calculatedPrice.discount > 0 ? '-' : '+'}₱{Math.abs(calculatedPrice.discount).toLocaleString()})
+                        {Number(calculatedPrice.discount) !== 0 && (
+                          <span className="text-sm text-gray-400 line-through">₱{Number(calculatedPrice.original || 0).toLocaleString()}</span>
+                        )}
+                        <span className="text-lg font-bold text-primary">₱{Number(calculatedPrice.final || 0).toLocaleString()}</span>
+                        {calculatedPrice.discount !== 0 && calculatedPrice.appliedDiscountName && (
+                          <span className={`text-xs font-medium px-1.5 py-0.5 rounded inline-flex items-center gap-1 ${Number(calculatedPrice.discount) > 0 ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                            </svg>
+                            {calculatedPrice.appliedDiscountName}
                           </span>
                         )}
                       </>
                     ) : (
-                      <span>₱{((startSlot.price || hourlyRate) * duration * recurrenceWeeks * selectedDays.length).toLocaleString()}</span>
+                      (() => {
+                        const getDisplayBasePrice = () => {
+                          const initialStartTime = new Date(selectedDate)
+                          const [startH, startM] = startSlot.time.split(':')
+                          initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
+                          const startDayIndex = initialStartTime.getDay()
+                          const uniqueSelectedDays = selectedDays.length > 0
+                            ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
+                            : [startDayIndex]
+
+                          let actualSlotCount = 0
+                          for (let i = 0; i < recurrenceWeeks; i++) {
+                            for (const dayIndex of uniqueSelectedDays) {
+                              actualSlotCount++
+                            }
+                          }
+                          return Number((startSlot.price || hourlyRate) * duration * actualSlotCount).toLocaleString()
+                        }
+                        return <span className="text-lg font-bold text-primary">₱{getDisplayBasePrice()}</span>
+                      })()
                     )}
-                    {recurrenceWeeks > 1 && <span className="text-xs font-normal text-gray-500 ml-1">({recurrenceWeeks} weeks)</span>}
-                    {selectedDays.length > 1 && <span className="text-xs font-normal text-gray-500 ml-1">({selectedDays.length} days/week)</span>}
-                  </p>
+                    {Number(recurrenceWeeks) > 1 && <span className="text-xs font-normal text-gray-500">({recurrenceWeeks} weeks)</span>}
+                    {selectedDays.length > 1 && <span className="text-xs font-normal text-gray-500">({selectedDays.length} days/week)</span>}
+                  </div>
                 </div>
               )}
             </div>
@@ -677,8 +767,9 @@ export function AvailabilityModal({
                 Cancel
               </button>
               <button
+                data-tutorial-step="5"
                 onClick={handleBook}
-                disabled={!startSlot || isBooking || !validationState.valid || validationState.validating}
+                disabled={!startSlot || isBooking || !validationState.valid || validationState.validating || isCalculatingPrice}
                 className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isBooking ? 'Processing...' : `Book (${duration} hr${duration > 1 ? 's' : ''})`}
@@ -687,6 +778,9 @@ export function AvailabilityModal({
           </div>
         </div>
       </div>
-    </div >
+
+      {/* Booking Tutorial Overlay */}
+      <BookingTutorial isOpen={isOpen} />
+    </div>
   )
 }

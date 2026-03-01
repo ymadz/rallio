@@ -250,17 +250,15 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
           <div className="lg:col-span-2">
             {/* Title and Address */}
             <div className="mb-6">
-              <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-bold text-gray-900">{venue.name}</h2>
-                <DiscountIndicator discounts={{
-                  rules: venue.discountRules || [],
-                  holidays: venue.holidayPricing || []
-                }} />
-              </div>
+              <h2 className="text-2xl font-bold text-gray-900">{venue.name}</h2>
               <p className="text-gray-500 mt-1">{venue.address}</p>
               <p className="text-sm text-gray-400 mt-1">
                 {activeCourts.length} {activeCourts.length === 1 ? 'court' : 'courts'} available
               </p>
+              <DiscountIndicator discounts={{
+                rules: venue.discountRules || [],
+                holidays: venue.holidayPricing || []
+              }} />
             </div>
 
             {/* About */}

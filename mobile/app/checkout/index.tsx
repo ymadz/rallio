@@ -34,6 +34,8 @@ export default function CheckoutScreen() {
         getSubtotal,
         getPlatformFeeAmount,
         getTotalAmount,
+        getDownPaymentAmount,
+        getRemainingBalance,
         setBookingReference,
         resetCheckout,
     } = useCheckoutStore();
@@ -66,8 +68,8 @@ export default function CheckoutScreen() {
                 if (reservation) {
                     console.log('Reservation status:', reservation.status);
 
-                    if (reservation.status === 'confirmed' || reservation.status === 'paid') {
-                        // Payment confirmed!
+                    if (reservation.status === 'confirmed' || reservation.status === 'paid' || reservation.status === 'partially_paid') {
+                        // Payment confirmed (or down payment received)!
                         setPendingReservationId(null);
                         setStep('success');
                     } else if (reservation.status === 'cancelled' || reservation.status === 'failed') {
@@ -85,12 +87,8 @@ export default function CheckoutScreen() {
         return () => subscription.remove();
     }, [pendingReservationId]);
 
-    // Discount State
-    const [promoCode, setPromoCode] = useState('');
-    const [isCheckingDiscount, setIsCheckingDiscount] = useState(false);
+    // Discount from store (Calculated in backend later, currently removing deprecated promo logic)
     const [discountAmount, setDiscountAmount] = useState(0);
-    const [appliedPromo, setAppliedPromo] = useState<string | null>(null);
-    const [promoError, setPromoError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!bookingData) {
@@ -119,6 +117,10 @@ export default function CheckoutScreen() {
         // Ideally we should sync this to the store, but for parity fix, local calculation on display and submission is acceptable.
     }, [discountAmount]);
 
+    const downPaymentAmount = getDownPaymentAmount();
+    const remainingBalance = getRemainingBalance();
+    const isDownPaymentRequired = paymentMethod === 'cash' && downPaymentAmount > 0;
+
     const formatTime = (time: string): string => {
         const [hours] = time.split(':').map(Number);
         const period = hours >= 12 ? 'PM' : 'AM';
@@ -130,60 +132,7 @@ export default function CheckoutScreen() {
         setPaymentMethod(method);
     };
 
-    const handleApplyPromo = async () => {
-        if (!promoCode.trim()) return;
-
-        setIsCheckingDiscount(true);
-        setPromoError(null);
-        setDiscountAmount(0);
-        setAppliedPromo(null);
-
-        try {
-            const { data: { session } } = await supabase.auth.getSession();
-            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.254.170:3000';
-
-            // Mocking the validation endpoint call since I cannot confirm its exact schema yet, 
-            // but following the pattern of other endpoints.
-            // Assuming /api/mobile/validate-discount or similar exists or logic needs to be robust. 
-            // If endpoint assumes specific payload structure:
-            const response = await fetch(`${apiUrl}/api/mobile/validate-discount`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session?.access_token || ''}`
-                },
-                body: JSON.stringify({
-                    venueId: bookingData.venueId || '', // Assuming bookingData has venueId
-                    code: promoCode,
-                    amount: subtotal
-                })
-            });
-
-            if (!response.ok) {
-                // If API not ready, fallback for demo/parity check:
-                // throw new Error('Invalid promo code');
-                // Actually, let's just log and show error to user
-                const err = await response.json();
-                throw new Error(err.error || 'Invalid promo code');
-            }
-
-            const data = await response.json();
-            if (data.valid) {
-                setDiscountAmount(data.discountAmount);
-                setAppliedPromo(promoCode);
-                Alert.alert('Success', `Discount of ₱${data.discountAmount} applied!`);
-            } else {
-                throw new Error('Invalid promo code');
-            }
-
-        } catch (error: any) {
-            console.error('Promo error:', error);
-            setPromoError(error.message || 'Failed to apply promo');
-            setDiscountAmount(0);
-        } finally {
-            setIsCheckingDiscount(false);
-        }
-    };
+    // Discount handling is now server-driven where applicable
 
     const handleConfirmBooking = async () => {
         if (!paymentMethod) {
@@ -216,7 +165,6 @@ export default function CheckoutScreen() {
                 endTimeISO: `${format(new Date(bookingData.date), 'yyyy-MM-dd')}T${bookingData.endTime}:00`, // Duration logic handled by server if needed, but passing endISO is clearer
                 totalAmount: total, // GRAND TOTAL (Pre-calculated with discount)
                 discountAmount: discountAmount, // Pass discount info if backend needs it
-                promoCode: appliedPromo,
                 numPlayers: bookingData.numPlayers,
                 paymentType: 'full',
                 paymentMethod: paymentMethod, // 'cash' or 'e-wallet'
@@ -252,43 +200,42 @@ export default function CheckoutScreen() {
 
             setBookingReference(bookingRef, primaryReservationId);
 
-            // Handle E-Wallet Payment
-            if (paymentMethod === 'e-wallet') {
-                console.log('Mobile Checkout: Initiating E-Wallet Payment...');
+            // Handle Payment Redirection (E-Wallet or Cash Down Payment)
+            if (paymentMethod === 'e-wallet' || isDownPaymentRequired) {
+                console.log(`Mobile Checkout: Initiating ${isDownPaymentRequired ? 'Down Payment' : 'Full Payment'} via PayMongo...`);
 
-                // Re-use the SAME API endpoint or the specific payment endpoint?
-                // MOCK PAYMENT: Directly mark as paid (bypasses PayMongo for development)
-                console.log('Mobile Checkout: Mock payment - marking as paid...');
-
-                // Update reservation status directly in Supabase
-                const { error: updateError } = await supabase
-                    .from('reservations')
-                    .update({
-                        status: 'confirmed',
-                        amount_paid: total
+                const checkoutResponse = await fetch(`${apiUrl}/api/mobile/create-checkout`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${session.access_token}`
+                    },
+                    body: JSON.stringify({
+                        reservationId: primaryReservationId,
+                        amount: isDownPaymentRequired ? downPaymentAmount : total,
+                        description: `Booking for ${bookingData.courtName} at ${bookingData.venueName}`,
+                        recurrenceGroupId: recurrenceGroupId,
+                        isDownPayment: isDownPaymentRequired
                     })
-                    .eq('id', primaryReservationId);
+                });
 
-                if (updateError) {
-                    console.error('Mock payment error:', updateError);
-                    throw new Error('Failed to process mock payment');
+                const checkoutResult = await checkoutResponse.json();
+
+                if (!checkoutResponse.ok || !checkoutResult.checkoutUrl) {
+                    throw new Error(checkoutResult.error || 'Failed to create checkout session');
                 }
 
-                // If recurring, update all related reservations
-                if (recurrenceGroupId) {
-                    await supabase
-                        .from('reservations')
-                        .update({
-                            status: 'confirmed',
-                            amount_paid: total / (bookingData.recurrenceWeeks || 1)
-                        })
-                        .eq('recurrence_group_id', recurrenceGroupId);
-                }
+                // Open PayMongo Checkout
+                await Linking.openURL(checkoutResult.checkoutUrl);
 
-                console.log('Mobile Checkout: Mock payment successful!');
+                // Set pending ID for AppState check when return
+                setPendingReservationId(primaryReservationId);
+
+                // Keep processing state while waiting for return from browser
+                return;
             }
 
-            // For cash payments, show success immediately
+            // For pure cash payments (no down payment), show success immediately
             setStep('success');
         } catch (error: any) {
             console.error('Booking error:', error);
@@ -317,12 +264,14 @@ export default function CheckoutScreen() {
                     </View>
 
                     <Text style={styles.successTitle}>
-                        {paymentMethod === 'e-wallet' ? 'Booking Confirmed!' : 'Booking Reserved!'}
+                        {paymentMethod === 'e-wallet' ? 'Booking Confirmed!' : isDownPaymentRequired ? 'Down Payment Confirmed!' : 'Booking Reserved!'}
                     </Text>
                     <Text style={styles.successSubtitle}>
                         {paymentMethod === 'e-wallet'
                             ? 'Your court has been successfully booked.'
-                            : 'Please complete payment at the venue.'}
+                            : isDownPaymentRequired
+                                ? 'Your deposit has been received. Pay the remaining balance at the venue.'
+                                : 'Please complete payment at the venue.'}
                     </Text>
 
                     {/* Booking Details Card */}
@@ -348,9 +297,19 @@ export default function CheckoutScreen() {
                             </Text>
                         </View>
                         <View style={[styles.detailRow, styles.totalRow]}>
-                            <Text style={styles.totalLabel}>Total Paid</Text>
-                            <Text style={styles.totalValue}>₱{total.toLocaleString()}</Text>
+                            <Text style={styles.totalLabel}>
+                                {isDownPaymentRequired ? 'Down Payment Paid' : 'Total Paid'}
+                            </Text>
+                            <Text style={styles.totalValue}>₱{(isDownPaymentRequired ? downPaymentAmount : total).toLocaleString()}</Text>
                         </View>
+                        {isDownPaymentRequired && (
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Remaining Balance</Text>
+                                <Text style={[styles.detailValue, { color: Colors.dark.warning }]}>
+                                    ₱{remainingBalance.toLocaleString()}
+                                </Text>
+                            </View>
+                        )}
                     </Card>
 
                     {/* Reminder for cash payment */}
@@ -466,7 +425,12 @@ export default function CheckoutScreen() {
                     </View>
                     <View style={styles.paymentInfo}>
                         <Text style={styles.paymentTitle}>Cash</Text>
-                        <Text style={styles.paymentDesc}>Pay at venue</Text>
+                        <Text style={styles.paymentDesc}>Pay balance at venue</Text>
+                        {downPaymentAmount > 0 && (
+                            <Text style={[styles.paymentDesc, { color: Colors.dark.primary, marginTop: 2, fontWeight: '600' }]}>
+                                ₱{downPaymentAmount.toLocaleString()} deposit required online
+                            </Text>
+                        )}
                     </View>
                     <View style={[
                         styles.radioOuter,
@@ -477,52 +441,6 @@ export default function CheckoutScreen() {
                 </TouchableOpacity>
 
 
-
-                {/* Promo Code Input */}
-                <Text style={styles.sectionTitle}>Promo Code</Text>
-                <Card variant="default" padding="sm" style={styles.promoCard}>
-                    <View style={styles.promoRow}>
-                        <TextInput
-                            style={styles.promoInput}
-                            placeholder="Enter discount code"
-                            placeholderTextColor={Colors.dark.textSecondary}
-                            value={promoCode}
-                            onChangeText={setPromoCode}
-                            autoCapitalize="characters"
-                            editable={!appliedPromo}
-                        />
-                        {appliedPromo ? (
-                            <TouchableOpacity onPress={() => {
-                                setAppliedPromo(null);
-                                setDiscountAmount(0);
-                                setPromoCode('');
-                            }}>
-                                <Ionicons name="close-circle" size={24} color={Colors.dark.textSecondary} />
-                            </TouchableOpacity>
-                        ) : (
-                            <TouchableOpacity
-                                onPress={handleApplyPromo}
-                                disabled={isCheckingDiscount || !promoCode}
-                                style={styles.applyButton}
-                            >
-                                {isCheckingDiscount ? (
-                                    <ActivityIndicator size="small" color={Colors.dark.primary} />
-                                ) : (
-                                    <Text style={[
-                                        styles.applyText,
-                                        !promoCode && styles.applyTextDisabled
-                                    ]}>Apply</Text>
-                                )}
-                            </TouchableOpacity>
-                        )}
-                    </View>
-                    {promoError && (
-                        <Text style={styles.promoError}>{promoError}</Text>
-                    )}
-                    {appliedPromo && (
-                        <Text style={styles.promoSuccess}>Promo applied!</Text>
-                    )}
-                </Card>
 
                 <Text style={styles.sectionTitle}>Price Details</Text>
                 <Card variant="default" padding="md">
@@ -547,6 +465,19 @@ export default function CheckoutScreen() {
                         <Text style={styles.totalPriceLabel}>Total</Text>
                         <Text style={styles.totalPriceValue}>₱{total.toLocaleString()}</Text>
                     </View>
+
+                    {isDownPaymentRequired && (
+                        <>
+                            <View style={[styles.priceRow, { marginTop: Spacing.sm, paddingTop: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.dark.border }]}>
+                                <Text style={[styles.priceLabel, { color: Colors.dark.primary, fontWeight: '600' }]}>Down Payment (Pay Online)</Text>
+                                <Text style={[styles.priceValue, { color: Colors.dark.primary, fontWeight: '600' }]}>₱{downPaymentAmount.toLocaleString()}</Text>
+                            </View>
+                            <View style={styles.priceRow}>
+                                <Text style={styles.priceLabel}>Remaining Balance (Pay at Venue)</Text>
+                                <Text style={styles.priceValue}>₱{remainingBalance.toLocaleString()}</Text>
+                            </View>
+                        </>
+                    )}
                 </Card>
 
                 {/* Cancellation Policy */}
@@ -568,15 +499,15 @@ export default function CheckoutScreen() {
             {/* Bottom CTA */}
             <View style={styles.bottomCta}>
                 <View style={styles.ctaPrice}>
-                    <Text style={styles.ctaPriceLabel}>Total</Text>
-                    <Text style={styles.ctaPriceValue}>₱{total.toLocaleString()}</Text>
+                    <Text style={styles.ctaPriceLabel}>{isDownPaymentRequired ? 'To Pay Online' : 'Total'}</Text>
+                    <Text style={styles.ctaPriceValue}>₱{(isDownPaymentRequired ? downPaymentAmount : total).toLocaleString()}</Text>
                 </View>
                 <Button
                     onPress={handleConfirmBooking}
                     disabled={!paymentMethod || !policyAccepted || isProcessing}
                     style={styles.confirmButton}
                 >
-                    {paymentMethod === 'e-wallet' ? 'Pay Now' : 'Confirm Booking'}
+                    {paymentMethod === 'e-wallet' ? 'Pay Now' : isDownPaymentRequired ? 'Pay Down Payment' : 'Confirm Booking'}
                 </Button>
             </View>
         </SafeAreaView >

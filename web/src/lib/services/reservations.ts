@@ -1,6 +1,8 @@
 
 import { createServiceClient } from '@/lib/supabase/service'
 import { SupabaseClient } from '@supabase/supabase-js'
+import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
+import { calculatePlatformFeeAmount } from '@/lib/platform-settings'
 
 export async function createReservation(
     supabase: SupabaseClient,
@@ -52,23 +54,13 @@ export async function createReservation(
     const targetSlots: { start: Date; end: Date; weekIndex: number }[] = []
 
     for (let i = 0; i < recurrenceWeeks; i++) {
-        // The "base" date for this week's iteration (aligned with the initial start date)
-        const weekBaseTime = initialStartTime.getTime() + (i * 7 * 24 * 60 * 60 * 1000)
-
         for (const dayIndex of uniqueSelectedDays) {
-            // Calculate offset from the original start day
-            // e.g. Start is Wed (3). Target is Mon (1). Offset = -2 days.
-            const dayOffset = dayIndex - startDayIndex
+            const dayOffset = (dayIndex - startDayIndex + 7) % 7
 
-            const slotStartTime = new Date(weekBaseTime + (dayOffset * 24 * 60 * 60 * 1000))
+            const slotStartTime = new Date(initialStartTime.getTime())
+            slotStartTime.setDate(slotStartTime.getDate() + (i * 7) + dayOffset)
+
             const slotEndTime = new Date(slotStartTime.getTime() + durationMs)
-
-            // Skip past dates (e.g., missed days in the first week)
-            // We allow a small buffer (e.g. 1 min) to avoid equality issues, but >= should be fine.
-            // Actually strictly, if it's the SAME time as initial, we allow it.
-            if (slotStartTime.getTime() < initialStartTime.getTime()) {
-                continue
-            }
 
             targetSlots.push({
                 start: slotStartTime,
@@ -102,7 +94,7 @@ export async function createReservation(
         const currentStartTimeISO = slot.start.toISOString()
         const currentEndTimeISO = slot.end.toISOString()
 
-        const conflictStatuses = ['pending_payment', 'pending', 'paid', 'confirmed', 'pending_refund']
+        const conflictStatuses = ['pending_payment', 'confirmed', 'ongoing', 'pending_refund', 'completed', 'no_show']
 
         const [reservationConflicts, queueConflicts] = await Promise.all([
             adminDb
@@ -117,8 +109,7 @@ export async function createReservation(
                 .from('queue_sessions')
                 .select('id, start_time, end_time')
                 .eq('court_id', data.courtId)
-                .in('status', ['draft', 'active', 'pending_approval'])
-                .in('approval_status', ['pending', 'approved'])
+                .in('status', ['pending_payment', 'open', 'active'])
                 .lt('start_time', currentEndTimeISO)
                 .gt('end_time', currentStartTimeISO)
         ])
@@ -132,12 +123,10 @@ export async function createReservation(
             }
         }
 
-        // Filter reservation conflicts
+        // Filter reservation conflicts — ALL active reservations are real conflicts
+        // (including the user's own pending reservations, since those hold the slot)
         const realConflicts = reservationConflicts.data?.filter(conflict => {
-            if (conflict.status === 'confirmed' || conflict.status === 'paid') return true
-            if (conflict.user_id === data.userId && (conflict.status === 'pending_payment' || conflict.status === 'pending') && !isRecurring) return false
-            if (conflict.user_id !== data.userId) return true
-            return isRecurring // If recurring, even own pending conflicts block it
+            return ['pending_payment', 'partially_paid', 'confirmed', 'ongoing'].includes(conflict.status)
         }) || []
 
         if (realConflicts.length > 0) {
@@ -149,20 +138,111 @@ export async function createReservation(
         }
     }
 
+    // 2.5 PRICE CALCULATION AND DISCOUNT VALIDATION PHASE
+    // Fetch Court to get hourly rate and venue details
+    const { data: court, error: courtError } = await adminDb
+        .from('courts')
+        .select(`
+            hourly_rate, 
+            venue_id,
+            venues (metadata)
+        `)
+        .eq('id', data.courtId)
+        .single()
+
+    if (courtError || !court) {
+        console.error('[createReservation] ❌ Court not found:', courtError)
+        return { success: false, error: 'Court not found.' }
+    }
+
+    // Calculate base price across ALL slots (assuming durationMs is same for all)
+    const durationHours = durationMs / (1000 * 60 * 60)
+    const basePricePerSlot = court.hourly_rate * durationHours
+    const totalBasePrice = basePricePerSlot * targetSlots.length
+
+    // Calculate actual discounts on the backend
+    const discountResult = await calculateApplicableDiscounts({
+        venueId: court.venue_id,
+        courtId: data.courtId,
+        startDate: targetSlots[0].start.toISOString(),
+        endDate: targetSlots[targetSlots.length - 1].end.toISOString(),
+        recurrenceWeeks: recurrenceWeeks,
+        basePrice: totalBasePrice
+    })
+
+    const finalTotalAmount = discountResult.finalPrice
+    const calculatedDiscountAmount = discountResult.totalDiscount
+
+    // We only log the primary discount name if one exists (for legacy discountType field)
+    let primaryDiscountName = ''
+    if (discountResult.discounts.length > 0) {
+        primaryDiscountName = discountResult.discounts[0].name
+    }
+
+    // 2.6 PLATFORM FEE CALCULATION (server-side to match what PayMongo charges)
+    let platformFeePercentage = 5 // default
+    let platformFeeEnabled = true
+    try {
+        const { data: feeSetting } = await adminDb
+            .from('platform_settings')
+            .select('setting_value')
+            .eq('setting_key', 'platform_fee')
+            .single()
+        if (feeSetting?.setting_value) {
+            const feeConfig = feeSetting.setting_value as { percentage?: number; enabled?: boolean }
+            platformFeePercentage = feeConfig.percentage ?? 5
+            platformFeeEnabled = feeConfig.enabled ?? true
+        }
+    } catch (err) {
+        console.warn('[createReservation] Failed to fetch platform fee, using default 5%', err)
+    }
+
     // 3. CREATION PHASE
     let primaryReservationId = ''
 
-    // Calculate price per slot
-    // Assuming totalAmount is Grand Total
-    const perInstanceAmount = data.totalAmount / targetSlots.length
+    // Calculate price per slot securely from the backend result
+    const courtAmountPerSlot = finalTotalAmount / targetSlots.length
+    const perInstanceDiscount = calculatedDiscountAmount / targetSlots.length
+
+    // Add platform fee to each slot's total
+    const platformFeePerSlot = platformFeeEnabled
+        ? calculatePlatformFeeAmount(courtAmountPerSlot, platformFeePercentage)
+        : 0
+    const perInstanceAmount = Math.round((courtAmountPerSlot + platformFeePerSlot) * 100) / 100
+
+    console.log('[createReservation] 💰 Price breakdown per slot:', {
+        courtAmount: courtAmountPerSlot,
+        platformFee: platformFeePerSlot,
+        platformFeePercentage,
+        totalPerSlot: perInstanceAmount,
+        slots: targetSlots.length
+    })
+
+    // Calculate down payment if applicable (based on total including platform fee)
+    const venueData = court.venues as any;
+    const venueMetadata = venueData ? (Array.isArray(venueData) ? venueData[0]?.metadata : venueData.metadata) : null;
+    const downPaymentPercentage = parseFloat(venueMetadata?.down_payment_percentage || '20')
+    const downPaymentAmount = data.paymentMethod === 'cash' ? Math.round((perInstanceAmount * downPaymentPercentage / 100) * 100) / 100 : undefined;
 
     for (let i = 0; i < targetSlots.length; i++) {
         const slot = targetSlots[i]
 
         // Determine status
-        // For cash recurring, we auto-confirm them as "Reserved" but unpaid. (Parity with web behavior)
-        // If e-wallet, pending_payment.
-        const status = (data.paymentMethod === 'cash' && isRecurring) ? 'confirmed' : 'pending_payment'
+        // All reservations start as pending_payment regardless of payment method.
+        // Cash bookings require court admin to mark as paid before they become confirmed.
+        // E-wallet bookings get confirmed automatically via PayMongo webhook.
+        const status = 'pending_payment'
+
+        // Calculate cash payment deadline: 2 hours before start_time
+        // This gives players time to go to the venue and pay in person.
+        // If start_time is less than 2 hours from now, deadline = now + 30 min (minimum window).
+        let cashPaymentDeadline: string | null = null
+        if (data.paymentMethod === 'cash') {
+            const twoHoursBefore = new Date(slot.start.getTime() - 2 * 60 * 60 * 1000)
+            const minimumDeadline = new Date(Date.now() + 30 * 60 * 1000) // 30 min from now
+            const deadline = twoHoursBefore > minimumDeadline ? twoHoursBefore : minimumDeadline
+            cashPaymentDeadline = deadline.toISOString()
+        }
 
         // Use USER SCOPED Client for INSERT to respect RLS
         // (Ensure the passed client has an authenticated user)
@@ -178,13 +258,20 @@ export async function createReservation(
                 amount_paid: 0,
                 num_players: data.numPlayers || 1,
                 payment_type: data.paymentType || 'full',
-                discount_applied: data.discountApplied ? (data.discountApplied / targetSlots.length) : 0, // Split discount too
-                discount_type: data.discountType || null,
-                discount_reason: data.discountReason || null,
+                payment_method: data.paymentMethod || null,
+                cash_payment_deadline: cashPaymentDeadline,
+                discount_applied: perInstanceDiscount,
+                discount_type: primaryDiscountName || null,
+                discount_reason: discountResult.discounts.map(d => d.description).join(', ') || null,
                 recurrence_group_id: recurrenceGroupId,
                 metadata: {
                     booking_origin: 'web_checkout',
                     intended_payment_method: data.paymentMethod ?? null,
+                    court_amount: courtAmountPerSlot,
+                    platform_fee: platformFeePerSlot,
+                    platform_fee_percentage: platformFeeEnabled ? platformFeePercentage : 0,
+                    down_payment_percentage: data.paymentMethod === 'cash' ? downPaymentPercentage : undefined,
+                    down_payment_amount: data.paymentMethod === 'cash' ? downPaymentAmount : undefined,
                     recurrence_index: i,
                     recurrence_total: targetSlots.length,
                     // Add week-specific metadata for proper display
@@ -199,6 +286,26 @@ export async function createReservation(
 
         if (error || !newRes) {
             console.error(`Failed to create reservation for slot ${i}`, error)
+
+            // Rollback: cancel any previously created reservations in this batch
+            if (createdReservationIds.length > 0) {
+                console.log(`🔄 Rolling back ${createdReservationIds.length} previously created reservations...`)
+                const { error: rollbackError } = await supabase
+                    .from('reservations')
+                    .update({
+                        status: 'cancelled',
+                        cancelled_at: new Date().toISOString(),
+                        cancellation_reason: 'Rolled back due to failed slot creation in recurring booking'
+                    })
+                    .in('id', createdReservationIds)
+
+                if (rollbackError) {
+                    console.error('❌ Rollback failed:', rollbackError)
+                } else {
+                    console.log('✅ Rollback successful')
+                }
+            }
+
             return { success: false, error: `Failed to create slot ${i + 1}: ${error.message}` }
         }
 
@@ -210,6 +317,8 @@ export async function createReservation(
         success: true,
         reservationId: primaryReservationId,
         recurrenceGroupId: recurrenceGroupId || undefined,
-        count: createdReservationIds.length
+        count: createdReservationIds.length,
+        downPaymentRequired: downPaymentAmount !== undefined && downPaymentAmount > 0,
+        downPaymentAmount: downPaymentAmount
     }
 }

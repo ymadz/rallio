@@ -13,22 +13,21 @@ import {
   Phone,
   Mail,
   CheckCircle,
+  XCircle,
   Edit,
   Loader2,
   AlertCircle,
-  Settings,
-  ClipboardCheck
+  Power,
 } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { getVenueById } from '@/app/actions/court-admin-actions'
+import { getVenueById, toggleVenueActiveStatus } from '@/app/actions/court-admin-actions'
 import { VenueCourts } from './venue-courts'
 import { PricingManagement } from './pricing-management'
 import { AvailabilityManagement } from './availability-management'
 import { AnalyticsDashboard } from './analytics-dashboard'
 import { ReviewsManagement } from './reviews-management'
 import DiscountManagement from './discount-management'
-import { QueueApprovalsManagement } from './queue-approvals-management'
 import { VenueEditModal } from './venue-edit-modal'
 
 interface VenueDetailProps {
@@ -45,6 +44,7 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
+  const [isToggling, setIsToggling] = useState(false)
 
   useEffect(() => {
     loadVenue()
@@ -70,10 +70,30 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
       </div>
     )
+  }
+
+  const handleToggleActive = async () => {
+    const newState = !venue.is_active
+    const action = newState ? 'activate' : 'deactivate'
+    if (!confirm(`Are you sure you want to ${action} this venue? ${!newState ? 'It will no longer be visible to users.' : 'It will become visible to users again.'}`)) return
+
+    setIsToggling(true)
+    try {
+      const result = await toggleVenueActiveStatus(venueId, newState)
+      if (!result.success) {
+        alert('Error: ' + result.error)
+        return
+      }
+      await loadVenue()
+    } catch (err: any) {
+      alert('Error: ' + err.message)
+    } finally {
+      setIsToggling(false)
+    }
   }
 
   if (error || !venue) {
@@ -102,7 +122,6 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
     { id: 'pricing', label: 'Pricing', icon: PhilippinePeso },
     { id: 'discounts', label: 'Discounts', icon: PhilippinePeso },
     { id: 'availability', label: 'Availability', icon: Clock },
-    { id: 'approvals', label: 'Queue Approvals', icon: ClipboardCheck },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'reviews', label: 'Reviews', icon: Star },
   ]
@@ -128,12 +147,17 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-3">
               <h1 className="text-3xl font-bold text-gray-900">{venue.name}</h1>
-              {venue.is_verified && (
-                <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
+              {venue.is_verified ? (
+                <span className="inline-flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
                   <CheckCircle className="w-4 h-4" />
                   Verified
                 </span>
-              )}
+              ) : !venue.is_active ? (
+                <span className="inline-flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-medium">
+                  <XCircle className="w-4 h-4" />
+                  Not Approved
+                </span>
+              ) : null}
             </div>
             {venue.description && (
               <p className="text-gray-600 mb-4">{venue.description}</p>
@@ -162,13 +186,31 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
             </div>
           </div>
 
-          <button 
-            onClick={() => setShowEditModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <Edit className="w-4 h-4" />
-            <span>Edit Venue</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleToggleActive}
+              disabled={isToggling}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 ${venue.is_active
+                  ? 'border border-red-200 text-red-600 hover:bg-red-50'
+                  : 'border border-green-200 text-green-600 hover:bg-green-50'
+                }`}
+              title={venue.is_active ? 'Deactivate venue - will be hidden from users' : 'Activate venue - will be visible to users'}
+            >
+              {isToggling ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Power className="w-4 h-4" />
+              )}
+              <span>{venue.is_active ? 'Deactivate' : 'Activate'}</span>
+            </button>
+            <button
+              onClick={() => setShowEditModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <Edit className="w-4 h-4" />
+              <span>Edit Venue</span>
+            </button>
+          </div>
         </div>
 
         {/* Quick Stats */}
@@ -190,12 +232,13 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
                 )}
               </div>
               <div className="flex items-center justify-center gap-2">
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  venue.is_verified
-                    ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${venue.is_verified
+                  ? 'bg-primary/10 text-primary border border-primary/20'
+                  : !venue.is_active
+                    ? 'bg-red-100 text-red-700 border border-red-200'
                     : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
-                }`}>
-                  {venue.is_verified ? 'Verified' : 'Pending Verification'}
+                  }`}>
+                  {venue.is_verified ? 'Verified' : !venue.is_active ? 'Not Approved' : 'Pending Verification'}
                 </span>
               </div>
             </div>
@@ -215,11 +258,10 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
-                className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-colors whitespace-nowrap ${
-                  isActive
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
+                className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-colors whitespace-nowrap ${isActive
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-100'
+                  }`}
               >
                 <Icon className="w-5 h-5" />
                 <span>{tab.label}</span>
@@ -229,60 +271,12 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
         </div>
       </div>
 
-      {/* Queue Settings Section */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <Settings className="w-5 h-5" />
-          Queue Session Settings
-        </h3>
-        
-        <div className="flex items-start justify-between p-4 bg-gray-50 rounded-lg">
-          <div className="flex-1">
-            <label htmlFor="requires-approval" className="block text-sm font-medium text-gray-900 mb-1">
-              Require Approval for Queue Sessions
-            </label>
-            <p className="text-sm text-gray-600">
-              When enabled, Queue Masters must wait for your approval before their sessions go live.
-              This gives you control over who uses your courts and when.
-            </p>
-          </div>
-          <div className="ml-4 flex-shrink-0">
-            <input
-              type="checkbox"
-              id="requires-approval"
-              checked={venue?.requires_queue_approval ?? true}
-              onChange={async (e) => {
-                try {
-                  const { error } = await supabase
-                    .from('venues')
-                    .update({ requires_queue_approval: e.target.checked })
-                    .eq('id', venueId)
-                  
-                  if (error) throw error
-                  
-                  await loadVenue()
-                  
-                  alert(e.target.checked 
-                    ? '✅ Queue sessions now require your approval' 
-                    : '✅ Queue sessions no longer require approval - they will go live immediately')
-                } catch (error) {
-                  console.error('Failed to update setting:', error)
-                  alert('❌ Failed to update setting. Please try again.')
-                }
-              }}
-              className="h-5 w-5 text-primary border-gray-300 rounded focus:ring-2 focus:ring-primary cursor-pointer"
-            />
-          </div>
-        </div>
-      </div>
-
       {/* Tab Content */}
       <div className="min-h-96">
         {activeTab === 'courts' && <VenueCourts venueId={venueId} onCourtChange={loadVenue} />}
         {activeTab === 'pricing' && <PricingManagement venueId={venueId} />}
         {activeTab === 'discounts' && <DiscountManagement venueId={venueId} />}
         {activeTab === 'availability' && <AvailabilityManagement venueId={venueId} />}
-        {activeTab === 'approvals' && <QueueApprovalsManagement />}
         {activeTab === 'analytics' && <AnalyticsDashboard venueId={venueId} />}
         {activeTab === 'reviews' && <ReviewsManagement venueId={venueId} />}
       </div>

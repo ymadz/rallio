@@ -1,17 +1,21 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createQueueSession } from '@/app/actions/queue-actions'
-import { getAvailableTimeSlotsAction, validateBookingAvailabilityAction, type TimeSlot } from '@/app/actions/reservations'
+import { createQueuePaymentIntent } from '@/app/actions/queue-payment-actions'
+// import { useCheckoutStore } from '@/stores/checkout-store' // No longer used for redirection
+import { getAvailableTimeSlotsAction, validateBookingAvailabilityAction, getVenueMetadataAction, type TimeSlot } from '@/app/actions/reservations'
 import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
 import { Calendar as CalendarIcon, Clock, Users, PhilippinePeso, Settings, Loader2, ArrowLeft, CheckCircle, Info, TrendingUp, Target } from 'lucide-react'
 import { DayPicker } from 'react-day-picker'
 import 'react-day-picker/dist/style.css'
 import Link from 'next/link'
+import { Link as LinkIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/use-auth'
+import { useToast } from '@/hooks/use-toast'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -37,8 +41,10 @@ interface Court {
 
 export function CreateSessionForm() {
   const router = useRouter()
+  const { toast } = useToast()
   const supabase = createClient()
   const { user } = useAuth()
+  // const { setBookingData } = useCheckoutStore()
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -54,6 +60,8 @@ export function CreateSessionForm() {
   const [maxPlayers, setMaxPlayers] = useState(12)
   const [costPerGame, setCostPerGame] = useState(50)
   const [isPublic, setIsPublic] = useState(true)
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'e-wallet'>('e-wallet')
+  const [downPaymentPercentage, setDownPaymentPercentage] = useState<number | undefined>(undefined)
 
   // Validation state
   const [validationState, setValidationState] = useState<{
@@ -89,8 +97,8 @@ export function CreateSessionForm() {
 
       try {
         const dateStr = format(startDate, 'yyyy-MM-dd')
-        const startDateTime = `${dateStr}T${startTime}:00`
-        const endDateTime = `${dateStr}T${endTime}:00`
+        const startDateTime = `${dateStr}T${startTime}:00+08:00`
+        const endDateTime = `${dateStr}T${endTime}:00+08:00`
 
         const result = await validateBookingAvailabilityAction({
           courtId,
@@ -273,6 +281,28 @@ export function CreateSessionForm() {
     fetchTimeSlots()
   }, [courtId, startDate])
 
+  // Load venue metadata when court changes
+  useEffect(() => {
+    const fetchVenueMetadata = async () => {
+      if (!courtId) return
+
+      const selectedVenue = venues.find(v => v.courts?.some(c => c.id === courtId))
+      if (!selectedVenue) return
+
+      try {
+        const result = await getVenueMetadataAction(selectedVenue.id)
+        if (result.success && result.metadata) {
+          const percentage = parseFloat((result.metadata as any).down_payment_percentage || '20')
+          setDownPaymentPercentage(percentage)
+        }
+      } catch (err) {
+        console.error('Error fetching venue metadata:', err)
+      }
+    }
+
+    fetchVenueMetadata()
+  }, [courtId, venues])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -308,7 +338,13 @@ export function CreateSessionForm() {
         throw new Error(availability.error || 'Selected time is not available')
       }
 
-      // Create session
+      // Calculate checkout values
+      const startH = parseInt(startTime.split(':')[0])
+      const startM = parseInt(startTime.split(':')[1])
+      const endH = startH + duration
+      const endTimeString = `${endH.toString().padStart(2, '0')}:${startM.toString().padStart(2, '0')}`
+
+      // Create Session Directly
       const result = await createQueueSession({
         courtId,
         startTime: startDateTime,
@@ -319,33 +355,44 @@ export function CreateSessionForm() {
         costPerGame,
         isPublic,
         recurrenceWeeks,
-        selectedDays: selectedDays.length > 0 ? selectedDays : undefined
+        selectedDays: selectedDays.length > 0 ? selectedDays : undefined,
+        paymentMethod
       })
 
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to create session')
+      if (!result.success || !result.session) {
+        throw new Error(result.error || 'Failed to create queue session')
       }
 
-      // Handle approval requirement
+      const sessionId = result.session.id
+
+      // Check if approval is required
       if (result.requiresApproval) {
-        alert('✅ Session created! It will be visible once the venue owner approves it. You\'ll be notified of their decision.')
-        router.push('/queue-master/sessions')
-      } else {
-        router.push(`/queue-master/sessions/${result.session?.id}`)
+        toast({
+          title: "Session Request Sent",
+          description: "Your session is pending approval from the venue. You will be notified when it's approved to proceed with payment.",
+        })
+        router.push(`/queue-master/sessions/${sessionId}`)
+        return
       }
+
+      // Handle Payment Flow (Only if approval NOT required)
+      if (paymentMethod === 'e-wallet' || result.downPaymentRequired) {
+        const paymentResult = await createQueuePaymentIntent(sessionId, 'gcash')
+        if (!paymentResult.success || !paymentResult.checkoutUrl) {
+          throw new Error(paymentResult.error || 'Failed to initiate payment')
+        }
+        window.location.href = paymentResult.checkoutUrl
+      } else {
+        // Cash Payment - Redirect to Session/Dashboard
+        router.push(`/queue-master/sessions/${sessionId}`)
+      }
+
     } catch (err: any) {
+      console.error(err)
       setError(err.message || 'An error occurred')
     } finally {
       setIsSubmitting(false)
     }
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-      </div>
-    )
   }
 
   // Get selected court details
@@ -357,16 +404,67 @@ export function CreateSessionForm() {
     v.courts?.some(c => c.id === courtId)
   )
 
-  // Calculate estimated revenue
-  const estimatedGamesPerPlayer = duration * 2 // Rough estimate: 2 games per hour
-  const estimatedRevenue = maxPlayers * estimatedGamesPerPlayer * costPerGame
+  // Calculate payment amounts for Queue Master
+  const courtRental = useMemo(() => {
+    if (!selectedCourt?.hourly_rate || !duration || duration <= 0) return 0
+    return selectedCourt.hourly_rate * duration
+  }, [selectedCourt?.hourly_rate, duration])
+
+  const platformFee = useMemo(() => {
+    return courtRental * 0.05
+  }, [courtRental])
+
+  const totalAmount = useMemo(() => {
+    return courtRental + platformFee
+  }, [courtRental, platformFee])
+
+
+  // Calculate all session dates for display
+  const allSessionDates = useMemo(() => {
+    if (!startDate) return []
+    const dates: Date[] = []
+    const start = new Date(startDate)
+    start.setHours(0, 0, 0, 0)
+
+    // Use selectedDays or default to startDay if empty (though effect handles this)
+    const daysToProcess = selectedDays.length > 0 ? selectedDays : [start.getDay()]
+
+    const startDay = start.getDay()
+
+    for (let w = 0; w < recurrenceWeeks; w++) {
+      daysToProcess.forEach(dayIndex => {
+        const dayDiff = dayIndex - startDay
+        const date = new Date(start)
+        date.setDate(date.getDate() + (w * 7) + dayDiff)
+
+        // Normalize time
+        date.setHours(0, 0, 0, 0)
+
+        // Only include if >= start date
+        if (date >= start) {
+          dates.push(date)
+        }
+      })
+    }
+    return dates.sort((a, b) => a.getTime() - b.getTime())
+  }, [startDate, recurrenceWeeks, selectedDays])
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    )
+  }
+
+
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Form */}
         <div className="lg:col-span-2 space-y-6">
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-6">
             {/* Error Alert */}
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start gap-2">
@@ -512,7 +610,13 @@ export function CreateSessionForm() {
                       <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col h-[400px]">
                         <div className="bg-blue-50 border-b border-blue-100 px-4 py-3 shrink-0">
                           <p className="text-xs text-blue-700">
-                            {!startTime ? "Tap a time to start" : "Tap another time to extend, or click start again to reset"}
+                            {!startTime ? (
+                              "Tap a time to start your booking"
+                            ) : duration <= 1 ? (
+                              "Tap another time to end your booking, or book 1 hour"
+                            ) : (
+                              `${duration} hours selected`
+                            )}
                           </p>
                         </div>
 
@@ -553,20 +657,19 @@ export function CreateSessionForm() {
 
                                       <div>
                                         <p className={cn(
-                                          "font-medium text-sm",
+                                          "font-medium",
                                           isSelected ? "text-white" : disabled ? "text-gray-400" : "text-gray-900"
                                         )}>
                                           {formatSlotTime(slot.time)} - {formatSlotTime(getNextHour(slot.time))}
                                         </p>
-                                        {disabled && <span className="text-[10px] text-red-500 font-medium uppercase">Reserved</span>}
+                                        {disabled && <span className="text-xs text-red-500 font-medium">Reserved</span>}
                                       </div>
                                     </div>
-                                    {/* Price/Selected Indicator */}
                                     <span className={cn(
-                                      "text-xs font-semibold",
+                                      "text-sm font-semibold",
                                       isSelected ? "text-white" : disabled ? "text-gray-400" : "text-gray-700"
                                     )}>
-                                      {isSelected || inRange ? 'Selected' : `₱${slot.price || selectedCourt?.hourly_rate || '-'}`}
+                                      ₱{slot.price || selectedCourt?.hourly_rate || '-'}
                                     </span>
                                   </div>
                                 </button>
@@ -795,59 +898,15 @@ export function CreateSessionForm() {
               </label>
             </div>
 
-            {/* Actions */}
-            <div className="pt-6 border-t border-gray-200">
-              {/* Validation Status */}
-              <div className="mb-4">
-                {!validationState.valid && validationState.error && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm flex items-start gap-2 animate-pulse">
-                    <span className="text-red-500 mt-0.5">⚠️</span>
-                    <div>
-                      <p className="font-semibold text-red-800 text-xs uppercase tracking-wide">Cannot Book</p>
-                      <p className="text-red-700 font-medium">{validationState.error}</p>
-                    </div>
-                  </div>
-                )}
-                {validationState.validating && (
-                  <div className="mb-2 text-xs text-blue-600 flex items-center gap-1.5">
-                    <div className="animate-spin rounded-full h-3 w-3 border-2 border-blue-600 border-t-transparent" />
-                    Checking availability...
-                  </div>
-                )}
-              </div>
 
-              <div className="flex items-center gap-3">
-                <Link
-                  href="/queue-master"
-                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-                >
-                  <ArrowLeft className="w-4 h-4 inline mr-2" />
-                  Cancel
-                </Link>
-                <button
-                  type="submit"
-                  disabled={isSubmitting || !courtId || !startTime || !validationState.valid || validationState.validating}
-                  className="flex-1 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Creating Session...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="w-5 h-5" />
-                      Create Session
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </form>
+
+            {/* Actions removed from here */}
+          </div>
         </div>
 
         {/* Sidebar Summary */}
         <div className="lg:col-span-1">
+
           <div className="sticky top-6 space-y-4">
             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
               <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
@@ -870,19 +929,42 @@ export function CreateSessionForm() {
 
                   <div className="pt-4 border-t border-gray-100">
                     <p className="text-xs text-gray-500 mb-2">SCHEDULE</p>
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2 text-sm text-gray-900">
-                        <CalendarIcon className="w-4 h-4 text-gray-400" />
-                        {startDate ? format(startDate, 'MMM d, yyyy') : '--'}
+                    <div className="space-y-2">
+                      {/* Dates */}
+                      <div className="flex items-start gap-2 text-sm text-gray-900">
+                        <CalendarIcon className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
+                        <div>
+                          {allSessionDates.length > 0 ? (
+                            <div className="space-y-1 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
+                              {allSessionDates.map((date, idx) => (
+                                <div key={idx} className="text-gray-700">
+                                  {format(date, 'EEE, MMM d, yyyy')}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            '--'
+                          )}
+                        </div>
                       </div>
+
+                      {/* Time */}
                       <div className="flex items-center gap-2 text-sm text-gray-900">
-                        <Clock className="w-4 h-4 text-gray-400" />
-                        {startTime || '--:--'} ({duration}h)
+                        <Clock className="w-4 h-4 text-gray-400 shrink-0" />
+                        {startTime ? (
+                          <span>
+                            {formatSlotTime(startTime)} - {formatSlotTime(`${parseInt(startTime.split(':')[0]) + duration}:${startTime.split(':')[1]}`)}
+                          </span>
+                        ) : (
+                          '--:--'
+                        )}
+                        {' '}({duration}h)
                       </div>
+
                       {recurrenceWeeks > 1 && (
                         <div className="flex items-center gap-2 text-sm text-blue-600 font-medium">
                           <TrendingUp className="w-4 h-4" />
-                          {recurrenceWeeks} weekly sessions
+                          {allSessionDates.length} sessions total
                         </div>
                       )}
                     </div>
@@ -900,23 +982,153 @@ export function CreateSessionForm() {
                     <p className="text-xs text-gray-500 mb-1">PRICING</p>
                     <p className="text-lg font-bold text-gray-900">₱{costPerGame} <span className="text-xs font-normal text-gray-500">/ game</span></p>
                   </div>
+
+                  {/* Payment Breakdown for Queue Master */}
+                  {courtId && selectedCourt?.hourly_rate && duration > 0 && (
+                    <div className="pt-4 border-t border-gray-100">
+                      <p className="text-xs text-gray-500 mb-2 font-semibold">PAYMENT DUE</p>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between items-center text-gray-600">
+                          <span>Court rental ({duration}h @ ₱{selectedCourt.hourly_rate}/h)</span>
+                          <span className="font-medium text-gray-900">₱{courtRental.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-gray-600">
+                          <span>Platform fee (5%)</span>
+                          <span className="font-medium text-gray-900">₱{platformFee.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                          <span className="font-semibold text-gray-900">Total</span>
+                          <span className="font-bold text-primary text-lg">₱{totalAmount.toFixed(2)}</span>
+                        </div>
+                      </div>
+                      <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-xs text-blue-800">
+                          <span className="font-semibold">ℹ️ Payment required:</span> You must pay the court rental and platform fee before the session can start.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Payment Method Selection - Relocated */}
+                  <div className="pt-4 border-t border-gray-100">
+                    <p className="text-xs text-gray-500 mb-2 font-semibold">PAYMENT METHOD</p>
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('e-wallet')}
+                        className={cn(
+                          "relative p-3 border rounded-lg text-left transition-all",
+                          paymentMethod === 'e-wallet'
+                            ? "border-primary bg-primary/5 ring-1 ring-primary"
+                            : "border-gray-200 hover:border-gray-300"
+                        )}
+                      >
+                        <div className="font-semibold text-gray-900 text-sm">E-Wallet</div>
+                        <div className="text-[10px] text-gray-600">GCash / Maya</div>
+                        {paymentMethod === 'e-wallet' && (
+                          <div className="absolute top-2 right-2 text-primary">
+                            <CheckCircle className="w-3 h-3" />
+                          </div>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('cash')}
+                        className={cn(
+                          "relative p-3 border rounded-lg text-left transition-all",
+                          paymentMethod === 'cash'
+                            ? "border-primary bg-primary/5 ring-1 ring-primary"
+                            : "border-gray-200 hover:border-gray-300"
+                        )}
+                      >
+                        <div className="font-semibold text-gray-900 text-sm">Cash</div>
+                        <div className="text-[10px] text-gray-600">Pay at venue</div>
+                        {paymentMethod === 'cash' && (
+                          <div className="absolute top-2 right-2 text-primary">
+                            <CheckCircle className="w-3 h-3" />
+                          </div>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Compact Policy */}
+                    <div className="bg-gray-50 rounded p-2 text-xs text-gray-600 mb-2">
+                      {paymentMethod === 'e-wallet' ? (
+                        <p>Instant confirmation. Refundable 24h before.</p>
+                      ) : (
+                        <p>
+                          {downPaymentPercentage && downPaymentPercentage > 0
+                            ? `Pay a ${downPaymentPercentage}% down payment (₱${((totalAmount * downPaymentPercentage) / 100).toFixed(2)}) online. Pay the rest at the venue.`
+                            : 'Pay at venue. Session pending until paid.'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Checking Availability & Validation Errors */}
+                  <div className="pt-4 border-t border-gray-100">
+                    {validationState.validating ? (
+                      <div className="mb-4 text-xs text-blue-600 flex items-center gap-1.5 bg-blue-50 p-2 rounded-lg">
+                        <div className="animate-spin rounded-full h-3 w-3 border-2 border-blue-600 border-t-transparent" />
+                        Checking availability...
+                      </div>
+                    ) : !validationState.valid && validationState.error ? (
+                      <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3 text-sm flex items-start gap-2">
+                        <span className="text-red-500 mt-0.5">⚠️</span>
+                        <div>
+                          <p className="font-semibold text-red-800 text-xs uppercase tracking-wide">Unavailable</p>
+                          <p className="text-red-700 text-xs mt-1">{validationState.error}</p>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* Actions */}
+                    <div className="space-y-3">
+                      <button
+                        type="submit"
+                        disabled={isSubmitting || !courtId || !startTime || !validationState.valid || validationState.validating}
+                        className="w-full px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            <span>{(paymentMethod === 'e-wallet' || (paymentMethod === 'cash' && downPaymentPercentage && downPaymentPercentage > 0)) ? 'Redirecting...' : 'Creating...'}</span>
+                          </>
+                        ) : (
+                          <>
+                            {(paymentMethod === 'e-wallet' || (paymentMethod === 'cash' && downPaymentPercentage && downPaymentPercentage > 0)) ? (
+                              <>
+                                <DollarSign className="w-5 h-5" />
+                                Pay & Create
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="w-5 h-5" />
+                                Create (Pay Cash)
+                              </>
+                            )}
+                          </>
+                        )}
+                      </button>
+
+                      <Link
+                        href="/queue-master"
+                        className="block w-full px-6 py-2 text-center text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                      >
+                        Cancel
+                      </Link>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
 
-            {courtId && costPerGame > 0 && (
-              <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <TrendingUp className="w-4 h-4 text-green-600" />
-                  <h4 className="font-semibold text-gray-900">Estimated Revenue</h4>
-                </div>
-                <p className="text-3xl font-bold text-green-700">₱{estimatedRevenue.toLocaleString()}</p>
-                <p className="text-[10px] text-gray-600 mt-2">Based on {maxPlayers} players × ~{estimatedGamesPerPlayer} games</p>
-              </div>
-            )}
+            {/* Removed Estimated Revenue Card */}
           </div>
+
         </div>
-      </div>
+      </form>
     </div>
   )
 }

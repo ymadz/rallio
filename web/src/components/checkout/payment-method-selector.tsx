@@ -3,7 +3,10 @@
 import { useCheckoutStore } from '@/stores/checkout-store'
 
 export function PaymentMethodSelector() {
-  const { paymentMethod, setPaymentMethod } = useCheckoutStore()
+  const { paymentMethod, setPaymentMethod, downPaymentPercentage, getDownPaymentAmount } = useCheckoutStore()
+
+  const downPaymentAmount = getDownPaymentAmount()
+  const isDownPaymentRequired = downPaymentPercentage ? downPaymentPercentage > 0 : false
 
   return (
     <div className="space-y-4">
@@ -15,10 +18,9 @@ export function PaymentMethodSelector() {
           onClick={() => setPaymentMethod('e-wallet')}
           className={`
             relative border-2 rounded-xl p-6 text-left transition-all
-            ${
-              paymentMethod === 'e-wallet'
-                ? 'border-primary bg-primary/5'
-                : 'border-gray-200 hover:border-gray-300'
+            ${paymentMethod === 'e-wallet'
+              ? 'border-primary bg-primary/5'
+              : 'border-gray-200 hover:border-gray-300'
             }
           `}
         >
@@ -73,10 +75,9 @@ export function PaymentMethodSelector() {
           onClick={() => setPaymentMethod('cash')}
           className={`
             relative border-2 rounded-xl p-6 text-left transition-all
-            ${
-              paymentMethod === 'cash'
-                ? 'border-primary bg-primary/5'
-                : 'border-gray-200 hover:border-gray-300'
+            ${paymentMethod === 'cash'
+              ? 'border-primary bg-primary/5'
+              : 'border-gray-200 hover:border-gray-300'
             }
           `}
         >
@@ -113,7 +114,9 @@ export function PaymentMethodSelector() {
 
           <h4 className="font-semibold text-gray-900 mb-2">Cash</h4>
           <p className="text-sm text-gray-600">
-            Pay in cash at the venue. Booking will be pending until payment is verified.
+            {isDownPaymentRequired
+              ? `Pay a ${downPaymentPercentage}% down payment (₱${downPaymentAmount.toFixed(2)}) online to secure your slot. Pay the rest at the venue.`
+              : 'Pay in cash at the venue. Booking will be pending until payment is verified.'}
           </p>
 
           {paymentMethod === 'cash' && (

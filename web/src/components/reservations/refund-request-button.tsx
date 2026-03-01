@@ -38,7 +38,7 @@ export function RefundRequestButton({
   }, [])
 
   // Only show refund button for paid/confirmed reservations with amount paid
-  const isPaidOrConfirmed = ['paid', 'confirmed'].includes(status) && amountPaid > 0
+  const isPaidOrConfirmed = status === 'confirmed' && amountPaid > 0
 
   // Check 24-hour policy: cannot refund within 24 hours of booking start time
   const hoursUntilStart = (new Date(startTime).getTime() - Date.now()) / (1000 * 60 * 60)

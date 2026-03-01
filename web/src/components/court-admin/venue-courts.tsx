@@ -159,7 +159,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     )
   }
@@ -192,7 +192,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
         </div>
         <button
           onClick={() => setShowAddModal(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
         >
           <Plus className="w-4 h-4" />
           <span>Add Court</span>
@@ -208,7 +208,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
           </p>
           <button
             onClick={() => setShowAddModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
           >
             <Plus className="w-4 h-4" />
             <span>Add Your First Court</span>
@@ -230,7 +230,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                 </div>
                 <div className="flex gap-2">
                   <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${court.is_verified
-                    ? 'bg-blue-100 text-blue-700'
+                    ? 'bg-primary/10 text-primary'
                     : 'bg-yellow-100 text-yellow-700'
                     }`}>
                     {court.is_verified ? (
@@ -285,7 +285,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                 </button>
                 <Link
                   href={`/courts/${court.id}`}
-                  className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm"
                 >
                   <Eye className="w-4 h-4" />
                   <span>View</span>
@@ -318,7 +318,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   placeholder="e.g., Court 1, Center Court"
                 />
               </div>
@@ -328,7 +328,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   rows={3}
                   placeholder="Brief description of the court..."
                 />
@@ -341,7 +341,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                     required
                     value={formData.court_type}
                     onChange={(e) => setFormData({ ...formData, court_type: e.target.value as 'indoor' | 'outdoor' })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   >
                     <option value="indoor">Indoor</option>
                     <option value="outdoor">Outdoor</option>
@@ -353,7 +353,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                   <select
                     value={formData.surface_type}
                     onChange={(e) => setFormData({ ...formData, surface_type: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   >
                     <option value="hardcourt">Hardcourt</option>
                     <option value="clay">Clay</option>
@@ -373,7 +373,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                     max="20"
                     value={formData.capacity}
                     onChange={(e) => setFormData({ ...formData, capacity: parseInt(e.target.value) || 4 })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   />
                 </div>
 
@@ -386,7 +386,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                     step="50"
                     value={formData.hourly_rate}
                     onChange={(e) => setFormData({ ...formData, hourly_rate: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   />
                 </div>
               </div>
@@ -421,7 +421,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                             })
                           }
                         }}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
                       />
                       <span className="text-sm text-gray-700">{amenity.name}</span>
                     </label>
@@ -433,7 +433,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                   )}
                 </div>
                 {formData.amenities.length > 0 && (
-                  <p className="text-xs text-blue-600 mt-2">
+                  <p className="text-xs text-primary mt-2">
                     {formData.amenities.length} amenity{formData.amenities.length !== 1 ? 's' : ''} selected
                   </p>
                 )}
@@ -491,7 +491,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   placeholder="e.g., Court 1, Center Court"
                 />
               </div>
@@ -501,7 +501,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   rows={3}
                   placeholder="Brief description of the court..."
                 />
@@ -514,7 +514,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                     required
                     value={formData.court_type}
                     onChange={(e) => setFormData({ ...formData, court_type: e.target.value as 'indoor' | 'outdoor' })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   >
                     <option value="indoor">Indoor</option>
                     <option value="outdoor">Outdoor</option>
@@ -526,7 +526,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                   <select
                     value={formData.surface_type}
                     onChange={(e) => setFormData({ ...formData, surface_type: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   >
                     <option value="hardcourt">Hardcourt</option>
                     <option value="clay">Clay</option>
@@ -546,7 +546,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                     max="20"
                     value={formData.capacity}
                     onChange={(e) => setFormData({ ...formData, capacity: parseInt(e.target.value) || 4 })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   />
                 </div>
 
@@ -559,7 +559,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                     step="50"
                     value={formData.hourly_rate}
                     onChange={(e) => setFormData({ ...formData, hourly_rate: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   />
                 </div>
               </div>
@@ -594,7 +594,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                             })
                           }
                         }}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
                       />
                       <span className="text-sm text-gray-700">{amenity.name}</span>
                     </label>
@@ -606,7 +606,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                   )}
                 </div>
                 {formData.amenities.length > 0 && (
-                  <p className="text-xs text-blue-600 mt-2">
+                  <p className="text-xs text-primary mt-2">
                     {formData.amenities.length} amenity{formData.amenities.length !== 1 ? 's' : ''} selected
                   </p>
                 )}

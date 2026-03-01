@@ -45,12 +45,7 @@ export default async function MatchesPage({
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-6">
-          <h1 className="text-2xl font-bold text-gray-900">My Matches</h1>
-          <p className="text-sm text-gray-500 mt-1">Track your performance and match history</p>
-        </div>
-      </header>
+
 
       {/* Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">

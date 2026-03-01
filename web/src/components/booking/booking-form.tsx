@@ -162,14 +162,9 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
 
     // Save discount details
     if (discountAmount !== 0) {
-      // If recurrence > 1, the discountAmount returned by `DiscountDisplay` (which calculates for 1 session usually)
-      // needs to be multiplied?
-      // Actually `DiscountDisplay` calculates based on inputs.
-      // If we didn't update `DiscountDisplay` to know about recurrence, it calculates for 1 session.
-      // So `discountAmount` is per session.
-      // Store `discountAmount` is treated as TOTAL discount in `getSubtotal`.
-      // So we should multiply it by weeks.
-
+      // discountAmount is per-session from the engine.
+      // The checkout store subtracts discountAmount from totalBase in getSubtotal(),
+      // so we multiply by recurrenceWeeks to get total discount across all sessions.
       setDiscountDetails({
         amount: discountAmount * recurrenceWeeks,
         type: discountType,
@@ -317,7 +312,7 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
               className="w-full"
             />
             <p className="text-xs text-gray-500 mt-1">
-              This affects group booking discounts (max {selectedCourt.capacity} players)
+              This affects group booking discounts
             </p>
           </div>
         )}
@@ -352,9 +347,8 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
           courtId={courtId}
           startDate={selectedDate.toISOString()}
           endDate={selectedDate.toISOString()}
-          numberOfDays={duration} // Note: This might need to adjust for multi-day vs duration logic but "numberOfDays" param often means hours for hourly booking
-          numberOfPlayers={numPlayers}
-          basePrice={sessionPrice} // Pass price PER session for discount calc, then we multiply later
+          recurrenceWeeks={recurrenceWeeks}
+          basePrice={sessionPrice}
           onDiscountCalculated={handleDiscountCalculated}
         />
       )}

@@ -40,7 +40,7 @@ export async function POST(req: Request) {
 
         console.log('[MobileAPI] Authenticated User:', user.id);
 
-        const { reservationId, amount, description, successUrl, cancelUrl, recurrenceGroupId } = await req.json()
+        const { reservationId, amount, description, successUrl, cancelUrl, recurrenceGroupId, isDownPayment } = await req.json()
 
         if (!reservationId || !amount) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -66,17 +66,30 @@ export async function POST(req: Request) {
         let finalDescription = description;
 
         if (recurrenceGroupId) {
-            // Fetch all pending reservations in the group to sum them up
-            // This protects against client-side math errors
+            // Fetch all pending/partially paid reservations in the group
             const { data: groupReservations } = await supabase
                 .from('reservations')
-                .select('total_amount, status')
+                .select('total_amount, status, metadata')
                 .eq('recurrence_group_id', recurrenceGroupId)
-                .in('status', ['pending', 'pending_payment'])
+                .in('status', ['pending_payment', 'partially_paid'])
 
             if (groupReservations && groupReservations.length > 0) {
-                amountToCharge = groupReservations.reduce((sum, res) => sum + (res.total_amount || 0), 0)
-                finalDescription += ` (Recurring: ${groupReservations.length} sessions)`
+                if (isDownPayment) {
+                    amountToCharge = groupReservations.reduce((sum, res) => {
+                        const meta = res.metadata as any;
+                        return sum + (meta?.down_payment_amount || 0);
+                    }, 0);
+                    finalDescription += ` (Down Payment - ${groupReservations.length} sessions)`;
+                } else {
+                    amountToCharge = groupReservations.reduce((sum, res) => sum + (res.total_amount || 0), 0)
+                    finalDescription += ` (Recurring: ${groupReservations.length} sessions)`
+                }
+            }
+        } else if (isDownPayment) {
+            const meta = reservation.metadata as any;
+            if (meta?.down_payment_amount) {
+                amountToCharge = meta.down_payment_amount;
+                finalDescription += ' (Down Payment)';
             }
         }
 
@@ -112,6 +125,7 @@ export async function POST(req: Request) {
             metadata: {
                 ...metadata,
                 description: finalDescription,
+                is_down_payment: isDownPayment || false,
             }
         }
 

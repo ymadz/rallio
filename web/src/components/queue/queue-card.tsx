@@ -4,6 +4,7 @@ import { QueueStatusBadge } from './queue-status-badge'
 import { Users, Clock, MapPin, ChevronRight, Calendar, Timer } from 'lucide-react'
 import { subHours, isBefore, format, differenceInSeconds } from 'date-fns'
 import { useEffect, useState } from 'react'
+import { useServerTime } from '@/hooks/use-server-time'
 
 interface QueueCardProps {
   queue: QueueSession
@@ -11,16 +12,20 @@ interface QueueCardProps {
 }
 
 export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
+  const { date: serverDate } = useServerTime()
   const isUserInQueue = queue.userPosition !== null
   const startTime = queue.startTime ? new Date(queue.startTime) : new Date()
   const endTime = queue.endTime ? new Date(queue.endTime) : (queue.startTime ? new Date(new Date(queue.startTime).getTime() + 2 * 60 * 60 * 1000) : new Date())
-  const openTime = subHours(startTime, 2)
+  const openTime = subHours(startTime, 12)
+  const now = serverDate || new Date()
+  const isLive = startTime <= now && endTime > now
+  const displayStatus = queue.status === 'completed' ? 'completed' : isLive ? 'live' : 'open'
   const [timeUntilOpen, setTimeUntilOpen] = useState<number>(0)
   const [isJoinable, setIsJoinable] = useState(false)
 
   useEffect(() => {
     const timer = setInterval(() => {
-      const now = new Date()
+      const now = serverDate || new Date()
       if (isBefore(now, openTime)) {
         setTimeUntilOpen(differenceInSeconds(openTime, now))
         setIsJoinable(false)
@@ -31,7 +36,7 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
     }, 1000)
 
     // Initial check
-    const now = new Date()
+    const now = serverDate || new Date()
     if (isBefore(now, openTime)) {
       setTimeUntilOpen(differenceInSeconds(openTime, now))
       setIsJoinable(false)
@@ -41,7 +46,7 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
     }
 
     return () => clearInterval(timer)
-  }, [queue.startTime])
+  }, [queue.startTime, serverDate])
 
   const formatTimeToken = (val: number) => val.toString().padStart(2, '0')
   const formatCountdown = (seconds: number) => {
@@ -79,7 +84,7 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
           </div>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <QueueStatusBadge status={queue.status} size="sm" />
+          <QueueStatusBadge status={displayStatus} size="sm" />
           {!isJoinable && variant !== 'active' && timeUntilOpen > 0 && (
             <div className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs font-medium border border-blue-100">
               <Timer className="w-3 h-3" />
@@ -98,7 +103,7 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
           <div>
             <p className="text-xs text-gray-500">Waiting</p>
             <p className="font-semibold text-gray-900">
-              {queue.players.filter(p => p.status === 'waiting').length}/{queue.maxPlayers}
+              {queue.currentPlayers || 0}/{queue.maxPlayers}
             </p>
           </div>
         </div>

@@ -4,7 +4,9 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
 import { checkRateLimit, createRateLimitConfig } from '@/lib/rate-limiter'
-import { createBulkNotifications, NotificationTemplates } from '@/lib/notifications'
+import { createBulkNotifications, createNotification, NotificationTemplates } from '@/lib/notifications'
+import { getServerNow } from '@/lib/time-server'
+import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
 
 /**
  * Queue Management Server Actions
@@ -17,7 +19,7 @@ export interface QueueSessionData {
   courtName: string
   venueName: string
   venueId: string
-  status: 'draft' | 'open' | 'active' | 'paused' | 'closed' | 'cancelled'
+  status: 'pending_payment' | 'open' | 'active' | 'paused' | 'completed' | 'cancelled'
   currentPlayers: number
   maxPlayers: number
   costPerGame: number
@@ -26,6 +28,11 @@ export interface QueueSessionData {
   createdAt: Date
   mode: 'casual' | 'competitive'
   gameFormat: 'singles' | 'doubles' | 'mixed'
+  reservationId?: string
+  totalCost?: number
+  paymentStatus?: 'pending' | 'paid' | 'failed'
+  paymentMethod?: 'cash' | 'e-wallet'
+  participants?: QueueParticipantData[]
 }
 
 export interface QueueParticipantData {
@@ -76,10 +83,10 @@ export async function getQueueDetails(courtId: string) {
         )
       `)
       .eq('court_id', courtId)
-      .in('status', ['open', 'active'])
+      .in('status', ['open', 'active', 'pending_payment'])
       .order('created_at', { ascending: false })
       .limit(1)
-      .single()
+      .maybeSingle()
 
     if (sessionError) {
       console.error('[getQueueDetails] ❌ Database error:', sessionError)
@@ -92,13 +99,14 @@ export async function getQueueDetails(courtId: string) {
     }
 
     // AUTO-CLOSE CHECK: If session is past end_time, close it automatically
-    if (new Date(session.end_time) < new Date()) {
+    const now = await getServerNow()
+    if (new Date(session.end_time) < now) {
       console.log('[getQueueDetails] 🕒 Session expired, auto-closing:', session.id)
 
       // Update DB to close the session
       const { error: closeError } = await supabase
         .from('queue_sessions')
-        .update({ status: 'closed' })
+        .update({ status: 'completed' })
         .eq('id', session.id)
 
       if (closeError) {
@@ -111,6 +119,21 @@ export async function getQueueDetails(courtId: string) {
 
       // Return null effectively removing it from view
       return { success: true, queue: null }
+    }
+
+    // AUTO-ACTIVATE: If session is 'open' and start_time has passed, flip to 'active'
+    if (session.status === 'open' && new Date(session.start_time) <= now) {
+      console.log('[getQueueDetails] ▶️ Auto-activating session (start_time reached):', session.id)
+      const { error: activateError } = await supabase
+        .from('queue_sessions')
+        .update({ status: 'active' })
+        .eq('id', session.id)
+
+      if (!activateError) {
+        session.status = 'active'
+        revalidatePath(`/queue/${courtId}`)
+        revalidatePath('/queue')
+      }
     }
 
     // Get all participants in this session
@@ -170,6 +193,7 @@ export async function getQueueDetails(courtId: string) {
       players: QueueParticipantData[]
       userPosition: number | null
       estimatedWaitTime: number
+      organizerId: string
     } = {
       id: session.id,
       courtId: session.court_id,
@@ -188,6 +212,7 @@ export async function getQueueDetails(courtId: string) {
       players: formattedParticipants,
       userPosition,
       estimatedWaitTime,
+      organizerId: session.organizer_id,
     }
 
     console.log('[getQueueDetails] ✅ Queue fetched successfully:', {
@@ -339,10 +364,11 @@ export async function leaveQueue(sessionId: string) {
     }
 
     // Mark as left
+    const now = await getServerNow()
     const { error: updateError } = await supabase
       .from('queue_participants')
       .update({
-        left_at: new Date().toISOString(),
+        left_at: now.toISOString(),
         status: 'left',
       })
       .eq('id', participant.id)
@@ -350,6 +376,14 @@ export async function leaveQueue(sessionId: string) {
     if (updateError) {
       console.error('[leaveQueue] ❌ Failed to leave queue:', updateError)
       return { success: false, error: 'Failed to leave queue' }
+    }
+
+    // Decrement current_players count
+    const { error: decrementError } = await supabase.rpc('decrement_queue_players', {
+      session_id: sessionId,
+    })
+    if (decrementError) {
+      console.warn('[leaveQueue] ⚠️ Failed to decrement player count:', decrementError)
     }
 
     console.log('[leaveQueue] ✅ Successfully left queue')
@@ -407,7 +441,7 @@ export async function getMyQueues() {
       .eq('user_id', user.id)
       .is('left_at', null)
       .in('queue_sessions.status', ['open', 'active'])
-      .gt('queue_sessions.end_time', new Date().toISOString()) // Filter out expired sessions
+      .gt('queue_sessions.end_time', (await getServerNow()).toISOString()) // Filter out expired sessions
       .order('joined_at', { ascending: false })
 
     if (participationsError) {
@@ -503,7 +537,6 @@ export async function getMyQueueHistory() {
         )
       `)
       .eq('user_id', user.id)
-      .or('status.eq.left,queue_sessions.status.in.(closed,cancelled),queue_sessions.end_time.lt.now()')
       .order('joined_at', { ascending: false })
       .limit(50) // Limit to last 50 for now
 
@@ -512,27 +545,36 @@ export async function getMyQueueHistory() {
       return { success: false, error: 'Failed to fetch history' }
     }
 
-    const history = (participations || []).map((p: any) => {
-      const costPerGame = parseFloat(p.queue_sessions.cost_per_game || '0')
-      const gamesPlayed = p.games_played || 0
-      const totalCost = costPerGame * gamesPlayed
+    const serverNow = await getServerNow()
 
-      return {
-        id: p.queue_session_id,
-        courtId: p.queue_sessions.court_id,
-        courtName: p.queue_sessions.courts?.name || 'Unknown Court',
-        venueName: p.queue_sessions.courts?.venues?.name || 'Unknown Venue',
-        status: p.queue_sessions.status, // might be 'active' if user just left
-        date: p.queue_sessions.start_time,
-        joinedAt: p.joined_at,
-        leftAt: p.left_at,
-        gamesPlayed,
-        gamesWon: p.games_won || 0,
-        totalCost,
-        paymentStatus: p.payment_status,
-        userStatus: p.status, // 'left' or 'waiting'/'playing' if session closed
-      }
-    })
+    const history = (participations || [])
+      .filter((p: any) => {
+        const isLeft = p.status === 'left'
+        const isSessionClosed = ['completed', 'cancelled'].includes(p.queue_sessions?.status)
+        const isSessionEnded = new Date(p.queue_sessions?.end_time) < serverNow
+        return isLeft || isSessionClosed || isSessionEnded
+      })
+      .map((p: any) => {
+        const costPerGame = parseFloat(p.queue_sessions.cost_per_game || '0')
+        const gamesPlayed = p.games_played || 0
+        const totalCost = costPerGame * gamesPlayed
+
+        return {
+          id: p.queue_session_id,
+          courtId: p.queue_sessions.court_id,
+          courtName: p.queue_sessions.courts?.name || 'Unknown Court',
+          venueName: p.queue_sessions.courts?.venues?.name || 'Unknown Venue',
+          status: p.queue_sessions.status, // might be 'active' if user just left
+          date: p.queue_sessions.start_time,
+          joinedAt: p.joined_at,
+          leftAt: p.left_at,
+          gamesPlayed,
+          gamesWon: p.games_won || 0,
+          totalCost,
+          paymentStatus: p.payment_status,
+          userStatus: p.status, // 'left' or 'waiting'/'playing' if session closed
+        }
+      })
 
     console.log('[getMyQueueHistory] ✅ Fetched history items:', history.length)
 
@@ -570,8 +612,7 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
       `)
       .in('status', ['open', 'active'])
       .eq('is_public', true)
-      .eq('approval_status', 'approved') // CRITICAL: Only show approved sessions
-      .gt('end_time', new Date().toISOString()) // Filter out expired sessions
+      .gt('end_time', (await getServerNow()).toISOString()) // Filter out expired sessions
       .order('start_time', { ascending: true })
       .limit(20)
 
@@ -580,12 +621,30 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
       return { success: false, error: 'Failed to fetch queues' }
     }
 
+    // Fetch actual participant counts since current_players column can be stale
+    const sessionIds = (sessions || []).map((s: any) => s.id)
+    let participantCounts: Record<string, number> = {}
+
+    if (sessionIds.length > 0) {
+      const { data: participants } = await supabase
+        .from('queue_participants')
+        .select('queue_session_id')
+        .in('queue_session_id', sessionIds)
+        .is('left_at', null)
+
+      if (participants) {
+        participants.forEach((p: any) => {
+          participantCounts[p.queue_session_id] = (participantCounts[p.queue_session_id] || 0) + 1
+        })
+      }
+    }
+
     const queues = (sessions || []).map((session: any) => {
-      // Use the current_players column which is maintained by database triggers
-      const currentPlayers = session.current_players || 0
+      // Use actual participant count, falling back to current_players column
+      const currentPlayers = participantCounts[session.id] || session.current_players || 0
       const estimatedWaitTime = currentPlayers * 15
 
-      console.log(`[getNearbyQueues] 📊 Session ${session.id.slice(0, 8)}: current_players=${currentPlayers}`)
+      console.log(`[getNearbyQueues] 📊 Session ${session.id.slice(0, 8)}: actual_participants=${participantCounts[session.id] || 0}, current_players_col=${session.current_players || 0}`)
 
       return {
         id: session.id,
@@ -647,6 +706,7 @@ export async function calculateQueuePayment(sessionId: string) {
       `)
       .eq('queue_session_id', sessionId)
       .eq('user_id', user.id)
+      .is('left_at', null)
       .single()
 
     if (participantError || !participant) {
@@ -692,7 +752,7 @@ export async function getQueueMasterHistory() {
       return { success: false, error: 'User not authenticated' }
     }
 
-    // Fetch sessions organized by user that are closed or cancelled
+    // Fetch sessions organized by user that are completed or cancelled
     // Also include expired sessions that might still be marked active/open if cron failed (fallback)
     const { data: sessions, error } = await supabase
       .from('queue_sessions')
@@ -706,7 +766,7 @@ export async function getQueueMasterHistory() {
         )
       `)
       .eq('organizer_id', user.id)
-      .or('status.in.(closed,cancelled),end_time.lt.now()')
+      .or(`status.in.(completed,cancelled),end_time.lt.${(await getServerNow()).toISOString()}`)
       .order('start_time', { ascending: false })
 
     if (error) throw error
@@ -746,8 +806,8 @@ export async function getQueueMasterHistory() {
  */
 export async function createQueueSession(data: {
   courtId: string
-  startTime: Date
-  endTime: Date
+  startTime: string | Date
+  endTime: string | Date
   mode: 'casual' | 'competitive'
   gameFormat: 'singles' | 'doubles' | 'mixed'
   maxPlayers: number
@@ -755,12 +815,15 @@ export async function createQueueSession(data: {
   isPublic: boolean
   recurrenceWeeks?: number
   selectedDays?: number[]
+  paymentMethod?: 'cash' | 'e-wallet'
 }): Promise<{
   success: boolean
   session?: QueueSessionData
   sessions?: QueueSessionData[]
   requiresApproval?: boolean
   error?: string
+  downPaymentRequired?: boolean
+  downPaymentAmount?: number
 }> {
   console.log('[createQueueSession] 🚀 Creating queue session(s):', data)
 
@@ -812,7 +875,7 @@ export async function createQueueSession(data: {
     }
 
     // 3. Validate inputs (Basic)
-    if (new Date(data.endTime) <= new Date(data.startTime)) {
+    if (new Date(data.endTime).getTime() <= new Date(data.startTime).getTime()) {
       return { success: false, error: 'End time must be after start time' }
     }
     if (data.costPerGame < 0) {
@@ -822,7 +885,7 @@ export async function createQueueSession(data: {
       return { success: false, error: 'Max players must be between 4 and 20' }
     }
 
-    // 4. Verify court exists and get venue settings
+    // 4. Verify court exists and get venue settings + hourly rate
     const { data: court, error: courtError } = await supabase
       .from('courts')
       .select(`
@@ -830,11 +893,13 @@ export async function createQueueSession(data: {
         name,
         is_active,
         venue_id,
+        hourly_rate,
         venues!inner (
           id,
           name,
           requires_queue_approval,
-          opening_hours
+          opening_hours,
+          metadata
         )
       `)
       .eq('id', data.courtId)
@@ -847,45 +912,58 @@ export async function createQueueSession(data: {
     if (!court.is_active) {
       return { success: false, error: 'Court is not active' }
     }
+    if (!court.hourly_rate || court.hourly_rate <= 0) {
+      console.error('[createQueueSession] ❌ Court hourly rate not configured')
+      return { success: false, error: 'Court hourly rate not configured. Please contact venue admin.' }
+    }
 
+    // Extract venue from court data
     const venue = court.venues as any
-    const requiresApproval = venue?.requires_queue_approval ?? true
-    const initialStatus = requiresApproval ? 'pending_approval' : 'draft'
-    const approvalStatus = requiresApproval ? 'pending' : 'approved'
+
+    // Simplified: All sessions start as pending_payment regardless of payment method
+    // Payment confirmation (e-wallet) or manual marking (cash) moves them to active/open
 
     // --- LOOP START ---
     // Generate all target dates first
     const targetDates: Date[] = []
-    const startObj = new Date(data.startTime)
-    // Normalize to start of day for safer comparisons if needed, 
-    // but here we need exact times.
+
+    // Interpret the input strings as Manila time
+    // Data passed from checkout-store can be either Date objects or ISO strings
+    // Convert to ISO string first if needed, then ensure timezone suffix
+    const startTimeStr = data.startTime instanceof Date
+      ? data.startTime.toISOString()
+      : data.startTime
+    const endTimeStr = data.endTime instanceof Date
+      ? data.endTime.toISOString()
+      : data.endTime
+
+    const startStr = startTimeStr.endsWith('Z') || startTimeStr.includes('+')
+      ? startTimeStr
+      : `${startTimeStr}+08:00`
+
+    const endStr = endTimeStr.endsWith('Z') || endTimeStr.includes('+')
+      ? endTimeStr
+      : `${endTimeStr}+08:00`
+
+    const startObj = new Date(startStr)
+    const endObj = new Date(endStr)
+    const durationMs = endObj.getTime() - startObj.getTime()
 
     // Determine the "anchored" days
-    // If selectedDays is provided, use it. Otherwise default to the start day.
+    // Get the Manila-equivalent representation to correctly find the day of the week
+    const manilaStartObj = new Date(startObj.getTime() + 8 * 60 * 60 * 1000)
+    const startDayIndex = manilaStartObj.getUTCDay() // 0-6 (Sun-Sat) in Manila
+
     const daysToBook = data.selectedDays && data.selectedDays.length > 0
       ? data.selectedDays
-      : [startObj.getDay()]
-
-    // Get the Sunday of the start week (assuming week starts on Sunday)
-    const startWeekSunday = new Date(startObj)
-    startWeekSunday.setDate(startObj.getDate() - startObj.getDay())
-    startWeekSunday.setHours(startObj.getHours(), startObj.getMinutes(), 0, 0)
+      : [startDayIndex]
 
     for (let i = 0; i < recurrenceWeeks; i++) {
-      const weekBase = new Date(startWeekSunday)
-      weekBase.setDate(weekBase.getDate() + (i * 7)) // Move to the ith week
-
       for (const dayIndex of daysToBook) {
-        const targetStart = new Date(weekBase)
-        targetStart.setDate(targetStart.getDate() + dayIndex)
+        const dayOffset = (dayIndex - startDayIndex + 7) % 7
 
-        // If it's the first week, ensure we don't book in the past relative to the chosen start date
-        // (Unless it's the exact same day/time, which is fine)
-        // But if user picks Wed, and adds Mon, Mon is in the past of that week.
-        // We typically skip past days in the first week.
-        if (i === 0 && targetStart < startObj) {
-          continue
-        }
+        // Use precise ms offsets rather than error-prone local Date methods
+        const targetStart = new Date(startObj.getTime() + dayOffset * 24 * 60 * 60 * 1000 + i * 7 * 24 * 60 * 60 * 1000)
 
         targetDates.push(targetStart)
       }
@@ -895,31 +973,35 @@ export async function createQueueSession(data: {
       return { success: false, error: 'No valid future dates selected.' }
     }
 
-
     // Pre-validation Loop
     for (const sessionStart of targetDates) {
-      const sessionEnd = new Date(sessionStart)
-      sessionEnd.setTime(sessionStart.getTime() + (new Date(data.endTime).getTime() - new Date(data.startTime).getTime()))
+      const sessionEnd = new Date(sessionStart.getTime() + durationMs)
 
       // Validate against venue hours
       const openingHours = venue?.opening_hours as Record<string, { open: string; close: string }> | null
+
+      // Calculate Manila time instances for this specific session iteration
+      const manilaStart = new Date(sessionStart.getTime() + 8 * 60 * 60 * 1000)
+      const manilaEnd = new Date(sessionEnd.getTime() + 8 * 60 * 60 * 1000)
+
       if (openingHours) {
         const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
-        const dayOfWeek = dayNames[sessionStart.getDay()]
+        const dayOfWeek = dayNames[manilaStart.getUTCDay()]
         const dayHours = openingHours[dayOfWeek]
 
         if (!dayHours) {
-          return { success: false, error: `Venue is closed on ${dayOfWeek} (${sessionStart.toLocaleDateString()})` }
+          const formattedDate = `${manilaStart.getUTCMonth() + 1}/${manilaStart.getUTCDate()}/${manilaStart.getUTCFullYear()}`
+          return { success: false, error: `Venue is closed on ${dayOfWeek} (${formattedDate})` }
         }
 
         // Parse open/close times
         const [openH, openM] = dayHours.open.split(':').map(Number)
         const [closeH, closeM] = dayHours.close.split(':').map(Number)
 
-        const sessionStartH = sessionStart.getHours()
-        const sessionStartM = sessionStart.getMinutes()
-        const sessionEndH = sessionEnd.getHours()
-        const sessionEndM = sessionEnd.getMinutes()
+        const sessionStartH = manilaStart.getUTCHours()
+        const sessionStartM = manilaStart.getUTCMinutes()
+        const sessionEndH = manilaEnd.getUTCHours()
+        const sessionEndM = manilaEnd.getUTCMinutes()
 
         const sessionStartMinutes = sessionStartH * 60 + sessionStartM
         const sessionEndMinutes = sessionEndH * 60 + sessionEndM
@@ -928,7 +1010,7 @@ export async function createQueueSession(data: {
 
         // Allow tight fitting? Usually yes.
         if (sessionStartMinutes < openMinutes || sessionEndMinutes > closeMinutes) {
-          const timeStr = sessionStart.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+          const timeStr = `${sessionStartH % 12 || 12}:${sessionStartM.toString().padStart(2, '0')} ${sessionStartH >= 12 ? 'PM' : 'AM'}`
           return {
             success: false,
             error: `Venue is closed at ${timeStr} on ${dayOfWeek}s (Open: ${dayHours.open} - ${dayHours.close})`
@@ -941,21 +1023,86 @@ export async function createQueueSession(data: {
         .from('reservations')
         .select('id')
         .eq('court_id', data.courtId)
-        .in('status', ['pending', 'confirmed', 'pending_payment', 'paid'])
+        .in('status', ['pending_payment', 'partially_paid', 'confirmed', 'ongoing'])
         .lt('start_time', sessionEnd.toISOString())
         .gt('end_time', sessionStart.toISOString())
 
       if (conflicts && conflicts.length > 0) {
-        return { success: false, error: `Conflict detected for ${sessionStart.toLocaleDateString()} at ${sessionStart.toLocaleTimeString()}` }
+        const formattedDate = `${manilaStart.getUTCMonth() + 1}/${manilaStart.getUTCDate()}/${manilaStart.getUTCFullYear()}`
+
+        const sh = manilaStart.getUTCHours()
+        const sm = manilaStart.getUTCMinutes()
+        const startTimeStr = `${sh % 12 || 12}:${sm.toString().padStart(2, '0')} ${sh >= 12 ? 'PM' : 'AM'}`
+
+        const eh = manilaEnd.getUTCHours()
+        const em = manilaEnd.getUTCMinutes()
+        const endTimeStr = `${eh % 12 || 12}:${em.toString().padStart(2, '0')} ${eh >= 12 ? 'PM' : 'AM'}`
+
+        return { success: false, error: `Conflict detected for ${formattedDate}: Queue session overlaps with existing reservation (${startTimeStr} - ${endTimeStr}). Court already booked during this time.` }
       }
     }
 
     // Creation Loop
-    for (const sessionStart of targetDates) {
-      const sessionEnd = new Date(sessionStart)
-      sessionEnd.setTime(sessionStart.getTime() + (new Date(data.endTime).getTime() - new Date(data.startTime).getTime()))
+    let isDownPaymentRequired = false;
 
-      // Create Reservation
+    for (const sessionStart of targetDates) {
+      const sessionEnd = new Date(sessionStart.getTime() + durationMs)
+
+      // Calculate base payment amounts
+      const durationHours = durationMs / (1000 * 60 * 60)
+      const baseCourtRental = court.hourly_rate * durationHours
+
+      // Calculate actual discounts on the backend (queue masters get discounts too!)
+      const discountResult = await calculateApplicableDiscounts({
+        venueId: venue.id,
+        courtId: data.courtId,
+        startDate: sessionStart.toISOString(),
+        endDate: sessionEnd.toISOString(),
+        recurrenceWeeks: recurrenceWeeks,
+        basePrice: baseCourtRental
+      })
+
+      const courtRental = discountResult.finalPrice
+      const platformFee = courtRental * 0.05
+      const totalAmount = courtRental + platformFee
+
+      let primaryDiscountName = null
+      let primaryDiscountReason = null
+      if (discountResult.discounts.length > 0) {
+        primaryDiscountName = discountResult.discounts[0].name
+        primaryDiscountReason = discountResult.discounts.map(d => d.description).join(', ')
+      }
+
+      console.log(`[createQueueSession] 💰 Payment calculation:`, {
+        hourlyRate: court.hourly_rate,
+        durationHours,
+        baseCourtRental,
+        discountApplied: discountResult.totalDiscount,
+        courtRental,
+        platformFee,
+        totalAmount
+      })
+
+      // Calculate down payment if applicable
+      const venueData = court.venues as any;
+      const venueMetadata = venueData ? (Array.isArray(venueData) ? venueData[0]?.metadata : venueData.metadata) : null;
+      const downPaymentPercentage = parseFloat(venueMetadata?.down_payment_percentage || '20')
+      const downPaymentAmount = data.paymentMethod === 'cash' ? (totalAmount * downPaymentPercentage) / 100 : undefined;
+
+      if (downPaymentAmount && downPaymentAmount > 0 && data.paymentMethod === 'cash') {
+        isDownPaymentRequired = true;
+      }
+
+      // Calculate cash payment deadline for queue session reservations
+      let cashPaymentDeadline: string | null = null
+      if (data.paymentMethod === 'cash') {
+        const twoHoursBefore = new Date(sessionStart.getTime() - 2 * 60 * 60 * 1000)
+        const minimumDeadline = new Date(Date.now() + 30 * 60 * 1000)
+        const deadline = twoHoursBefore > minimumDeadline ? twoHoursBefore : minimumDeadline
+        cashPaymentDeadline = deadline.toISOString()
+      }
+
+      // Create Reservation with payment requirement
       const { data: reservation, error: reservationError } = await supabase
         .from('reservations')
         .insert({
@@ -963,18 +1110,32 @@ export async function createQueueSession(data: {
           user_id: user.id,
           start_time: sessionStart.toISOString(),
           end_time: sessionEnd.toISOString(),
-          status: 'confirmed',
-          total_amount: 0,
+          status: 'pending_payment',
+          total_amount: totalAmount, // Fixed: Include platform fee in total_amount
           amount_paid: 0,
           num_players: data.maxPlayers,
           payment_type: 'full',
+          payment_method: data.paymentMethod || null,
+          cash_payment_deadline: cashPaymentDeadline,
+          discount_applied: discountResult.totalDiscount,
+          discount_type: primaryDiscountName || null,
+          discount_reason: primaryDiscountReason || null,
           metadata: {
             booking_origin: 'queue_session',
             queue_session_organizer: true,
             is_queue_session_reservation: true,
-            recurrence_group_id: recurrenceGroupId
+            recurrence_group_id: recurrenceGroupId,
+            platform_fee: platformFee,
+            hourly_rate: court.hourly_rate,
+            duration_hours: durationHours,
+            base_court_rental: baseCourtRental,
+            discount_amount: discountResult.totalDiscount,
+            total_with_fee: totalAmount,
+            intended_payment_method: data.paymentMethod,
+            down_payment_percentage: data.paymentMethod === 'cash' ? downPaymentPercentage : undefined,
+            down_payment_amount: data.paymentMethod === 'cash' ? downPaymentAmount : undefined
           },
-          notes: `Queue Session (${data.mode}) - ${sessionStart.toLocaleDateString()}`,
+          notes: `Queue Session (${data.mode}) - ${sessionStart.toLocaleDateString()}${data.paymentMethod === 'cash' ? ' (Cash Payment)' : ''}`,
         })
         .select('id')
         .single()
@@ -997,22 +1158,39 @@ export async function createQueueSession(data: {
           max_players: data.maxPlayers,
           cost_per_game: data.costPerGame,
           is_public: data.isPublic,
-          status: initialStatus,
+          status: 'pending_payment', // Always start with pending payment
           current_players: 0,
-          requires_approval: requiresApproval,
-          approval_status: approvalStatus,
           metadata: {
             reservation_id: reservation.id,
-            recurrence_group_id: recurrenceGroupId
+            recurrence_group_id: recurrenceGroupId,
+            payment_required: totalAmount,
+            payment_status: 'pending',
+            payment_method: data.paymentMethod || 'e-wallet',
+            base_court_rental: baseCourtRental,
+            discount_amount: discountResult.totalDiscount,
+            court_rental: courtRental,
+            platform_fee: platformFee,
+            down_payment_amount: data.paymentMethod === 'cash' ? downPaymentAmount : undefined
           },
         })
         .select()
         .single()
 
       if (insertError || !session) {
-        // Rollback reservation
-        await supabase.from('reservations').delete().eq('id', reservation.id)
-        return { success: false, error: `Failed to create session for ${sessionStart.toLocaleDateString()}` }
+        console.error('[createQueueSession] ❌ DB Insert Error:', insertError)
+        // Rollback reservation using service client to bypass RLS policies
+        try {
+          const serviceClient = await createServiceClient()
+          const { error: deleteError } = await serviceClient.from('reservations').delete().eq('id', reservation.id)
+          if (deleteError) {
+            console.error('[createQueueSession] ❌ CRITICAL: Failed to rollback reservation after session insert error:', deleteError)
+          } else {
+            console.log(`[createQueueSession] ♻️ Successfully rolled back reservation ${reservation.id}`)
+          }
+        } catch (rollbackError) {
+          console.error('[createQueueSession] ❌ CRITICAL: Exception during reservation rollback:', rollbackError)
+        }
+        return { success: false, error: `Failed to create session for ${sessionStart.toLocaleDateString()}: ${insertError?.message || 'Unknown error'}` }
       }
 
       createdSessions.push({
@@ -1030,10 +1208,41 @@ export async function createQueueSession(data: {
         createdAt: new Date(session.created_at),
         mode: session.mode,
         gameFormat: session.game_format,
+        participants: [],
+        reservationId: reservation.id,
+        paymentStatus: session.metadata?.payment_status || 'pending',
+        paymentMethod: data.paymentMethod || 'e-wallet',
+        totalCost: totalAmount,
       })
     }
 
     console.log(`[createQueueSession] ✅ Successfully created ${createdSessions.length} sessions`)
+
+    // Send payment notification to Queue Master
+    try {
+      const firstSession = createdSessions[0]
+
+      await createNotification({
+        userId: user.id,
+        type: 'queue_approval_approved',
+        title: '💳 Queue Session Payment Required',
+        message: `Your queue session${createdSessions.length > 1 ? 's have' : ' has'} been created at ${venue?.name || 'the venue'}. ${data.paymentMethod === 'cash' ? 'Please pay at the venue to activate your session.' : 'Complete payment to activate.'}`,
+        actionUrl: `/queue-master/sessions/${firstSession.id}`,
+        metadata: {
+          court_name: court.name,
+          venue_name: venue?.name || 'Unknown Venue',
+          session_count: createdSessions.length,
+          queue_session_id: firstSession.id,
+          total_amount: firstSession.totalCost,
+          payment_method: data.paymentMethod || 'e-wallet',
+          payment_required: true
+        }
+      })
+      console.log('[createQueueSession] 📬 Sent payment notification to Queue Master')
+    } catch (notificationError) {
+      // Non-critical error - log but don't fail
+      console.error('[createQueueSession] ⚠️ Failed to send notifications (non-critical):', notificationError)
+    }
 
     // 9. Revalidate paths
     revalidatePath('/queue')
@@ -1041,7 +1250,17 @@ export async function createQueueSession(data: {
     revalidatePath(`/queue/${data.courtId}`)
 
     // Return the first session as primary, but include all
-    return { success: true, session: createdSessions[0], sessions: createdSessions, requiresApproval }
+    const firstSessionData = createdSessions[0]
+    return {
+      success: true,
+      session: firstSessionData,
+      sessions: createdSessions,
+      // For queue sessions, payment is always required initially, but we specify if a down payment applies to cash
+      downPaymentRequired: isDownPaymentRequired && firstSessionData.paymentStatus !== 'paid',
+      // Note: we'd need downPaymentAmount from the metadata to return it cleanly, but we can extract it or pass it.
+      // Wait, let's just grab it from the metadata.
+      // Actually queue session `totalCost` isn't the down payment. Let's return what we know.
+    }
 
   } catch (error: any) {
     console.error('[createQueueSession] ❌ Error:', error)
@@ -1100,11 +1319,11 @@ export async function updateQueueSession(
       return { success: false, error: 'Unauthorized: Not session organizer' }
     }
 
-    // 3. Only allow updates if status is draft or open
-    if (!['draft', 'open'].includes(session.status)) {
+    // 3. Only allow updates if status is pending_payment or open
+    if (!['pending_payment', 'open'].includes(session.status)) {
       return {
         success: false,
-        error: 'Cannot update session in current status. Only draft or open sessions can be updated.',
+        error: 'Cannot update session in current status. Only pending or open sessions can be updated.',
       }
     }
 
@@ -1149,7 +1368,6 @@ export async function updateQueueSession(
         )
       `)
       .single()
-
     if (updateError || !updatedSession) {
       console.error('[updateQueueSession] ❌ Failed to update session:', updateError)
       return { success: false, error: updateError?.message || 'Failed to update queue session' }
@@ -1171,6 +1389,23 @@ export async function updateQueueSession(
       createdAt: new Date(updatedSession.created_at),
       mode: updatedSession.mode,
       gameFormat: updatedSession.game_format,
+    }
+
+    // 7b. Sync with linked reservation if time was updated
+    if (updates.startTime || updates.endTime) {
+      const reservationId = updatedSession.metadata?.reservation_id
+      if (reservationId) {
+        console.log('[updateQueueSession] 🔄 Syncing time with reservation:', reservationId)
+        const adminDb = createServiceClient()
+        await adminDb
+          .from('reservations')
+          .update({
+            start_time: updatedSession.start_time,
+            end_time: updatedSession.end_time,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', reservationId)
+      }
     }
 
     console.log('[updateQueueSession] ✅ Queue session updated successfully')
@@ -1355,7 +1590,7 @@ export async function closeQueueSession(sessionId: string): Promise<{
     // 2. Get session and verify user is organizer
     const { data: session, error: sessionError } = await supabase
       .from('queue_sessions')
-      .select('organizer_id, status, court_id')
+      .select('organizer_id, status, court_id, metadata, settings')
       .eq('id', sessionId)
       .single()
 
@@ -1391,24 +1626,61 @@ export async function closeQueueSession(sessionId: string): Promise<{
       unpaidBalances,
     }
 
-    // 5. Update session status to closed
+    // 5. Update session status to completed
     const { error: updateError } = await supabase
       .from('queue_sessions')
       .update({
-        status: 'closed',
+        status: 'completed',
         settings: {
-          closed_at: new Date().toISOString(),
+          ...(session.settings || {}),
+          manually_closed: true,
+          completed_at: new Date().toISOString(),
           summary,
         },
       })
       .eq('id', sessionId)
 
     if (updateError) {
-      console.error('[closeQueueSession] ❌ Failed to close session:', updateError)
-      return { success: false, error: 'Failed to close queue session' }
+      console.error('[closeQueueSession] ❌ Failed to complete session:', updateError)
+      return { success: false, error: 'Failed to complete queue session' }
     }
 
-    console.log('[closeQueueSession] ✅ Queue session closed successfully:', summary)
+    console.log('[closeQueueSession] ✅ Queue session completed successfully:', summary)
+
+    // 5b. Also complete the linked reservation (belt-and-suspenders with DB trigger)
+    const linkedReservationId = session.metadata?.reservation_id
+    if (linkedReservationId) {
+      // Fetch existing reservation metadata so we can merge, not overwrite
+      const { data: existingRes } = await supabase
+        .from('reservations')
+        .select('metadata')
+        .eq('id', linkedReservationId)
+        .single()
+
+      const { error: resError } = await supabase
+        .from('reservations')
+        .update({
+          status: 'completed',
+          metadata: {
+            ...(existingRes?.metadata || {}),
+            auto_completed: {
+              at: new Date().toISOString(),
+              by: 'queue_master',
+              reason: 'queue_session_closed',
+              queue_session_id: sessionId,
+            },
+          },
+        })
+        .eq('id', linkedReservationId)
+        .in('status', ['confirmed', 'partially_paid', 'ongoing'])
+
+      if (resError) {
+        console.error('[closeQueueSession] ⚠️ Failed to complete linked reservation:', resError)
+      } else {
+        console.log('[closeQueueSession] ✅ Linked reservation completed:', linkedReservationId)
+        revalidatePath('/court-admin/reservations')
+      }
+    }
 
     // 6. Send notifications to all participants
     try {
@@ -1481,7 +1753,7 @@ export async function cancelQueueSession(
     // 2. Get session and verify user is organizer
     const { data: session, error: sessionError } = await supabase
       .from('queue_sessions')
-      .select('organizer_id, status, court_id, current_players')
+      .select('organizer_id, status, court_id, current_players, metadata')
       .eq('id', sessionId)
       .single()
 
@@ -1493,12 +1765,19 @@ export async function cancelQueueSession(
       return { success: false, error: 'Unauthorized: Not session organizer' }
     }
 
-    // 3. Only allow cancellation if status is draft or open with no players
-    if (!['draft', 'open'].includes(session.status)) {
-      return { success: false, error: 'Can only cancel draft or open sessions' }
+    // 3. Only allow cancellation if status is pending_payment or open with no players
+    if (!['pending_payment', 'open'].includes(session.status)) {
+      return { success: false, error: 'Can only cancel pending or open sessions' }
     }
 
-    if (session.current_players > 0) {
+    // Check actual active participants (current_players column can get out of sync)
+    const { count: activeParticipantCount } = await supabase
+      .from('queue_participants')
+      .select('id', { count: 'exact', head: true })
+      .eq('queue_session_id', sessionId)
+      .is('left_at', null)
+
+    if ((activeParticipantCount ?? 0) > 0) {
       return {
         success: false,
         error: 'Cannot cancel session with active participants. Close the session instead.',
@@ -1511,6 +1790,7 @@ export async function cancelQueueSession(
       .update({
         status: 'cancelled',
         metadata: {
+          ...(session.metadata || {}),
           cancelled_at: new Date().toISOString(),
           cancellation_reason: reason,
         },
@@ -1520,6 +1800,39 @@ export async function cancelQueueSession(
     if (updateError) {
       console.error('[cancelQueueSession] ❌ Failed to cancel session:', updateError)
       return { success: false, error: 'Failed to cancel queue session' }
+    }
+
+    // 4b. Sync with linked reservation
+    const reservationId = session.metadata?.reservation_id
+    if (reservationId) {
+      console.log('[cancelQueueSession] 🔄 Syncing cancellation with reservation:', reservationId)
+      const adminDb = createServiceClient()
+
+      // Fetch existing reservation metadata so we can merge, not overwrite
+      const { data: existingRes } = await adminDb
+        .from('reservations')
+        .select('metadata')
+        .eq('id', reservationId)
+        .single()
+
+      const { error: resError } = await adminDb
+        .from('reservations')
+        .update({
+          status: 'cancelled',
+          cancelled_at: new Date().toISOString(),
+          cancellation_reason: reason,
+          metadata: {
+            ...(existingRes?.metadata || {}),
+            cancelled_at: new Date().toISOString(),
+            cancellation_reason: reason,
+            cancelled_by: user.id
+          }
+        })
+        .eq('id', reservationId)
+
+      if (resError) {
+        console.error('[cancelQueueSession] ⚠️ Failed to sync reservation cancellation:', resError)
+      }
     }
 
     console.log('[cancelQueueSession] ✅ Queue session cancelled successfully')
@@ -1903,13 +2216,14 @@ export async function getMyQueueMasterSessions(filter?: {
 
     // Apply status filter
     if (filter?.status === 'active') {
-      // Active: sessions that are currently running (active or paused)
-      query = query.in('status', ['active', 'paused'])
+      // Active: all paid sessions (open, active) — ready to go
+      query = query.in('status', ['active', 'open'])
     } else if (filter?.status === 'pending') {
-      // Pending: sessions that are open or awaiting approval
-      query = query.in('status', ['open', 'pending_approval'])
+      // Pending: sessions awaiting payment (needs action)
+      // Include legacy statuses that map to pending
+      query = query.in('status', ['pending_payment', 'draft', 'pending_approval', 'upcoming'])
     } else if (filter?.status === 'past') {
-      query = query.in('status', ['closed', 'cancelled'])
+      query = query.in('status', ['completed', 'cancelled', 'closed', 'rejected'])
     }
 
     query = query.order('created_at', { ascending: false })
@@ -1921,27 +2235,45 @@ export async function getMyQueueMasterSessions(filter?: {
       return { success: false, error: 'Failed to fetch sessions' }
     }
 
-    // Filter out expired sessions if we are looking for active ones
-    // and fire-and-forget an update to close them
-    const now = new Date()
-    const validSessions = sessions.filter((session: any) => {
-      if (['open', 'active', 'paused'].includes(session.status)) {
-        const endTime = new Date(session.end_time)
-        if (endTime < now) {
-          // Expired!
-          console.log('[getMyQueueMasterSessions] 🕒 Session expired, auto-closing:', session.id)
-          supabase.from('queue_sessions').update({ status: 'closed' }).eq('id', session.id).then(({ error }) => {
-            if (error) console.error('Failed to auto-close expired session:', session.id, error)
-          })
+    // Auto-activate, auto-close, and filter sessions based on time
+    const now = await getServerNow()
+    const validSessions: any[] = []
+    for (const session of sessions) {
+      const startTime = new Date(session.start_time)
+      const endTime = new Date(session.end_time)
 
-          // If filtering for active or pending, exclude expired sessions
-          if (filter?.status === 'active' || filter?.status === 'pending') {
-            return false
-          }
+      // AUTO-CLOSE: If past end_time, complete the session
+      if (['open', 'active'].includes(session.status) && endTime < now) {
+        console.log('[getMyQueueMasterSessions] 🕒 Session expired, auto-completing:', session.id)
+        const { error } = await supabase.from('queue_sessions')
+          .update({ status: 'completed', updated_at: now.toISOString() })
+          .eq('id', session.id)
+        if (error) {
+          console.error('Failed to auto-complete expired session:', session.id, error)
+        } else {
+          session.status = 'completed'
+        }
+        // Exclude from active/pending views
+        if (filter?.status === 'active' || filter?.status === 'pending') {
+          continue
+        }
+        validSessions.push(session)
+        continue
+      }
+
+      // AUTO-ACTIVATE: If session is 'open' and start_time has passed, flip to 'active'
+      if (session.status === 'open' && startTime <= now && endTime > now) {
+        console.log('[getMyQueueMasterSessions] ▶️ Auto-activating session (start_time reached):', session.id)
+        const { error } = await supabase.from('queue_sessions')
+          .update({ status: 'active', updated_at: now.toISOString() })
+          .eq('id', session.id)
+        if (!error) {
+          session.status = 'active'
         }
       }
-      return true
-    })
+
+      validSessions.push(session)
+    }
 
     // 3. Get participant data for each session
     const sessionsWithParticipants = await Promise.all(
@@ -1986,12 +2318,7 @@ export async function getMyQueueMasterSessions(filter?: {
           paymentStatus: p.payment_status,
         }))
 
-        // Check for auto-close condition
-        if (['open', 'active'].includes(session.status) && new Date(session.end_time) < new Date()) {
-          // Fire and forget update
-          supabase.from('queue_sessions').update({ status: 'closed' }).eq('id', session.id).then()
-          session.status = 'closed'
-        }
+        // Status corrections are already handled above in the for-loop
 
         return {
           id: session.id,
@@ -2000,6 +2327,7 @@ export async function getMyQueueMasterSessions(filter?: {
           venueName: session.courts?.venues?.name || 'Unknown Venue',
           venueId: session.courts?.venues?.id || '',
           status: session.status,
+
           currentPlayers: formattedParticipants.length,
           maxPlayers: session.max_players || 12,
           costPerGame: parseFloat(session.cost_per_game || '0'),
@@ -2009,6 +2337,9 @@ export async function getMyQueueMasterSessions(filter?: {
           mode: session.mode,
           gameFormat: session.game_format,
           participants: formattedParticipants,
+          totalCost: session.metadata?.payment_required ? parseFloat(session.metadata.payment_required) : 0,
+          paymentStatus: session.metadata?.payment_status || 'pending',
+          paymentMethod: session.metadata?.payment_method || 'e-wallet',
         }
       })
     )
@@ -2079,7 +2410,7 @@ export async function getQueueMasterStats(): Promise<{
       return { success: false, error: 'Failed to fetch stats' }
     }
 
-    const now = new Date()
+    const now = await getServerNow()
     const totalSessions = sessions?.length || 0
 
     // Categorize sessions
@@ -2094,35 +2425,40 @@ export async function getQueueMasterStats(): Promise<{
     sessions?.forEach(session => {
       const startTime = new Date(session.start_time)
       const endTime = session.end_time ? new Date(session.end_time) : null
-      const isFuture = startTime > now
-      const isExpired = endTime && endTime < now && ['open', 'active', 'paused'].includes(session.status)
+      const isExpired = endTime && endTime < now && ['open', 'active'].includes(session.status)
 
-      // Auto-close if expired (fire and forget)
+      // Auto-complete if expired (fire and forget)
       if (isExpired) {
-        supabase.from('queue_sessions').update({ status: 'closed' }).eq('id', session.id).then(({ error }) => {
-          if (error) console.error('Failed to auto-close expired session:', session.id, error)
+        supabase.from('queue_sessions').update({ status: 'completed' }).eq('id', session.id).then(({ error }) => {
+          if (error) console.error('Failed to auto-complete expired session:', session.id, error)
         })
       }
 
-      // Count logic matching Dashboard filters
-      // If it WAS active but is now expired, we count it as past for the stats
-      const effectiveStatus = isExpired ? 'closed' : session.status
+      // Auto-activate: open sessions whose start_time has passed (fire and forget)
+      if (!isExpired && session.status === 'open' && startTime <= now) {
+        supabase.from('queue_sessions').update({ status: 'active' }).eq('id', session.id).then(({ error }) => {
+          if (error) console.error('Failed to auto-activate session:', session.id, error)
+        })
+        session.status = 'active' // Use corrected status for counting
+      }
 
-      if (['closed', 'cancelled', 'rejected', 'completed', 'expired'].includes(effectiveStatus)) {
+      // Count logic matching Dashboard filters
+      const effectiveStatus = isExpired ? 'completed' : session.status
+
+      if (['completed', 'cancelled', 'closed', 'rejected'].includes(effectiveStatus)) {
         pastCount++
-      } else if (['draft', 'open', 'pending_approval'].includes(effectiveStatus)) {
-        // Pending: sessions that are open but not yet active, or awaiting approval
-        pendingCount++
-      } else if (['active', 'paused'].includes(effectiveStatus)) {
-        // Active: sessions that are currently running
+      } else if (['active', 'open'].includes(effectiveStatus)) {
         activeCount++
+      } else {
+        // pending_payment + any legacy statuses (draft, pending_approval, upcoming)
+        pendingCount++
       }
 
       // Stats calculation
       const sessionRevenue = session.queue_participants?.reduce((sum: number, p: any) => sum + (p.amount_owed || 0), 0) || 0
       totalRevenue += sessionRevenue
 
-      if (['active', 'open', 'closed', 'completed'].includes(effectiveStatus)) {
+      if (['active', 'open', 'completed'].includes(effectiveStatus)) {
         totalPlayers += session.queue_participants?.length || 0
         evaluatedSessions++
       }

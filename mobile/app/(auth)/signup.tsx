@@ -23,7 +23,7 @@ export default function SignupScreen() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    const [phone, setPhone] = useState('');
+
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     const { signUp, signInWithGoogle, isLoading } = useAuthStore();
@@ -60,7 +60,6 @@ export default function SignupScreen() {
         const { error } = await signUp(email, password, {
             firstName,
             lastName,
-            phone: phone || undefined,
         });
 
         if (error) {
@@ -142,14 +141,7 @@ export default function SignupScreen() {
                             leftIcon="mail-outline"
                         />
 
-                        <Input
-                            label="Phone (optional)"
-                            placeholder="+63 9XX XXX XXXX"
-                            value={phone}
-                            onChangeText={setPhone}
-                            keyboardType="phone-pad"
-                            leftIcon="call-outline"
-                        />
+
 
                         <Input
                             label="Password"

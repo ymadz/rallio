@@ -359,13 +359,19 @@ async function markReservationPaidAndConfirmed({
     reservationRecord = data
   }
 
-  // PAYMENT CONFIRMATION FLOW (requires migration 006 applied):
-  // pending_payment → paid → confirmed
-  // If migration 006 NOT applied: pending → confirmed directly
+  // PAYMENT CONFIRMATION FLOW:
+  // Go directly from pending_payment → confirmed (or partially_paid for down payments).
+  // The 'paid' intermediate state is recorded in metadata for audit trail,
+  // but we skip it as a DB status to avoid stuck-in-paid edge cases.
+
+  // Detect if this payment was a down payment
+  const isDownPayment = payment.metadata?.is_down_payment === true || payment.metadata?.is_down_payment === 'true'
+  const targetStatus = isDownPayment ? 'partially_paid' : 'confirmed'
+  console.log('[markReservationPaidAndConfirmed] 🔍 Payment type:', { isDownPayment, targetStatus })
 
   // Check if already in final state
   console.log('[markReservationPaidAndConfirmed] 🔍 Checking current reservation status')
-  if (reservationRecord.status === 'confirmed') {
+  if (reservationRecord.status === 'confirmed' || reservationRecord.status === 'partially_paid') {
     console.log('[markReservationPaidAndConfirmed] ℹ️ Reservation already confirmed')
     // Already confirmed - just ensure amount_paid is synced
     if ((reservationRecord.amount_paid ?? 0) < payment.amount) {
@@ -394,75 +400,32 @@ async function markReservationPaidAndConfirmed({
     return
   }
 
-  // First, mark as 'paid' to indicate payment successful
-  console.log('[markReservationPaidAndConfirmed] 📝 Step 1: Marking reservation as PAID')
-  if (reservationRecord.status !== 'paid') {
-    const paidMetadata = {
-      ...(reservationRecord.metadata || {}),
-      payment_paid_event: {
-        eventId,
-        eventType,
-        paidAt: nowISO,
-        payment_id: payment.id,
-      },
-      payment_status_history: buildStatusHistory(reservationRecord.metadata, 'paid'),
-    }
+  // If already 'paid' (from a previous partial run), just proceed to confirm
+  // Otherwise skip the intermediate 'paid' step entirely and go straight to target status
+  console.log(`[markReservationPaidAndConfirmed] 📝 Setting reservation to ${targetStatus} atomically`)
 
-    console.log('[markReservationPaidAndConfirmed] Attempting to update status to "paid":', {
-      reservationId,
-      currentStatus: reservationRecord.status,
-      targetStatus: 'paid',
-      amount: payment.amount,
-    })
-
-    const { data: paidReservation, error: paidError } = await supabase
-      .from('reservations')
-      .update({
-        status: 'paid',
-        amount_paid: payment.amount,
-        updated_at: nowISO,
-        metadata: paidMetadata,
-      })
-      .eq('id', reservationId)
-      .select('id, status, amount_paid, metadata')
-      .single()
-
-    if (paidError) {
-      console.error('[markReservationPaidAndConfirmed] ❌ Failed to mark reservation as paid:', {
-        reservationId,
-        error: {
-          message: paidError.message,
-          code: paidError.code,
-          details: paidError.details,
-          hint: paidError.hint
-        },
-        errorCode: paidError.code,
-        errorDetails: JSON.stringify(paidError, null, 2),
-      })
-
-      // If 'paid' status is not valid (migration 006 not applied), go directly to 'confirmed'
-      if (paidError.code === '23514') { // CHECK constraint violation
-        console.warn('[markReservationPaidAndConfirmed] ⚠️ Migration 006 NOT applied - "paid" status not in CHECK constraint')
-        console.warn('[markReservationPaidAndConfirmed] ⚠️ Will skip to "confirmed" status instead')
-        // Fall through to confirm step below
-      } else {
-        console.error('[markReservationPaidAndConfirmed] ❌ CRITICAL: Non-constraint error, aborting')
-        throw paidError
-      }
-    } else {
-      console.log('[markReservationPaidAndConfirmed] ✅ Reservation marked as PAID:', {
-        id: paidReservation.id,
-        status: paidReservation.status,
-        amountPaid: paidReservation.amount_paid
-      })
-      reservationRecord = paidReservation
-    }
-  } else {
-    console.log('[markReservationPaidAndConfirmed] ℹ️ Reservation already in "paid" status, proceeding to confirmation')
+  // Build comprehensive metadata that records the payment event
+  const confirmationMetadata = {
+    ...(reservationRecord.metadata || {}),
+    payment_paid_event: {
+      eventId,
+      eventType,
+      paidAt: nowISO,
+      payment_id: payment.id,
+    },
+    payment_status_history: buildStatusHistory(
+      { ...reservationRecord.metadata, payment_status_history: buildStatusHistory(reservationRecord.metadata, 'paid') },
+      targetStatus
+    ),
   }
 
-  // Then, mark as 'confirmed' to finalize the booking
-  console.log('[markReservationPaidAndConfirmed] 📝 Step 2: Marking reservation as CONFIRMED')
+  // Mark reservation — single atomic update
+  console.log('[markReservationPaidAndConfirmed] Attempting atomic update:', {
+    reservationId,
+    currentStatus: reservationRecord.status,
+    targetStatus,
+    amount: payment.amount,
+  })
 
   // Check for recurrence group (Bulk Payment Confirmation)
   const recurrenceGroupId = payment.metadata?.recurrence_group_id
@@ -475,7 +438,7 @@ async function markReservationPaidAndConfirmed({
       .from('reservations')
       .select('id, status, total_amount, metadata')
       .eq('recurrence_group_id', recurrenceGroupId)
-      .in('status', ['pending', 'pending_payment', 'paid']) // Include 'paid' just in case
+      .in('status', ['pending_payment', 'paid']) // Include 'paid' just in case
 
     if (groupFetchError) {
       console.error('[markReservationPaidAndConfirmed] ❌ Failed to fetch recurrence group:', groupFetchError)
@@ -483,7 +446,7 @@ async function markReservationPaidAndConfirmed({
     } else if (groupReservations && groupReservations.length > 0) {
       console.log('[markReservationPaidAndConfirmed] 🔄 Confirming group reservations:', groupReservations.length)
 
-      const confirmMetadata = {
+      const confirmGroupMetadata = {
         payment_confirmed_event: {
           eventId,
           eventType,
@@ -493,21 +456,29 @@ async function markReservationPaidAndConfirmed({
         }
       }
 
-      // 2. Mark ALL as confirmed and paid
-      // We calculate per-reservation payment amount (assuming even split or full coverage)
-      // Actually, since it's confirmed, we just mark them confirmed.
+      // 2. Mark ALL as confirmed/partially_paid based on down payment status
+      const updates = groupReservations.map(res => {
+        const resMeta = (res.metadata || {}) as any
+        let resAmountPaid = res.total_amount
+        let resStatus = 'confirmed'
 
-      const updates = groupReservations.map(res => ({
-        id: res.id,
-        status: 'confirmed',
-        amount_paid: res.total_amount, // Mark as fully paid
-        updated_at: nowISO,
-        metadata: {
-          ...(res.metadata || {}),
-          ...confirmMetadata,
-          payment_status_history: buildStatusHistory(res.metadata, 'confirmed')
+        if (isDownPayment) {
+          resStatus = 'partially_paid'
+          resAmountPaid = resMeta?.down_payment_amount || payment.amount / groupReservations.length
         }
-      }))
+
+        return {
+          id: res.id,
+          status: resStatus,
+          amount_paid: resAmountPaid,
+          updated_at: nowISO,
+          metadata: {
+            ...resMeta,
+            ...confirmGroupMetadata,
+            payment_status_history: buildStatusHistory(res.metadata, resStatus)
+          }
+        }
+      })
 
       for (const update of updates) {
         const { error: updateError } = await supabase
@@ -527,32 +498,29 @@ async function markReservationPaidAndConfirmed({
         }
       }
 
-      // Update the main reservationRecord reference to the confirmed version (for notifications)
-      reservationRecord.status = 'confirmed'
+      // Update the main reservationRecord reference for notifications
+      reservationRecord.status = targetStatus
       return // Exit here as we handled everything
     }
   }
 
   // STANDARD SINGLE CONFIRMATION FALLBACK
 
-  const confirmMetadata = {
-    ...(reservationRecord.metadata || {}),
-    payment_confirmed_event: {
-      eventId,
-      eventType,
-      confirmedAt: nowISO,
-      payment_id: payment.id,
-    },
-    payment_status_history: buildStatusHistory(reservationRecord.metadata, 'confirmed'),
-  }
-
   const { data: confirmedReservation, error: confirmError } = await supabase
     .from('reservations')
     .update({
-      status: 'confirmed',
+      status: targetStatus,
       amount_paid: payment.amount,
       updated_at: nowISO,
-      metadata: confirmMetadata,
+      metadata: {
+        ...confirmationMetadata,
+        payment_confirmed_event: {
+          eventId,
+          eventType,
+          confirmedAt: nowISO,
+          payment_id: payment.id,
+        },
+      },
     })
     .eq('id', reservationId)
     .select('id, status, amount_paid')
@@ -640,6 +608,71 @@ async function markReservationPaidAndConfirmed({
   } catch (notificationError) {
     console.error('[markReservationPaidAndConfirmed] ⚠️ Failed to send notifications (non-critical):', notificationError)
     // Don't throw - notifications are non-critical, booking is already confirmed
+  }
+
+  // LINKED QUEUE SESSION UPDATE
+  try {
+    const { data: queueSession } = await supabase
+      .from('queue_sessions')
+      .select('id, status, metadata, start_time, end_time')
+      .filter('metadata->>reservation_id', 'eq', reservationId)
+      .single()
+
+    if (queueSession) {
+      console.log('[markReservationPaidAndConfirmed] 🔄 Linked Queue Session found:', queueSession.id)
+
+      const updateData: any = {
+        metadata: {
+          ...queueSession.metadata,
+          payment_status: 'paid',
+          payment_confirmed_at: nowISO
+        }
+      }
+
+
+
+      // Calculate correct status based on time lifecycle
+      // pending_payment → open (if within 12h before start) or open (default after payment)
+      if (['pending_payment', 'pending_approval'].includes(queueSession.status)) {
+        const now = new Date()
+        const startTime = new Date(queueSession.start_time)
+        const endTime = new Date(queueSession.end_time)
+
+        let newStatus: string
+        if (now >= endTime) {
+          newStatus = 'completed'
+          console.log('[markReservationPaidAndConfirmed] 📅 Session already ended → completed')
+        } else if (now >= startTime) {
+          newStatus = 'active'
+          console.log('[markReservationPaidAndConfirmed] 🚀 Session already started → active')
+        } else {
+          newStatus = 'open'
+          console.log('[markReservationPaidAndConfirmed] 🔓 Session paid → open')
+        }
+
+        updateData.status = newStatus
+      }
+
+      const { error: qError } = await supabase
+        .from('queue_sessions')
+        .update(updateData)
+        .eq('id', queueSession.id)
+
+      if (qError) {
+        console.error('[markReservationPaidAndConfirmed] ❌ Failed to update Queue Session:', qError)
+      } else {
+        console.log('[markReservationPaidAndConfirmed] ✅ Queue Session updated successfully')
+        // Revalidate is tricky in webhook, but we try
+        try {
+          revalidatePath('/queue')
+          revalidatePath('/queue-master')
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+  } catch (qErr) {
+    console.error('[markReservationPaidAndConfirmed] Error checking/updating queue session:', qErr)
   }
 }
 

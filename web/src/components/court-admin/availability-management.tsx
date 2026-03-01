@@ -179,7 +179,7 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
 
   const getTypeColor = (type: string) => {
     switch (type) {
-      case 'maintenance': return 'bg-blue-100 text-blue-700 border-blue-200'
+      case 'maintenance': return 'bg-primary/10 text-primary border-primary/20'
       case 'event': return 'bg-purple-100 text-purple-700 border-purple-200'
       case 'holiday': return 'bg-red-100 text-red-700 border-red-200'
       default: return 'bg-gray-100 text-gray-700 border-gray-200'
@@ -197,7 +197,7 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
       {/* Loading State */}
       {isLoading && (
         <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
       )}
 
@@ -224,7 +224,7 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
           <button
             onClick={() => setActiveTab('schedule')}
             className={`px-6 py-2 rounded-lg font-medium transition-colors ${activeTab === 'schedule'
-              ? 'bg-blue-600 text-white shadow-sm'
+              ? 'bg-primary text-white shadow-sm'
               : 'text-gray-600 hover:bg-gray-100'
               }`}
           >
@@ -236,7 +236,7 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
           <button
             onClick={() => setActiveTab('blocked')}
             className={`px-6 py-2 rounded-lg font-medium transition-colors ${activeTab === 'blocked'
-              ? 'bg-blue-600 text-white shadow-sm'
+              ? 'bg-primary text-white shadow-sm'
               : 'text-gray-600 hover:bg-gray-100'
               }`}
           >
@@ -252,12 +252,12 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
       {activeTab === 'schedule' && !isLoading && !error && (
         <div className="space-y-6">
           {/* Quick Actions */}
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
             <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5" />
+              <AlertCircle className="w-5 h-5 text-primary mt-0.5" />
               <div className="flex-1">
-                <h3 className="font-semibold text-blue-900 mb-1">Operating Hours</h3>
-                <p className="text-sm text-blue-700">
+                <h3 className="font-semibold text-primary/80 mb-1">Operating Hours</h3>
+                <p className="text-sm text-primary/70">
                   Set your default operating hours for each day of the week. These will apply to all courts unless specified otherwise.
                 </p>
               </div>
@@ -270,7 +270,7 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
               <h2 className="text-xl font-bold text-gray-900">Weekly Schedule</h2>
               <button
                 onClick={() => setShowHoursModal(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
               >
                 <Plus className="w-4 h-4" />
                 <span>Set Operating Hours</span>
@@ -356,7 +356,7 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
             </div>
             <button
               onClick={() => setShowAddModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
             >
               <Plus className="w-4 h-4" />
               <span>Add Blocked Date</span>
@@ -365,10 +365,10 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
 
           {/* Empty State */}
           {blockedDates.length === 0 ? (
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-8 text-center">
-              <Calendar className="w-12 h-12 text-blue-600 mx-auto mb-3" />
-              <h3 className="text-lg font-semibold text-blue-900 mb-2">No Blocked Dates</h3>
-              <p className="text-sm text-blue-700">
+            <div className="bg-primary/5 border border-primary/20 rounded-xl p-8 text-center">
+              <Calendar className="w-12 h-12 text-primary mx-auto mb-3" />
+              <h3 className="text-lg font-semibold text-primary/80 mb-2">No Blocked Dates</h3>
+              <p className="text-sm text-primary/70">
                 You haven&apos;t blocked any dates yet. Add blocked dates for maintenance, holidays, or special events.
               </p>
             </div>
@@ -435,8 +435,8 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
             </div>
 
             <div className="space-y-4 max-h-96 overflow-y-auto">
-              <div className="bg-blue-50 p-4 rounded-xl mb-4 border border-blue-100">
-                <p className="text-xs font-semibold text-blue-800 uppercase tracking-wider mb-3">Quick Actions</p>
+              <div className="bg-primary/5 p-4 rounded-xl mb-4 border border-primary/20">
+                <p className="text-xs font-semibold text-primary/80 uppercase tracking-wider mb-3">Quick Actions</p>
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => {
@@ -447,7 +447,7 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
                       })
                       setOperatingHours(newHours)
                     }}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-white text-blue-700 text-xs font-medium rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors shadow-sm"
+                    className="flex items-center gap-1.5 px-3 py-2 bg-white text-primary text-xs font-medium rounded-lg border border-primary/20 hover:bg-primary/5 transition-colors shadow-sm"
                     title="Copy Monday's hours to every day of the week"
                   >
                     <Clock className="w-3.5 h-3.5" />
@@ -537,7 +537,7 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
               </button>
               <button
                 onClick={handleSaveHours}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50"
                 disabled={isSubmitting}
               >
                 {isSubmitting ? (
@@ -572,7 +572,7 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
                 <select
                   value={blockForm.courtId}
                   onChange={(e) => setBlockForm({ ...blockForm, courtId: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
                 >
                   <option value="">All Courts</option>
                   {courts.map(court => (
@@ -588,7 +588,7 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
                   required
                   value={blockForm.startDate}
                   onChange={(e) => setBlockForm({ ...blockForm, startDate: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
                 />
               </div>
 
@@ -598,7 +598,7 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
                   type="date"
                   value={blockForm.endDate}
                   onChange={(e) => setBlockForm({ ...blockForm, endDate: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
                 />
               </div>
 
@@ -608,7 +608,7 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
                   required
                   value={blockForm.blockType}
                   onChange={(e) => setBlockForm({ ...blockForm, blockType: e.target.value as any })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
                 >
                   <option value="maintenance">Maintenance</option>
                   <option value="holiday">Holiday</option>
@@ -623,7 +623,7 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
                   required
                   value={blockForm.reason}
                   onChange={(e) => setBlockForm({ ...blockForm, reason: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
                   rows={3}
                   placeholder="Explain why this date is blocked..."
                 />
@@ -640,7 +640,7 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50"
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? (

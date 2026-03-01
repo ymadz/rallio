@@ -122,8 +122,8 @@ export function ReviewsManagement({ venueId }: ReviewsManagementProps) {
           <Star
             key={star}
             className={`${sizeClass} ${star <= rating
-                ? 'fill-yellow-400 text-yellow-400'
-                : 'fill-gray-200 text-gray-200'
+              ? 'fill-yellow-400 text-yellow-400'
+              : 'fill-gray-200 text-gray-200'
               }`}
           />
         ))}
@@ -341,7 +341,7 @@ export function ReviewsManagement({ venueId }: ReviewsManagementProps) {
                     </div>
                     <button
                       onClick={() => handleRespond(review)}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm"
                     >
                       <MessageSquare className="w-4 h-4" />
                       <span>{review.owner_response || review.response ? 'Edit Response' : 'Respond'}</span>
@@ -427,7 +427,7 @@ export function ReviewsManagement({ venueId }: ReviewsManagementProps) {
                   <button
                     onClick={handleSubmitResponse}
                     disabled={!responseText.trim() || isResponding}
-                    className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isResponding ? (
                       <>

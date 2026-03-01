@@ -32,6 +32,7 @@ interface Venue {
     name: string;
     address: string;
     opening_hours?: Record<string, { open: string; close: string }> | string | null;
+    metadata?: Record<string, any>;
 }
 
 interface TimeSlot {
@@ -80,7 +81,7 @@ export default function BookingScreen() {
     const [selectedDays, setSelectedDays] = useState<number[]>([]);
     const [isValidatingRecurrence, setIsValidatingRecurrence] = useState(false);
 
-    const { setBookingData, setDiscount } = useCheckoutStore();
+    const { setBookingData, setDiscount, setDownPaymentPercentage } = useCheckoutStore();
 
     // Derived State and Helpers
     const selectedCourt = React.useMemo(() => courts.find(c => c.id === selectedCourtId), [courts, selectedCourtId]);
@@ -357,6 +358,13 @@ export default function BookingScreen() {
             selectedDays: selectedDays, // Add this
         });
 
+        // Set down payment percentage from venue metadata
+        if (venue.metadata?.down_payment_percentage) {
+            setDownPaymentPercentage(parseFloat(venue.metadata.down_payment_percentage));
+        } else {
+            setDownPaymentPercentage(20); // Default fallback matching backend
+        }
+
         // Navigate to checkout
         router.push('/checkout');
     };
@@ -614,7 +622,6 @@ export default function BookingScreen() {
                                 <Ionicons name="add" size={24} color={Colors.dark.text} />
                             </TouchableOpacity>
                         </View>
-                        <Text style={styles.playersHint}>Max {selectedCourt.capacity} players</Text>
                     </>
                 )}
 

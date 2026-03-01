@@ -44,7 +44,7 @@ export default function VenuesPage() {
           <button
             onClick={() => setActiveTab('venues')}
             className={`inline-flex items-center gap-2 px-1 pb-4 border-b-2 font-medium text-sm transition-colors ${activeTab === 'venues'
-              ? 'border-blue-600 text-blue-600'
+              ? 'border-primary text-primary'
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
           >
@@ -54,14 +54,17 @@ export default function VenuesPage() {
           <button
             onClick={() => setActiveTab('pending')}
             className={`inline-flex items-center gap-2 px-1 pb-4 border-b-2 font-medium text-sm transition-colors ${activeTab === 'pending'
-              ? 'border-yellow-600 text-yellow-600'
+              ? 'border-primary text-primary'
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
           >
             <Clock className="w-5 h-5" />
             Pending Approvals
             {pendingCount > 0 && (
-              <span className="ml-1 px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full text-xs font-bold">
+              <span className={`ml-1 px-2 py-0.5 rounded-full text-xs font-bold ${activeTab === 'pending'
+                ? 'bg-primary/10 text-primary'
+                : 'bg-gray-100 text-gray-600'
+                }`}>
                 {pendingCount}
               </span>
             )}
@@ -69,7 +72,7 @@ export default function VenuesPage() {
           <button
             onClick={() => setActiveTab('amenities')}
             className={`inline-flex items-center gap-2 px-1 pb-4 border-b-2 font-medium text-sm transition-colors ${activeTab === 'amenities'
-              ? 'border-blue-600 text-blue-600'
+              ? 'border-primary text-primary'
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
           >

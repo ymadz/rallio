@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
+import { DevTimeToolbar } from "@/components/dev/dev-time-toolbar";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -29,9 +30,9 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white min-h-screen`}
       >
         {children}
-        <Toaster 
-          position="top-center" 
-          richColors 
+        <Toaster
+          position="top-center"
+          richColors
           expand={true}
           toastOptions={{
             style: {
@@ -43,6 +44,7 @@ export default function RootLayout({
             className: 'text-base',
           }}
         />
+        {process.env.NODE_ENV === 'development' && <DevTimeToolbar />}
       </body>
     </html>
   );

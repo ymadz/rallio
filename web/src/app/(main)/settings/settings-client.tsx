@@ -17,11 +17,11 @@ export function SettingsClient({ profile, player, notificationPrefs }: SettingsC
   const [activeSection, setActiveSection] = useState<'notifications' | 'privacy'>('notifications')
   const [isSaving, setIsSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
-  
+
   // Modal states
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
-  
+
   // Password form state
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
@@ -30,7 +30,7 @@ export function SettingsClient({ profile, player, notificationPrefs }: SettingsC
   })
   const [passwordError, setPasswordError] = useState('')
   const [isChangingPassword, setIsChangingPassword] = useState(false)
-  
+
   // Delete confirmation state
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
@@ -55,26 +55,26 @@ export function SettingsClient({ profile, player, notificationPrefs }: SettingsC
   const handleSaveNotifications = async () => {
     setIsSaving(true)
     setMessage(null)
-    
+
     const result = await updateNotificationPreferencesAction(notifications)
-    
+
     if (result.success) {
       setMessage({ type: 'success', text: 'Notification preferences saved successfully!' })
     } else {
       setMessage({ type: 'error', text: result.error || 'Failed to save preferences' })
     }
-    
+
     setIsSaving(false)
   }
 
   const handleDownloadData = async () => {
     setIsSaving(true)
     setMessage(null)
-    
+
     try {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
-      
+
       if (!user) {
         setMessage({ type: 'error', text: 'Not authenticated' })
         setIsSaving(false)
@@ -112,32 +112,32 @@ export function SettingsClient({ profile, player, notificationPrefs }: SettingsC
     } catch (error: any) {
       setMessage({ type: 'error', text: error.message || 'Failed to export data' })
     }
-    
+
     setIsSaving(false)
   }
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault()
     setPasswordError('')
-    
+
     // Validate passwords
     if (passwordForm.newPassword.length < 6) {
       setPasswordError('New password must be at least 6 characters')
       return
     }
-    
+
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
       setPasswordError('New passwords do not match')
       return
     }
-    
+
     setIsChangingPassword(true)
-    
+
     const result = await changePasswordAction({
       currentPassword: passwordForm.currentPassword,
       newPassword: passwordForm.newPassword,
     })
-    
+
     if (result.success) {
       setShowPasswordModal(false)
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
@@ -145,7 +145,7 @@ export function SettingsClient({ profile, player, notificationPrefs }: SettingsC
     } else {
       setPasswordError(result.error || 'Failed to change password')
     }
-    
+
     setIsChangingPassword(false)
   }
 
@@ -154,12 +154,12 @@ export function SettingsClient({ profile, player, notificationPrefs }: SettingsC
       setDeleteError('Please type DELETE to confirm')
       return
     }
-    
+
     setIsDeleting(true)
     setDeleteError('')
-    
+
     const result = await deleteAccountAction(deleteConfirmation)
-    
+
     if (result.success) {
       // Redirect to home page after deletion
       router.push('/')
@@ -177,12 +177,7 @@ export function SettingsClient({ profile, player, notificationPrefs }: SettingsC
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <header className="px-6 py-6 border-b border-gray-100">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-          <p className="text-gray-500 mt-1">Manage your account preferences and privacy</p>
-        </div>
-      </header>
+
 
       {/* Main Content */}
       <div className="p-6 bg-gray-50 min-h-screen">
@@ -193,11 +188,10 @@ export function SettingsClient({ profile, player, notificationPrefs }: SettingsC
               <button
                 key={section.id}
                 onClick={() => setActiveSection(section.id as any)}
-                className={`flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-medium transition-all ${
-                  activeSection === section.id
+                className={`flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-medium transition-all ${activeSection === section.id
                     ? 'bg-primary text-white shadow-sm'
                     : 'text-gray-600 hover:text-gray-900'
-                }`}
+                  }`}
               >
                 <span className="text-base">{section.icon}</span>
                 <span>{section.label}</span>
@@ -209,9 +203,8 @@ export function SettingsClient({ profile, player, notificationPrefs }: SettingsC
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
             <div className="p-6">
               {message && (
-                <div className={`mb-6 p-4 rounded-lg flex items-start gap-3 ${
-                  message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'
-                }`}>
+                <div className={`mb-6 p-4 rounded-lg flex items-start gap-3 ${message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'
+                  }`}>
                   {message.type === 'success' ? (
                     <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />

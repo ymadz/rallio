@@ -224,7 +224,7 @@ export function AnalyticsDashboard({ venueId }: AnalyticsDashboardProps) {
             <select
               value={timeRange}
               onChange={(e) => setTimeRange(e.target.value as any)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="week">Last 7 Days</option>
               <option value="month">Last 30 Days</option>
@@ -241,7 +241,7 @@ export function AnalyticsDashboard({ venueId }: AnalyticsDashboardProps) {
       {/* Loading State */}
       {isLoading && (
         <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
       )}
 
@@ -264,10 +264,10 @@ export function AnalyticsDashboard({ venueId }: AnalyticsDashboardProps) {
 
       {/* Empty State */}
       {!isLoading && !error && !analytics && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-8 text-center">
-          <BarChart3 className="w-12 h-12 text-blue-600 mx-auto mb-3" />
-          <h3 className="text-lg font-semibold text-blue-900 mb-2">No Analytics Data Yet</h3>
-          <p className="text-sm text-blue-700">
+        <div className="bg-primary/5 border border-primary/20 rounded-xl p-8 text-center">
+          <BarChart3 className="w-12 h-12 text-primary mx-auto mb-3" />
+          <h3 className="text-lg font-semibold text-primary/80 mb-2">No Analytics Data Yet</h3>
+          <p className="text-sm text-primary/70">
             Start receiving bookings to see your analytics and performance metrics.
           </p>
         </div>
@@ -295,11 +295,11 @@ export function AnalyticsDashboard({ venueId }: AnalyticsDashboardProps) {
 
           <div className="bg-white border border-gray-200 rounded-xl p-6">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Calendar className="w-6 h-6 text-blue-600" />
+              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                <Calendar className="w-6 h-6 text-primary" />
               </div>
               {analytics.bookings_change > 0 && (
-                <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                <span className="inline-flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium">
                   <TrendingUp className="w-3 h-3" />
                   +{analytics.bookings_change}%
                 </span>
@@ -532,14 +532,14 @@ export function AnalyticsDashboard({ venueId }: AnalyticsDashboardProps) {
             </div>
           </div>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
             <div className="flex items-start gap-3">
-              <Clock className="w-5 h-5 text-blue-600 mt-0.5" />
+              <Clock className="w-5 h-5 text-primary mt-0.5" />
               <div>
-                <h3 className="font-semibold text-blue-900 mb-1">
+                <h3 className="font-semibold text-primary/80 mb-1">
                   Peak Hours: {peakHours.find((h: any) => (h.booking_count || h.bookings || 0) === maxBookings)?.hourLabel || 'N/A'}
                 </h3>
-                <p className="text-sm text-blue-700">
+                <p className="text-sm text-primary/70">
                   This is your busiest time. Consider dynamic pricing or maintenance during off-peak hours.
                 </p>
               </div>

@@ -137,7 +137,7 @@ export function VenueDetailsPanel({ venueId, onClose, onRefresh, onEdit }: Venue
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
         <div className="bg-white rounded-xl p-8">
-          <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto" />
+          <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto" />
         </div>
       </div>
     )
@@ -174,7 +174,7 @@ export function VenueDetailsPanel({ venueId, onClose, onRefresh, onEdit }: Venue
               {onEdit && (
                 <button
                   onClick={() => onEdit(venue)}
-                  className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium"
                 >
                   <Edit className="w-4 h-4" />
                   Edit Venue
@@ -243,7 +243,7 @@ export function VenueDetailsPanel({ venueId, onClose, onRefresh, onEdit }: Venue
                             href={venue.website}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-sm text-blue-600 hover:underline"
+                            className="text-sm text-primary hover:underline"
                           >
                             {venue.website}
                           </a>
@@ -293,12 +293,12 @@ export function VenueDetailsPanel({ venueId, onClose, onRefresh, onEdit }: Venue
                     <div className="text-2xl font-bold text-green-600">{venue.stats?.totalBookings || 0}</div>
                   </div>
 
-                  <div className="p-4 bg-purple-50 rounded-lg">
+                  <div className="p-4 bg-teal-50 rounded-lg">
                     <div className="flex items-center gap-2 mb-1">
-                      <PhilippinePeso className="w-4 h-4 text-purple-600" />
-                      <div className="text-sm font-medium text-purple-900">Total Revenue</div>
+                      <PhilippinePeso className="w-4 h-4 text-teal-600" />
+                      <div className="text-sm font-medium text-teal-900">Total Revenue</div>
                     </div>
-                    <div className="text-2xl font-bold text-purple-600">
+                    <div className="text-2xl font-bold text-teal-600">
                       ₱{venue.stats?.totalRevenue?.toLocaleString() || 0}
                     </div>
                   </div>
@@ -312,7 +312,7 @@ export function VenueDetailsPanel({ venueId, onClose, onRefresh, onEdit }: Venue
                 <h3 className="text-lg font-semibold text-gray-900">Courts</h3>
                 <button
                   onClick={() => setShowCreateCourtModal(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
                 >
                   <Plus className="w-4 h-4" />
                   Add Court
@@ -322,7 +322,7 @@ export function VenueDetailsPanel({ venueId, onClose, onRefresh, onEdit }: Venue
               {venue.courts && venue.courts.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {venue.courts.map((court: Court) => (
-                    <div key={court.id} className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
+                    <div key={court.id} className="border border-gray-200 rounded-lg p-4 hover:border-primary/50 transition-colors">
                       <div className="flex items-start justify-between mb-3">
                         <div>
                           <h4 className="font-semibold text-gray-900">{court.name}</h4>
@@ -440,7 +440,7 @@ export function VenueDetailsPanel({ venueId, onClose, onRefresh, onEdit }: Venue
                         <div className="text-sm text-gray-600">
                           Capacity: <span className="font-medium text-gray-900">{court.capacity} players</span>
                         </div>
-                        <div className="text-sm font-semibold text-blue-600">
+                        <div className="text-sm font-semibold text-primary">
                           ₱{court.hourly_rate}/hr
                         </div>
                       </div>
@@ -473,7 +473,7 @@ export function VenueDetailsPanel({ venueId, onClose, onRefresh, onEdit }: Venue
                   <p className="text-gray-500">No courts yet</p>
                   <button
                     onClick={() => setShowCreateCourtModal(true)}
-                    className="mt-3 text-sm text-blue-600 hover:underline"
+                    className="mt-3 text-sm text-primary hover:underline"
                   >
                     Add your first court
                   </button>
@@ -632,7 +632,7 @@ function CourtFormModal({ venueId, court, onClose, onSuccess }: {
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="e.g., Court 1, Court A"
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
             />
           </div>
 
@@ -646,7 +646,7 @@ function CourtFormModal({ venueId, court, onClose, onSuccess }: {
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               placeholder="Optional court description..."
               rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none resize-none"
             />
           </div>
 
@@ -660,7 +660,7 @@ function CourtFormModal({ venueId, court, onClose, onSuccess }: {
                 value={formData.court_type}
                 onChange={(e) => setFormData({ ...formData, court_type: e.target.value as 'indoor' | 'outdoor' })}
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
               >
                 <option value="indoor">Indoor</option>
                 <option value="outdoor">Outdoor</option>
@@ -676,7 +676,7 @@ function CourtFormModal({ venueId, court, onClose, onSuccess }: {
                 value={formData.surface_type}
                 onChange={(e) => setFormData({ ...formData, surface_type: e.target.value })}
                 placeholder="e.g., Wood, Synthetic"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
               />
             </div>
           </div>
@@ -694,7 +694,7 @@ function CourtFormModal({ venueId, court, onClose, onSuccess }: {
                 min="1"
                 max="10"
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
               />
             </div>
 
@@ -709,7 +709,7 @@ function CourtFormModal({ venueId, court, onClose, onSuccess }: {
                 min="0"
                 step="0.01"
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
               />
             </div>
           </div>
@@ -729,7 +729,7 @@ function CourtFormModal({ venueId, court, onClose, onSuccess }: {
                     type="checkbox"
                     checked={formData.amenity_ids.includes(amenity.id)}
                     onChange={() => toggleAmenity(amenity.id)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    className="rounded border-gray-300 text-primary focus:ring-primary"
                   />
                   <span className="text-sm text-gray-700">{amenity.name}</span>
                 </label>
@@ -750,7 +750,7 @@ function CourtFormModal({ venueId, court, onClose, onSuccess }: {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-2"
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-2"
             >
               {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
               {court ? 'Update Court' : 'Create Court'}

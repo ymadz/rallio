@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { getMyQueueMasterSessions, getQueueMasterStats } from '@/app/actions/queue-actions'
-import { Plus, Calendar, TrendingUp, PhilippinePeso, Users, Clock, PlayCircle, CheckCircle, XCircle, Loader2, AlertCircle } from 'lucide-react'
+import { Plus, Calendar, TrendingUp, PhilippinePeso, DollarSign, Users, Clock, PlayCircle, CheckCircle, XCircle, Loader2, AlertCircle } from 'lucide-react'
+import { useServerTime } from '@/hooks/use-server-time'
 import Link from 'next/link'
 
 type SessionStatus = 'active' | 'pending' | 'past'
@@ -21,6 +22,10 @@ interface SessionData {
   mode: string
   gameFormat: string
   participants: any[]
+  approvalStatus?: string
+  totalCost?: number
+  paymentStatus?: string
+  paymentMethod?: string
 }
 
 interface DashboardStats {
@@ -51,6 +56,7 @@ export function QueueMasterDashboard() {
   const [filter, setFilter] = useState<SessionStatus>('active')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { date: serverDate } = useServerTime()
 
   useEffect(() => {
     loadDashboard()
@@ -82,26 +88,52 @@ export function QueueMasterDashboard() {
     }
   }
 
+  const getEffectiveStatus = (session: SessionData) => {
+    return session.status
+  }
+
+  const isSessionLive = (session: SessionData) => {
+    const now = serverDate || new Date()
+    return new Date(session.startTime) <= now && new Date(session.endTime) > now
+  }
+
+  const getDisplayStatus = (session: SessionData) => {
+    const effective = getEffectiveStatus(session)
+    if (effective === 'open' || effective === 'active') {
+      return isSessionLive(session) ? 'live' : 'upcoming'
+    }
+    return effective
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'live': return 'bg-green-100 text-green-700 border-green-200'
       case 'active': return 'bg-green-100 text-green-700 border-green-200'
       case 'open': return 'bg-blue-100 text-blue-700 border-blue-200'
-      case 'paused': return 'bg-yellow-100 text-yellow-700 border-yellow-200'
-      case 'closed': return 'bg-gray-100 text-gray-700 border-gray-200'
       case 'cancelled': return 'bg-red-100 text-red-700 border-red-200'
-      case 'pending_approval': return 'bg-orange-100 text-orange-700 border-orange-200'
+      case 'pending_payment': return 'bg-orange-100 text-orange-700 border-orange-200'
+      case 'completed': return 'bg-gray-100 text-gray-700 border-gray-200'
       default: return 'bg-gray-100 text-gray-700 border-gray-200'
     }
   }
 
   const getStatusIcon = (status: string) => {
     switch (status) {
+      case 'live': return <PlayCircle className="w-4 h-4" />
       case 'active': return <PlayCircle className="w-4 h-4" />
       case 'open': return <Clock className="w-4 h-4" />
-      case 'closed': return <CheckCircle className="w-4 h-4" />
       case 'cancelled': return <XCircle className="w-4 h-4" />
-      case 'pending_approval': return <Clock className="w-4 h-4" />
+      case 'completed': return <CheckCircle className="w-4 h-4" />
+      case 'pending_payment': return <DollarSign className="w-4 h-4" />
       default: return <Clock className="w-4 h-4" />
+    }
+  }
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'live': return 'Live Now'
+      case 'pending_payment': return 'Pending Payment'
+      default: return status.charAt(0).toUpperCase() + status.slice(1)
     }
   }
 
@@ -274,9 +306,9 @@ export function QueueMasterDashboard() {
                     </div>
                     <p className="text-sm text-gray-600">{session.venueName}</p>
                   </div>
-                  <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium ${getStatusColor(session.status)}`}>
-                    {getStatusIcon(session.status)}
-                    <span className="capitalize">{session.status}</span>
+                  <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium ${getStatusColor(getDisplayStatus(session))}`}>
+                    {getStatusIcon(getDisplayStatus(session))}
+                    <span>{getStatusLabel(getDisplayStatus(session))}</span>
                   </div>
                 </div>
 
@@ -301,6 +333,30 @@ export function QueueMasterDashboard() {
                       ₱{session.costPerGame}
                     </p>
                   </div>
+
+                  <div className="bg-gray-50 rounded-lg p-3 col-span-2 flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <DollarSign className="w-4 h-4 text-gray-500" />
+                        <span className="text-xs text-gray-600">Session Cost</span>
+                      </div>
+                      <p className="text-lg font-bold text-gray-900">
+                        ₱{session.totalCost?.toFixed(2) || '0.00'}
+                      </p>
+                    </div>
+
+                    <div className="text-right">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${session.paymentStatus === 'paid'
+                        ? 'bg-green-100 text-green-800 border-green-200'
+                        : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                        }`}>
+                        {session.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}
+                      </span>
+                      <p className="text-xs text-gray-500 mt-1 capitalize">
+                        via {session.paymentMethod?.replace('-', ' ') || 'cash'}
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Session Details */}
@@ -312,20 +368,30 @@ export function QueueMasterDashboard() {
                   </div>
                   <div className="text-right">
                     <div className="text-gray-900 font-medium">
-                      {Math.ceil((new Date(session.endTime).getTime() - new Date(session.startTime).getTime()) / (1000 * 60 * 60))}h Duration
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      Created {new Date(session.createdAt).toLocaleTimeString('en-US', {
+                      {new Date(session.startTime).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      })}{' '}
+                      {new Date(session.startTime).toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                      })}
+                      {' - '}
+                      {new Date(session.endTime).toLocaleTimeString('en-US', {
                         hour: 'numeric',
                         minute: '2-digit',
                         hour12: true
                       })}
                     </div>
+                    <div className="text-xs text-gray-500">
+                      {Math.ceil((new Date(session.endTime).getTime() - new Date(session.startTime).getTime()) / (1000 * 60 * 60))}h Duration
+                    </div>
                   </div>
                 </div>
 
                 {/* View Summary for closed sessions */}
-                {(session.status === 'closed' || session.status === 'cancelled') && (
+                {(session.status === 'completed' || session.status === 'cancelled') && (
                   <div className="mt-4 pt-4 border-t border-gray-100">
                     <div className="flex items-center justify-center gap-2 text-primary font-medium text-sm group-hover:text-primary-dark transition-colors">
                       <CheckCircle className="w-4 h-4" />

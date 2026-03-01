@@ -45,6 +45,7 @@ interface CheckoutState {
     // Confirmation
     bookingReference?: string;
     reservationId?: string;
+    downPaymentPercentage?: number;
 
     // Actions
     setBookingData: (data: BookingData) => void;
@@ -52,6 +53,7 @@ interface CheckoutState {
     setPaymentMethod: (method: PaymentMethod) => void;
     setPolicyAccepted: (accepted: boolean) => void;
     setDiscount: (amount: number, type?: string, reason?: string) => void;
+    setDownPaymentPercentage: (percentage: number) => void;
     setBookingReference: (reference: string, reservationId: string) => void;
     resetCheckout: () => void;
 
@@ -59,6 +61,8 @@ interface CheckoutState {
     getSubtotal: () => number;
     getPlatformFeeAmount: () => number;
     getTotalAmount: () => number;
+    getDownPaymentAmount: () => number;
+    getRemainingBalance: () => number;
 }
 
 const initialState = {
@@ -73,6 +77,7 @@ const initialState = {
     platformFeeEnabled: true,
     bookingReference: undefined,
     reservationId: undefined,
+    downPaymentPercentage: undefined,
 };
 
 export const useCheckoutStore = create<CheckoutState>()(
@@ -96,6 +101,8 @@ export const useCheckoutStore = create<CheckoutState>()(
 
             setDiscount: (amount, type, reason) =>
                 set({ discountAmount: amount, discountType: type, discountReason: reason }),
+
+            setDownPaymentPercentage: (percentage) => set({ downPaymentPercentage: percentage }),
 
             setBookingReference: (reference, reservationId) =>
                 set({ bookingReference: reference, reservationId }),
@@ -139,6 +146,20 @@ export const useCheckoutStore = create<CheckoutState>()(
                 const subtotal = state.getSubtotal();
                 const platformFee = state.getPlatformFeeAmount();
                 return Math.round((subtotal + platformFee) * 100) / 100;
+            },
+
+            getDownPaymentAmount: () => {
+                const state = get();
+                if (state.paymentMethod !== 'cash' || !state.downPaymentPercentage) return 0;
+                const total = state.getTotalAmount();
+                return Math.round((total * (state.downPaymentPercentage / 100)) * 100) / 100;
+            },
+
+            getRemainingBalance: () => {
+                const state = get();
+                const total = state.getTotalAmount();
+                const downPayment = state.getDownPaymentAmount();
+                return Math.round((total - downPayment) * 100) / 100;
             },
         }),
         {

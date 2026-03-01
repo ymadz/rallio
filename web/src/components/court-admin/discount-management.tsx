@@ -39,7 +39,7 @@ import {
   toggleHolidayPricing,
   type DiscountRule,
   type HolidayPricing,
-  type DiscountType,
+  type RuleDiscountType,
 } from '@/app/actions/discount-actions';
 
 interface DiscountManagementProps {
@@ -60,11 +60,10 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
   const [ruleForm, setRuleForm] = useState({
     name: '',
     description: '',
-    discount_type: 'multi_day' as DiscountType,
+    discount_type: 'recurring' as RuleDiscountType,
     discount_value: 0,
     discount_unit: 'percent' as 'percent' | 'fixed',
-    min_days: null as number | null,
-    min_players: null as number | null,
+    min_weeks: null as number | null,
     advance_days: null as number | null,
     is_active: true,
     priority: 50,
@@ -115,8 +114,7 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
         discount_type: rule.discount_type,
         discount_value: rule.discount_value,
         discount_unit: rule.discount_unit,
-        min_days: rule.min_days ?? null,
-        min_players: rule.min_players ?? null,
+        min_weeks: rule.min_weeks ?? null,
         advance_days: rule.advance_days ?? null,
         is_active: rule.is_active,
         priority: rule.priority,
@@ -128,11 +126,10 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
       setRuleForm({
         name: '',
         description: '',
-        discount_type: 'multi_day',
+        discount_type: 'recurring',
         discount_value: 0,
         discount_unit: 'percent',
-        min_days: null,
-        min_players: null,
+        min_weeks: null,
         advance_days: null,
         is_active: true,
         priority: 50,
@@ -354,31 +351,23 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
   // HELPER FUNCTIONS
   // ==========================================
 
-  const getDiscountTypeIcon = (type: DiscountType) => {
+  const getRuleDiscountTypeIcon = (type: RuleDiscountType) => {
     switch (type) {
-      case 'multi_day':
+      case 'recurring':
         return <Calendar className="h-4 w-4" />;
-      case 'group':
-        return <Users className="h-4 w-4" />;
       case 'early_bird':
         return <Clock className="h-4 w-4" />;
-      case 'seasonal':
-        return <Gift className="h-4 w-4" />;
       default:
         return <Percent className="h-4 w-4" />;
     }
   };
 
-  const getDiscountTypeLabel = (type: DiscountType) => {
+  const getRuleDiscountTypeLabel = (type: RuleDiscountType) => {
     switch (type) {
-      case 'multi_day':
-        return 'Multi-Day Booking';
-      case 'group':
-        return 'Group Booking';
+      case 'recurring':
+        return 'Recurring Booking';
       case 'early_bird':
         return 'Early Bird Special';
-      case 'seasonal':
-        return 'Seasonal Discount';
       default:
         return type;
     }
@@ -410,7 +399,7 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
             <div>
               <h3 className="text-lg font-semibold">Discount Rules</h3>
               <p className="text-sm text-muted-foreground">
-                Create discount rules for multi-day bookings, groups, and early birds
+                Create discount rules for recurring bookings and early birds
               </p>
             </div>
             <Button onClick={() => handleOpenRuleModal()}>
@@ -436,14 +425,14 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2">
-                          {getDiscountTypeIcon(rule.discount_type)}
+                          {getRuleDiscountTypeIcon(rule.discount_type)}
                           <CardTitle className="text-base">{rule.name}</CardTitle>
                         </div>
                         <Badge variant={rule.is_active ? 'default' : 'secondary'}>
                           {rule.is_active ? 'Active' : 'Inactive'}
                         </Badge>
                         <Badge variant="outline">
-                          {getDiscountTypeLabel(rule.discount_type)}
+                          {getRuleDiscountTypeLabel(rule.discount_type)}
                         </Badge>
                       </div>
                       <div className="flex items-center gap-2">
@@ -480,16 +469,10 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
                           {rule.discount_unit === 'percent' ? '%' : ' PHP'}
                         </p>
                       </div>
-                      {rule.min_days && (
+                      {rule.min_weeks && (
                         <div>
-                          <span className="text-muted-foreground">Min Days:</span>
-                          <p className="font-medium">{rule.min_days}</p>
-                        </div>
-                      )}
-                      {rule.min_players && (
-                        <div>
-                          <span className="text-muted-foreground">Min Players:</span>
-                          <p className="font-medium">{rule.min_players}</p>
+                          <span className="text-muted-foreground">Min Weeks:</span>
+                          <p className="font-medium">{rule.min_weeks}</p>
                         </div>
                       )}
                       {rule.advance_days && (
@@ -642,15 +625,14 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
                 <Select
                   value={ruleForm.discount_type}
                   onValueChange={(value: string) =>
-                    setRuleForm({ ...ruleForm, discount_type: value as DiscountType })
+                    setRuleForm({ ...ruleForm, discount_type: value as RuleDiscountType })
                   }
                 >
                   <SelectTrigger id="rule-type">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="multi_day">Multi-Day Booking</SelectItem>
-                    <SelectItem value="group">Group Booking</SelectItem>
+                    <SelectItem value="recurring">Recurring Booking</SelectItem>
                     <SelectItem value="early_bird">Early Bird Special</SelectItem>
                   </SelectContent>
                 </Select>
@@ -702,34 +684,18 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
             </div>
 
             {/* Type-specific fields */}
-            {ruleForm.discount_type === 'multi_day' && (
+            {ruleForm.discount_type === 'recurring' && (
               <div className="space-y-2">
-                <Label htmlFor="min-days">Minimum Days Required</Label>
+                <Label htmlFor="min-weeks">Minimum Weeks Required</Label>
                 <Input
-                  id="min-days"
+                  id="min-weeks"
                   type="number"
                   min="1"
-                  value={ruleForm.min_days || ''}
+                  value={ruleForm.min_weeks || ''}
                   onChange={(e) =>
-                    setRuleForm({ ...ruleForm, min_days: parseInt(e.target.value) || null })
+                    setRuleForm({ ...ruleForm, min_weeks: parseInt(e.target.value) || null })
                   }
-                  placeholder="e.g., 3"
-                />
-              </div>
-            )}
-
-            {ruleForm.discount_type === 'group' && (
-              <div className="space-y-2">
-                <Label htmlFor="min-players">Minimum Players Required</Label>
-                <Input
-                  id="min-players"
-                  type="number"
-                  min="1"
-                  value={ruleForm.min_players || ''}
-                  onChange={(e) =>
-                    setRuleForm({ ...ruleForm, min_players: parseInt(e.target.value) || null })
-                  }
-                  placeholder="e.g., 4"
+                  placeholder="e.g., 2"
                 />
               </div>
             )}

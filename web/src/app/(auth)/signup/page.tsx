@@ -19,11 +19,13 @@ interface SignupData {
   email: string
   password: string
   confirmPassword: string
+
   agreeToTerms: boolean
 }
 
 export default function SignupPage() {
   const router = useRouter()
+
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -38,7 +40,7 @@ export default function SignupPage() {
     terms: '',
     privacy: '',
   })
-  
+
   // Fetch legal content on mount
   useEffect(() => {
     const fetchContent = async () => {
@@ -47,13 +49,13 @@ export default function SignupPage() {
           getPublicSettings('terms_and_conditions'),
           getPublicSettings('privacy_policy')
         ])
-        
+
         setLegalContent({
-          terms: termsRes.success && termsRes.data && (termsRes.data as any).setting_value?.content 
-            ? (termsRes.data as any).setting_value.content 
+          terms: termsRes.success && termsRes.data && (termsRes.data as any).setting_value?.content
+            ? (termsRes.data as any).setting_value.content
             : DEFAULT_TERMS_AND_CONDITIONS,
-          privacy: privacyRes.success && privacyRes.data && (privacyRes.data as any).setting_value?.content 
-            ? (privacyRes.data as any).setting_value.content 
+          privacy: privacyRes.success && privacyRes.data && (privacyRes.data as any).setting_value?.content
+            ? (privacyRes.data as any).setting_value.content
             : DEFAULT_PRIVACY_POLICY,
         })
       } catch (err) {
@@ -80,6 +82,7 @@ export default function SignupPage() {
     email: '',
     password: '',
     confirmPassword: '',
+
     agreeToTerms: false,
   })
 
@@ -142,16 +145,16 @@ export default function SignupPage() {
 
       if (error) {
         setError(error.message)
+        setIsLoading(false) // Stop loading on error
         return
       }
 
       // Profile and player records are automatically created by database trigger (handle_new_user)
-      
+
       // Redirect to verification page
       router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`)
     } catch {
       setError('An unexpected error occurred')
-    } finally {
       setIsLoading(false)
     }
   }
@@ -163,7 +166,7 @@ export default function SignupPage() {
       const supabase = createClient()
       const redirectUrl = `${window.location.origin}/auth/callback`
       console.log('🔍 [Google Signup] Redirect URL:', redirectUrl)
-      
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -332,16 +335,16 @@ export default function SignupPage() {
           />
           <Label htmlFor="terms" className="text-sm font-normal leading-snug">
             I've read and agree with the{' '}
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={(e) => openLegalModal(e, 'terms')}
               className="text-primary hover:underline hover:text-primary/90 inline-block font-normal p-0 h-auto"
             >
               Terms and Conditions
             </button>{' '}
             and the{' '}
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={(e) => openLegalModal(e, 'privacy')}
               className="text-primary hover:underline hover:text-primary/90 inline-block font-normal p-0 h-auto"
             >

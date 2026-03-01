@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
-import Link from 'next/link'
+import { useState, useEffect } from 'react'
 import { AvailabilityModal } from '@/components/venue/availability-modal'
+import { QueueSessionModal } from '@/components/venue/queue-session-modal'
 import { EmptyCourtsState } from '@/components/courts/empty-courts-state'
+import { createClient } from '@/lib/supabase/client'
 
 interface Court {
   id: string
@@ -29,10 +30,36 @@ interface VenueDetailsClientProps {
 export function VenueDetailsClient({ courts, venueId, venueName, discounts }: VenueDetailsClientProps) {
   const [selectedCourt, setSelectedCourt] = useState<Court | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isQueueModalOpen, setIsQueueModalOpen] = useState(false)
+  const [isQueueMaster, setIsQueueMaster] = useState(false)
+
+  // Check if user has queue_master role
+  useEffect(() => {
+    const checkRole = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: roles } = await supabase
+        .from('user_roles')
+        .select('roles!inner(name)')
+        .eq('user_id', user.id)
+
+      const roleNames = roles?.map((r: any) => r.roles?.name) || []
+      setIsQueueMaster(roleNames.includes('queue_master'))
+    }
+
+    checkRole()
+  }, [])
 
   const handleViewAvailability = (court: Court) => {
     setSelectedCourt(court)
     setIsModalOpen(true)
+  }
+
+  const handleOpenQueueModal = (court: Court) => {
+    setSelectedCourt(court)
+    setIsQueueModalOpen(true)
   }
 
   // Show empty state if no courts available
@@ -66,9 +93,6 @@ export function VenueDetailsClient({ courts, venueId, venueName, discounts }: Ve
                       }`}>
                       {court.court_type}
                     </span>
-                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
-                      {court.capacity} players max
-                    </span>
                   </div>
                 </div>
                 <div className="text-right ml-4">
@@ -78,7 +102,7 @@ export function VenueDetailsClient({ courts, venueId, venueName, discounts }: Ve
               </div>
 
               {/* Court Actions */}
-              <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className={`mt-4 grid gap-2 ${isQueueMaster ? 'grid-cols-2' : 'grid-cols-1'}`}>
                 <button
                   onClick={() => handleViewAvailability(court)}
                   className="bg-primary text-white text-center py-2.5 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
@@ -88,15 +112,17 @@ export function VenueDetailsClient({ courts, venueId, venueName, discounts }: Ve
                   </svg>
                   View Schedule
                 </button>
-                <Link
-                  href={`/queue/${court.id}`}
-                  className="border border-gray-300 text-gray-700 text-center py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                  </svg>
-                  Queue
-                </Link>
+                {isQueueMaster && (
+                  <button
+                    onClick={() => handleOpenQueueModal(court)}
+                    className="border border-gray-300 text-gray-700 text-center py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                    Queue
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -120,12 +146,12 @@ export function VenueDetailsClient({ courts, venueId, venueName, discounts }: Ve
         />
       )}
 
-      {/* Availability Modal */}
+      {/* Queue Session Modal */}
       {selectedCourt && (
-        <AvailabilityModal
-          isOpen={isModalOpen}
+        <QueueSessionModal
+          isOpen={isQueueModalOpen}
           onClose={() => {
-            setIsModalOpen(false)
+            setIsQueueModalOpen(false)
             setSelectedCourt(null)
           }}
           courtId={selectedCourt.id}

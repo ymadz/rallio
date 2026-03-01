@@ -50,12 +50,7 @@ export default async function ProfilePage() {
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <header className="px-6 py-6 border-b border-gray-100">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Profile</h1>
-          <p className="text-gray-500 mt-1">View and manage your player profile</p>
-        </div>
-      </header>
+
 
       {/* Profile Content */}
       <div className="max-w-7xl mx-auto p-6 bg-gray-50 min-h-screen">

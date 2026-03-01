@@ -7,18 +7,18 @@ import { revalidatePath } from 'next/cache';
 // TYPES
 // ==========================================
 
-export type DiscountType = 'multi_day' | 'group' | 'early_bird' | 'seasonal' | 'holiday_surcharge';
+export type RuleDiscountType = 'recurring' | 'early_bird';
+export type CalculatedDiscountType = RuleDiscountType | 'seasonal' | 'holiday_surcharge';
 
 export interface DiscountRule {
   id: string;
   venue_id: string;
   name: string;
   description: string | null;
-  discount_type: DiscountType;
+  discount_type: RuleDiscountType;
   discount_value: number;
   discount_unit: 'percent' | 'fixed';
-  min_days?: number | null;
-  min_players?: number | null;
+  min_weeks?: number | null;
   advance_days?: number | null;
   is_active: boolean;
   priority: number;
@@ -46,13 +46,12 @@ export interface DiscountCalculationInput {
   courtId: string;
   startDate: string;
   endDate: string;
-  numberOfDays: number;
-  numberOfPlayers: number;
+  recurrenceWeeks: number;
   basePrice: number;
 }
 
 export interface ApplicableDiscount {
-  type: DiscountType | 'holiday_surcharge';
+  type: CalculatedDiscountType;
   name: string;
   description: string;
   amount: number;
@@ -323,7 +322,7 @@ export async function calculateApplicableDiscounts(
   try {
     const supabase = await createClient();
     const applicableDiscounts: ApplicableDiscount[] = [];
-    
+
     const bookingDate = new Date(input.startDate);
     const today = new Date();
     const daysInAdvance = Math.floor((bookingDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
@@ -341,7 +340,7 @@ export async function calculateApplicableDiscounts(
       // Use the first matching holiday pricing (most specific)
       const holiday = holidayPricing[0];
       const isIncrease = holiday.price_multiplier > 1.0;
-      
+
       let amount = 0;
       if (holiday.fixed_surcharge) {
         amount = holiday.fixed_surcharge;
@@ -352,7 +351,7 @@ export async function calculateApplicableDiscounts(
       applicableDiscounts.push({
         type: isIncrease ? 'holiday_surcharge' : 'seasonal',
         name: holiday.name,
-        description: isIncrease 
+        description: isIncrease
           ? `${Math.round((holiday.price_multiplier - 1) * 100)}% holiday surcharge`
           : `${Math.round((1 - holiday.price_multiplier) * 100)}% seasonal discount`,
         amount: Math.abs(amount),
@@ -370,46 +369,34 @@ export async function calculateApplicableDiscounts(
       .order('priority', { ascending: false });
 
     if (discountRules && discountRules.length > 0) {
-      const now = new Date().toISOString();
+      // Use input.startDate for validity check to align with local booking time and intended target date
+      const targetDateStr = input.startDate;
 
       for (const rule of discountRules) {
         // Check validity dates
-        if (rule.valid_from && rule.valid_from > now) continue;
-        if (rule.valid_until && rule.valid_until < now) continue;
+        if (rule.valid_from && rule.valid_from > targetDateStr) continue;
+        if (rule.valid_until && rule.valid_until < targetDateStr) continue;
 
         let isApplicable = false;
         let discountAmount = 0;
 
         switch (rule.discount_type) {
-          case 'multi_day':
-            if (rule.min_days && input.numberOfDays >= rule.min_days) {
+          case 'recurring':
+            if (rule.min_weeks && Number(input.recurrenceWeeks) >= Number(rule.min_weeks)) {
               isApplicable = true;
               discountAmount = rule.discount_unit === 'percent'
-                ? (input.basePrice * input.numberOfDays * rule.discount_value) / 100
-                : rule.discount_value;
-            }
-            break;
-
-          case 'group':
-            if (rule.min_players && input.numberOfPlayers >= rule.min_players) {
-              isApplicable = true;
-              discountAmount = rule.discount_unit === 'percent'
-                ? (input.basePrice * rule.discount_value) / 100
-                : rule.discount_value;
+                ? (Number(input.basePrice) * Number(rule.discount_value)) / 100
+                : Number(rule.discount_value);
             }
             break;
 
           case 'early_bird':
-            if (rule.advance_days && daysInAdvance >= rule.advance_days) {
+            if (rule.advance_days && daysInAdvance >= Number(rule.advance_days)) {
               isApplicable = true;
               discountAmount = rule.discount_unit === 'percent'
-                ? (input.basePrice * rule.discount_value) / 100
-                : rule.discount_value;
+                ? (Number(input.basePrice) * Number(rule.discount_value)) / 100
+                : Number(rule.discount_value);
             }
-            break;
-
-          case 'seasonal':
-            // Already handled by holiday_pricing table
             break;
 
           default:
@@ -421,9 +408,9 @@ export async function calculateApplicableDiscounts(
             type: rule.discount_type,
             name: rule.name,
             description: rule.description || `${rule.discount_value}${rule.discount_unit === 'percent' ? '%' : ' PHP'} discount`,
-            amount: discountAmount,
+            amount: Number(discountAmount),
             isIncrease: false,
-            priority: rule.priority,
+            priority: Number(rule.priority),
           });
         }
       }
@@ -436,9 +423,9 @@ export async function calculateApplicableDiscounts(
     let totalDiscount = 0;
     for (const discount of applicableDiscounts) {
       if (discount.isIncrease) {
-        totalDiscount -= discount.amount; // Negative discount = surcharge
+        totalDiscount -= Number(discount.amount); // Negative discount = surcharge
       } else {
-        totalDiscount += discount.amount;
+        totalDiscount += Number(discount.amount);
       }
     }
 

@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { createRefund, getRefund, getPayment } from '@/lib/paymongo'
 import { createNotification, NotificationTemplates } from '@/lib/notifications'
 import { revalidatePath } from 'next/cache'
@@ -79,7 +79,7 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
     }
 
     // Check reservation status allows refunds
-    const refundableStatuses = ['paid', 'confirmed', 'pending_payment']
+    const refundableStatuses = ['confirmed', 'pending_payment', 'partially_paid']
     if (!refundableStatuses.includes(reservation.status)) {
       return {
         success: false,
@@ -124,25 +124,6 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
       }
     }
 
-    if (paymentsError || !payments || payments.length === 0) {
-      // FALLBACK: If no direct payments, check for recurring group payments
-      if (reservation.recurrence_group_id) {
-        console.log('🔍 [requestRefundAction] No direct payment found, checking recurrence group:', reservation.recurrence_group_id)
-
-        const { data: groupPayments, error: groupError } = await supabase
-          .from('payments')
-          .select('*')
-          .contains('metadata', { recurrence_group_id: reservation.recurrence_group_id })
-          .in('status', ['paid', 'completed'])
-
-        if (groupPayments && groupPayments.length > 0) {
-          console.log('✅ [requestRefundAction] Found group payment:', groupPayments[0].id)
-          payments = groupPayments
-          // Clear error since we found a payment
-          paymentsError = null
-        }
-      }
-    }
 
     if (paymentsError || !payments || payments.length === 0) {
       console.error('❌ [requestRefundAction] No paid payments found:', paymentsError)
@@ -192,16 +173,18 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
     const paymongoPaymentId = paymentToRefund.external_id || paymentToRefund.metadata?.paymongo_payment?.id
 
     // For bulk payments, ensure we don't refund more than the reservation amount
-    const actualRefundAmount = Math.min(refundableAmount, reservation.amount_paid)
+    // reservation.amount_paid is in pesos, refundableAmount is in centavos — convert to same unit
+    const amountPaidCentavos = Math.round(reservation.amount_paid * 100)
+    const actualRefundAmount = Math.min(refundableAmount, amountPaidCentavos)
 
-    // Create refund record form in database first
+    // 5. Create refund record
     const { data: refundRecord, error: insertError } = await supabase
       .from('refunds')
       .insert({
         payment_id: paymentToRefund.id,
         reservation_id: params.reservationId,
         user_id: user.id,
-        amount: Math.round(actualRefundAmount * 100), // Store in centavos
+        amount: Math.round(actualRefundAmount), // actualRefundAmount is already in centavos
         currency: 'PHP',
         status: 'pending',
         payment_external_id: paymongoPaymentId,
@@ -364,7 +347,7 @@ export async function cancelRefundRequestAction(refundId: string): Promise<Refun
     if (refund.reservations?.status === 'pending_refund') {
       await supabase
         .from('reservations')
-        .update({ status: 'paid' }) // Revert to paid
+        .update({ status: 'confirmed' }) // Revert to confirmed
         .eq('id', refund.reservation_id)
     }
 
@@ -423,7 +406,7 @@ export async function adminProcessRefundAction(
       return { success: false, error: 'Refund not found' }
     }
 
-    if (refund.status !== 'pending') {
+    if (refund.status !== 'pending' && refund.status !== 'failed') {
       return { success: false, error: `Cannot process refund with status: ${refund.status}` }
     }
 
@@ -442,7 +425,7 @@ export async function adminProcessRefundAction(
       // Revert reservation status
       await supabase
         .from('reservations')
-        .update({ status: 'paid' }) // Revert to paid
+        .update({ status: 'confirmed' }) // Revert to confirmed
         .eq('id', refund.reservation_id)
 
       // Notify user
@@ -720,15 +703,22 @@ async function handleSuccessfulRefund(
   const supabase = createServiceClient()
 
   // Update reservation status
+  const { data: reservation } = await supabase
+    .from('reservations')
+    .select('metadata')
+    .eq('id', reservationId)
+    .single()
+
+  const currentMetadata = reservation?.metadata || {}
+
   await supabase
     .from('reservations')
     .update({
       status: 'refunded',
-      metadata: supabase.rpc('jsonb_set', {
-        target: 'metadata',
-        path: '{refunded_at}',
-        new_value: JSON.stringify(new Date().toISOString()),
-      })
+      metadata: {
+        ...currentMetadata,
+        refunded_at: new Date().toISOString()
+      }
     })
     .eq('id', reservationId)
 

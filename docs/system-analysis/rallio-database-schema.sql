@@ -499,12 +499,11 @@ CREATE TABLE holiday_pricing (
   name varchar(200) NOT NULL,
   start_date date NOT NULL,
   end_date date NOT NULL,
-  pricing_type varchar(20) NOT NULL CHECK (pricing_type IN ('surcharge', 'discount')),
-  adjustment_type varchar(20) NOT NULL CHECK (adjustment_type IN ('percentage', 'fixed')),
-  adjustment_value numeric(12,2) NOT NULL,
-  applies_to_days varchar(50)[], -- ['monday', 'tuesday', ...] or NULL for all days
+  price_multiplier numeric(4,2) NOT NULL DEFAULT 1.0, -- >1 for surcharge, <1 for discount (e.g. 1.2 = +20%)
+  fixed_surcharge numeric(9,2) DEFAULT NULL, -- Flat rate added to total
   is_active boolean DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
   created_by uuid REFERENCES users(id),
   CHECK (end_date >= start_date)
 );
@@ -513,8 +512,7 @@ CREATE INDEX idx_holiday_pricing_venue ON holiday_pricing(venue_id);
 CREATE INDEX idx_holiday_pricing_dates ON holiday_pricing(start_date, end_date);
 CREATE INDEX idx_holiday_pricing_active ON holiday_pricing(is_active) WHERE is_active = true;
 
-COMMENT ON TABLE holiday_pricing IS 'Special pricing for holidays and events';
-COMMENT ON COLUMN holiday_pricing.applies_to_days IS 'Specific days of week, NULL means all days in date range';
+COMMENT ON TABLE holiday_pricing IS 'Special pricing for holidays and events handled by multipliers or fixed surcharges';
 
 -- Promotional codes
 CREATE TABLE promo_codes (
@@ -786,6 +784,12 @@ CREATE TRIGGER update_queue_sessions_updated_at BEFORE UPDATE ON queue_sessions
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_ratings_updated_at BEFORE UPDATE ON ratings
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_discount_rules_updated_at BEFORE UPDATE ON discount_rules
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_holiday_pricing_updated_at BEFORE UPDATE ON holiday_pricing
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Function to update reservation status based on splits

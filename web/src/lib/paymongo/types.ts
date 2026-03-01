@@ -114,11 +114,11 @@ export interface PayMongoWebhookEvent {
   type: 'event'
   attributes: {
     type:
-      | 'source.chargeable'
-      | 'payment.paid'
-      | 'payment.failed'
-      | 'payment_intent.succeeded'
-      | 'payment_intent.payment_failed'
+    | 'source.chargeable'
+    | 'payment.paid'
+    | 'payment.failed'
+    | 'payment_intent.succeeded'
+    | 'payment_intent.payment_failed'
     livemode: boolean
     data: PayMongoSource | PayMongoPayment | PayMongoPaymentIntent
     created_at: number
@@ -182,7 +182,7 @@ export interface PayMongoResponse<T> {
 // REFUND TYPES
 // =============================================
 
-export type RefundReason = 
+export type RefundReason =
   | 'requested_by_customer'
   | 'duplicate'
   | 'fraudulent'
@@ -216,7 +216,7 @@ export interface PayMongoRefundWebhookEvent {
   id: string
   type: 'event'
   attributes: {
-    type: 'refund.succeeded' | 'refund.failed'
+    type: 'refund.succeeded' | 'refund.failed' | 'refund.updated'
     livemode: boolean
     data: PayMongoRefund
     created_at: number

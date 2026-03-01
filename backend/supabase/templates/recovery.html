@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,45 +15,29 @@
       padding: 20px;
       background-color: #f5f5f5;
     }
+
     .container {
       background-color: #ffffff;
       border-radius: 12px;
       padding: 40px;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
-    .logo {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-    .logo-icon {
-      width: 60px;
-      height: 60px;
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-      border-radius: 12px;
-      transform: rotate(45deg);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 10px;
-    }
-    .brand-name {
-      font-size: 28px;
-      font-weight: bold;
-      color: #10b981;
-    }
+
     h1 {
       color: #1f2937;
       font-size: 24px;
       margin-bottom: 20px;
       text-align: center;
     }
+
     p {
       color: #4b5563;
       margin-bottom: 15px;
     }
+
     .button {
       display: inline-block;
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      background-color: #10b981;
       color: white !important;
       text-decoration: none;
       padding: 14px 32px;
@@ -61,10 +46,12 @@
       font-size: 16px;
       margin: 20px 0;
     }
+
     .button-container {
       text-align: center;
       margin: 30px 0;
     }
+
     .footer {
       text-align: center;
       color: #9ca3af;
@@ -73,6 +60,7 @@
       padding-top: 20px;
       border-top: 1px solid #e5e7eb;
     }
+
     .warning {
       background-color: #fef3c7;
       padding: 15px;
@@ -80,38 +68,33 @@
       margin: 20px 0;
       border-left: 4px solid #f59e0b;
     }
+
     .warning p {
       margin: 0;
       color: #92400e;
     }
   </style>
 </head>
+
 <body>
   <div class="container">
-    <div class="logo">
-      <div class="logo-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M9 5l7 7-7 7" stroke="white" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </div>
-      <div class="brand-name">Rallio</div>
-    </div>
-
-    <h1>🔐 Reset Your Password</h1>
+    <h1>Reset Your Password</h1>
 
     <p>Hi there!</p>
 
-    <p>We received a request to reset the password for your Rallio account. Click the button below to create a new password:</p>
+    <p>We received a request to reset the password for your Rallio account. Click the button below to create a new
+      password:</p>
 
     <div class="button-container">
       <a href="{{ .ConfirmationURL }}" class="button">Reset Password</a>
     </div>
 
     <div class="warning">
-      <p>⚠️ This link will expire in 1 hour for security reasons.</p>
+      <p>This link will expire in 1 hour for security reasons.</p>
     </div>
 
-    <p>If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.</p>
+    <p>If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.
+    </p>
 
     <p>For security, never share this link with anyone.</p>
 
@@ -119,10 +102,11 @@
       <p>© {{ .SiteURL }} Rallio - Badminton Court Finder</p>
       <p>Zamboanga City, Philippines</p>
       <p>
-        <a href="{{ .SiteURL }}/terms" style="color: #10b981;">Terms of Service</a> • 
+        <a href="{{ .SiteURL }}/terms" style="color: #10b981;">Terms of Service</a> •
         <a href="{{ .SiteURL }}/privacy" style="color: #10b981;">Privacy Policy</a>
       </p>
     </div>
   </div>
 </body>
+
 </html>

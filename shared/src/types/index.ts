@@ -116,9 +116,11 @@ export interface Reservation {
 
 export type ReservationStatus =
   | 'pending_payment'
+  | 'partially_paid'
   | 'pending'
   | 'paid'
   | 'confirmed'
+  | 'ongoing'
   | 'cancelled'
   | 'completed'
   | 'no_show';

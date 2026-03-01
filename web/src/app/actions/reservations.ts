@@ -13,11 +13,31 @@ export interface TimeSlot {
 }
 
 /**
+ * Server Action: Get venue metadata (like down payment percentage)
+ */
+export async function getVenueMetadataAction(venueId: string) {
+  const supabase = createServiceClient()
+  const { data, error } = await supabase
+    .from('venues')
+    .select('metadata')
+    .eq('id', venueId)
+    .single()
+
+  if (error) {
+    console.error('Error fetching venue metadata:', error)
+    return { success: false, error: error.message }
+  }
+
+  return { success: true, metadata: data.metadata }
+}
+
+/**
  * Server Action: Get available time slots for a specific court on a given date
  */
 export async function getAvailableTimeSlotsAction(
   courtId: string,
-  dateString: string
+  dateString: string,
+  excludeReservationId?: string
 ): Promise<TimeSlot[]> {
   // Use Service Client to bypass RLS and ensure we see ALL bookings
   const supabase = await createClient() // Keep for court fetching (unlikely RLS protected for read) but better to use service for ALL availability checks
@@ -59,21 +79,10 @@ export async function getAvailableTimeSlotsAction(
   const [openHour] = dayHours.open.split(':').map(Number)
   const [closeHour] = dayHours.close.split(':').map(Number)
 
-  // Generate all possible hourly slots
-  const allSlots: TimeSlot[] = []
-  for (let hour = openHour; hour < closeHour; hour++) {
-    const timeString = `${hour.toString().padStart(2, '0')}:00`
-    allSlots.push({
-      time: timeString,
-      available: true,
-      price: court.hourly_rate,
-    })
-  }
-
   // Get existing reservations AND queue sessions for this court on this date
   // Query for the entire day range to catch any overlapping bookings
   const dateOnlyString = format(date, 'yyyy-MM-dd')
-  const activeStatuses = ['pending_payment', 'pending', 'paid', 'confirmed', 'pending_refund']
+  const activeStatuses = ['pending_payment', 'partially_paid', 'confirmed', 'ongoing', 'pending_refund', 'completed', 'no_show']
 
   // Use timezone-aware date range (Asia/Manila = +08:00)
   // Query from midnight to end of day in the venue's timezone
@@ -83,25 +92,32 @@ export async function getAvailableTimeSlotsAction(
   console.log(`[Availability Check] Querying for date: ${dateOnlyString}`)
   console.log(`[Availability Check] Date range: ${startOfDayLocal} to ${endOfDayLocal}`)
 
+  // Build reservations query
+  let reservationsQuery = adminDb
+    .from('reservations')
+    .select('start_time, end_time, status')
+    .eq('court_id', courtId)
+    .lt('start_time', endOfDayLocal) // Starts before the end of the query window
+    .gt('end_time', startOfDayLocal) // Ends after the start of the query window
+    .in('status', activeStatuses)
+
+  // Exclude specific reservation if provided (for rescheduling)
+  if (excludeReservationId) {
+    reservationsQuery = reservationsQuery.neq('id', excludeReservationId)
+  }
+
   const [reservationsResult, queueSessionsResult] = await Promise.all([
-    // Get reservations - use overlap logic
-    adminDb
-      .from('reservations')
-      .select('start_time, end_time, status')
-      .eq('court_id', courtId)
-      .lt('start_time', endOfDayLocal) // Starts before the end of the query window
-      .gt('end_time', startOfDayLocal) // Ends after the start of the query window
-      .in('status', activeStatuses),
+    // Execute reservations query
+    reservationsQuery,
 
     // Get queue sessions
     adminDb
       .from('queue_sessions')
-      .select('start_time, end_time, status, approval_status')
+      .select('start_time, end_time, status')
       .eq('court_id', courtId)
       .lt('start_time', endOfDayLocal)
       .gt('end_time', startOfDayLocal)
-      .in('status', ['draft', 'active', 'pending_approval'])
-      .in('approval_status', ['pending', 'approved'])
+      .in('status', ['pending_payment', 'open', 'active'])
   ])
 
 
@@ -130,6 +146,48 @@ export async function getAvailableTimeSlotsAction(
   }
 
   console.log(`[Availability Check] Total booked slots: ${allBookedSlots.length}`)
+
+  // Determine the effective slot range by extending operating hours to include
+  // any hours that have existing reservations. This ensures booked slots are
+  // always visible even if the venue's operating hours for this day don't cover them.
+  let effectiveOpenHour = openHour
+  let effectiveCloseHour = closeHour
+
+  if (allBookedSlots && allBookedSlots.length > 0) {
+    for (const reservation of allBookedSlots) {
+      try {
+        const startTime = new Date(reservation.start_time)
+        const endTime = new Date(reservation.end_time)
+
+        const startHourStr = startTime.toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Manila' })
+        const endHourStr = endTime.toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Manila' })
+
+        const resStartHour = parseInt(startHourStr) % 24
+        let resEndHour = parseInt(endHourStr) % 24
+        if (resEndHour === 0 && resStartHour > 0) resEndHour = 24
+
+        const endMinutes = endTime.getMinutes()
+        const resEndHourCeil = endMinutes > 0 ? resEndHour + 1 : resEndHour
+
+        // Extend the effective range to include this reservation's hours
+        effectiveOpenHour = Math.min(effectiveOpenHour, resStartHour)
+        effectiveCloseHour = Math.max(effectiveCloseHour, resEndHourCeil)
+      } catch (error) {
+        // Ignore parse errors for range extension; they'll be caught below
+      }
+    }
+  }
+
+  // Generate all possible hourly slots using the effective range
+  const allSlots: TimeSlot[] = []
+  for (let hour = effectiveOpenHour; hour < effectiveCloseHour; hour++) {
+    const timeString = `${hour.toString().padStart(2, '0')}:00`
+    allSlots.push({
+      time: timeString,
+      available: true,
+      price: court.hourly_rate,
+    })
+  }
 
   // Mark unavailable slots based on existing reservations AND queue sessions
   if (allBookedSlots && allBookedSlots.length > 0) {
@@ -174,12 +232,14 @@ export async function getAvailableTimeSlotsAction(
     }
   }
 
-  // Filter out past time slots if date is today
-  const now = new Date()
-  const isToday = format(date, 'yyyy-MM-dd') === format(now, 'yyyy-MM-dd')
+  // Filter out past time slots if date is today (in Asia/Manila timezone)
+  const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000
+  const manilaNow = new Date(Date.now() + MANILA_OFFSET_MS)
+  const todayString = manilaNow.toISOString().split('T')[0]
+  const isToday = dateString === todayString
 
   if (isToday) {
-    const currentHour = now.getHours()
+    const currentHour = manilaNow.getUTCHours()
     return allSlots.filter((slot) => {
       const slotHour = parseInt(slot.time.split(':')[0])
       return slotHour > currentHour
@@ -226,7 +286,11 @@ export async function validateBookingAvailabilityAction(data: {
   }
 
   const durationMs = initialEndTime.getTime() - initialStartTime.getTime()
-  const startDayIndex = initialStartTime.getDay() // 0-6
+
+  // Handle Manila Timezone correctly (+08:00)
+  const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000
+  const initialManilaTime = new Date(initialStartTime.getTime() + MANILA_OFFSET_MS)
+  const startDayIndex = initialManilaTime.getUTCDay() // 0-6
 
   // 0. FETCH OPERATING HOURS
   const { data: court, error: courtError } = await supabase
@@ -254,15 +318,12 @@ export async function validateBookingAvailabilityAction(data: {
   const targetSlots: { start: Date; end: Date; weekIndex: number }[] = []
 
   for (let i = 0; i < recurrenceWeeks; i++) {
-    const weekBaseTime = initialStartTime.getTime() + (i * 7 * 24 * 60 * 60 * 1000)
     for (const dayIndex of uniqueSelectedDays) {
-      const dayOffset = dayIndex - startDayIndex
-      const slotStartTime = new Date(weekBaseTime + (dayOffset * 24 * 60 * 60 * 1000))
+      const dayOffset = (dayIndex - startDayIndex + 7) % 7
+
+      const slotStartTime = new Date(initialStartTime.getTime() + (i * 7 * 24 * 60 * 60 * 1000) + (dayOffset * 24 * 60 * 60 * 1000))
       const slotEndTime = new Date(slotStartTime.getTime() + durationMs)
 
-      if (slotStartTime.getTime() < initialStartTime.getTime()) {
-        continue
-      }
       targetSlots.push({ start: slotStartTime, end: slotEndTime, weekIndex: i })
     }
   }
@@ -283,12 +344,22 @@ export async function validateBookingAvailabilityAction(data: {
 
   // 2. VALIDATION PHASE
   for (const slot of targetSlots) {
+    // A. Check Past Time
+    // Strict absolute offset independent of server parsing logic.
+    if (slot.start.getTime() < Date.now() - 60000) { // Add 1 minute grace period
+      const dateStr = slot.start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+      return { available: false, conflictDate: dateStr, error: `Cannot book a time in the past: ${dateStr}` }
+    }
+
     const currentStartTimeISO = slot.start.toISOString()
     const currentEndTimeISO = slot.end.toISOString()
-    const conflictStatuses = ['pending_payment', 'pending', 'paid', 'confirmed', 'pending_refund']
+    const conflictStatuses = ['pending_payment', 'partially_paid', 'confirmed', 'ongoing', 'pending_refund', 'completed', 'no_show']
 
-    // A. Check Operating Hours
-    const dayName = dayNames[slot.start.getDay()]
+    // B. Check Operating Hours using UTC-safe Manila offset
+    const manilaSlotStart = new Date(slot.start.getTime() + MANILA_OFFSET_MS)
+    const manilaSlotEnd = new Date(slot.end.getTime() + MANILA_OFFSET_MS)
+
+    const dayName = dayNames[manilaSlotStart.getUTCDay()]
     const dayHours = openingHours?.[dayName]
 
     if (!dayHours) {
@@ -301,13 +372,11 @@ export async function validateBookingAvailabilityAction(data: {
     const [openH, openM] = dayHours.open.split(':').map(Number)
     const [closeH, closeM] = dayHours.close.split(':').map(Number)
 
-    // Parse slot times (in local venue time - assuming generic logical comparison or keeping consistent timezone)
-    // Ideally we'd use timezone-aware comparison, but for now using getHours() matches existing logic if local
-    // To be safer, we compare HH:MM values directly
-    const slotStartH = slot.start.getHours()
-    const slotStartM = slot.start.getMinutes()
-    const slotEndH = slot.end.getHours()
-    const slotEndM = slot.end.getMinutes()
+    // Parse slot times using explicitly offset UTC methods to bypass Vercel timezones
+    const slotStartH = manilaSlotStart.getUTCHours()
+    const slotStartM = manilaSlotStart.getUTCMinutes()
+    const slotEndH = manilaSlotEnd.getUTCHours()
+    const slotEndM = manilaSlotEnd.getUTCMinutes()
 
     const slotStartMinutes = slotStartH * 60 + slotStartM
     const slotEndMinutes = slotEndH * 60 + slotEndM
@@ -335,8 +404,7 @@ export async function validateBookingAvailabilityAction(data: {
         .from('queue_sessions')
         .select('id, start_time, end_time')
         .eq('court_id', data.courtId)
-        .in('status', ['draft', 'active', 'pending_approval'])
-        .in('approval_status', ['pending', 'approved'])
+        .in('status', ['pending_payment', 'open', 'active'])
         .lt('start_time', currentEndTimeISO)
         .gt('end_time', currentStartTimeISO)
     ])
@@ -347,14 +415,14 @@ export async function validateBookingAvailabilityAction(data: {
     }
 
     const realConflicts = reservationConflicts.data?.filter(conflict => {
-      if (conflict.status === 'confirmed' || conflict.status === 'paid') return true
+      if (conflict.status === 'confirmed') return true
       const isRecurring = recurrenceWeeks > 1 || selectedDays.length > 1 // Define if not defined in context, but wait, this variable was used in original code?
       // Ah, I see `isRecurring` used in original code line 302, but I don't see it defined in my replacement chunk yet.
       // It must be defined.
       // Let's rely on recurrenceWeeks > 1 || uniqueSelectedDays.length > 1
       const isRecurringCheck = recurrenceWeeks > 1 || uniqueSelectedDays.length > 1;
 
-      if (userId && conflict.user_id === userId && (conflict.status === 'pending_payment' || conflict.status === 'pending') && !isRecurringCheck) return false
+      if (userId && conflict.user_id === userId && conflict.status === 'pending_payment' && !isRecurringCheck) return false
       if (userId && conflict.user_id !== userId) return true
       if (!userId) return true
       return isRecurringCheck
@@ -387,7 +455,7 @@ export async function createReservationAction(data: {
   discountReason?: string
   recurrenceWeeks?: number
   selectedDays?: number[] // Array of day indices (0-6)
-}): Promise<{ success: boolean; reservationId?: string; error?: string; count?: number }> {
+}): Promise<{ success: boolean; reservationId?: string; error?: string; count?: number; downPaymentRequired?: boolean; downPaymentAmount?: number }> {
   const supabase = await createClient()
 
   // Use the shared service
@@ -403,10 +471,45 @@ export async function createReservationAction(data: {
 
 /**
  * Server Action: Cancel a reservation
+ * Validates auth, ownership, status, and 24-hour policy
  */
 export async function cancelReservationAction(reservationId: string) {
   const supabase = await createClient()
 
+  // 1. Auth check
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return { success: false, error: 'Not authenticated' }
+  }
+
+  // 2. Fetch reservation and verify ownership
+  const { data: booking, error: fetchError } = await supabase
+    .from('reservations')
+    .select('id, user_id, status, start_time')
+    .eq('id', reservationId)
+    .single()
+
+  if (fetchError || !booking) {
+    return { success: false, error: 'Booking not found' }
+  }
+
+  if (booking.user_id !== user.id) {
+    return { success: false, error: 'You do not have permission to cancel this booking' }
+  }
+
+  // 3. Status check — only active bookings can be cancelled
+  const cancellableStatuses = ['pending_payment', 'pending', 'confirmed', 'partially_paid']
+  if (!cancellableStatuses.includes(booking.status)) {
+    return { success: false, error: `Cannot cancel a booking with status: ${booking.status}` }
+  }
+
+  // 4. 24-hour policy — cannot cancel within 24 hours of start time
+  const hoursUntilStart = (new Date(booking.start_time).getTime() - Date.now()) / (1000 * 60 * 60)
+  if (hoursUntilStart < 24) {
+    return { success: false, error: 'Cannot cancel within 24 hours of booking start time' }
+  }
+
+  // 5. Perform cancellation
   const { error } = await supabase
     .from('reservations')
     .update({
@@ -443,7 +546,7 @@ export async function cleanupOldPendingReservationsAction(olderThanMinutes: numb
   const { data: oldReservations, error: fetchError } = await supabase
     .from('reservations')
     .select('id, created_at, start_time, end_time, user_id')
-    .in('status', ['pending_payment', 'pending'])
+    .in('status', ['pending_payment'])
     .lt('created_at', cutoffTimeISO)
 
   if (fetchError) {
@@ -462,7 +565,7 @@ export async function cleanupOldPendingReservationsAction(olderThanMinutes: numb
   const { error: updateError } = await supabase
     .from('reservations')
     .update({ status: 'cancelled' })
-    .in('status', ['pending_payment', 'pending'])
+    .in('status', ['pending_payment'])
     .lt('created_at', cutoffTimeISO)
 
   if (updateError) {

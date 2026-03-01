@@ -86,7 +86,7 @@ export function AmenityManagement() {
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
           >
             <Plus className="w-4 h-4" />
             Add Amenity
@@ -101,7 +101,7 @@ export function AmenityManagement() {
             placeholder="Search amenities..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
           />
         </div>
       </div>
@@ -110,7 +110,7 @@ export function AmenityManagement() {
       <div className="flex-1 bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col">
         {isLoading ? (
           <div className="flex-1 flex items-center justify-center">
-            <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
           </div>
         ) : filteredAmenities.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center py-12">
@@ -128,7 +128,7 @@ export function AmenityManagement() {
               {filteredAmenities.map((amenity) => (
                 <div
                   key={amenity.id}
-                  className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors"
+                  className="border border-gray-200 rounded-lg p-4 hover:border-primary/30 transition-colors"
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-2">
@@ -288,7 +288,7 @@ function AmenityFormModal({ amenity, onClose, onSuccess }: {
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="e.g., Parking, WiFi, Lockers"
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
             />
           </div>
 
@@ -302,7 +302,7 @@ function AmenityFormModal({ amenity, onClose, onSuccess }: {
               value={formData.icon}
               onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
               placeholder="Emoji or icon identifier"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
             />
             <p className="text-xs text-gray-500 mt-1">
               You can use emoji (e.g., 🚗 🚿 💡) or Lucide React icon name
@@ -319,7 +319,7 @@ function AmenityFormModal({ amenity, onClose, onSuccess }: {
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               placeholder="Brief description of this amenity..."
               rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none resize-none"
             />
           </div>
 
@@ -336,7 +336,7 @@ function AmenityFormModal({ amenity, onClose, onSuccess }: {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-2"
+              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-2"
             >
               {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
               {amenity ? 'Update Amenity' : 'Create Amenity'}

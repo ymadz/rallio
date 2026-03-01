@@ -4,12 +4,10 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getQueueDetails } from '@/app/actions/queue-actions'
-import { 
-  pauseQueueSession, 
-  resumeQueueSession, 
+import {
   closeQueueSession,
   removeParticipant,
-  waiveFee 
+  waiveFee
 } from '@/app/actions/queue-actions'
 import {
   assignMatchFromQueue,
@@ -17,12 +15,12 @@ import {
   getActiveMatch,
   startMatch
 } from '@/app/actions/match-actions'
+import { initiatePaymentAction } from '@/app/actions/payments'
 import {
   Users,
   Clock,
   PhilippinePeso,
   PlayCircle,
-  PauseCircle,
   StopCircle,
   Loader2,
   AlertCircle,
@@ -40,6 +38,7 @@ import { PaymentManagementModal } from './payment-management-modal'
 import { MatchAssignmentModal } from './match-assignment-modal'
 import { MatchTimer } from './match-timer'
 import { MatchStatusBadge } from './match-status-badge'
+import { useServerTime } from '@/hooks/use-server-time'
 
 interface SessionManagementClientProps {
   sessionId: string
@@ -75,17 +74,19 @@ interface QueueSession {
   players: Participant[]
   requiresApproval?: boolean
   approvalStatus?: string
+  metadata?: any
 }
 
 export function SessionManagementClient({ sessionId }: SessionManagementClientProps) {
   const router = useRouter()
+  const { date: serverDate } = useServerTime()
   const supabase = createClient()
-  
+
   const [session, setSession] = useState<QueueSession | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
-  
+
   // Modal states
   const [showMatchAssignModal, setShowMatchAssignModal] = useState(false)
   const [showScoreModal, setShowScoreModal] = useState(false)
@@ -93,7 +94,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null)
   const [activeMatches, setActiveMatches] = useState<any[]>([])
-  
+
   // Session summary modal state
   const [showSummaryModal, setShowSummaryModal] = useState(false)
   const [sessionSummary, setSessionSummary] = useState<{
@@ -105,10 +106,10 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
 
   useEffect(() => {
     loadSession()
-    
+
     // Subscribe to real-time updates
     console.log('🔔 [useEffect] Setting up real-time subscriptions for session:', sessionId)
-    
+
     const channel = supabase
       .channel(`queue-session-${sessionId}`)
       .on(
@@ -163,7 +164,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
   const loadSession = async () => {
     console.log('🚨🚨🚨 [loadSession] Starting session load')
     console.log('🔍 [loadSession] Session ID:', sessionId)
-    
+
     setIsLoading(true)
     setError(null)
     try {
@@ -217,9 +218,9 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         .is('left_at', null)
         .order('joined_at', { ascending: true })
 
-      console.log('📥 [loadSession] Participants query result:', { 
-        count: participants?.length || 0, 
-        error: participantsError 
+      console.log('📥 [loadSession] Participants query result:', {
+        count: participants?.length || 0,
+        error: participantsError
       })
 
       if (participantsError) {
@@ -268,6 +269,33 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         mode: sessionData.mode,
         gameFormat: sessionData.game_format,
         players: formattedParticipants,
+        metadata: sessionData.metadata
+      }
+
+      // AUTO-COMPLETE: If past end_time, complete the session on the spot
+      const now = serverDate || new Date()
+      if (['open', 'active'].includes(formattedSession.status) && formattedSession.endTime < now) {
+        console.log('🕒 [loadSession] Session expired, auto-completing:', sessionData.id)
+        const { error: closeErr } = await supabase
+          .from('queue_sessions')
+          .update({ status: 'completed', updated_at: new Date().toISOString() })
+          .eq('id', sessionData.id)
+
+        if (!closeErr) {
+          formattedSession.status = 'completed'
+        }
+      }
+      // AUTO-ACTIVATE: If 'open' and start_time has passed, flip to 'active'
+      else if (formattedSession.status === 'open' && formattedSession.startTime <= now && formattedSession.endTime > now) {
+        console.log('▶️ [loadSession] Auto-activating session:', sessionData.id)
+        const { error: activateErr } = await supabase
+          .from('queue_sessions')
+          .update({ status: 'active', updated_at: new Date().toISOString() })
+          .eq('id', sessionData.id)
+
+        if (!activateErr) {
+          formattedSession.status = 'active'
+        }
       }
 
       console.log('✅ [loadSession] Session formatted successfully:', {
@@ -279,11 +307,11 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
       })
 
       setSession(formattedSession)
-      
+
       // Load active matches
       console.log('📡 [loadSession] Loading active matches...')
       await loadActiveMatches()
-      
+
       console.log('✅✅✅ [loadSession] Session load complete!')
     } catch (err: any) {
       console.log('❌❌❌ [loadSession] Error occurred:', err)
@@ -298,7 +326,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
   const loadActiveMatches = async () => {
     console.log('🏸 [loadActiveMatches] Starting to load active matches')
     console.log('🔍 [loadActiveMatches] Session ID:', sessionId)
-    
+
     try {
       console.log('📡 [loadActiveMatches] Querying matches table...')
       const { data: matches, error: matchError } = await supabase
@@ -311,9 +339,9 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         .in('status', ['scheduled', 'in_progress'])
         .order('created_at', { ascending: false })
 
-      console.log('📥 [loadActiveMatches] Matches query result:', { 
-        count: matches?.length || 0, 
-        error: matchError 
+      console.log('📥 [loadActiveMatches] Matches query result:', {
+        count: matches?.length || 0,
+        error: matchError
       })
 
       if (matches) {
@@ -354,32 +382,6 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
     }
   }
 
-  const handlePause = async () => {
-    setActionLoading('pause')
-    try {
-      const result = await pauseQueueSession(sessionId)
-      if (!result.success) throw new Error(result.error)
-      await loadSession()
-    } catch (err: any) {
-      alert(err.message || 'Failed to pause session')
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  const handleResume = async () => {
-    setActionLoading('resume')
-    try {
-      const result = await resumeQueueSession(sessionId)
-      if (!result.success) throw new Error(result.error)
-      await loadSession()
-    } catch (err: any) {
-      alert(err.message || 'Failed to resume session')
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
   const handleClose = async () => {
     if (!confirm('Are you sure you want to close this session? This action cannot be undone.')) {
       return
@@ -389,13 +391,13 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
     try {
       const result = await closeQueueSession(sessionId)
       if (!result.success) throw new Error(result.error)
-      
+
       // Show summary modal instead of redirecting immediately
       if (result.summary) {
         setSessionSummary(result.summary)
         setShowSummaryModal(true)
       } else {
-        router.push('/queue-master')
+        router.push('/bookings')
       }
     } catch (err: any) {
       alert(err.message || 'Failed to close session')
@@ -451,6 +453,28 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
     }
   }
 
+
+  const handlePayNow = async () => {
+    if (!session?.metadata?.reservation_id) {
+      alert('Payment information not found. Please contact support.')
+      return
+    }
+
+    setActionLoading('pay')
+    try {
+      const paymentMethod = session.metadata?.payment_method === 'paymaya' ? 'paymaya' : 'gcash'
+      const result = await initiatePaymentAction(session.metadata.reservation_id, paymentMethod)
+      if (!result.success || !result.checkoutUrl) {
+        throw new Error(result.error || 'Failed to initiate payment')
+      }
+      window.location.href = result.checkoutUrl
+    } catch (err: any) {
+      alert(err.message || 'Payment initiation failed')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -467,11 +491,11 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
           <h3 className="font-semibold text-gray-900 mb-2">Failed to Load Session</h3>
           <p className="text-sm text-gray-500 mb-4">{error}</p>
           <Link
-            href="/queue-master"
+            href="/bookings"
             className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to Dashboard
+            Back to Bookings
           </Link>
         </div>
       </div>
@@ -485,12 +509,33 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'live': return 'bg-green-100 text-green-700 border-green-200'
       case 'active': return 'bg-green-100 text-green-700 border-green-200'
       case 'open': return 'bg-blue-100 text-blue-700 border-blue-200'
-      case 'paused': return 'bg-yellow-100 text-yellow-700 border-yellow-200'
-      case 'closed': return 'bg-gray-100 text-gray-700 border-gray-200'
+      case 'pending_payment': return 'bg-amber-100 text-amber-700 border-amber-200'
+      case 'completed': return 'bg-gray-100 text-gray-700 border-gray-200'
       default: return 'bg-gray-100 text-gray-700 border-gray-200'
     }
+  }
+
+  const getDisplayStatus = () => {
+    const now = serverDate || new Date()
+    const status = session.status
+    if (status === 'open' || status === 'active') {
+      const isLive = new Date(session.startTime) <= now && new Date(session.endTime) > now
+      return isLive ? 'Live Now' : 'Open'
+    }
+    if (status === 'pending_payment') return 'Pending Payment'
+    return status.charAt(0).toUpperCase() + status.slice(1)
+  }
+
+  const getDisplayStatusKey = () => {
+    const now = serverDate || new Date()
+    const status = session.status
+    if (status === 'open' || status === 'active') {
+      return new Date(session.startTime) <= now && new Date(session.endTime) > now ? 'live' : 'upcoming'
+    }
+    return status
   }
 
   return (
@@ -498,27 +543,37 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
       {/* Header */}
       <div className="mb-6">
         <Link
-          href="/queue-master"
+          href="/bookings"
           className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Dashboard</span>
+          <span>Back to Bookings</span>
         </Link>
 
-        {/* Pending Approval Alert */}
-        {session.status === 'pending_approval' && (
-          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 rounded-r-lg">
-            <div className="flex items-start">
-              <Clock className="h-5 w-5 text-yellow-400 mt-0.5 mr-3 flex-shrink-0" />
-              <div>
-                <h3 className="text-sm font-medium text-yellow-800">
-                  Pending Venue Owner Approval
-                </h3>
-                <p className="mt-1 text-sm text-yellow-700">
-                  Your session is waiting for approval from the venue owner. 
-                  You'll be notified once a decision is made. Players cannot join until the session is approved.
-                </p>
+        {/* Payment Required Alert */}
+        {session.status === 'pending_payment' && (
+          <div className="bg-orange-50 border-l-4 border-orange-400 p-4 mb-6 rounded-r-lg">
+            <div className="flex items-start justify-between">
+              <div className="flex items-start">
+                <DollarSign className="h-5 w-5 text-orange-400 mt-0.5 mr-3 flex-shrink-0" />
+                <div>
+                  <h3 className="text-sm font-medium text-orange-800">
+                    Payment Required
+                  </h3>
+                  <p className="mt-1 text-sm text-orange-700">
+                    Complete payment to activate your session and allow players to join.
+                    {session.metadata?.payment_required && ` Amount due: ₱${parseFloat(session.metadata.payment_required).toFixed(2)}`}
+                  </p>
+                </div>
               </div>
+              <button
+                onClick={handlePayNow}
+                disabled={actionLoading === 'pay'}
+                className="ml-4 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {actionLoading === 'pay' && <Loader2 className="w-4 h-4 animate-spin" />}
+                Pay Now
+              </button>
             </div>
           </div>
         )}
@@ -533,9 +588,9 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
             </div>
             <p className="text-gray-600">{session.venueName}</p>
           </div>
-          <div className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium ${getStatusColor(session.status)}`}>
+          <div className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium ${getStatusColor(getDisplayStatusKey())}`}>
             <div className="w-2 h-2 rounded-full bg-current"></div>
-            <span className="capitalize">{session.status}</span>
+            <span>{getDisplayStatus()}</span>
           </div>
         </div>
       </div>
@@ -567,9 +622,9 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
 
         {/* Action Buttons */}
         <div className="flex items-center gap-3 mt-6 pt-6 border-t border-white/20">
-          {(session.status === 'closed' || session.status === 'cancelled') ? (
+          {(session.status === 'completed' || session.status === 'cancelled') ? (
             <Link
-              href={`/queue-master/sessions/${sessionId}/summary`}
+              href={`/bookings`}
               className="flex items-center gap-2 px-4 py-2 bg-white text-primary rounded-lg hover:bg-white/90 transition-colors font-medium"
             >
               <Trophy className="w-4 h-4" />
@@ -577,26 +632,6 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
             </Link>
           ) : (
             <>
-              {session.status === 'active' && (
-                <button
-                  onClick={handlePause}
-                  disabled={actionLoading === 'pause'}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  <PauseCircle className="w-4 h-4" />
-                  <span>Pause</span>
-                </button>
-              )}
-              {session.status === 'paused' && (
-                <button
-                  onClick={handleResume}
-                  disabled={actionLoading === 'resume'}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  <PlayCircle className="w-4 h-4" />
-                  <span>Resume</span>
-                </button>
-              )}
               <button
                 onClick={handleClose}
                 disabled={actionLoading === 'close'}
@@ -624,23 +659,21 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                 {activeMatches.map((match) => (
                   <div
                     key={match.id}
-                    className={`border-2 rounded-lg p-4 ${
-                      match.status === 'scheduled'
-                        ? 'border-gray-200 bg-gray-50'
-                        : match.status === 'in_progress'
+                    className={`border-2 rounded-lg p-4 ${match.status === 'scheduled'
+                      ? 'border-gray-200 bg-gray-50'
+                      : match.status === 'in_progress'
                         ? 'border-green-200 bg-green-50'
                         : 'border-blue-200 bg-blue-50'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          match.status === 'scheduled'
-                            ? 'bg-gray-600'
-                            : match.status === 'in_progress'
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${match.status === 'scheduled'
+                          ? 'bg-gray-600'
+                          : match.status === 'in_progress'
                             ? 'bg-green-600'
                             : 'bg-blue-600'
-                        }`}>
+                          }`}>
                           <Trophy className="w-4 h-4 text-white" />
                         </div>
                         <div>
@@ -709,15 +742,42 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
               <h2 className="text-xl font-bold text-gray-900">
                 Participants ({session.players.length})
               </h2>
-              <button
-                onClick={handleAssignMatch}
-                disabled={waitingPlayers.length < (session.gameFormat === 'singles' ? 2 : 4)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Assign Match</span>
-              </button>
+              {(() => {
+                const now = serverDate || new Date()
+                const isStarted = new Date(session.startTime) <= now
+                return (
+                  <button
+                    onClick={handleAssignMatch}
+                    disabled={!isStarted || waitingPlayers.length < (session.gameFormat === 'singles' ? 2 : 4)}
+                    title={!isStarted ? 'Session has not started yet' : undefined}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Assign Match</span>
+                  </button>
+                )
+              })()}
             </div>
+
+            {/* Pre-start reminder */}
+            {(() => {
+              const now = serverDate || new Date()
+              const sessionStart = new Date(session.startTime)
+              if (sessionStart > now) {
+                return (
+                  <div className="mb-4 flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+                    <Clock className="w-5 h-5 flex-shrink-0" />
+                    <p>
+                      Match assignments will be available once the session starts at{' '}
+                      <span className="font-semibold">
+                        {sessionStart.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                      </span>. Players can join the queue in the meantime.
+                    </p>
+                  </div>
+                )
+              }
+              return null
+            })()}
 
             {/* Waiting Players */}
             {waitingPlayers.length > 0 && (
@@ -743,13 +803,12 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                         </div>
                         <button
                           onClick={() => handleOpenPaymentModal(player)}
-                          className={`px-3 py-1 text-xs font-medium rounded-full border ${
-                            player.paymentStatus === 'paid'
-                              ? 'bg-green-100 text-green-700 border-green-200'
-                              : player.paymentStatus === 'partial'
+                          className={`px-3 py-1 text-xs font-medium rounded-full border ${player.paymentStatus === 'paid'
+                            ? 'bg-green-100 text-green-700 border-green-200'
+                            : player.paymentStatus === 'partial'
                               ? 'bg-yellow-100 text-yellow-700 border-yellow-200'
                               : 'bg-red-100 text-red-700 border-red-200 hover:bg-red-200'
-                          }`}
+                            }`}
                           title="Manage payment"
                         >
                           <PhilippinePeso className="w-3 h-3 inline mr-0.5" />
@@ -833,20 +892,20 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600">Start Time</span>
                 <span className="font-medium text-gray-900">
-                  {new Date(session.startTime).toLocaleTimeString('en-US', { 
-                    hour: 'numeric', 
+                  {new Date(session.startTime).toLocaleTimeString('en-US', {
+                    hour: 'numeric',
                     minute: '2-digit',
-                    hour12: true 
+                    hour12: true
                   })}
                 </span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600">End Time</span>
                 <span className="font-medium text-gray-900">
-                  {new Date(session.endTime).toLocaleTimeString('en-US', { 
-                    hour: 'numeric', 
+                  {new Date(session.endTime).toLocaleTimeString('en-US', {
+                    hour: 'numeric',
                     minute: '2-digit',
-                    hour12: true 
+                    hour12: true
                   })}
                 </span>
               </div>
@@ -966,10 +1025,10 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                   )}
 
                   <button
-                    onClick={() => router.push('/queue-master')}
+                    onClick={() => router.push('/bookings')}
                     className="w-full py-3 bg-primary text-white font-medium rounded-xl hover:bg-primary/90 transition-colors"
                   >
-                    Back to Dashboard
+                    Back to Bookings
                   </button>
                 </div>
               </div>

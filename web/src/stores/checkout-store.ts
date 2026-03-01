@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type CheckoutStep = 'details' | 'payment' | 'policy' | 'processing' | 'confirmation'
+export type CheckoutStep = 'details' | 'payment' | 'policy' | 'processing'
 export type PaymentMethod = 'e-wallet' | 'cash' | null
 
 export interface BookingData {
@@ -16,6 +16,14 @@ export interface BookingData {
   capacity: number
   recurrenceWeeks?: number // 1 = single booking, 4 = 4 weeks, etc.
   selectedDays?: number[] // Array of day indices (0-6) for multi-day booking
+  isQueueSession?: boolean
+  queueSessionData?: {
+    mode: 'casual' | 'competitive'
+    gameFormat: 'singles' | 'doubles' | 'mixed'
+    maxPlayers: number
+    costPerGame: number
+    isPublic: boolean
+  }
 }
 
 export interface PlayerPaymentStatus {
@@ -64,6 +72,7 @@ interface CheckoutState {
   // Confirmation
   bookingReference?: string
   reservationId?: string
+  downPaymentPercentage?: number
 
   // Actions
   setBookingData: (data: BookingData) => void
@@ -77,12 +86,15 @@ interface CheckoutState {
   setDiscountDetails: (details: { amount: number; type?: string; reason?: string; discounts?: any[] }) => void
   setPlatformFee: (percentage: number, enabled: boolean) => void
   setBookingReference: (reference: string, reservationId: string) => void
+  setDownPaymentPercentage: (percentage: number) => void
   resetCheckout: () => void
 
   // Computed values
   getSubtotal: () => number
   getPlatformFeeAmount: () => number
   getTotalAmount: () => number
+  getDownPaymentAmount: () => number
+  getRemainingBalance: () => number
   getPerPlayerAmount: () => number
   getAllPlayersPaid: () => boolean
 }
@@ -198,6 +210,8 @@ export const useCheckoutStore = create<CheckoutState>()(
       setBookingReference: (reference, reservationId) =>
         set({ bookingReference: reference, reservationId }),
 
+      setDownPaymentPercentage: (percentage) => set({ downPaymentPercentage: percentage }),
+
       resetCheckout: () => set(initialState),
 
       // Computed values
@@ -211,12 +225,36 @@ export const useCheckoutStore = create<CheckoutState>()(
         const endHour = parseInt(bookingData.endTime.split(':')[0])
         const duration = endHour - startHour
         const recurrenceWeeks = bookingData.recurrenceWeeks || 1
-        const numSessionsPerWeek = bookingData.selectedDays?.length || 1
+        const selectedDays = bookingData.selectedDays || []
 
         const baseRate = bookingData.hourlyRate * duration
 
-        // Calculate total base price based on duration, recurrence weeks, and sessions per week
-        const totalBase = baseRate * recurrenceWeeks * numSessionsPerWeek
+        // Calculate ACTUAL future slots that will be created (matching reservations.ts logic)
+        const initialStartTime = new Date(bookingData.date)
+        const [startH, startM] = bookingData.startTime.split(':')
+        initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
+        const startDayIndex = initialStartTime.getDay()
+
+        // Deduplicate selected days
+        const uniqueSelectedDays = selectedDays.length > 0
+          ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
+          : [startDayIndex]
+
+        // Count only FUTURE slots (matching reservation service skip logic)
+        let actualSlotCount = 0
+        for (let i = 0; i < recurrenceWeeks; i++) {
+          for (const dayIndex of uniqueSelectedDays) {
+            const dayOffset = (dayIndex - startDayIndex + 7) % 7
+
+            const slotStartTime = new Date(initialStartTime.getTime())
+            slotStartTime.setDate(slotStartTime.getDate() + (i * 7) + dayOffset)
+
+            actualSlotCount++
+          }
+        }
+
+        // Calculate total based on ACTUAL slots that will be created
+        const totalBase = baseRate * actualSlotCount
         return Math.max(0, totalBase - state.discountAmount)
       },
 
@@ -232,6 +270,20 @@ export const useCheckoutStore = create<CheckoutState>()(
         const subtotal = state.getSubtotal()
         const platformFee = state.getPlatformFeeAmount()
         return Math.round((subtotal + platformFee) * 100) / 100
+      },
+
+      getDownPaymentAmount: () => {
+        const state = get()
+        if (state.paymentMethod !== 'cash' || !state.downPaymentPercentage) return 0
+        const total = state.getTotalAmount()
+        return Math.round((total * (state.downPaymentPercentage / 100)) * 100) / 100
+      },
+
+      getRemainingBalance: () => {
+        const state = get()
+        const total = state.getTotalAmount()
+        const downPayment = state.getDownPaymentAmount()
+        return Math.round((total - downPayment) * 100) / 100
       },
 
       getPerPlayerAmount: () => {
