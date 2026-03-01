@@ -191,12 +191,18 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
     }
   })
 
-  // Mix venue image + court images
-  const venueImages = []
-  if (venue.image_url) {
-    venueImages.push(venue.image_url)
+  // Mix venue images + court images
+  const uniqueVenueImages = new Set<string>()
+
+  if (venue.metadata?.images && Array.isArray(venue.metadata.images)) {
+    venue.metadata.images.forEach((img: string) => uniqueVenueImages.add(img))
+  } else if (venue.image_url) {
+    uniqueVenueImages.add(venue.image_url)
   }
-  venueImages.push(...allCourtImages)
+
+  allCourtImages.forEach(img => uniqueVenueImages.add(img))
+
+  const venueImages = Array.from(uniqueVenueImages)
 
   // Fallback if absolutely no images
   if (venueImages.length === 0) {
@@ -271,8 +277,8 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
             <div className="bg-white border border-gray-200 rounded-xl p-4 sticky top-6">
               {/* Venue Status Banner */}
               <div className={`rounded-xl p-4 mb-4 ${isOpen
-                  ? 'bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200'
-                  : 'bg-gradient-to-r from-red-50 to-orange-50 border border-red-200'
+                ? 'bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200'
+                : 'bg-gradient-to-r from-red-50 to-orange-50 border border-red-200'
                 }`}>
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isOpen ? 'bg-green-100' : 'bg-red-100'
@@ -317,8 +323,8 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
                         <div
                           key={index}
                           className={`flex items-center justify-between px-3 py-2 rounded-lg ${schedule.closed
-                              ? 'bg-gray-50'
-                              : 'bg-primary/5'
+                            ? 'bg-gray-50'
+                            : 'bg-primary/5'
                             }`}
                         >
                           <span className={`text-xs font-semibold ${schedule.closed ? 'text-gray-400' : 'text-gray-700'
