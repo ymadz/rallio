@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 
-const STORAGE_KEY = 'rallio_booking_tutorial_done'
+const STORAGE_KEY = 'rallio_home_tour_seen'
 
 interface TutorialStep {
   target: string
@@ -12,98 +12,81 @@ interface TutorialStep {
 }
 
 const STEPS: TutorialStep[] = [
-  {
-    target: 'center',
-    title: 'Court Booking 🎾',
-    description: 'Welcome to the Rallio court booking system! Let’s walk through how to easily secure your next game.',
-    position: 'center',
+  { 
+    target: 'center', // Special keyword for unanchored step
+    title: 'Hello! Welcome to Rallio 🏸', 
+    description: "Let us take you on a quick tour to show you how to find courts, jump into queues, and manage your games.",
+    position: 'center'
   },
-  {
-    target: '[data-tutorial-step="1"]',
-    title: 'Choose a Date',
-    description: 'Pick the day you want to play. Past dates are disabled. Today is selected by default.',
-    position: 'right',
+  { 
+    target: '#tour-nav-home', 
+    title: 'Home Dashboard', 
+    description: 'This is your central hub for active bookings, suggested courts, and nearby venues.',
+    position: 'right'
   },
-  {
-    target: '[data-tutorial-step="2"]',
-    title: 'Select Time Range',
-    description: 'Tap a start time, then tap an end time to select your playing hours. Reserved slots are greyed out.',
-    position: 'left',
+  { 
+    target: '#tour-nav-find-court', 
+    title: 'Find Courts', 
+    description: 'Browse and discover all available badminton courts in your area with real-time availability.',
+    position: 'right'
   },
-  {
-    target: '[data-tutorial-step="3"]',
-    title: 'Repeat Booking (Optional)',
-    description: 'Want to play weekly? Set how many weeks to repeat your booking.',
-    position: 'right',
+  { 
+    target: '#tour-nav-queue', 
+    title: 'Join a Queue', 
+    description: 'Jump into an active queue session at your favorite venue to play open play games.',
+    position: 'right'
   },
-  {
-    target: '[data-tutorial-step="4"]',
-    title: 'Include Days (Optional)',
-    description: 'Select additional days of the week to book at the same time slot.',
-    position: 'right',
+  { 
+    target: '#tour-nav-bookings', 
+    title: 'Your Bookings', 
+    description: 'Manage your upcoming and past court reservations right here.',
+    position: 'right'
   },
-  {
-    target: '[data-tutorial-step="5"]',
-    title: 'Confirm & Book',
-    description: 'Review your selection, price, and tap Book to proceed to checkout.',
-    position: 'top',
+  { 
+    target: '#tour-nav-matches', 
+    title: 'Matches', 
+    description: 'Find teammates and opponents to organize games, and view your past match history.',
+    position: 'right'
   },
+  { 
+    target: '#tour-nav-profile', 
+    title: 'Your Profile', 
+    description: 'Update your skill level and personal details to find better matchups.',
+    position: 'right'
+  }
 ]
 
-interface BookingTutorialProps {
-  isOpen: boolean
-}
-
-export function BookingTutorial({ isOpen }: BookingTutorialProps) {
+export function HomeTutorial() {
   const [currentStep, setCurrentStep] = useState(0)
   const [showTutorial, setShowTutorial] = useState(false)
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
 
+  // Determine actual target dynamically for desktop vs mobile
+  const getActualTarget = (stepTarget: string) => {
+    if (stepTarget === 'center') return 'center'
+    const isMobile = window.innerWidth < 768
+    if (isMobile && stepTarget.startsWith('#tour-nav-')) {
+      return `#mobile-${stepTarget.replace('#', '')}`
+    }
+    return stepTarget
+  }
+
   // Check localStorage on mount
   useEffect(() => {
-    if (isOpen) {
-      const done = localStorage.getItem(STORAGE_KEY)
-      if (!done) {
-        // Small delay to let the modal render and layout settle
-        const timer = setTimeout(() => setShowTutorial(true), 600)
-        return () => clearTimeout(timer)
-      }
-    } else {
-      setShowTutorial(false)
-      setCurrentStep(0)
+    const done = localStorage.getItem(STORAGE_KEY)
+    if (!done) {
+      // Delay slightly so layout can settle (especially sidebar sizing)
+      const timer = setTimeout(() => setShowTutorial(true), 800)
+      return () => clearTimeout(timer)
     }
-  }, [isOpen])
-
-  // Automatically scroll to the target only when the step changes
-  useEffect(() => {
-    if (!showTutorial) return
-    const step = STEPS[currentStep]
-    if (!step) return
-    
-    if (step.target === 'center') {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-      return
-    }
-
-    // Small delay to allow react to mount new items, particularly on transition
-    const timer = setTimeout(() => {
-      const el = document.querySelector(step.target)
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      }
-    }, 100)
-
-    return () => clearTimeout(timer)
-  }, [currentStep, showTutorial])
+  }, [])
 
   // Measure target element position
   const measureTarget = useCallback(() => {
     if (!showTutorial) return
     const step = STEPS[currentStep]
-    if (!step) return
-    
-    const activeTarget = step.target
+    const activeTarget = getActualTarget(step.target)
     
     if (activeTarget === 'center') {
       // Center of screen
@@ -118,6 +101,7 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
         left: window.innerWidth / 2,
         toJSON: () => {}
       })
+      window.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
 
@@ -125,13 +109,18 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
     if (el) {
       const rect = el.getBoundingClientRect()
       setTargetRect(rect)
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
     }
   }, [currentStep, showTutorial])
 
   useEffect(() => {
     measureTarget()
+    
+    // In case dom size shifts
     window.addEventListener('resize', measureTarget)
     window.addEventListener('scroll', measureTarget, true)
+    
+    // Safety check - if on mobile, and the user flips orient, recalibrate
     return () => {
       window.removeEventListener('resize', measureTarget)
       window.removeEventListener('scroll', measureTarget, true)
@@ -162,6 +151,10 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
 
   const step = STEPS[currentStep]
   const padding = 8
+  
+  // We want the position logic to adapt smoothly when targeting bottom mobile tabs
+  const isMobile = window.innerWidth < 768
+  const dynamicPosition = step.position === 'center' ? 'center' : (isMobile ? 'top' : step.position)
 
   // Spotlight cutout dimensions
   const spotlight = {
@@ -176,9 +169,6 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
   const getTooltipStyle = (): React.CSSProperties => {
     const tooltipWidth = 320
     const gap = 16
-
-    const isMobile = window.innerWidth < 768
-    const dynamicPosition = step.position === 'center' ? 'center' : (isMobile && step.position !== 'top' ? 'bottom' : step.position)
 
     switch (dynamicPosition) {
       case 'center':
@@ -202,7 +192,7 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
         }
       case 'top':
         return {
-          left: Math.max(spotlight.x, 16),
+          left: Math.max(16, Math.min(spotlight.x - (tooltipWidth/2) + (spotlight.width/2), window.innerWidth - tooltipWidth - 16)),
           top: Math.max(spotlight.y - gap - 180, 16),
           maxWidth: tooltipWidth,
         }
@@ -221,7 +211,7 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
       {/* SVG overlay with spotlight cutout */}
       <svg className="absolute inset-0 w-full h-full" style={{ pointerEvents: 'none' }}>
         <defs>
-          <mask id="tutorial-mask">
+          <mask id="home-tutorial-mask">
             <rect width="100%" height="100%" fill="white" />
             <rect
               x={spotlight.x}
@@ -237,38 +227,34 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
           width="100%"
           height="100%"
           fill="rgba(0, 0, 0, 0.6)"
-          mask="url(#tutorial-mask)"
+          mask="url(#home-tutorial-mask)"
         />
       </svg>
 
       {/* Spotlight border ring */}
-      {step.position !== 'center' && (
-        <>
-          <div
-            className="absolute border-2 border-white/80 rounded-xl pointer-events-none transition-all duration-500 ease-out"
-            style={{
-              left: spotlight.x,
-              top: spotlight.y,
-              width: spotlight.width,
-              height: spotlight.height,
-              boxShadow: '0 0 0 4px rgba(255,255,255,0.2), 0 0 20px rgba(255,255,255,0.1)',
-            }}
-          />
+      <div
+        className="absolute border-2 border-white/80 rounded-xl pointer-events-none transition-all duration-500 ease-out"
+        style={{
+          left: spotlight.x,
+          top: spotlight.y,
+          width: spotlight.width,
+          height: spotlight.height,
+          boxShadow: '0 0 0 4px rgba(255,255,255,0.2), 0 0 20px rgba(255,255,255,0.1)',
+        }}
+      />
 
-          {/* Pulsing ring animation */}
-          <div
-            className="absolute rounded-xl pointer-events-none animate-ping"
-            style={{
-              left: spotlight.x - 2,
-              top: spotlight.y - 2,
-              width: spotlight.width + 4,
-              height: spotlight.height + 4,
-              border: '2px solid rgba(255,255,255,0.3)',
-              animationDuration: '2s',
-            }}
-          />
-        </>
-      )}
+      {/* Pulsing ring animation */}
+      <div
+        className="absolute rounded-xl pointer-events-none animate-ping"
+        style={{
+          left: spotlight.x - 2,
+          top: spotlight.y - 2,
+          width: spotlight.width + 4,
+          height: spotlight.height + 4,
+          border: '2px solid rgba(255,255,255,0.3)',
+          animationDuration: '2s',
+        }}
+      />
 
       {/* Tooltip card */}
       <div

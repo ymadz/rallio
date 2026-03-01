@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 
-const STORAGE_KEY = 'rallio_booking_tutorial_done'
+const STORAGE_KEY_SCHEDULE = 'rallio_qm_tour_schedule_seen'
+const STORAGE_KEY_SETTINGS = 'rallio_qm_tour_settings_seen'
 
 interface TutorialStep {
   target: string
@@ -11,74 +12,121 @@ interface TutorialStep {
   position: 'bottom' | 'top' | 'left' | 'right' | 'center'
 }
 
-const STEPS: TutorialStep[] = [
-  {
-    target: 'center',
-    title: 'Court Booking 🎾',
-    description: 'Welcome to the Rallio court booking system! Let’s walk through how to easily secure your next game.',
-    position: 'center',
+const SCHEDULE_STEPS: TutorialStep[] = [
+  { 
+    target: 'center', 
+    title: 'Queue Master Booking 👑', 
+    description: "Welcome to the dedicated booking flow for public queue sessions! Let's quickly go over how to schedule a queue event.",
+    position: 'center'
   },
-  {
-    target: '[data-tutorial-step="1"]',
-    title: 'Choose a Date',
-    description: 'Pick the day you want to play. Past dates are disabled. Today is selected by default.',
-    position: 'right',
+  { 
+    target: '#qm-tour-calendar', 
+    title: 'Choose Date', 
+    description: 'Select the starting date for your queue session.',
+    position: 'right'
   },
-  {
-    target: '[data-tutorial-step="2"]',
-    title: 'Select Time Range',
-    description: 'Tap a start time, then tap an end time to select your playing hours. Reserved slots are greyed out.',
-    position: 'left',
+  { 
+    target: '#qm-tour-repeat', 
+    title: 'Repeat Booking', 
+    description: 'Choose whether this queue repeats automatically for multiple consecutive weeks.',
+    position: 'right'
   },
-  {
-    target: '[data-tutorial-step="3"]',
-    title: 'Repeat Booking (Optional)',
-    description: 'Want to play weekly? Set how many weeks to repeat your booking.',
-    position: 'right',
+  { 
+    target: '#qm-tour-days', 
+    title: 'Include Days', 
+    description: 'If you want to run this queue on multiple days per week, select them here. (Optional)',
+    position: 'right'
   },
-  {
-    target: '[data-tutorial-step="4"]',
-    title: 'Include Days (Optional)',
-    description: 'Select additional days of the week to book at the same time slot.',
-    position: 'right',
+  { 
+    target: '#qm-tour-time', 
+    title: 'Set Duration', 
+    description: 'Tap on a start time, then tap on an end time to block out your queue session. Multiple hours can be booked at once.',
+    position: 'left'
   },
-  {
-    target: '[data-tutorial-step="5"]',
-    title: 'Confirm & Book',
-    description: 'Review your selection, price, and tap Book to proceed to checkout.',
-    position: 'top',
-  },
+  { 
+    target: '#qm-tour-next', 
+    title: 'Configure Rules', 
+    description: 'When your schedule is set, click this to define whether your queue is casual or competitive, the max player count, and the cost per head.',
+    position: 'top'
+  }
 ]
 
-interface BookingTutorialProps {
+const SETTINGS_STEPS: TutorialStep[] = [
+  { 
+    target: '#qm-tour-mode', 
+    title: 'Session Mode', 
+    description: 'Choose whether this queue affects player ELO rankings (Competitive) or is just for fun (Casual).',
+    position: 'bottom'
+  },
+  { 
+    target: '#qm-tour-format', 
+    title: 'Game Format', 
+    description: 'Select if games will be 1v1 Singles, or 2v2 Doubles/Mixed.',
+    position: 'bottom'
+  },
+  { 
+    target: '#qm-tour-players', 
+    title: 'Player Capacity', 
+    description: 'Set the maximum number of people who can join this queue session to avoid overcrowding.',
+    position: 'bottom'
+  },
+  { 
+    target: '#qm-tour-cost', 
+    title: 'Cost Per Head', 
+    description: 'Set the entry fee that players will pay to join your queue session.',
+    position: 'top'
+  },
+  { 
+    target: '#qm-tour-public', 
+    title: 'Public Session', 
+    description: 'Turn this on to allow anyone to discover and join your queue. If turned off, the queue will be private.',
+    position: 'top'
+  },
+  { 
+    target: '#qm-tour-book', 
+    title: 'Finalize Booking', 
+    description: 'Once you are happy with the settings, tap here to finalize the schedule and create your queue session!',
+    position: 'top'
+  }
+]
+
+interface QueueTutorialProps {
   isOpen: boolean
+  view: 'schedule' | 'settings'
 }
 
-export function BookingTutorial({ isOpen }: BookingTutorialProps) {
+export function QueueTutorial({ isOpen, view }: QueueTutorialProps) {
   const [currentStep, setCurrentStep] = useState(0)
   const [showTutorial, setShowTutorial] = useState(false)
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
 
-  // Check localStorage on mount
+  const STPES = view === 'schedule' ? SCHEDULE_STEPS : SETTINGS_STEPS
+  const STORAGE_KEY = view === 'schedule' ? STORAGE_KEY_SCHEDULE : STORAGE_KEY_SETTINGS
+
+  // Check localStorage whenever view or isOpen changes
   useEffect(() => {
     if (isOpen) {
       const done = localStorage.getItem(STORAGE_KEY)
       if (!done) {
-        // Small delay to let the modal render and layout settle
+        // Reset step if view changed
+        setCurrentStep(0)
+        // Delay to allow DOM layout to settle, especially on the settings view toggle
         const timer = setTimeout(() => setShowTutorial(true), 600)
         return () => clearTimeout(timer)
+      } else {
+        setShowTutorial(false)
       }
     } else {
       setShowTutorial(false)
       setCurrentStep(0)
     }
-  }, [isOpen])
+  }, [isOpen, view, STORAGE_KEY])
 
   // Automatically scroll to the target only when the step changes
   useEffect(() => {
     if (!showTutorial) return
-    const step = STEPS[currentStep]
+    const step = STPES[currentStep]
     if (!step) return
     
     if (step.target === 'center') {
@@ -95,12 +143,12 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
     }, 100)
 
     return () => clearTimeout(timer)
-  }, [currentStep, showTutorial])
+  }, [currentStep, showTutorial, STPES])
 
   // Measure target element position
   const measureTarget = useCallback(() => {
     if (!showTutorial) return
-    const step = STEPS[currentStep]
+    const step = STPES[currentStep]
     if (!step) return
     
     const activeTarget = step.target
@@ -126,12 +174,14 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
       const rect = el.getBoundingClientRect()
       setTargetRect(rect)
     }
-  }, [currentStep, showTutorial])
+  }, [currentStep, showTutorial, STPES])
 
   useEffect(() => {
     measureTarget()
+    
     window.addEventListener('resize', measureTarget)
     window.addEventListener('scroll', measureTarget, true)
+    
     return () => {
       window.removeEventListener('resize', measureTarget)
       window.removeEventListener('scroll', measureTarget, true)
@@ -142,10 +192,10 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
     localStorage.setItem(STORAGE_KEY, 'true')
     setShowTutorial(false)
     setCurrentStep(0)
-  }, [])
+  }, [STORAGE_KEY])
 
   const handleNext = () => {
-    if (currentStep < STEPS.length - 1) {
+    if (currentStep < STPES.length - 1) {
       setCurrentStep(prev => prev + 1)
     } else {
       completeTutorial()
@@ -158,10 +208,21 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
     }
   }
 
-  if (!showTutorial || !targetRect) return null
+  const handleSkip = () => {
+     // If they skip, aggressively mark both seen so they aren't bugged again
+     localStorage.setItem(STORAGE_KEY_SCHEDULE, 'true')
+     localStorage.setItem(STORAGE_KEY_SETTINGS, 'true')
+     setShowTutorial(false)
+     setCurrentStep(0)
+  }
 
-  const step = STEPS[currentStep]
+  if (!showTutorial || !targetRect || !STPES[currentStep]) return null
+
+  const step = STPES[currentStep]
   const padding = 8
+  
+  const isMobile = window.innerWidth < 768
+  const dynamicPosition = step.position === 'center' ? 'center' : (isMobile && step.position !== 'top' ? 'bottom' : step.position)
 
   // Spotlight cutout dimensions
   const spotlight = {
@@ -176,9 +237,6 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
   const getTooltipStyle = (): React.CSSProperties => {
     const tooltipWidth = 320
     const gap = 16
-
-    const isMobile = window.innerWidth < 768
-    const dynamicPosition = step.position === 'center' ? 'center' : (isMobile && step.position !== 'top' ? 'bottom' : step.position)
 
     switch (dynamicPosition) {
       case 'center':
@@ -197,19 +255,19 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
       case 'left':
         return {
           left: Math.max(spotlight.x - tooltipWidth - gap, 16),
-          top: spotlight.y,
+          top: Math.max(spotlight.y, 16),
           maxWidth: tooltipWidth,
         }
       case 'top':
         return {
-          left: Math.max(spotlight.x, 16),
+          left: Math.max(16, Math.min(spotlight.x - (tooltipWidth/2) + (spotlight.width/2), window.innerWidth - tooltipWidth - 16)),
           top: Math.max(spotlight.y - gap - 180, 16),
           maxWidth: tooltipWidth,
         }
       case 'bottom':
       default:
         return {
-          left: Math.max(spotlight.x, 16),
+          left: Math.max(16, Math.min(spotlight.x - (tooltipWidth/2) + (spotlight.width/2), window.innerWidth - tooltipWidth - 16)),
           top: spotlight.y + spotlight.height + gap,
           maxWidth: tooltipWidth,
         }
@@ -217,11 +275,11 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
   }
 
   return (
-    <div ref={overlayRef} className="fixed inset-0 z-[100]" style={{ pointerEvents: 'auto' }}>
+    <div ref={overlayRef} className="fixed inset-0 z-[110]" style={{ pointerEvents: 'auto' }}>
       {/* SVG overlay with spotlight cutout */}
       <svg className="absolute inset-0 w-full h-full" style={{ pointerEvents: 'none' }}>
         <defs>
-          <mask id="tutorial-mask">
+          <mask id="qm-tutorial-mask">
             <rect width="100%" height="100%" fill="white" />
             <rect
               x={spotlight.x}
@@ -237,7 +295,7 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
           width="100%"
           height="100%"
           fill="rgba(0, 0, 0, 0.6)"
-          mask="url(#tutorial-mask)"
+          mask="url(#qm-tutorial-mask)"
         />
       </svg>
 
@@ -254,8 +312,6 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
               boxShadow: '0 0 0 4px rgba(255,255,255,0.2), 0 0 20px rgba(255,255,255,0.1)',
             }}
           />
-
-          {/* Pulsing ring animation */}
           <div
             className="absolute rounded-xl pointer-events-none animate-ping"
             style={{
@@ -280,7 +336,7 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
       >
         {/* Step indicator */}
         <div className="flex items-center gap-1.5 mb-3">
-          {STEPS.map((_, i) => (
+          {STPES.map((_, i) => (
             <div
               key={i}
               className={`h-1.5 rounded-full transition-all duration-300 ${
@@ -293,7 +349,7 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
             />
           ))}
           <span className="text-[10px] text-gray-400 ml-auto font-medium">
-            {currentStep + 1}/{STEPS.length}
+            {currentStep + 1}/{STPES.length}
           </span>
         </div>
 
@@ -304,7 +360,7 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
         {/* Actions */}
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
           <button
-            onClick={completeTutorial}
+            onClick={handleSkip}
             className="text-xs text-gray-400 hover:text-gray-600 transition-colors font-medium"
           >
             Skip tour
@@ -322,7 +378,7 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
               onClick={handleNext}
               className="px-4 py-1.5 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
             >
-              {currentStep === STEPS.length - 1 ? 'Got it!' : 'Next'}
+              {currentStep === STPES.length - 1 ? 'Got it!' : 'Next'}
             </button>
           </div>
         </div>

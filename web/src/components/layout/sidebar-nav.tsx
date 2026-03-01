@@ -115,9 +115,11 @@ export function SidebarNav({ user }: SidebarNavProps) {
             {navItems.map((item) => {
               const Icon = item.icon
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+              const tourId = `tour-nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`
               return (
                 <Link
                   key={item.href}
+                  id={tourId}
                   href={item.href}
                   className={cn(
                     'flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors',
@@ -139,6 +141,7 @@ export function SidebarNav({ user }: SidebarNavProps) {
 
           {/* Bottom Actions */}
           <div className="px-3 py-4 border-t border-gray-200 space-y-1">
+            {/* ... Admin logic stays identical ... */}
             {/* Global Admin Link (if has role) */}
             {hasGlobalAdminRole && (
               <Link
@@ -172,8 +175,6 @@ export function SidebarNav({ user }: SidebarNavProps) {
                 {isExpanded && <span>Court Admin</span>}
               </Link>
             )}
-
-
 
             {/* Settings */}
             <Link
@@ -210,14 +211,16 @@ export function SidebarNav({ user }: SidebarNavProps) {
       </div>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 pb-safe">
         <div className="flex items-center justify-around h-16 px-2">
           {navItems.slice(0, 5).map((item) => {
             const Icon = item.icon
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+            const tourId = `tour-nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`
             return (
               <Link
                 key={item.href}
+                id={`mobile-${tourId}`} 
                 href={item.href}
                 className={cn(
                   'flex flex-col items-center gap-1 px-2 py-2 rounded-lg transition-colors',

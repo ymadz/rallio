@@ -5,6 +5,7 @@ import { ActiveBookingBanner } from '@/components/booking/active-booking-banner'
 import { NearbyVenues } from '@/components/home/nearby-venues'
 import { NearbyQueues } from '@/components/home/nearby-queues'
 import { formatCurrency } from '@rallio/shared'
+import { HomeTutorial } from '@/components/home/home-tutorial'
 
 export const metadata = {
   title: 'Home | Rallio',
@@ -16,6 +17,7 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 export default async function HomePage() {
+// ... existing generic supabase and data pulls
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -78,6 +80,8 @@ export default async function HomePage() {
 
       {/* Main Content */}
       <div className="p-6">
+        <HomeTutorial />
+        
         {/* Profile Completion Reminder */}
         {!isProfileTrulyComplete && <ProfileCompletionBanner />}
 
