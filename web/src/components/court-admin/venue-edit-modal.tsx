@@ -6,6 +6,7 @@ import { updateVenue } from '@/app/actions/court-admin-actions'
 import { useRouter } from 'next/navigation'
 import { AddressAutocomplete } from '@/components/ui/address-autocomplete'
 import { VenuePhotoUpload } from './venue-photo-upload'
+import { VenueGalleryUpload } from './venue-gallery-upload'
 
 interface VenueEditModalProps {
   venue: {
@@ -20,6 +21,7 @@ interface VenueEditModalProps {
     latitude?: number
     longitude?: number
     image_url?: string
+    metadata?: any
   }
   isOpen: boolean
   onClose: () => void
@@ -40,7 +42,8 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
     website: '',
     latitude: '',
     longitude: '',
-    image_url: ''
+    image_url: '',
+    images: [] as string[]
   })
 
   // Reset form when venue changes
@@ -56,7 +59,8 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
         website: venue.website || '',
         latitude: venue.latitude?.toString() || '',
         longitude: venue.longitude?.toString() || '',
-        image_url: venue.image_url || ''
+        image_url: venue.image_url || '',
+        images: venue.metadata?.images || []
       })
     }
   }, [venue])
@@ -75,7 +79,11 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
         phone: formData.phone || null,
         email: formData.email || null,
         website: formData.website || null,
-        image_url: formData.image_url || null
+        image_url: formData.image_url || null,
+        metadata: {
+          ...(venue.metadata || {}),
+          images: formData.images
+        }
       }
 
       // Only add coordinates if provided
@@ -138,6 +146,14 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
             venueId={venue.id}
             currentImage={formData.image_url}
             onImageChange={(url) => setFormData(prev => ({ ...prev, image_url: url || '' }))}
+          />
+
+          {/* Gallery Images Upload */}
+          <VenueGalleryUpload
+            venueId={venue.id}
+            currentImages={formData.images}
+            onImagesChange={(urls) => setFormData(prev => ({ ...prev, images: urls }))}
+            maxImages={10}
           />
 
           {/* Venue Name */}

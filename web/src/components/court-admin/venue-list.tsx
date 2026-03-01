@@ -36,6 +36,7 @@ const LocationPicker = dynamic(
 )
 
 import { VenuePhotoUpload } from '@/components/court-admin/venue-photo-upload'
+import { VenueGalleryUpload } from '@/components/court-admin/venue-gallery-upload'
 import { AddressAutocomplete } from '@/components/ui/address-autocomplete'
 
 interface Venue {
@@ -67,7 +68,8 @@ export function VenueList() {
     website: '',
     latitude: '',
     longitude: '',
-    image_url: ''
+    image_url: '',
+    images: [] as string[]
   })
   const [showMapPicker, setShowMapPicker] = useState(false)
 
@@ -110,7 +112,8 @@ export function VenueList() {
         phone: formData.phone || undefined,
         email: formData.email || undefined,
         website: formData.website || undefined,
-        image_url: formData.image_url || undefined
+        image_url: formData.image_url || undefined,
+        metadata: { images: formData.images }
       }
 
       // Add coordinates if provided
@@ -136,7 +139,8 @@ export function VenueList() {
         website: '',
         latitude: '',
         longitude: '',
-        image_url: ''
+        image_url: '',
+        images: []
       })
       setShowCreateModal(false)
       // Reload venues
@@ -411,6 +415,14 @@ export function VenueList() {
                 venueId="new-venue"
                 currentImage={formData.image_url}
                 onImageChange={(url) => setFormData({ ...formData, image_url: url || '' })}
+              />
+
+              {/* Gallery Images Upload */}
+              <VenueGalleryUpload
+                venueId="new-venue"
+                currentImages={formData.images}
+                onImagesChange={(urls) => setFormData(prev => ({ ...prev, images: urls }))}
+                maxImages={10}
               />
 
               {/* Venue Name */}

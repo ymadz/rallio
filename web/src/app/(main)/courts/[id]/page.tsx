@@ -17,6 +17,7 @@ async function getVenueByIdServer(venueId: string) {
       id,
       name,
       description,
+      owner_id,
       address,
       city,
       latitude,
@@ -58,9 +59,7 @@ async function getVenueByIdServer(venueId: string) {
       )
     `)
     .eq('id', venueId)
-    .eq('is_active', true)
-    .eq('is_verified', true)
-    .single()
+    .maybeSingle()
 
   // Fetch active discount rules and holiday pricing
   const { data: discountRules } = await supabase
@@ -79,9 +78,32 @@ async function getVenueByIdServer(venueId: string) {
 
   const activeDiscountCount = (discountRules?.length || 0) + (holidayPricing?.length || 0)
 
-  if (error || !venue) {
-    console.error('🔍 [getVenueByIdServer] Error:', error)
+  if (error) {
+    console.error('🔍 [getVenueByIdServer] Error:', JSON.stringify(error, null, 2))
     return null
+  }
+
+  if (!venue) {
+    return null
+  }
+
+  // Check visibility if not active or not verified
+  if (!venue.is_active || !venue.is_verified) {
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) return null
+
+    // Check if user is owner
+    if (user.id !== venue.owner_id) {
+      // Check if user is global admin
+      const { data: roles } = await supabase
+        .from('user_roles')
+        .select('role:roles(name)')
+        .eq('user_id', user.id)
+
+      const isGlobalAdmin = roles?.some((r: any) => r.role?.name === 'global_admin')
+      if (!isGlobalAdmin) return null
+    }
   }
 
   console.log('🔍 [getVenueByIdServer] Fetched venue:', venue.name, 'Courts:', venue.courts?.length)
@@ -160,7 +182,7 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
       saturday: 'Sat',
       sunday: 'Sun'
     }
-    
+
     const formatted = days.map(day => {
       const schedule = hours[day]
       if (!schedule) return { day: dayAbbrev[day], closed: true }
@@ -195,6 +217,9 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
   const venueImages = []
   if (venue.image_url) {
     venueImages.push(venue.image_url)
+  }
+  if (venue.metadata?.images && Array.isArray(venue.metadata.images)) {
+    venueImages.push(...venue.metadata.images)
   }
   venueImages.push(...allCourtImages)
 
@@ -272,15 +297,13 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
             {/* Venue Status Card */}
             <div className="bg-white border border-gray-200 rounded-xl p-4 sticky top-6">
               {/* Venue Status Banner */}
-              <div className={`rounded-xl p-4 mb-4 ${
-                isOpen 
-                  ? 'bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200' 
-                  : 'bg-gradient-to-r from-red-50 to-orange-50 border border-red-200'
-              }`}>
+              <div className={`rounded-xl p-4 mb-4 ${isOpen
+                ? 'bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200'
+                : 'bg-gradient-to-r from-red-50 to-orange-50 border border-red-200'
+                }`}>
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    isOpen ? 'bg-green-100' : 'bg-red-100'
-                  }`}>
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isOpen ? 'bg-green-100' : 'bg-red-100'
+                    }`}>
                     {isOpen ? (
                       <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -296,9 +319,8 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
                       <span className={`font-bold text-base ${isOpen ? 'text-green-700' : 'text-red-700'}`}>
                         {isOpen ? 'Open Now' : 'Currently Closed'}
                       </span>
-                      <div className={`w-2 h-2 rounded-full animate-pulse ${
-                        isOpen ? 'bg-green-500' : 'bg-red-500'
-                      }`} />
+                      <div className={`w-2 h-2 rounded-full animate-pulse ${isOpen ? 'bg-green-500' : 'bg-red-500'
+                        }`} />
                     </div>
                     <p className={`text-xs mt-0.5 ${isOpen ? 'text-green-600' : 'text-red-600'}`}>
                       {isOpen ? 'Ready to accept bookings' : 'Check operating hours below'}
@@ -321,15 +343,13 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
                       {openingHours.map((schedule: any, index: number) => (
                         <div
                           key={index}
-                          className={`flex items-center justify-between px-3 py-2 rounded-lg ${
-                            schedule.closed
-                              ? 'bg-gray-50'
-                              : 'bg-primary/5'
-                          }`}
+                          className={`flex items-center justify-between px-3 py-2 rounded-lg ${schedule.closed
+                            ? 'bg-gray-50'
+                            : 'bg-primary/5'
+                            }`}
                         >
-                          <span className={`text-xs font-semibold ${
-                            schedule.closed ? 'text-gray-400' : 'text-gray-700'
-                          }`}>
+                          <span className={`text-xs font-semibold ${schedule.closed ? 'text-gray-400' : 'text-gray-700'
+                            }`}>
                             {schedule.day}
                           </span>
                           {schedule.closed ? (
