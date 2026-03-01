@@ -75,6 +75,7 @@ export function QueueSessionModal({
         final: number
         discount: number
         appliedDiscountName?: string
+        appliedDiscounts?: any[]
     } | null>(null)
     const [isCalculatingPrice, setIsCalculatingPrice] = useState(false)
 
@@ -214,13 +215,15 @@ export function QueueSessionModal({
                         original: basePrice,
                         final: result.finalPrice,
                         discount: result.totalDiscount,
-                        appliedDiscountName: discountName
+                        appliedDiscountName: discountName,
+                        appliedDiscounts: result.discounts
                     })
                 } else {
                     setCalculatedPrice({
                         original: basePrice,
                         final: basePrice,
-                        discount: 0
+                        discount: 0,
+                        appliedDiscounts: []
                     })
                 }
             } catch (err) {
@@ -228,7 +231,8 @@ export function QueueSessionModal({
                 setCalculatedPrice({
                     original: basePrice,
                     final: basePrice,
-                    discount: 0
+                    discount: 0,
+                    appliedDiscounts: []
                 })
             } finally {
                 setIsCalculatingPrice(false)
@@ -364,7 +368,8 @@ export function QueueSessionModal({
                 setDiscountDetails({
                     amount: calculatedPrice.discount,
                     type: undefined,
-                    reason: calculatedPrice.discount > 0 ? 'Discount applied' : 'Surcharge applied'
+                    reason: calculatedPrice.discount > 0 ? 'Discount applied' : 'Surcharge applied',
+                    discounts: calculatedPrice.appliedDiscounts || []
                 })
             } else {
                 setDiscount(0)
@@ -443,34 +448,34 @@ export function QueueSessionModal({
                                     <div id="qm-tour-calendar">
                                         <h4 className="font-semibold text-gray-900 mb-3">Choose Date</h4>
                                         <div className="border border-gray-200 rounded-xl p-4">
-                                        <DayPicker
-                                            mode="single"
-                                            selected={selectedDate}
-                                            onSelect={(date) => date && setSelectedDate(date)}
-                                            disabled={disabledDays}
-                                            className="mx-auto"
-                                            modifiersClassNames={{
-                                                selected: 'bg-primary text-white hover:bg-primary',
-                                                today: 'font-bold text-primary',
-                                            }}
-                                        />
+                                            <DayPicker
+                                                mode="single"
+                                                selected={selectedDate}
+                                                onSelect={(date) => date && setSelectedDate(date)}
+                                                disabled={disabledDays}
+                                                className="mx-auto"
+                                                modifiersClassNames={{
+                                                    selected: 'bg-primary text-white hover:bg-primary',
+                                                    today: 'font-bold text-primary',
+                                                }}
+                                            />
 
-                                        {/* Legend */}
-                                        <div className="mt-4 pt-4 border-t border-gray-200 space-y-2">
-                                            <div className="flex items-center gap-2 text-xs">
-                                                <div className="w-4 h-4 bg-white border-2 border-gray-300 rounded" />
-                                                <span className="text-gray-600">Available</span>
-                                            </div>
-                                            <div className="flex items-center gap-2 text-xs">
-                                                <div className="w-4 h-4 bg-gray-100 text-gray-400 flex items-center justify-center rounded text-[10px]">✕</div>
-                                                <span className="text-gray-600">Reserved / Unavailable</span>
-                                            </div>
-                                            <div className="flex items-center gap-2 text-xs">
-                                                <div className="w-4 h-4 bg-primary rounded" />
-                                                <span className="text-gray-600">Selected</span>
+                                            {/* Legend */}
+                                            <div className="mt-4 pt-4 border-t border-gray-200 space-y-2">
+                                                <div className="flex items-center gap-2 text-xs">
+                                                    <div className="w-4 h-4 bg-white border-2 border-gray-300 rounded" />
+                                                    <span className="text-gray-600">Available</span>
+                                                </div>
+                                                <div className="flex items-center gap-2 text-xs">
+                                                    <div className="w-4 h-4 bg-gray-100 text-gray-400 flex items-center justify-center rounded text-[10px]">✕</div>
+                                                    <span className="text-gray-600">Reserved / Unavailable</span>
+                                                </div>
+                                                <div className="flex items-center gap-2 text-xs">
+                                                    <div className="w-4 h-4 bg-primary rounded" />
+                                                    <span className="text-gray-600">Selected</span>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
                                     </div>
 
                                     {/* Recurrence */}
@@ -881,13 +886,17 @@ export function QueueSessionModal({
                                                     <span className="text-sm text-gray-400 line-through">₱{Number(calculatedPrice.original || 0).toLocaleString()}</span>
                                                 )}
                                                 <span className="text-lg font-bold text-primary">₱{Number(calculatedPrice.final || 0).toLocaleString()}</span>
-                                                {calculatedPrice.discount !== 0 && calculatedPrice.appliedDiscountName && (
-                                                    <span className={`text-xs font-medium px-1.5 py-0.5 rounded inline-flex items-center gap-1 ${Number(calculatedPrice.discount) > 0 ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
-                                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                                                        </svg>
-                                                        {calculatedPrice.appliedDiscountName}
-                                                    </span>
+                                                {calculatedPrice.discount !== 0 && calculatedPrice.appliedDiscounts && calculatedPrice.appliedDiscounts.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {calculatedPrice.appliedDiscounts.map((discount, idx) => (
+                                                            <span key={idx} className={`text-xs font-medium px-1.5 py-0.5 rounded inline-flex items-center gap-1 ${discount.isIncrease ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
+                                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                                                                </svg>
+                                                                {discount.name}
+                                                            </span>
+                                                        ))}
+                                                    </div>
                                                 )}
                                             </>
                                         ) : (

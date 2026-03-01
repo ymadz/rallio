@@ -6,6 +6,7 @@ import { createQueueSession } from '@/app/actions/queue-actions'
 import { createQueuePaymentIntent } from '@/app/actions/queue-payment-actions'
 // import { useCheckoutStore } from '@/stores/checkout-store' // No longer used for redirection
 import { getAvailableTimeSlotsAction, validateBookingAvailabilityAction, getVenueMetadataAction, type TimeSlot } from '@/app/actions/reservations'
+import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
 import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
 import { Calendar as CalendarIcon, Clock, Users, DollarSign, Settings, Loader2, ArrowLeft, CheckCircle, Info, TrendingUp, Target } from 'lucide-react'
@@ -47,6 +48,13 @@ export function CreateSessionForm() {
   // const { setBookingData } = useCheckoutStore()
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isCalculatingPrice, setIsCalculatingPrice] = useState(false)
+  const [calculatedPrice, setCalculatedPrice] = useState<{
+    original: number
+    final: number
+    discount: number
+    appliedDiscounts?: any[]
+  } | null>(null)
 
   // Form state
   const [courtId, setCourtId] = useState('')
@@ -71,12 +79,27 @@ export function CreateSessionForm() {
     conflictDate?: string
   }>({ valid: true, validating: false })
 
+  // UI state
+  const [venues, setVenues] = useState<Venue[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingSlots, setIsLoadingSlots] = useState(false)
+  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
+
   // Reset selected days when date changes
   useEffect(() => {
     if (startDate) {
       setSelectedDays([startDate.getDay()])
     }
   }, [startDate])
+
+  // Get selected court details (Moved up for use in useEffects)
+  const selectedCourt = venues
+    .flatMap(v => v.courts || [])
+    .find(c => c.id === courtId)
+
+  const selectedVenue = venues.find(v =>
+    v.courts?.some(c => c.id === courtId)
+  )
 
   // Validate recurring availability
   useEffect(() => {
@@ -129,6 +152,76 @@ export function CreateSessionForm() {
 
     return () => clearTimeout(timeoutId)
   }, [startTime, duration, recurrenceWeeks, selectedDays, startDate, courtId])
+
+  // Calculate real price including discounts
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout
+
+    async function calculatePrice() {
+      if (!startDate || !startTime || !courtId || !selectedCourt?.hourly_rate) {
+        setCalculatedPrice(null)
+        return
+      }
+
+      setIsCalculatingPrice(true)
+
+      // Get Manila time
+      const dateObj = new Date(startDate)
+      const [hours, minutes] = startTime.split(':').map(Number)
+      dateObj.setHours(hours, minutes, 0, 0)
+
+      const startDateTimeStr = dateObj.toISOString()
+
+      const endDateObj = new Date(dateObj.getTime() + duration * 60 * 60 * 1000)
+      const endDateTimeStr = endDateObj.toISOString()
+
+      const basePrice = selectedCourt.hourly_rate * duration * (selectedDays.length > 0 ? selectedDays.length : 1) * recurrenceWeeks
+
+      try {
+        const venueId = selectedVenue?.id
+        if (!venueId) throw new Error("Venue ID not found")
+
+        const result = await calculateApplicableDiscounts({
+          venueId,
+          courtId,
+          startDate: startDateTimeStr,
+          endDate: endDateTimeStr,
+          recurrenceWeeks,
+          basePrice
+        })
+
+        if (result.success) {
+          setCalculatedPrice({
+            original: basePrice,
+            final: result.finalPrice,
+            discount: result.totalDiscount,
+            appliedDiscounts: result.discounts
+          })
+        } else {
+          setCalculatedPrice({
+            original: basePrice,
+            final: basePrice,
+            discount: 0,
+            appliedDiscounts: []
+          })
+        }
+      } catch (err) {
+        console.error("Price calc error", err)
+        setCalculatedPrice({
+          original: basePrice,
+          final: basePrice,
+          discount: 0,
+          appliedDiscounts: []
+        })
+      } finally {
+        setIsCalculatingPrice(false)
+      }
+    }
+
+    // Debounce pricing
+    timeoutId = setTimeout(calculatePrice, 500)
+    return () => clearTimeout(timeoutId)
+  }, [startTime, duration, recurrenceWeeks, selectedDays, startDate, courtId, selectedCourt, selectedVenue])
 
   const handleTimeSelect = (clickedSlot: TimeSlot) => {
     if (!clickedSlot.available) return
@@ -212,11 +305,7 @@ export function CreateSessionForm() {
     return `${nextHour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
   }
 
-  // UI state
-  const [venues, setVenues] = useState<Venue[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [isLoadingSlots, setIsLoadingSlots] = useState(false)
-  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
+  // UI state (Moved to top)
 
   // Load venues and courts on mount
   useEffect(() => {
@@ -396,19 +485,14 @@ export function CreateSessionForm() {
   }
 
   // Get selected court details
-  const selectedCourt = venues
-    .flatMap(v => v.courts || [])
-    .find(c => c.id === courtId)
-
-  const selectedVenue = venues.find(v =>
-    v.courts?.some(c => c.id === courtId)
-  )
+  // (Moved up for use in useEffect)
 
   // Calculate payment amounts for Queue Master
   const courtRental = useMemo(() => {
+    if (calculatedPrice) return calculatedPrice.final
     if (!selectedCourt?.hourly_rate || !duration || duration <= 0) return 0
     return selectedCourt.hourly_rate * duration
-  }, [selectedCourt?.hourly_rate, duration])
+  }, [selectedCourt?.hourly_rate, duration, calculatedPrice])
 
   const platformFee = useMemo(() => {
     return courtRental * 0.05
@@ -987,20 +1071,52 @@ export function CreateSessionForm() {
                   {courtId && selectedCourt?.hourly_rate && duration > 0 && (
                     <div className="pt-4 border-t border-gray-100">
                       <p className="text-xs text-gray-500 mb-2 font-semibold">PAYMENT DUE</p>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between items-center text-gray-600">
-                          <span>Court rental ({duration}h @ ₱{selectedCourt.hourly_rate}/h)</span>
-                          <span className="font-medium text-gray-900">₱{courtRental.toFixed(2)}</span>
+
+                      {isCalculatingPrice ? (
+                        <div className="py-4 flex justify-center text-sm text-gray-400">
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Calculating price...
                         </div>
-                        <div className="flex justify-between items-center text-gray-600">
-                          <span>Platform fee (5%)</span>
-                          <span className="font-medium text-gray-900">₱{platformFee.toFixed(2)}</span>
+                      ) : (
+                        <div className="space-y-2 text-sm">
+                          {calculatedPrice?.original && calculatedPrice.original !== calculatedPrice.final && (
+                            <div className="flex justify-between items-center text-gray-600 line-through">
+                              <span>Base court rental</span>
+                              <span>₱{calculatedPrice.original.toFixed(2)}</span>
+                            </div>
+                          )}
+
+                          <div className="flex justify-between items-center text-gray-600">
+                            <span>Court rental ({duration}h)</span>
+                            <span className="font-medium text-gray-900">₱{courtRental.toFixed(2)}</span>
+                          </div>
+
+                          {/* Applied Discounts */}
+                          {calculatedPrice?.appliedDiscounts && calculatedPrice.appliedDiscounts.length > 0 && (
+                            <div className="pl-4 border-l-2 border-gray-100 space-y-1">
+                              {calculatedPrice.appliedDiscounts.map((discount, idx) => (
+                                <div key={idx} className="flex justify-between items-center text-xs">
+                                  <span className={discount.isIncrease ? 'text-orange-600' : 'text-green-600'}>
+                                    ↳ {discount.name}
+                                  </span>
+                                  <span className={discount.isIncrease ? 'text-orange-600' : 'text-green-600 font-medium'}>
+                                    {discount.isIncrease ? '+' : '-'}₱{Math.abs(discount.amount).toFixed(2)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <div className="flex justify-between items-center text-gray-600">
+                            <span>Platform fee (5%)</span>
+                            <span className="font-medium text-gray-900">₱{platformFee.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                            <span className="font-semibold text-gray-900">Total</span>
+                            <span className="font-bold text-primary text-lg">₱{totalAmount.toFixed(2)}</span>
+                          </div>
                         </div>
-                        <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                          <span className="font-semibold text-gray-900">Total</span>
-                          <span className="font-bold text-primary text-lg">₱{totalAmount.toFixed(2)}</span>
-                        </div>
-                      </div>
+                      )}
+
                       <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                         <p className="text-xs text-blue-800">
                           <span className="font-semibold">ℹ️ Payment required:</span> You must pay the court rental and platform fee before the session can start.
