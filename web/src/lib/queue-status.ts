@@ -17,7 +17,7 @@ import {
   PlayCircle,
   CheckCircle,
   XCircle,
-  PhilippinePeso,
+  DollarSign,
   type LucideIcon
 } from 'lucide-react'
 
@@ -161,7 +161,7 @@ export function getStatusIcon(status: string): LucideIcon {
     case 'play': return PlayCircle
     case 'check': return CheckCircle
     case 'x': return XCircle
-    case 'dollar': return PhilippinePeso
+    case 'dollar': return DollarSign
     default: return Clock
   }
 }

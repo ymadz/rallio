@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import {
-  PhilippinePeso,
+  DollarSign,
   Clock,
   Plus,
   Edit,
@@ -110,7 +110,7 @@ export function PricingManagement({ venueId }: PricingManagementProps) {
       case 'special':
         return { icon: Zap, color: 'bg-yellow-100 text-yellow-700 border-yellow-200', label: 'Special' }
       default:
-        return { icon: PhilippinePeso, color: 'bg-gray-100 text-gray-700 border-gray-200', label: 'Standard' }
+        return { icon: DollarSign, color: 'bg-gray-100 text-gray-700 border-gray-200', label: 'Standard' }
     }
   }
 
@@ -149,7 +149,7 @@ export function PricingManagement({ venueId }: PricingManagementProps) {
       {/* Empty State */}
       {!isLoading && !error && courts.length === 0 && (
         <div className="bg-primary/5 border border-primary/20 rounded-xl p-8 text-center">
-          <PhilippinePeso className="w-12 h-12 text-primary mx-auto mb-3" />
+          <DollarSign className="w-12 h-12 text-primary mx-auto mb-3" />
           <h3 className="text-lg font-semibold text-primary/80 mb-2">No Courts Yet</h3>
           <p className="text-sm text-primary/70 mb-4">
             Add courts to your venue to start configuring pricing.
@@ -163,7 +163,7 @@ export function PricingManagement({ venueId }: PricingManagementProps) {
           <div className="bg-white border border-gray-200 rounded-xl p-4">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                <PhilippinePeso className="w-5 h-5 text-primary" />
+                <DollarSign className="w-5 h-5 text-primary" />
               </div>
               <div>
                 <p className="text-xs text-gray-500">Avg. Base Rate</p>
@@ -225,7 +225,7 @@ export function PricingManagement({ venueId }: PricingManagementProps) {
               }`}
           >
             <div className="flex items-center gap-2">
-              <PhilippinePeso className="w-4 h-4" />
+              <DollarSign className="w-4 h-4" />
               <span>Court Rates</span>
             </div>
           </button>

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { getDashboardStats, getRecentReservations } from '@/app/actions/court-admin-actions'
 import {
   Calendar,
-  PhilippinePeso,
+  DollarSign,
   Clock,
   TrendingUp,
   Star,
@@ -170,7 +170,7 @@ export function CourtAdminDashboard() {
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 bg-emerald-50 rounded-lg flex items-center justify-center">
-              <PhilippinePeso className="w-6 h-6 text-emerald-600" />
+              <DollarSign className="w-6 h-6 text-emerald-600" />
             </div>
             <span className="text-3xl font-bold text-gray-900">₱{stats.totalRevenue.toFixed(0)}</span>
           </div>

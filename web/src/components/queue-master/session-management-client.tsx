@@ -19,7 +19,7 @@ import { initiatePaymentAction } from '@/app/actions/payments'
 import {
   Users,
   Clock,
-  PhilippinePeso,
+  DollarSign,
   PlayCircle,
   StopCircle,
   Loader2,
@@ -555,7 +555,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
           <div className="bg-orange-50 border-l-4 border-orange-400 p-4 mb-6 rounded-r-lg">
             <div className="flex items-start justify-between">
               <div className="flex items-start">
-                <PhilippinePeso className="h-5 w-5 text-orange-400 mt-0.5 mr-3 flex-shrink-0" />
+                <DollarSign className="h-5 w-5 text-orange-400 mt-0.5 mr-3 flex-shrink-0" />
                 <div>
                   <h3 className="text-sm font-medium text-orange-800">
                     Payment Required
@@ -811,7 +811,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                             }`}
                           title="Manage payment"
                         >
-                          <PhilippinePeso className="w-3 h-3 inline mr-0.5" />
+                          <DollarSign className="w-3 h-3 inline mr-0.5" />
                           {player.paymentStatus}
                         </button>
                       </div>
@@ -1003,7 +1003,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                     <div className="bg-green-50 rounded-xl p-4 text-center">
                       <div className="text-3xl font-bold text-green-600">₱{sessionSummary.totalRevenue.toFixed(2)}</div>
                       <div className="text-sm text-gray-600 flex items-center justify-center gap-1 mt-1">
-                        <PhilippinePeso className="w-4 h-4" />
+                        <DollarSign className="w-4 h-4" />
                         Total Revenue
                       </div>
                     </div>

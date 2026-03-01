@@ -10,7 +10,7 @@ import {
   Users,
   Building2,
   Calendar,
-  PhilippinePeso,
+  DollarSign,
   TrendingUp,
   Shield,
   Clock,
@@ -170,7 +170,7 @@ export default function AnalyticsDashboard() {
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="p-3 bg-yellow-100 rounded-lg">
-              <PhilippinePeso className="w-6 h-6 text-yellow-600" />
+              <DollarSign className="w-6 h-6 text-yellow-600" />
             </div>
             <span className="text-xs text-gray-500">{stats.reservations.recentBookings} bookings</span>
           </div>
