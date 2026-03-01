@@ -6,7 +6,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/server'
 
-export type NotificationType =
+export type NotificationType = 
   | 'booking_confirmed'
   | 'booking_cancelled'
   | 'payment_received'
@@ -20,11 +20,6 @@ export type NotificationType =
   | 'queue_approval_approved'
   | 'queue_approval_rejected'
   | 'refund_processed'
-  | 'refund_requested'
-  | 'refund_approved'
-  | 'refund_rejected'
-  | 'booking_rejected'
-  | 'new_booking_request'
   | 'system_announcement'
 
 interface NotificationData {
@@ -44,45 +39,22 @@ export async function createNotification(data: NotificationData) {
   const supabase = createServiceClient()
 
   try {
-    const insertData: any = {
-      user_id: data.userId,
-      type: data.type,
-      title: data.title,
-      message: data.message,
-      action_url: data.actionUrl,
-      is_read: false,
-      created_at: new Date().toISOString(),
-    }
-
-    // Only add metadata if it's provided
-    if (data.metadata) {
-      insertData.metadata = data.metadata
-    }
-
     const { data: notification, error } = await supabase
       .from('notifications')
-      .insert(insertData)
+      .insert({
+        user_id: data.userId,
+        type: data.type,
+        title: data.title,
+        message: data.message,
+        action_url: data.actionUrl,
+        metadata: data.metadata,
+        is_read: false,
+        created_at: new Date().toISOString(),
+      })
       .select()
       .single()
 
     if (error) {
-      // Fallback: If metadata column is missing, try without it
-      if (error.message?.includes("metadata") && error.message?.includes("column") && data.metadata) {
-        console.warn('⚠️ [createNotification] Metadata column missing, retrying without metadata')
-        const { metadata, ...dataWithoutMetadata } = insertData
-        const { data: retryData, error: retryError } = await supabase
-          .from('notifications')
-          .insert(dataWithoutMetadata)
-          .select()
-          .single()
-
-        if (retryError) {
-          console.error('❌ [createNotification] Retry failed:', retryError)
-          return { success: false, error: retryError.message }
-        }
-        return { success: true, notification: retryData }
-      }
-
       console.error('❌ [createNotification] Error:', error)
       return { success: false, error: error.message }
     }
@@ -102,39 +74,23 @@ export async function createBulkNotifications(notifications: NotificationData[])
   const supabase = createServiceClient()
 
   try {
-    const insertData = notifications.map(n => ({
-      user_id: n.userId,
-      type: n.type,
-      title: n.title,
-      message: n.message,
-      action_url: n.actionUrl,
-      metadata: n.metadata,
-      is_read: false,
-      created_at: new Date().toISOString(),
-    }))
-
     const { data, error } = await supabase
       .from('notifications')
-      .insert(insertData)
+      .insert(
+        notifications.map(n => ({
+          user_id: n.userId,
+          type: n.type,
+          title: n.title,
+          message: n.message,
+          action_url: n.actionUrl,
+          metadata: n.metadata,
+          is_read: false,
+          created_at: new Date().toISOString(),
+        }))
+      )
       .select()
 
     if (error) {
-      // Fallback: If metadata column is missing, try without it
-      if (error.message?.includes("metadata") && error.message?.includes("column")) {
-        console.warn('⚠️ [createBulkNotifications] Metadata column missing, retrying without metadata')
-        const dataWithoutMetadata = insertData.map(({ metadata, ...rest }) => rest)
-        const { data: retryData, error: retryError } = await supabase
-          .from('notifications')
-          .insert(dataWithoutMetadata)
-          .select()
-
-        if (retryError) {
-          console.error('❌ [createBulkNotifications] Retry failed:', retryError)
-          return { success: false, error: retryError.message }
-        }
-        return { success: true, notifications: retryData }
-      }
-
       console.error('❌ [createBulkNotifications] Error:', error)
       return { success: false, error: error.message }
     }
@@ -272,71 +228,5 @@ export const NotificationTemplates = {
     message: `Your refund of ₱${amount.toFixed(2)} has been processed and will be credited to your account within 5-7 business days.`,
     actionUrl: `/bookings/${bookingId}`,
     metadata: { amount, booking_id: bookingId },
-  }),
-
-  /**
-   * New booking request notification (for Court Admin)
-   */
-  newBookingRequest: (venueName: string, courtName: string, date: string, bookingId: string): Omit<NotificationData, 'userId'> => ({
-    type: 'new_booking_request',
-    title: '🆕 New Booking Request',
-    message: `New booking at ${venueName} (${courtName}) for ${date}. Review and approve.`,
-    actionUrl: `/court-admin/reservations`,
-    metadata: { booking_id: bookingId, venue_name: venueName, court_name: courtName },
-  }),
-
-  /**
-   * Booking rejected notification
-   */
-  bookingRejected: (venueName: string, courtName: string, reason: string, bookingId: string): Omit<NotificationData, 'userId'> => ({
-    type: 'booking_rejected',
-    title: '❌ Booking Rejected',
-    message: `Your booking at ${venueName} (${courtName}) was rejected. Reason: ${reason}`,
-    actionUrl: `/bookings/${bookingId}`,
-    metadata: { booking_id: bookingId, venue_name: venueName, court_name: courtName, reason },
-  }),
-
-  /**
-   * Refund requested notification (for Court Admin)
-   */
-  refundRequested: (amount: number, bookingId: string): Omit<NotificationData, 'userId'> => ({
-    type: 'refund_requested',
-    title: '💵 Refund Request Received',
-    message: `A refund of ₱${(amount / 100).toFixed(2)} has been requested for booking #${bookingId.slice(0, 8)}.`,
-    actionUrl: `/court-admin/refunds`,
-    metadata: { amount, booking_id: bookingId },
-  }),
-
-  /**
-   * Refund approved notification
-   */
-  refundApproved: (amount: number, bookingId: string): Omit<NotificationData, 'userId'> => ({
-    type: 'refund_approved',
-    title: '✅ Refund Approved',
-    message: `Your refund of ₱${(amount / 100).toFixed(2)} for booking #${bookingId.slice(0, 8)} has been approved.`,
-    actionUrl: `/bookings/${bookingId}`,
-    metadata: { amount, booking_id: bookingId },
-  }),
-
-  /**
-   * Refund rejected notification
-   */
-  refundRejected: (reason: string, bookingId: string): Omit<NotificationData, 'userId'> => ({
-    type: 'refund_rejected',
-    title: '❌ Refund Rejected',
-    message: `Your refund request for booking #${bookingId.slice(0, 8)} was rejected. Reason: ${reason}`,
-    actionUrl: `/bookings/${bookingId}`,
-    metadata: { reason, booking_id: bookingId },
-  }),
-
-  /**
-   * User cancelled booking (for Court Admin)
-   */
-  userCancelledBookingForAdmin: (userName: string, venueName: string, courtName: string, date: string, bookingId: string): Omit<NotificationData, 'userId'> => ({
-    type: 'booking_cancelled',
-    title: '🗑️ Booking Cancelled by User',
-    message: `${userName} has cancelled their booking at ${venueName} (${courtName}) for ${date}.`,
-    actionUrl: `/court-admin/reservations`,
-    metadata: { booking_id: bookingId, user_name: userName, venue_name: venueName, court_name: courtName },
   }),
 }
