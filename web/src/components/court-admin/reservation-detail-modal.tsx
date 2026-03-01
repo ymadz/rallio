@@ -10,7 +10,7 @@ import {
   User,
   MapPin,
   Calendar,
-  DollarSign,
+  PhilippinePeso,
   Users,
   FileText,
   Loader2
@@ -297,7 +297,7 @@ export function ReservationDetailModal({
           {/* Booking Details */}
           <div className="bg-gray-50 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-2">
-              <DollarSign className="w-5 h-5 text-gray-400" />
+              <PhilippinePeso className="w-5 h-5 text-gray-400" />
               <h3 className="font-semibold text-gray-900">Amount Breakdown</h3>
             </div>
             <div className="flex justify-between items-center mb-2">
@@ -437,7 +437,7 @@ export function ReservationDetailModal({
                 </>
               ) : (
                 <>
-                  <DollarSign className="w-5 h-5" />
+                  <PhilippinePeso className="w-5 h-5" />
                   <span>{reservation.status === 'partially_paid' ? 'Collect Remaining Balance' : 'Mark as Paid (Cash Received)'}</span>
                 </>
               )}

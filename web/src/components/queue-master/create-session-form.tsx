@@ -8,7 +8,7 @@ import { createQueuePaymentIntent } from '@/app/actions/queue-payment-actions'
 import { getAvailableTimeSlotsAction, validateBookingAvailabilityAction, getVenueMetadataAction, type TimeSlot } from '@/app/actions/reservations'
 import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
-import { Calendar as CalendarIcon, Clock, Users, DollarSign, Settings, Loader2, ArrowLeft, CheckCircle, Info, TrendingUp, Target } from 'lucide-react'
+import { Calendar as CalendarIcon, Clock, Users, PhilippinePeso, Settings, Loader2, ArrowLeft, CheckCircle, Info, TrendingUp, Target } from 'lucide-react'
 import { DayPicker } from 'react-day-picker'
 import 'react-day-picker/dist/style.css'
 import Link from 'next/link'
@@ -867,7 +867,7 @@ export function CreateSessionForm() {
                     Cost Per Game (₱) <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
-                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <PhilippinePeso className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                     <input
                       type="number"
                       value={costPerGame}
@@ -1099,7 +1099,7 @@ export function CreateSessionForm() {
                           <>
                             {(paymentMethod === 'e-wallet' || (paymentMethod === 'cash' && downPaymentPercentage && downPaymentPercentage > 0)) ? (
                               <>
-                                <DollarSign className="w-5 h-5" />
+                                <PhilippinePeso className="w-5 h-5" />
                                 Pay & Create
                               </>
                             ) : (
