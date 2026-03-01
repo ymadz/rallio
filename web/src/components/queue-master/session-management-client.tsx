@@ -20,7 +20,7 @@ import {
 import {
   Users,
   Clock,
-  DollarSign,
+  PhilippinePeso,
   PlayCircle,
   PauseCircle,
   StopCircle,
@@ -752,7 +752,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                           }`}
                           title="Manage payment"
                         >
-                          <DollarSign className="w-3 h-3 inline mr-0.5" />
+                          <PhilippinePeso className="w-3 h-3 inline mr-0.5" />
                           {player.paymentStatus}
                         </button>
                       </div>
@@ -944,7 +944,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                     <div className="bg-green-50 rounded-xl p-4 text-center">
                       <div className="text-3xl font-bold text-green-600">₱{sessionSummary.totalRevenue.toFixed(2)}</div>
                       <div className="text-sm text-gray-600 flex items-center justify-center gap-1 mt-1">
-                        <DollarSign className="w-4 h-4" />
+                        <PhilippinePeso className="w-4 h-4" />
                         Total Revenue
                       </div>
                     </div>

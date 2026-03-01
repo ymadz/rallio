@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { getMyQueueMasterSessions, getQueueMasterStats } from '@/app/actions/queue-actions'
-import { Plus, Calendar, TrendingUp, DollarSign, Users, Clock, PlayCircle, CheckCircle, XCircle, Loader2, AlertCircle } from 'lucide-react'
+import { Plus, Calendar, TrendingUp, PhilippinePeso, Users, Clock, PlayCircle, CheckCircle, XCircle, Loader2, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 
 type SessionStatus = 'active' | 'pending' | 'past'
@@ -166,7 +166,7 @@ export function QueueMasterDashboard() {
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center">
-              <DollarSign className="w-6 h-6 text-emerald-600" />
+              <PhilippinePeso className="w-6 h-6 text-emerald-600" />
             </div>
             <span className="text-3xl font-bold text-gray-900">₱{stats.totalRevenue.toFixed(0)}</span>
           </div>
@@ -294,7 +294,7 @@ export function QueueMasterDashboard() {
 
                   <div className="bg-gray-50 rounded-lg p-3">
                     <div className="flex items-center gap-2 mb-1">
-                      <DollarSign className="w-4 h-4 text-gray-500" />
+                      <PhilippinePeso className="w-4 h-4 text-gray-500" />
                       <span className="text-xs text-gray-600">Per Game</span>
                     </div>
                     <p className="text-lg font-bold text-gray-900">

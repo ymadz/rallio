@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Calendar, Users, DollarSign, Clock, PlayCircle, CheckCircle, XCircle, ArrowRight, Filter } from 'lucide-react'
+import { Calendar, Users, PhilippinePeso, Clock, PlayCircle, CheckCircle, XCircle, ArrowRight, Filter } from 'lucide-react'
 import Link from 'next/link'
 
 interface SessionData {
@@ -189,7 +189,7 @@ export function MySessionsClient({ initialSessions }: MySessionsClientProps) {
                                                 <span>{session.currentPlayers} / {session.maxPlayers} Players</span>
                                             </div>
                                             <div className="flex items-center gap-1.5">
-                                                <DollarSign className="w-4 h-4 text-gray-400" />
+                                                <PhilippinePeso className="w-4 h-4 text-gray-400" />
                                                 <span>₱{session.costPerGame} / game</span>
                                             </div>
                                         </div>

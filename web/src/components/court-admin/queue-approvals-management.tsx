@@ -12,7 +12,7 @@ import {
   MapPin,
   Calendar,
   Users,
-  DollarSign,
+  PhilippinePeso,
   CheckCircle,
   XCircle,
   Loader2,
@@ -269,7 +269,7 @@ export function QueueApprovalsManagement() {
                     <span className="text-gray-700">Max {approval.maxPlayers} players</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
-                    <DollarSign className="w-4 h-4 text-gray-400" />
+                    <PhilippinePeso className="w-4 h-4 text-gray-400" />
                     <span className="text-gray-700">₱{approval.costPerGame}/game</span>
                   </div>
                 </div>

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import {
   TrendingUp,
   TrendingDown,
-  DollarSign,
+  PhilippinePeso,
   Calendar,
   Users,
   Clock,
@@ -279,7 +279,7 @@ export function AnalyticsDashboard({ venueId }: AnalyticsDashboardProps) {
           <div className="bg-white border border-gray-200 rounded-xl p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <DollarSign className="w-6 h-6 text-green-600" />
+                <PhilippinePeso className="w-6 h-6 text-green-600" />
               </div>
               {analytics.revenue_change > 0 && (
                 <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
@@ -514,50 +514,52 @@ export function AnalyticsDashboard({ venueId }: AnalyticsDashboardProps) {
       )}
 
       {/* Insights */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-          <div className="flex items-start gap-3">
-            <TrendingUp className="w-5 h-5 text-green-600 mt-0.5" />
-            <div>
-              <h3 className="font-semibold text-green-900 mb-1">Revenue Growth</h3>
-              <p className="text-sm text-green-700">
-                {analytics.revenue_change > 0
-                  ? `Your revenue increased by ${analytics.revenue_change}% vs the previous period. Great job!`
-                  : analytics.revenue_change < 0
-                    ? `Revenue is down by ${Math.abs(analytics.revenue_change)}%. Consider promotion strategies.`
-                    : 'Revenue is stable compared to the previous period.'}
-              </p>
+      {!isLoading && !error && analytics && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <TrendingUp className="w-5 h-5 text-green-600 mt-0.5" />
+              <div>
+                <h3 className="font-semibold text-green-900 mb-1">Revenue Growth</h3>
+                <p className="text-sm text-green-700">
+                  {analytics.revenue_change > 0
+                    ? `Your revenue increased by ${analytics.revenue_change}% vs the previous period. Great job!`
+                    : analytics.revenue_change < 0
+                      ? `Revenue is down by ${Math.abs(analytics.revenue_change)}%. Consider promotion strategies.`
+                      : 'Revenue is stable compared to the previous period.'}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-          <div className="flex items-start gap-3">
-            <Clock className="w-5 h-5 text-blue-600 mt-0.5" />
-            <div>
-              <h3 className="font-semibold text-blue-900 mb-1">
-                Peak Hours: {peakHours.find((h: any) => (h.booking_count || h.bookings || 0) === maxBookings)?.hourLabel || 'N/A'}
-              </h3>
-              <p className="text-sm text-blue-700">
-                This is your busiest time. Consider dynamic pricing or maintenance during off-peak hours.
-              </p>
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <Clock className="w-5 h-5 text-blue-600 mt-0.5" />
+              <div>
+                <h3 className="font-semibold text-blue-900 mb-1">
+                  Peak Hours: {peakHours.find((h: any) => (h.booking_count || h.bookings || 0) === maxBookings)?.hourLabel || 'N/A'}
+                </h3>
+                <p className="text-sm text-blue-700">
+                  This is your busiest time. Consider dynamic pricing or maintenance during off-peak hours.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
-          <div className="flex items-start gap-3">
-            <Users className="w-5 h-5 text-purple-600 mt-0.5" />
-            <div>
-              <h3 className="font-semibold text-purple-900 mb-1">Customer Stats</h3>
-              <p className="text-sm text-purple-700">
-                You had {analytics.unique_customers} unique customers this period.
-                {analytics.customers_change > 0 && ` That's up ${analytics.customers_change}%!`}
-              </p>
+          <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <Users className="w-5 h-5 text-purple-600 mt-0.5" />
+              <div>
+                <h3 className="font-semibold text-purple-900 mb-1">Customer Stats</h3>
+                <p className="text-sm text-purple-700">
+                  You had {analytics.unique_customers} unique customers this period.
+                  {analytics.customers_change > 0 && ` That's up ${analytics.customers_change}%!`}
+                </p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

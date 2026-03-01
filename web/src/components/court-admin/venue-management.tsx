@@ -14,7 +14,7 @@ import {
   Loader2,
   AlertCircle,
   ChevronRight,
-  DollarSign,
+  PhilippinePeso,
   Clock
 } from 'lucide-react'
 import Link from 'next/link'
@@ -340,7 +340,7 @@ export function VenueManagement() {
                                 <span className="capitalize">{court.surface_type}</span>
                               )}
                               <span className="flex items-center gap-1">
-                                <DollarSign className="w-4 h-4" />
+                                <PhilippinePeso className="w-4 h-4" />
                                 ₱{parseFloat(court.hourly_rate).toFixed(2)}/hr
                               </span>
                             </div>

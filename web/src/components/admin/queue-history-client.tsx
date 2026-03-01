@@ -19,7 +19,7 @@ import {
     CheckCircle,
     XCircle,
     Clock,
-    DollarSign,
+    PhilippinePeso,
     Trophy,
     Building2
 } from 'lucide-react'
@@ -105,7 +105,7 @@ export function GlobalQueueHistoryClient({ initialSessions, venues }: GlobalQueu
                 <Card>
                     <CardContent className="p-6 flex items-center gap-4">
                         <div className="p-3 bg-green-100 rounded-full">
-                            <DollarSign className="w-6 h-6 text-green-600" />
+                            <PhilippinePeso className="w-6 h-6 text-green-600" />
                         </div>
                         <div>
                             <p className="text-sm font-medium text-gray-500">Total Revenue</p>

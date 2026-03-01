@@ -5,7 +5,7 @@ import { getDashboardStats, getRecentActivity } from '@/app/actions/global-admin
 import {
   Users,
   Building2,
-  DollarSign,
+  PhilippinePeso,
   Activity,
   Star,
   AlertCircle,
@@ -179,7 +179,7 @@ export default function GlobalAdminDashboard() {
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 bg-purple-50 rounded-lg flex items-center justify-center">
-              <DollarSign className="w-6 h-6 text-purple-600" />
+              <PhilippinePeso className="w-6 h-6 text-purple-600" />
             </div>
           </div>
           <p className="text-3xl font-bold text-gray-900">₱{stats.monthlyRevenue.toLocaleString()}</p>
