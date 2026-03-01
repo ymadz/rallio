@@ -534,11 +534,14 @@ export default function CourtsPage() {
                           {isOpen ? 'OPEN' : 'CLOSED'}
                         </span>
 
-                        {venue.hasActiveDiscounts && (
-                          <span className="px-1.5 py-0.5 md:px-2.5 md:py-1 bg-red-500 text-white text-[10px] md:text-xs font-bold rounded md:rounded-md shadow-sm">
-                            PROMO
+                        {venue.hasActiveDiscounts && venue.activeDiscountLabels && venue.activeDiscountLabels.map((label, i) => (
+                          <span key={i} className="px-1.5 py-0.5 md:px-2.5 md:py-1 bg-primary/90 text-white text-[10px] md:text-xs font-bold rounded md:rounded-md shadow-sm flex items-center gap-1">
+                            <svg className="w-2.5 h-2.5 md:w-3 md:h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                            </svg>
+                            {label}
                           </span>
-                        )}
+                        ))}
                       </div>
 
                       {/* Distance Badge (if location available) */}
