@@ -211,6 +211,81 @@ export function ReservationManagement() {
     loadReservations()
   }
 
+  const handleExportCSV = () => {
+    const headers = [
+      'Reservation ID',
+      'Customer Name',
+      'Phone Number',
+      'Venue Name',
+      'Court Name',
+      'Date',
+      'Start Time',
+      'End Time',
+      'Status',
+      'Total Amount',
+      'Amount Paid',
+      'Created At'
+    ];
+
+    const escapeCSV = (str: string | number | undefined | null) => {
+      if (str === null || str === undefined) return '""';
+      const strVal = String(str);
+      if (strVal.includes(',') || strVal.includes('"') || strVal.includes('\n')) {
+        return `"${strVal.replace(/"/g, '""')}"`;
+      }
+      return strVal;
+    };
+
+    const rows = filteredReservations.map(res => {
+      const customerName = res.user?.display_name ||
+        `${res.user?.first_name || ''} ${res.user?.last_name || ''}`.trim() ||
+        'Unknown';
+      const displayStatus = getDisplayStatus(res).label;
+      const dateStr = new Date(res.start_time).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+      const startTimeStr = new Date(res.start_time).toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+      const endTimeStr = new Date(res.end_time).toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+      const createdAtStr = new Date(res.created_at).toLocaleString('en-US');
+
+      return [
+        escapeCSV(res.id),
+        escapeCSV(customerName),
+        escapeCSV(res.user?.phone || ''),
+        escapeCSV(res.court?.venue?.name || ''),
+        escapeCSV(res.court?.name || ''),
+        escapeCSV(dateStr),
+        escapeCSV(startTimeStr),
+        escapeCSV(endTimeStr),
+        escapeCSV(displayStatus),
+        escapeCSV(res.total_amount),
+        escapeCSV(res.amount_paid),
+        escapeCSV(createdAtStr)
+      ].join(',');
+    });
+
+    const csvContent = [headers.map(escapeCSV).join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const datePostfix = new Date().toISOString().split('T')[0];
+    link.setAttribute('download', `reservations_export_${datePostfix}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'confirmed': return 'bg-green-100 text-green-700 border-green-200'
@@ -420,7 +495,10 @@ export function ReservationManagement() {
             </select>
 
             {/* Export Button */}
-            <button className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            <button
+              onClick={handleExportCSV}
+              className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
               <Download className="w-4 h-4" />
               <span>Export</span>
             </button>
