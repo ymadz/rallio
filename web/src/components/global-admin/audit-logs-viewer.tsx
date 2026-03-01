@@ -42,14 +42,14 @@ export default function AuditLogsViewer() {
   // Filter state
   const [filters, setFilters] = useState<GetAuditLogsParams>({
     page: 1,
-    limit: 50,
+    limit: 10,
   })
 
   // UI state
   const [showFilters, setShowFilters] = useState(false)
   const [pagination, setPagination] = useState({
     page: 1,
-    limit: 50,
+    limit: 10,
     total: 0,
     totalPages: 0,
   })
@@ -92,7 +92,7 @@ export default function AuditLogsViewer() {
         setLogs((result as any).logs || [])
         setPagination((result as any).pagination || {
           page: 1,
-          limit: 50,
+          limit: 10,
           total: 0,
           totalPages: 0,
         })
@@ -143,7 +143,7 @@ export default function AuditLogsViewer() {
   const clearFilters = () => {
     setFilters({
       page: 1,
-      limit: 50,
+      limit: 10,
     })
   }
 
@@ -151,13 +151,47 @@ export default function AuditLogsViewer() {
     setFilters(prev => ({ ...prev, page }))
   }
 
+  const renderValueSummary = (value: any) => {
+    if (!value) return <span className="text-gray-400 italic">None</span>
+    if (typeof value !== 'object') return <span>{String(value)}</span>
+
+    return (
+      <div className="space-y-1">
+        {Object.entries(value).map(([key, val]) => {
+          // Skip internal/length fields that aren't useful visually
+          if (key === 'content_length' || key.startsWith('_')) return null;
+
+          let displayVal = String(val);
+          if (val === null) displayVal = 'null';
+          else if (typeof val === 'boolean') displayVal = val ? 'Yes' : 'No';
+          else if (typeof val === 'object') displayVal = '{...}';
+
+          return (
+            <div key={key} className="grid grid-cols-[120px_1fr] gap-2">
+              <span className="text-gray-500 font-medium capitalize truncate" title={key}>
+                {key.replace(/_/g, ' ')}
+              </span>
+              <span className="text-gray-900 truncate" title={String(val)}>
+                {displayVal}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    )
+  }
+
   const formatDate = (date: string) => {
-    return new Date(date).toLocaleString('en-US', {
-      month: 'short',
+    const d = new Date(date)
+    return d.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
       day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
+      year: 'numeric'
+    }) + ' at ' + d.toLocaleTimeString('en-US', {
+      hour: 'numeric',
       minute: '2-digit',
+      hour12: true
     })
   }
 
@@ -182,7 +216,7 @@ export default function AuditLogsViewer() {
         <button
           onClick={handleExport}
           disabled={exportLoading}
-          className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/80 disabled:opacity-50"
         >
           <Download className="w-4 h-4" />
           {exportLoading ? 'Exporting...' : 'Export CSV'}
@@ -413,13 +447,13 @@ export default function AuditLogsViewer() {
                   Timestamp
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
-                  Admin
+                  Performed By
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
                   Action
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
-                  Target
+                  Module
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">
                   Details
@@ -461,18 +495,13 @@ export default function AuditLogsViewer() {
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getActionColor(log.action_type)}`}>
-                        {log.action_type}
+                        {log.action_type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
                       {log.target_type ? (
                         <div>
-                          <div className="font-medium">{log.target_type}</div>
-                          {log.target_id && (
-                            <div className="text-xs text-gray-500 font-mono">
-                              {log.target_id.slice(0, 8)}...
-                            </div>
-                          )}
+                          <div className="font-medium">{log.target_type.charAt(0).toUpperCase() + log.target_type.slice(1)}</div>
                         </div>
                       ) : (
                         <span className="text-gray-400">-</span>
@@ -484,7 +513,7 @@ export default function AuditLogsViewer() {
                           e.stopPropagation()
                           setSelectedLog(log)
                         }}
-                        className="text-xs text-purple-600 hover:text-purple-700 font-medium"
+                        className="text-xs text-green-600 hover:text-green-700 font-medium"
                       >
                         View Details
                       </button>
@@ -552,55 +581,42 @@ export default function AuditLogsViewer() {
                 <p className="text-sm text-gray-900 mt-1">{formatDate(selectedLog.created_at)}</p>
               </div>
               <div>
-                <label className="text-sm font-semibold text-gray-700">Admin</label>
+                <label className="text-sm font-semibold text-gray-700">Performed By</label>
                 <p className="text-sm text-gray-900 mt-1">
                   {selectedLog.admin?.display_name} ({selectedLog.admin?.email})
                 </p>
               </div>
               <div>
                 <label className="text-sm font-semibold text-gray-700">Action Type</label>
-                <p className="text-sm text-gray-900 mt-1">{selectedLog.action_type}</p>
+                <p className="text-sm text-gray-900 mt-1">
+                  {selectedLog.action_type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                </p>
               </div>
               {selectedLog.target_type && (
-                <>
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700">Target Type</label>
-                    <p className="text-sm text-gray-900 mt-1">{selectedLog.target_type}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700">Target ID</label>
-                    <p className="text-sm text-gray-900 mt-1 font-mono">{selectedLog.target_id}</p>
-                  </div>
-                </>
+                <div>
+                  <label className="text-sm font-semibold text-gray-700">Affected Modules</label>
+                  <p className="text-sm text-gray-900 mt-1">
+                    {selectedLog.target_type.charAt(0).toUpperCase() + selectedLog.target_type.slice(1)}
+                  </p>
+                </div>
               )}
               {selectedLog.old_value && (
                 <div>
                   <label className="text-sm font-semibold text-gray-700">Old Value</label>
-                  <pre className="text-xs text-gray-900 mt-1 bg-gray-50 p-3 rounded-lg overflow-x-auto">
-                    {JSON.stringify(selectedLog.old_value, null, 2)}
-                  </pre>
+                  <div className="text-xs mt-1 bg-gray-50 px-4 py-3 border border-gray-100 rounded-lg">
+                    {renderValueSummary(selectedLog.old_value)}
+                  </div>
                 </div>
               )}
               {selectedLog.new_value && (
                 <div>
                   <label className="text-sm font-semibold text-gray-700">New Value</label>
-                  <pre className="text-xs text-gray-900 mt-1 bg-gray-50 p-3 rounded-lg overflow-x-auto">
-                    {JSON.stringify(selectedLog.new_value, null, 2)}
-                  </pre>
+                  <div className="text-xs mt-1 bg-gray-50 px-4 py-3 border border-gray-100 rounded-lg">
+                    {renderValueSummary(selectedLog.new_value)}
+                  </div>
                 </div>
               )}
-              {selectedLog.ip_address && (
-                <div>
-                  <label className="text-sm font-semibold text-gray-700">IP Address</label>
-                  <p className="text-sm text-gray-900 mt-1 font-mono">{selectedLog.ip_address}</p>
-                </div>
-              )}
-              {selectedLog.user_agent && (
-                <div>
-                  <label className="text-sm font-semibold text-gray-700">User Agent</label>
-                  <p className="text-xs text-gray-700 mt-1 break-all">{selectedLog.user_agent}</p>
-                </div>
-              )}
+
             </div>
             <div className="p-6 border-t border-gray-200 flex justify-end shrink-0">
               <button
