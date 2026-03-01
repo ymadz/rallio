@@ -20,6 +20,7 @@ interface VenueEditModalProps {
     latitude?: number
     longitude?: number
     image_url?: string
+    metadata?: any
   }
   isOpen: boolean
   onClose: () => void
@@ -40,7 +41,7 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
     website: '',
     latitude: '',
     longitude: '',
-    image_url: ''
+    image_urls: [] as string[]
   })
 
   // Reset form when venue changes
@@ -56,7 +57,7 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
         website: venue.website || '',
         latitude: venue.latitude?.toString() || '',
         longitude: venue.longitude?.toString() || '',
-        image_url: venue.image_url || ''
+        image_urls: venue.metadata?.images || (venue.image_url ? [venue.image_url] : [])
       })
     }
   }, [venue])
@@ -75,7 +76,8 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
         phone: formData.phone || null,
         email: formData.email || null,
         website: formData.website || null,
-        image_url: formData.image_url || null
+        image_url: formData.image_urls.length > 0 ? formData.image_urls[0] : null,
+        metadata: { ...venue.metadata, images: formData.image_urls }
       }
 
       // Only add coordinates if provided
@@ -136,8 +138,8 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
           {/* Cover Image Upload */}
           <VenuePhotoUpload
             venueId={venue.id}
-            currentImage={formData.image_url}
-            onImageChange={(url) => setFormData(prev => ({ ...prev, image_url: url || '' }))}
+            currentImages={formData.image_urls}
+            onImagesChange={(urls) => setFormData(prev => ({ ...prev, image_urls: urls }))}
           />
 
           {/* Venue Name */}
