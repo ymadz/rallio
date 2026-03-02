@@ -1024,8 +1024,9 @@ export async function initiateQueuePaymentAction(
       isQueueMaster: userId !== undefined,
     })
 
-    // Get participant details
-    const { data: participant, error: participantError } = await supabase
+    // Get participant details (use service client to bypass RLS - Queue Master is not the participant)
+    const serviceClient = createServiceClient()
+    const { data: participant, error: participantError } = await serviceClient
       .from('queue_participants')
       .select('*')
       .eq('queue_session_id', sessionId)
@@ -1037,12 +1038,13 @@ export async function initiateQueuePaymentAction(
       return { success: false, error: 'Participant not found in this session' }
     }
 
-    // Get queue session details with court and venue info
-    const { data: queueSession, error: sessionError } = await supabase
+    // Get queue session details with court and venue info (use service client to bypass RLS)
+    const { data: queueSession, error: sessionError } = await serviceClient
       .from('queue_sessions')
       .select(`
         cost_per_game,
         organizer_id,
+        court_id,
         courts (
           name,
           venues (
@@ -1207,7 +1209,7 @@ export async function initiateQueuePaymentAction(
       amount: totalAmount,
     })
 
-    revalidatePath(`/queue/${participant.queue_sessions.courts?.id}`)
+    revalidatePath(`/queue/${queueSession.court_id}`)
     revalidatePath('/queue')
 
     return {
