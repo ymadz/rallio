@@ -12,8 +12,13 @@ function CallbackContent() {
 
     useEffect(() => {
         // Determine deep link based on status
-        // Redirect to callback route with status parameter using appLink if provided, else fallback to native scheme
-        const target = appLink ? `${appLink}?status=${status === 'success' ? 'success' : 'failed'}` : `rallio://checkout/callback?status=${status === 'success' ? 'success' : 'failed'}`
+        // Redirect to callback route safely handling existing query params
+        let target = `rallio://checkout/callback?status=${status === 'success' ? 'success' : 'failed'}`;
+
+        if (appLink) {
+            const separator = appLink.includes('?') ? '&' : '?';
+            target = `${appLink}${separator}status=${status === 'success' ? 'success' : 'failed'}`;
+        }
 
         setMessage(status === 'success' ? 'Payment Successful!' : 'Payment Cancelled')
 
