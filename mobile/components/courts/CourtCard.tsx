@@ -29,6 +29,7 @@ interface Venue {
     rating?: number;
     review_count?: number;
     thumbnail_url?: string;
+    image_url?: string | null;
 }
 
 interface CourtCardProps {
@@ -37,12 +38,12 @@ interface CourtCardProps {
 }
 
 export function CourtCard({ venue, onPress }: CourtCardProps) {
-    // Prefer precomputed thumbnail, fall back to nested court_images
+    // Prefer venue's own image_url, then precomputed thumbnail, then nested court_images
     const nestedImage = venue.courts
         ?.flatMap((c) => c.court_images || [])
         .find((img) => img.is_primary)?.url
         ?? venue.courts?.[0]?.court_images?.[0]?.url;
-    const imageUrl = venue.thumbnail_url ?? nestedImage;
+    const imageUrl = venue.image_url ?? venue.thumbnail_url ?? nestedImage;
 
     // Calculate price range
     const prices = venue.courts?.map((c) => c.hourly_rate).filter(Boolean) || [];

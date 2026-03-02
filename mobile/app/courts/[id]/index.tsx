@@ -56,6 +56,7 @@ interface Venue {
     phone: string | null;
     email: string | null;
     website: string | null;
+    image_url?: string | null;
     metadata: { amenities?: string[] } | null;
     courts?: Court[];
 }
@@ -131,6 +132,7 @@ export default function VenueDetailsScreen() {
                 phone,
                 email,
                 website,
+                image_url,
                 metadata,
                 courts (
                     id,
@@ -202,10 +204,15 @@ export default function VenueDetailsScreen() {
         }
     };
 
-    // Get all images from all courts
-    const allImages = venue?.courts
+    // Get all images: court_images first, then fall back to venue image_url
+    const courtImages = venue?.courts
         ?.flatMap((c) => c.court_images || [])
         .sort((a, b) => (a.is_primary ? -1 : b.is_primary ? 1 : 0)) || [];
+    const allImages: { url: string; is_primary: boolean }[] = courtImages.length > 0
+        ? courtImages
+        : venue?.image_url
+            ? [{ url: venue.image_url, is_primary: true }]
+            : [];
 
     const handleGalleryScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
         const index = Math.round(e.nativeEvent.contentOffset.x / width);

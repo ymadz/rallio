@@ -23,6 +23,7 @@ export interface Venue {
     longitude?: number;
     opening_hours?: any;
     metadata?: Record<string, any>;
+    image_url?: string | null;
     courts?: Court[];
     court_count?: number;
     // Derived / computed fields
@@ -89,6 +90,7 @@ export const useCourtStore = create<CourtStore>()((set, get) => ({
                     longitude,
                     opening_hours,
                     metadata,
+                    image_url,
                     courts (
                         id,
                         name,
@@ -150,6 +152,7 @@ export const useCourtStore = create<CourtStore>()((set, get) => ({
                     : undefined;
 
                 // Pick primary image (or first available) as thumbnail
+                // Prefer the venue's own image_url, then fall back to court_images
                 const allImages = venue.courts?.flatMap((c: Court) => c.court_images || []) ?? [];
                 const primary = allImages.find((img: { url: string; is_primary: boolean }) => img.is_primary) ?? allImages[0];
 
@@ -159,7 +162,7 @@ export const useCourtStore = create<CourtStore>()((set, get) => ({
                     rating: avgRating,
                     review_count: allRatings.length,
                     distance,
-                    thumbnail_url: primary?.url,
+                    thumbnail_url: venue.image_url ?? primary?.url,
                 };
             });
 
