@@ -28,6 +28,7 @@ interface Venue {
     distance?: number; // in km
     rating?: number;
     review_count?: number;
+    thumbnail_url?: string;
 }
 
 interface CourtCardProps {
@@ -36,11 +37,12 @@ interface CourtCardProps {
 }
 
 export function CourtCard({ venue, onPress }: CourtCardProps) {
-    // Get primary image or first available
-    const primaryImage = venue.courts
+    // Prefer precomputed thumbnail, fall back to nested court_images
+    const nestedImage = venue.courts
         ?.flatMap((c) => c.court_images || [])
-        .find((img) => img.is_primary);
-    const imageUrl = primaryImage?.url || venue.courts?.[0]?.court_images?.[0]?.url;
+        .find((img) => img.is_primary)?.url
+        ?? venue.courts?.[0]?.court_images?.[0]?.url;
+    const imageUrl = venue.thumbnail_url ?? nestedImage;
 
     // Calculate price range
     const prices = venue.courts?.map((c) => c.hourly_rate).filter(Boolean) || [];
