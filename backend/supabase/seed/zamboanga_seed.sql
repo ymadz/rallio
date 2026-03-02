@@ -7,7 +7,7 @@
 --   • 10 Venues (real Zamboanga barangays & landmarks)
 --   • 24 Courts (varied types, surfaces, rates)
 --   • Court-Amenity links
---   • Discount rules & promo codes
+--   • Discount rules
 --   • Sample ratings & reviews
 --
 -- Requires at least 1 existing user account.
@@ -372,29 +372,15 @@ BEGIN
     -- =====================================================
     RAISE NOTICE 'Inserting Discount Rules...';
 
-    INSERT INTO discount_rules (venue_id, name, description, discount_type, discount_value, discount_unit, min_days, is_active) VALUES
-        (v_paseo, 'Weekly Loyalty', 'Book 3+ consecutive days and save', 'multi_day', 10.00, 'percent', 3, true),
-        (v_kcc, 'Weekly Pass', 'Book for a full week', 'multi_day', 15.00, 'percent', 5, true);
-
-    INSERT INTO discount_rules (venue_id, name, description, discount_type, discount_value, discount_unit, min_players, is_active) VALUES
-        (v_tumaga, 'Group Discount', 'Groups of 8+ players get a discount', 'group', 15.00, 'percent', 8, true),
-        (v_culianan, 'Team Practice', 'Teams of 6+ get a discount', 'group', 10.00, 'percent', 6, true);
+    INSERT INTO discount_rules (venue_id, name, description, discount_type, discount_value, discount_unit, min_weeks, is_active) VALUES
+        (v_paseo, 'Weekly Loyalty', 'Book 3+ consecutive weeks and save', 'recurring', 10.00, 'percent', 3, true),
+        (v_kcc, 'Weekly Pass', 'Book for 5 weeks', 'recurring', 15.00, 'percent', 5, true);
 
     INSERT INTO discount_rules (venue_id, name, description, discount_type, discount_value, discount_unit, advance_days, is_active) VALUES
         (v_kcc, 'Early Bird', 'Book 7+ days in advance', 'early_bird', 5.00, 'percent', 7, true);
 
     -- =====================================================
-    -- 7. PROMO CODES
-    -- =====================================================
-    RAISE NOTICE 'Inserting Promo Codes...';
-
-    INSERT INTO promo_codes (code, description, discount_type, discount_value, max_uses, venue_id, valid_from, valid_until, is_active) VALUES
-        ('ZAMBO2026', 'Welcome to Rallio Zamboanga!', 'percent', 20.00, 100, NULL, NOW(), NOW() + INTERVAL '90 days', true),
-        ('PASEO50', 'Paseo del Mar opening promo', 'fixed', 50.00, 50, v_paseo, NOW(), NOW() + INTERVAL '30 days', true),
-        ('KCCVIP', 'KCC VIP member discount', 'percent', 15.00, 200, v_kcc, NOW(), NOW() + INTERVAL '180 days', true);
-
-    -- =====================================================
-    -- 8. SAMPLE RATINGS & REVIEWS
+    -- 7. SAMPLE RATINGS & REVIEWS
     -- =====================================================
     RAISE NOTICE 'Inserting Ratings...';
 
@@ -431,8 +417,7 @@ BEGIN
     RAISE NOTICE '   → 10 Venues';
     RAISE NOTICE '   → 24 Courts';
     RAISE NOTICE '   → Court amenity links';
-    RAISE NOTICE '   → 5 Discount rules';
-    RAISE NOTICE '   → 3 Promo codes';
+    RAISE NOTICE '   → 3 Discount rules';
     RAISE NOTICE '   → 13 Ratings/reviews';
 
 END $$;

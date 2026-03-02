@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 export default async function HomePage() {
-// ... existing generic supabase and data pulls
+  // ... existing generic supabase and data pulls
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -81,7 +81,7 @@ export default async function HomePage() {
       {/* Main Content */}
       <div className="p-6">
         <HomeTutorial />
-        
+
         {/* Profile Completion Reminder */}
         {!isProfileTrulyComplete && <ProfileCompletionBanner />}
 
@@ -115,15 +115,15 @@ export default async function HomePage() {
           </Link>
 
           <Link
-            href="/ai-help"
-            className="bg-gradient-to-br from-rose-300 via-pink-300 to-orange-200 hover:from-rose-400 hover:via-pink-400 hover:to-orange-300 rounded-2xl p-6 flex flex-col justify-between min-h-[160px] transition-colors"
+            href="/bookings"
+            className="bg-primary hover:bg-primary/90 rounded-2xl p-6 flex flex-col justify-between min-h-[160px] transition-colors"
           >
-            <div className="w-12 h-12 bg-white/30 rounded-xl flex items-center justify-center">
+            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
               <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
             </div>
-            <span className="text-white text-lg font-semibold">Help AI</span>
+            <span className="text-white text-lg font-semibold">My Bookings</span>
           </Link>
         </div>
 
