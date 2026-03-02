@@ -40,7 +40,7 @@ export async function POST(req: Request) {
 
         console.log('[MobileAPI] Authenticated User:', user.id);
 
-        const { reservationId, amount, description, successUrl, cancelUrl, recurrenceGroupId, isDownPayment } = await req.json()
+        const { reservationId, amount, description, successUrl, cancelUrl, recurrenceGroupId, isDownPayment, redirectUrl } = await req.json()
 
         if (!reservationId || !amount) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -159,8 +159,9 @@ export async function POST(req: Request) {
 
         // Create Bridge URLs
         // PayMongo will redirect here -> We then deep link to app
-        const bridgeSuccessUrl = `${baseUrl}/mobile-payment/callback?status=success`;
-        const bridgeFailedUrl = `${baseUrl}/mobile-payment/callback?status=failed`;
+        const appLinkParam = redirectUrl ? `&appLink=${encodeURIComponent(redirectUrl)}` : '';
+        const bridgeSuccessUrl = `${baseUrl}/mobile-payment/callback?status=success${appLinkParam}`;
+        const bridgeFailedUrl = `${baseUrl}/mobile-payment/callback?status=failed${appLinkParam}`;
 
         console.log('[MobileAPI] Bridge URLs:', { bridgeSuccessUrl, bridgeFailedUrl });
 
