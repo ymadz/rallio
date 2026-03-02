@@ -55,6 +55,7 @@ export default function CheckoutScreen() {
 
     // Track pending e-wallet payment for AppState fallback
     const [pendingReservationId, setPendingReservationId] = useState<string | null>(null);
+    const [successfulReservationId, setSuccessfulReservationId] = useState<string | null>(null);
     const appState = useRef(AppState.currentState);
 
     // AppState listener - check payment status when app returns to foreground
@@ -250,6 +251,7 @@ export default function CheckoutScreen() {
                 if (browserResult.type === 'success' && browserResult.url) {
                     const parsedUrl = Linking.parse(browserResult.url);
                     if (parsedUrl.queryParams?.status === 'success') {
+                        setSuccessfulReservationId(primaryReservationId);
                         setStep('success');
                         setIsProcessing(false);
                         return;
@@ -289,85 +291,44 @@ export default function CheckoutScreen() {
 
     // Success Screen
     if (step === 'success') {
+        const displayId = successfulReservationId || pendingReservationId || '...';
+        const displayIdShort = displayId !== '...' ? displayId.split('-')[0] : '...';
+
         return (
-            <SafeAreaView style={styles.container}>
-                <ScrollView style={styles.scrollView} contentContainerStyle={styles.successContent}>
-                    {/* Success Icon */}
-                    <View style={styles.successIconContainer}>
-                        <View style={styles.successIcon}>
-                            <Ionicons name="checkmark" size={48} color={Colors.dark.text} />
-                        </View>
+            <SafeAreaView style={[styles.container, { backgroundColor: '#f9fafb', justifyContent: 'center', padding: 16 }]}>
+                <View style={{ backgroundColor: '#ffffff', borderRadius: 12, padding: 32, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}>
+                    <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#dcfce7', alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
+                        <Ionicons name="checkmark" size={32} color="#16a34a" />
                     </View>
 
-                    <Text style={styles.successTitle}>
-                        {paymentMethod === 'e-wallet' ? 'Booking Confirmed!' : isDownPaymentRequired ? 'Down Payment Confirmed!' : 'Booking Reserved!'}
-                    </Text>
-                    <Text style={styles.successSubtitle}>
-                        {paymentMethod === 'e-wallet'
-                            ? 'Your court has been successfully booked.'
-                            : isDownPaymentRequired
-                                ? 'Your deposit has been received. Pay the remaining balance at the venue.'
-                                : 'Please complete payment at the venue.'}
+                    <Text style={{ fontSize: 24, fontWeight: '700', color: '#111827', marginBottom: 12 }}>
+                        Payment Successful!
                     </Text>
 
-                    {/* Booking Details Card */}
-                    <Card variant="glass" padding="lg" style={styles.detailsCard}>
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Court</Text>
-                            <Text style={styles.detailValue}>{bookingData.courtName}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Venue</Text>
-                            <Text style={styles.detailValue}>{bookingData.venueName}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Date</Text>
-                            <Text style={styles.detailValue}>
-                                {format(new Date(bookingData.date), 'EEEE, MMM d, yyyy')}
-                            </Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Time</Text>
-                            <Text style={styles.detailValue}>
-                                {formatTime(bookingData.startTime)} - {formatTime(bookingData.endTime)}
-                            </Text>
-                        </View>
-                        <View style={[styles.detailRow, styles.totalRow]}>
-                            <Text style={styles.totalLabel}>
-                                {isDownPaymentRequired ? 'Down Payment Paid' : 'Total Paid'}
-                            </Text>
-                            <Text style={styles.totalValue}>₱{(isDownPaymentRequired ? downPaymentAmount : total).toLocaleString()}</Text>
-                        </View>
-                        {isDownPaymentRequired && (
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Remaining Balance</Text>
-                                <Text style={[styles.detailValue, { color: Colors.dark.warning }]}>
-                                    ₱{remainingBalance.toLocaleString()}
-                                </Text>
-                            </View>
-                        )}
-                    </Card>
+                    <Text style={{ fontSize: 16, color: '#4b5563', textAlign: 'center', marginBottom: 32, lineHeight: 24 }}>
+                        Your payment has been received and your court reservation is confirmed.
+                    </Text>
 
-                    {/* Reminder for cash payment */}
-                    {paymentMethod === 'cash' && (
-                        <Card variant="default" padding="md" style={styles.reminderCard}>
-                            <View style={styles.reminderRow}>
-                                <Ionicons name="warning" size={20} color={Colors.dark.warning} />
-                                <View style={styles.reminderContent}>
-                                    <Text style={styles.reminderTitle}>Payment Reminder</Text>
-                                    <Text style={styles.reminderText}>
-                                        Arrive 15 minutes early and pay at the venue.
-                                        Unpaid bookings may be cancelled.
-                                    </Text>
-                                </View>
-                            </View>
-                        </Card>
-                    )}
+                    <TouchableOpacity
+                        style={{ width: '100%', backgroundColor: '#0f766e', paddingVertical: 14, borderRadius: 8, alignItems: 'center', marginBottom: 12 }}
+                        onPress={() => {
+                            Alert.alert('Coming Soon', 'Mobile receipt viewing is currently under construction. You can view your booking details in the Bookings tab.');
+                        }}
+                    >
+                        <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>View Receipt</Text>
+                    </TouchableOpacity>
 
-                    <Button onPress={handleDone} style={styles.doneButton}>
-                        View My Bookings
-                    </Button>
-                </ScrollView>
+                    <TouchableOpacity
+                        style={{ width: '100%', backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#e5e7eb', paddingVertical: 14, borderRadius: 8, alignItems: 'center', marginBottom: 32 }}
+                        onPress={handleDone}
+                    >
+                        <Text style={{ color: '#111827', fontSize: 16, fontWeight: '600' }}>Back to Bookings</Text>
+                    </TouchableOpacity>
+
+                    <Text style={{ fontSize: 14, color: '#9ca3af' }}>
+                        Reservation ID: {displayIdShort}...
+                    </Text>
+                </View>
             </SafeAreaView>
         );
     }
