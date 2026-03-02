@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-
-const STORAGE_KEY = 'rallio_booking_tutorial_done'
+import { createClient } from '@/lib/supabase/client'
 
 interface TutorialStep {
   target: string
@@ -60,18 +59,34 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
 
-  // Check localStorage on mount
+  // Check on mount
   useEffect(() => {
-    if (isOpen) {
-      const done = localStorage.getItem(STORAGE_KEY)
-      if (!done) {
-        // Small delay to let the modal render and layout settle
-        const timer = setTimeout(() => setShowTutorial(true), 600)
-        return () => clearTimeout(timer)
+    let timer: NodeJS.Timeout
+    const checkTutorial = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data } = await supabase
+        .from('tutorials')
+        .select('booking_tutorial_done')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (!data?.booking_tutorial_done) {
+        timer = setTimeout(() => setShowTutorial(true), 600)
       }
+    }
+    
+    if (isOpen) {
+      checkTutorial()
     } else {
       setShowTutorial(false)
       setCurrentStep(0)
+    }
+    
+    return () => {
+        if (timer) clearTimeout(timer)
     }
   }, [isOpen])
 
@@ -138,10 +153,25 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
     }
   }, [measureTarget])
 
-  const completeTutorial = useCallback(() => {
-    localStorage.setItem(STORAGE_KEY, 'true')
+  const completeTutorial = useCallback(async () => {
     setShowTutorial(false)
     setCurrentStep(0)
+    
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data } = await supabase
+        .from('tutorials')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle()
+        
+    if (data) {
+        await supabase.from('tutorials').update({ booking_tutorial_done: true }).eq('user_id', user.id)
+    } else {
+        await supabase.from('tutorials').insert({ user_id: user.id, booking_tutorial_done: true })
+    }
   }, [])
 
   const handleNext = () => {
