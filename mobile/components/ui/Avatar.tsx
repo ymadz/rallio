@@ -36,7 +36,7 @@ export function Avatar({ source, name, size = 'md', style }: AvatarProps) {
         return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
     };
 
-    const containerStyle: ViewStyle = {
+    const containerStyle = {
         width: dimension,
         height: dimension,
         borderRadius: dimension / 2,
@@ -46,7 +46,7 @@ export function Avatar({ source, name, size = 'md', style }: AvatarProps) {
         return (
             <Image
                 source={{ uri: source }}
-                style={[styles.image, containerStyle, style]}
+                style={[styles.image, containerStyle, style as any]}
             />
         );
     }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { cancelReservationAction } from '@/app/actions/reservations'
+import { submitCourtReview } from '@/app/actions/review-actions'
 import { createClient } from '@supabase/supabase-js'
 
 export async function POST(request: NextRequest) {
@@ -9,28 +9,37 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, error: 'Missing Authorization header' }, { status: 401 })
         }
 
-        // Initialize Supabase client with the Authorization header (mobile sends Bearer token)
         const supabase = createClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
             { global: { headers: { Authorization: authHeader } } }
         )
 
-        // Verify authentication
         const { data: { user }, error: authError } = await supabase.auth.getUser()
         if (authError || !user) {
             return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
         }
 
         const body = await request.json()
-        const { reservationId } = body
+        const { courtId, reservationId, overallRating, qualityRating, cleanlinessRating, facilitiesRating, valueRating, review } = body
 
-        if (!reservationId) {
-            return NextResponse.json({ success: false, error: 'Reservation ID is required' }, { status: 400 })
+        if (!courtId || !overallRating) {
+            return NextResponse.json(
+                { success: false, error: 'courtId and overallRating are required' },
+                { status: 400 }
+            )
         }
 
-        // Call the shared server action
-        const result = await cancelReservationAction(reservationId)
+        const result = await submitCourtReview({
+            courtId,
+            reservationId,
+            overallRating,
+            qualityRating,
+            cleanlinessRating,
+            facilitiesRating,
+            valueRating,
+            review,
+        })
 
         if (!result.success) {
             return NextResponse.json(result, { status: 400 })
@@ -38,7 +47,7 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json(result)
     } catch (error: any) {
-        console.error('API Cancel Reservation Error:', error)
+        console.error('API Submit Review Error:', error)
         return NextResponse.json(
             { success: false, error: error.message || 'Internal Server Error' },
             { status: 500 }

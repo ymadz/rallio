@@ -8,18 +8,21 @@ import {
     TouchableOpacity,
     ActivityIndicator,
     Alert,
-    Linking,
     TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Typography, Radius } from '@/constants/Colors';
 import { Card, Button } from '@/components/ui';
 import { useCheckoutStore } from '@/store/checkout-store';
+import { useCourtStore } from '@/store/court-store';
 import { useAuthStore } from '@/store/auth-store';
 import { supabase } from '@/lib/supabase';
 import { format } from 'date-fns';
+import SplitPaymentControls from '@/components/checkout/SplitPaymentControls';
 
 type PaymentMethod = 'e-wallet' | 'cash';
 
@@ -40,11 +43,19 @@ export default function CheckoutScreen() {
         resetCheckout,
     } = useCheckoutStore();
 
+    const { getVenueById } = useCourtStore();
+
+    // Get venue to check for discounts
+    const venue = bookingData ? getVenueById(bookingData.venueId) : null;
+    const hasDiscounts = venue?.hasActiveDiscounts || false;
+    const discountLabels = venue?.activeDiscountLabels || [];
+
     const [isProcessing, setIsProcessing] = useState(false);
     const [step, setStep] = useState<'review' | 'payment' | 'processing' | 'success'>('review');
 
     // Track pending e-wallet payment for AppState fallback
     const [pendingReservationId, setPendingReservationId] = useState<string | null>(null);
+    const [successfulReservationId, setSuccessfulReservationId] = useState<string | null>(null);
     const appState = useRef(AppState.currentState);
 
     // AppState listener - check payment status when app returns to foreground
@@ -91,6 +102,13 @@ export default function CheckoutScreen() {
     const [discountAmount, setDiscountAmount] = useState(0);
 
     useEffect(() => {
+        // Adjust total if discount is applied? 
+        // Note: The store `getTotalAmount` usually calculates based on its internal state. 
+        // Since we are adding local discount state, we subtract it here. 
+        // Ideally we should sync this to the store, but for parity fix, local calculation on display and submission is acceptable.
+    }, [discountAmount]);
+
+    useEffect(() => {
         if (!bookingData) {
             router.replace('/(tabs)/courts');
         }
@@ -109,13 +127,6 @@ export default function CheckoutScreen() {
     const subtotal = getSubtotal();
     const platformFee = getPlatformFeeAmount();
     const total = getTotalAmount() - discountAmount;
-
-    useEffect(() => {
-        // Adjust total if discount is applied? 
-        // Note: The store `getTotalAmount` usually calculates based on its internal state. 
-        // Since we are adding local discount state, we subtract it here. 
-        // Ideally we should sync this to the store, but for parity fix, local calculation on display and submission is acceptable.
-    }, [discountAmount]);
 
     const downPaymentAmount = getDownPaymentAmount();
     const remainingBalance = getRemainingBalance();
@@ -156,7 +167,7 @@ export default function CheckoutScreen() {
                 throw new Error('User not authenticated (No session)');
             }
 
-            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.254.170:3000';
+            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'https://rallio-amad.vercel.app';
 
             // Prepare payload for Server Action Wrapper
             const reservationPayload = {
@@ -165,7 +176,6 @@ export default function CheckoutScreen() {
                 endTimeISO: `${format(new Date(bookingData.date), 'yyyy-MM-dd')}T${bookingData.endTime}:00`, // Duration logic handled by server if needed, but passing endISO is clearer
                 totalAmount: total, // GRAND TOTAL (Pre-calculated with discount)
                 discountAmount: discountAmount, // Pass discount info if backend needs it
-                numPlayers: bookingData.numPlayers,
                 paymentType: 'full',
                 paymentMethod: paymentMethod, // 'cash' or 'e-wallet'
                 notes: bookingData.notes,
@@ -204,6 +214,10 @@ export default function CheckoutScreen() {
             if (paymentMethod === 'e-wallet' || isDownPaymentRequired) {
                 console.log(`Mobile Checkout: Initiating ${isDownPaymentRequired ? 'Down Payment' : 'Full Payment'} via PayMongo...`);
 
+                // Add return URL for Expo Go compatibility
+                const redirectUrl = Linking.createURL('/checkout');
+                console.log('Mobile Checkout: Deep link return URL:', redirectUrl);
+
                 const checkoutResponse = await fetch(`${apiUrl}/api/mobile/create-checkout`, {
                     method: 'POST',
                     headers: {
@@ -215,7 +229,8 @@ export default function CheckoutScreen() {
                         amount: isDownPaymentRequired ? downPaymentAmount : total,
                         description: `Booking for ${bookingData.courtName} at ${bookingData.venueName}`,
                         recurrenceGroupId: recurrenceGroupId,
-                        isDownPayment: isDownPaymentRequired
+                        isDownPayment: isDownPaymentRequired,
+                        redirectUrl: redirectUrl
                     })
                 });
 
@@ -225,13 +240,36 @@ export default function CheckoutScreen() {
                     throw new Error(checkoutResult.error || 'Failed to create checkout session');
                 }
 
-                // Open PayMongo Checkout
-                await Linking.openURL(checkoutResult.checkoutUrl);
+                // Open PayMongo Checkout via WebBrowser so it returns back to the app smoothly
+                const browserResult = await WebBrowser.openAuthSessionAsync(
+                    checkoutResult.checkoutUrl,
+                    redirectUrl
+                );
 
-                // Set pending ID for AppState check when return
+                console.log('Mobile Checkout: Browser returned', browserResult.type);
+
+                if (browserResult.type === 'success' && browserResult.url) {
+                    const parsedUrl = Linking.parse(browserResult.url);
+                    if (parsedUrl.queryParams?.status === 'success') {
+                        setSuccessfulReservationId(primaryReservationId);
+                        setStep('success');
+                        setIsProcessing(false);
+                        return;
+                    } else if (parsedUrl.queryParams?.status === 'failed') {
+                        Alert.alert('Payment Failed', 'Your payment was cancelled or failed.');
+                        setStep('review');
+                        setIsProcessing(false);
+                        return;
+                    }
+                }
+
+                // If user closed the browser securely or deep link missed
                 setPendingReservationId(primaryReservationId);
+                setIsProcessing(false);
 
-                // Keep processing state while waiting for return from browser
+                Alert.alert('Payment Pending', 'If you completed the payment, your booking will be confirmed shortly. You can check its status in the Bookings tab.', [
+                    { text: 'View Bookings', onPress: () => { resetCheckout(); router.replace('/(tabs)/bookings'); } }
+                ]);
                 return;
             }
 
@@ -253,85 +291,44 @@ export default function CheckoutScreen() {
 
     // Success Screen
     if (step === 'success') {
+        const displayId = successfulReservationId || pendingReservationId || '...';
+        const displayIdShort = displayId !== '...' ? displayId.split('-')[0] : '...';
+
         return (
-            <SafeAreaView style={styles.container}>
-                <ScrollView style={styles.scrollView} contentContainerStyle={styles.successContent}>
-                    {/* Success Icon */}
-                    <View style={styles.successIconContainer}>
-                        <View style={styles.successIcon}>
-                            <Ionicons name="checkmark" size={48} color={Colors.dark.text} />
-                        </View>
+            <SafeAreaView style={[styles.container, { backgroundColor: '#f9fafb', justifyContent: 'center', padding: 16 }]}>
+                <View style={{ backgroundColor: '#ffffff', borderRadius: 12, padding: 32, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}>
+                    <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#dcfce7', alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
+                        <Ionicons name="checkmark" size={32} color="#16a34a" />
                     </View>
 
-                    <Text style={styles.successTitle}>
-                        {paymentMethod === 'e-wallet' ? 'Booking Confirmed!' : isDownPaymentRequired ? 'Down Payment Confirmed!' : 'Booking Reserved!'}
-                    </Text>
-                    <Text style={styles.successSubtitle}>
-                        {paymentMethod === 'e-wallet'
-                            ? 'Your court has been successfully booked.'
-                            : isDownPaymentRequired
-                                ? 'Your deposit has been received. Pay the remaining balance at the venue.'
-                                : 'Please complete payment at the venue.'}
+                    <Text style={{ fontSize: 24, fontWeight: '700', color: '#111827', marginBottom: 12 }}>
+                        Payment Successful!
                     </Text>
 
-                    {/* Booking Details Card */}
-                    <Card variant="glass" padding="lg" style={styles.detailsCard}>
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Court</Text>
-                            <Text style={styles.detailValue}>{bookingData.courtName}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Venue</Text>
-                            <Text style={styles.detailValue}>{bookingData.venueName}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Date</Text>
-                            <Text style={styles.detailValue}>
-                                {format(new Date(bookingData.date), 'EEEE, MMM d, yyyy')}
-                            </Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Time</Text>
-                            <Text style={styles.detailValue}>
-                                {formatTime(bookingData.startTime)} - {formatTime(bookingData.endTime)}
-                            </Text>
-                        </View>
-                        <View style={[styles.detailRow, styles.totalRow]}>
-                            <Text style={styles.totalLabel}>
-                                {isDownPaymentRequired ? 'Down Payment Paid' : 'Total Paid'}
-                            </Text>
-                            <Text style={styles.totalValue}>₱{(isDownPaymentRequired ? downPaymentAmount : total).toLocaleString()}</Text>
-                        </View>
-                        {isDownPaymentRequired && (
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Remaining Balance</Text>
-                                <Text style={[styles.detailValue, { color: Colors.dark.warning }]}>
-                                    ₱{remainingBalance.toLocaleString()}
-                                </Text>
-                            </View>
-                        )}
-                    </Card>
+                    <Text style={{ fontSize: 16, color: '#4b5563', textAlign: 'center', marginBottom: 32, lineHeight: 24 }}>
+                        Your payment has been received and your court reservation is confirmed.
+                    </Text>
 
-                    {/* Reminder for cash payment */}
-                    {paymentMethod === 'cash' && (
-                        <Card variant="default" padding="md" style={styles.reminderCard}>
-                            <View style={styles.reminderRow}>
-                                <Ionicons name="warning" size={20} color={Colors.dark.warning} />
-                                <View style={styles.reminderContent}>
-                                    <Text style={styles.reminderTitle}>Payment Reminder</Text>
-                                    <Text style={styles.reminderText}>
-                                        Arrive 15 minutes early and pay at the venue.
-                                        Unpaid bookings may be cancelled.
-                                    </Text>
-                                </View>
-                            </View>
-                        </Card>
-                    )}
+                    <TouchableOpacity
+                        style={{ width: '100%', backgroundColor: '#0f766e', paddingVertical: 14, borderRadius: 8, alignItems: 'center', marginBottom: 12 }}
+                        onPress={() => {
+                            Alert.alert('Coming Soon', 'Mobile receipt viewing is currently under construction. You can view your booking details in the Bookings tab.');
+                        }}
+                    >
+                        <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>View Receipt</Text>
+                    </TouchableOpacity>
 
-                    <Button onPress={handleDone} style={styles.doneButton}>
-                        View My Bookings
-                    </Button>
-                </ScrollView>
+                    <TouchableOpacity
+                        style={{ width: '100%', backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#e5e7eb', paddingVertical: 14, borderRadius: 8, alignItems: 'center', marginBottom: 32 }}
+                        onPress={handleDone}
+                    >
+                        <Text style={{ color: '#111827', fontSize: 16, fontWeight: '600' }}>Back to Bookings</Text>
+                    </TouchableOpacity>
+
+                    <Text style={{ fontSize: 14, color: '#9ca3af' }}>
+                        Reservation ID: {displayIdShort}...
+                    </Text>
+                </View>
             </SafeAreaView>
         );
     }
@@ -361,31 +358,104 @@ export default function CheckoutScreen() {
             </View>
 
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-                {/* Booking Summary */}
+                {/* Unified Booking Summary & Price Details */}
                 <Text style={styles.sectionTitle}>Booking Summary</Text>
                 <Card variant="glass" padding="md" style={styles.summaryCard}>
-                    <Text style={styles.courtName}>{bookingData.courtName}</Text>
-                    <Text style={styles.venueName}>{bookingData.venueName}</Text>
+                    {/* Court Info */}
+                    <View style={styles.summarySectionBlock}>
+                        <Text style={styles.summaryLabel}>Court</Text>
+                        <Text style={styles.courtName}>{bookingData.courtName}</Text>
+                        <Text style={styles.venueName}>{bookingData.venueName}</Text>
+                    </View>
 
-                    <View style={styles.summaryDetails}>
-                        <View style={styles.summaryItem}>
-                            <Ionicons name="calendar-outline" size={16} color={Colors.dark.textSecondary} />
-                            <Text style={styles.summaryText}>
-                                {format(new Date(bookingData.date), 'EEE, MMM d')}
+                    {/* Date & Time */}
+                    <View style={styles.summarySectionBlock}>
+                        <Text style={styles.summaryLabel}>Date & Time</Text>
+                        <Text style={styles.summaryMainText}>
+                            {format(new Date(bookingData.date), 'EEEE, MMM d, yyyy')}
+                        </Text>
+                        <Text style={styles.summarySubText}>
+                            {formatTime(bookingData.startTime)} - {formatTime(bookingData.endTime)}
+                        </Text>
+
+                        {bookingData.recurrenceWeeks && bookingData.recurrenceWeeks > 1 && (
+                            <View style={styles.recurrenceBadges}>
+                                <View style={styles.recurrenceBadge}>
+                                    <Text style={styles.recurrenceBadgeText}>{bookingData.recurrenceWeeks} Weeks Selection</Text>
+                                </View>
+                                {(bookingData.selectedDays?.length || 0) > 1 && (
+                                    <View style={[styles.recurrenceBadge, styles.weeklyBadge]}>
+                                        <Text style={[styles.recurrenceBadgeText, styles.weeklyBadgeText]}>
+                                            {bookingData.selectedDays?.length}x Weekly
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
+                        )}
+                    </View>
+
+                    {/* Divider */}
+                    <View style={styles.divider} />
+
+                    {/* Price Breakdown */}
+                    <View style={styles.priceContainer}>
+                        <View style={styles.priceRow}>
+                            <Text style={styles.priceLabel}>
+                                Court Fee (₱{bookingData.hourlyRate.toFixed(2)} × {bookingData.duration} {bookingData.duration > 1 ? 'hrs' : 'hr'})
+                                {bookingData.recurrenceWeeks && bookingData.recurrenceWeeks > 1 ? ` × ${bookingData.recurrenceWeeks * (bookingData.selectedDays?.length || 1)} sessions` : ''}
+                            </Text>
+                            <Text style={styles.priceValue}>₱{(subtotal + discountAmount).toLocaleString()}</Text>
+                        </View>
+
+                        {/* Discount Tags */}
+                        {hasDiscounts && discountLabels.length > 0 && (
+                            <View style={[styles.discountBadgesContainer, { marginTop: Spacing.sm }]}>
+                                {discountLabels.map((label, idx) => (
+                                    <View key={idx} style={styles.discountBadge}>
+                                        <Ionicons name="pricetag" size={14} color={Colors.dark.primary} style={{ marginTop: 2 }} />
+                                        <Text style={styles.discountBadgeText}>{label}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+
+                        {discountAmount > 0 && (
+                            <>
+                                <View style={styles.priceRow}>
+                                    <Text style={[styles.priceLabel, { color: Colors.dark.success }]}>Discount</Text>
+                                    <Text style={[styles.priceValue, { color: Colors.dark.success }]}>-₱{discountAmount.toLocaleString()}</Text>
+                                </View>
+                                <View style={[styles.priceRow, { paddingTop: Spacing.xs }]}>
+                                    <Text style={[styles.priceLabel, { fontWeight: '600' }]}>Subtotal</Text>
+                                    <Text style={[styles.priceValue, { fontWeight: '600' }]}>₱{subtotal.toLocaleString()}</Text>
+                                </View>
+                            </>
+                        )}
+
+                        <View style={[styles.priceRow, { marginTop: Spacing.xs }]}>
+                            <Text style={styles.priceLabel}>Platform Fee (5%)</Text>
+                            <Text style={styles.priceValue}>₱{platformFee.toFixed(2)}</Text>
+                        </View>
+                    </View>
+
+                    {/* Total Area */}
+                    <View style={[styles.totalPriceRow, { marginTop: Spacing.md }]}>
+                        <View style={styles.priceRow}>
+                            <Text style={styles.totalPriceLabel}>Total Amount</Text>
+                            <Text style={styles.totalPriceValue}>
+                                ₱{(isDownPaymentRequired ? downPaymentAmount : total).toLocaleString()}
                             </Text>
                         </View>
-                        <View style={styles.summaryItem}>
-                            <Ionicons name="time-outline" size={16} color={Colors.dark.textSecondary} />
-                            <Text style={styles.summaryText}>
-                                {formatTime(bookingData.startTime)} - {formatTime(bookingData.endTime)}
-                            </Text>
-                        </View>
-                        <View style={styles.summaryItem}>
-                            <Ionicons name="people-outline" size={16} color={Colors.dark.textSecondary} />
-                            <Text style={styles.summaryText}>
-                                {bookingData.numPlayers} players
-                            </Text>
-                        </View>
+
+                        {isDownPaymentRequired && (
+                            <View style={styles.downPaymentBox}>
+                                <View>
+                                    <Text style={styles.dpBoxTitle}>REMAINING BALANCE</Text>
+                                    <Text style={styles.dpBoxSub}>To be paid at the venue</Text>
+                                </View>
+                                <Text style={styles.dpBoxValue}>₱{remainingBalance.toLocaleString()}</Text>
+                            </View>
+                        )}
                     </View>
                 </Card>
 
@@ -439,46 +509,6 @@ export default function CheckoutScreen() {
                         {paymentMethod === 'cash' && <View style={styles.radioInner} />}
                     </View>
                 </TouchableOpacity>
-
-
-
-                <Text style={styles.sectionTitle}>Price Details</Text>
-                <Card variant="default" padding="md">
-                    <View style={styles.priceRow}>
-                        <Text style={styles.priceLabel}>
-                            ₱{bookingData.hourlyRate} × {bookingData.duration} hr
-                            {bookingData.recurrenceWeeks && bookingData.recurrenceWeeks > 1 ? ` × ${bookingData.recurrenceWeeks} wks` : ''}
-                        </Text>
-                        <Text style={styles.priceValue}>₱{subtotal.toLocaleString()}</Text>
-                    </View>
-                    <View style={styles.priceRow}>
-                        <Text style={styles.priceLabel}>Platform fee (5%)</Text>
-                        <Text style={styles.priceValue}>₱{platformFee.toFixed(2)}</Text>
-                    </View>
-                    {discountAmount > 0 && (
-                        <View style={styles.priceRow}>
-                            <Text style={[styles.priceLabel, { color: Colors.dark.success }]}>Discount</Text>
-                            <Text style={[styles.priceValue, { color: Colors.dark.success }]}>-₱{discountAmount.toLocaleString()}</Text>
-                        </View>
-                    )}
-                    <View style={[styles.priceRow, styles.totalPriceRow]}>
-                        <Text style={styles.totalPriceLabel}>Total</Text>
-                        <Text style={styles.totalPriceValue}>₱{total.toLocaleString()}</Text>
-                    </View>
-
-                    {isDownPaymentRequired && (
-                        <>
-                            <View style={[styles.priceRow, { marginTop: Spacing.sm, paddingTop: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.dark.border }]}>
-                                <Text style={[styles.priceLabel, { color: Colors.dark.primary, fontWeight: '600' }]}>Down Payment (Pay Online)</Text>
-                                <Text style={[styles.priceValue, { color: Colors.dark.primary, fontWeight: '600' }]}>₱{downPaymentAmount.toLocaleString()}</Text>
-                            </View>
-                            <View style={styles.priceRow}>
-                                <Text style={styles.priceLabel}>Remaining Balance (Pay at Venue)</Text>
-                                <Text style={styles.priceValue}>₱{remainingBalance.toLocaleString()}</Text>
-                            </View>
-                        </>
-                    )}
-                </Card>
 
                 {/* Cancellation Policy */}
                 <TouchableOpacity
@@ -567,19 +597,77 @@ const styles = StyleSheet.create({
         color: Colors.dark.textSecondary,
         marginBottom: Spacing.md,
     },
-    summaryDetails: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: Spacing.md,
+    summaryLabel: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+        marginBottom: 2,
     },
-    summaryItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
+    summaryMainText: {
+        ...Typography.body,
+        fontWeight: '600',
+        color: Colors.dark.text,
     },
-    summaryText: {
+    summarySubText: {
         ...Typography.bodySmall,
         color: Colors.dark.textSecondary,
+    },
+    summarySectionBlock: {
+        marginBottom: Spacing.md,
+    },
+    recurrenceBadges: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: Spacing.sm,
+        marginTop: Spacing.sm,
+    },
+    recurrenceBadge: {
+        backgroundColor: Colors.dark.primary + '15',
+        paddingHorizontal: Spacing.sm,
+        paddingVertical: 4,
+        borderRadius: Radius.sm,
+    },
+    recurrenceBadgeText: {
+        ...Typography.caption,
+        color: Colors.dark.primary,
+        fontWeight: '600',
+    },
+    weeklyBadge: {
+        backgroundColor: Colors.dark.primary + '15',
+    },
+    weeklyBadgeText: {
+        color: Colors.dark.primary,
+    },
+    divider: {
+        height: 1,
+        backgroundColor: Colors.dark.border,
+        marginVertical: Spacing.sm,
+    },
+    priceContainer: {
+        paddingVertical: Spacing.sm,
+    },
+    downPaymentBox: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: Colors.dark.primary + '10',
+        padding: Spacing.md,
+        borderRadius: Radius.md,
+        marginTop: Spacing.md,
+    },
+    dpBoxTitle: {
+        ...Typography.caption,
+        color: Colors.dark.primary,
+        fontWeight: 'bold',
+        letterSpacing: 0.5,
+    },
+    dpBoxSub: {
+        ...Typography.bodySmall,
+        color: Colors.dark.textSecondary,
+        marginTop: 2,
+    },
+    dpBoxValue: {
+        ...Typography.h3,
+        color: Colors.dark.text,
     },
     paymentOption: {
         flexDirection: 'row',
@@ -642,6 +730,39 @@ const styles = StyleSheet.create({
     priceLabel: {
         ...Typography.body,
         color: Colors.dark.textSecondary,
+    },
+    priceTotalValue: {
+        ...Typography.h3,
+        color: Colors.dark.text,
+    },
+    discountBadgesContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: Spacing.sm,
+        marginTop: Spacing.xs,
+        marginBottom: Spacing.xs,
+    },
+    discountBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.dark.primary + '15',
+        borderWidth: 1,
+        borderColor: Colors.dark.primary + '30',
+        paddingHorizontal: Spacing.sm,
+        paddingVertical: 4,
+        borderRadius: Radius.full,
+        gap: 4,
+    },
+    discountBadgeText: {
+        ...Typography.caption,
+        color: Colors.dark.primary,
+        fontWeight: 'bold',
+    },
+    bottomSafeArea: {
+        marginTop: Spacing.sm,
+        paddingTop: Spacing.sm,
+        borderTopWidth: 1,
+        borderTopColor: Colors.dark.border,
     },
     priceValue: {
         ...Typography.body,

@@ -23,7 +23,7 @@ interface Reservation {
     end_time: string;
     num_players: number;
     total_amount: number;
-    status: 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'no_show';
+    status: 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'no_show' | 'pending_payment' | 'partially_paid' | 'pending_refund';
     courts?: {
         name: string;
         venues?: {
@@ -61,18 +61,24 @@ const BookingCard = React.memo(({ booking, onPress }: BookingCardProps) => {
 
     const statusColors: Record<string, { bg: string; text: string }> = {
         pending: { bg: Colors.dark.warning + '20', text: Colors.dark.warning },
+        pending_payment: { bg: Colors.dark.warning + '20', text: Colors.dark.warning },
+        partially_paid: { bg: Colors.dark.info + '20', text: Colors.dark.info },
         confirmed: { bg: Colors.dark.success + '20', text: Colors.dark.success },
         cancelled: { bg: Colors.dark.error + '20', text: Colors.dark.error },
         completed: { bg: Colors.dark.textTertiary + '20', text: Colors.dark.textTertiary },
         no_show: { bg: Colors.dark.error + '20', text: Colors.dark.error },
+        pending_refund: { bg: Colors.dark.warning + '20', text: Colors.dark.warning },
     };
 
     const statusLabels: Record<string, string> = {
         pending: 'Pending Payment',
+        pending_payment: 'Awaiting Payment',
+        partially_paid: 'Partially Paid',
         confirmed: 'Confirmed',
         cancelled: 'Cancelled',
         completed: 'Completed',
         no_show: 'No Show',
+        pending_refund: 'Refund Pending',
     };
 
     // Get status color with fallback
@@ -132,6 +138,7 @@ const BookingCard = React.memo(({ booking, onPress }: BookingCardProps) => {
 BookingCard.displayName = 'BookingCard';
 
 type TabKey = 'upcoming' | 'past';
+type SubFilter = 'all' | 'today' | 'this-week';
 
 export default function BookingsScreen() {
     const { user } = useAuthStore();
@@ -140,6 +147,7 @@ export default function BookingsScreen() {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<TabKey>('upcoming');
+    const [subFilter, setSubFilter] = useState<SubFilter>('all');
 
     const fetchBookings = useCallback(async (showRefreshIndicator = false) => {
         if (!user) return;
@@ -191,11 +199,43 @@ export default function BookingsScreen() {
     const now = new Date();
     const filteredBookings = bookings.filter(booking => {
         const endTime = new Date(booking.end_time);
+        const startTime = new Date(booking.start_time);
+
+        // Top-level tab filter
+        let passesTab = false;
         if (activeTab === 'upcoming') {
-            return endTime >= now && booking.status !== 'cancelled';
+            passesTab = endTime >= now && booking.status !== 'cancelled';
+        } else {
+            passesTab = endTime < now || booking.status === 'cancelled';
         }
-        return endTime < now || booking.status === 'cancelled';
+        if (!passesTab) return false;
+
+        // Sub-filter for upcoming tab
+        if (activeTab === 'upcoming' && subFilter !== 'all') {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const tomorrow = new Date(today);
+            tomorrow.setDate(today.getDate() + 1);
+            const endOfWeek = new Date(today);
+            endOfWeek.setDate(today.getDate() + (7 - today.getDay()));
+
+            if (subFilter === 'today') {
+                return startTime >= today && startTime < tomorrow;
+            }
+            if (subFilter === 'this-week') {
+                return startTime >= today && startTime < endOfWeek;
+            }
+        }
+
+        return true;
     });
+
+    // Stats
+    const totalBookings = bookings.length;
+    const awaitingPayment = bookings.filter(b =>
+        ['pending', 'pending_payment', 'partially_paid'].includes(b.status)
+    ).length;
+    const confirmedCount = bookings.filter(b => b.status === 'confirmed').length;
 
     const renderEmptyState = () => (
         <View style={styles.emptyContainer}>
@@ -239,6 +279,22 @@ export default function BookingsScreen() {
         </View>
     );
 
+    const renderBookingItem = useCallback(({ item }: { item: Reservation }) => (
+        <BookingCard
+            booking={item}
+            onPress={() => handleBookingPress(item.id)}
+        />
+    ), []);
+
+    const getItemLayout = useCallback(
+        (data: any, index: number) => ({
+            length: 140, // Approximate height of BookingCard + margin
+            offset: 140 * index,
+            index,
+        }),
+        []
+    );
+
     return (
         <SafeAreaView style={styles.container}>
             {/* Header */}
@@ -246,11 +302,29 @@ export default function BookingsScreen() {
                 <Text style={styles.title}>My Bookings</Text>
             </View>
 
+            {/* Stats Cards */}
+            {!isLoading && !error && bookings.length > 0 && (
+                <View style={styles.statsRow}>
+                    <View style={styles.statCard}>
+                        <Text style={styles.statNumber}>{totalBookings}</Text>
+                        <Text style={styles.statLabel}>Total</Text>
+                    </View>
+                    <View style={[styles.statCard, { borderColor: Colors.dark.warning + '40' }]}>
+                        <Text style={[styles.statNumber, { color: Colors.dark.warning }]}>{awaitingPayment}</Text>
+                        <Text style={styles.statLabel}>Awaiting</Text>
+                    </View>
+                    <View style={[styles.statCard, { borderColor: Colors.dark.success + '40' }]}>
+                        <Text style={[styles.statNumber, { color: Colors.dark.success }]}>{confirmedCount}</Text>
+                        <Text style={styles.statLabel}>Confirmed</Text>
+                    </View>
+                </View>
+            )}
+
             {/* Tab Switcher */}
             <View style={styles.tabContainer}>
                 <TouchableOpacity
                     style={[styles.tab, activeTab === 'upcoming' && styles.tabActive]}
-                    onPress={() => setActiveTab('upcoming')}
+                    onPress={() => { setActiveTab('upcoming'); setSubFilter('all'); }}
                 >
                     <Text style={[styles.tabText, activeTab === 'upcoming' && styles.tabTextActive]}>
                         Upcoming
@@ -258,13 +332,30 @@ export default function BookingsScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                     style={[styles.tab, activeTab === 'past' && styles.tabActive]}
-                    onPress={() => setActiveTab('past')}
+                    onPress={() => { setActiveTab('past'); setSubFilter('all'); }}
                 >
                     <Text style={[styles.tabText, activeTab === 'past' && styles.tabTextActive]}>
                         Past
                     </Text>
                 </TouchableOpacity>
             </View>
+
+            {/* Sub-filters for upcoming */}
+            {activeTab === 'upcoming' && !isLoading && !error && (
+                <View style={styles.subFilterRow}>
+                    {(['all', 'today', 'this-week'] as SubFilter[]).map((f) => (
+                        <TouchableOpacity
+                            key={f}
+                            style={[styles.subFilterChip, subFilter === f && styles.subFilterChipActive]}
+                            onPress={() => setSubFilter(f)}
+                        >
+                            <Text style={[styles.subFilterText, subFilter === f && styles.subFilterTextActive]}>
+                                {f === 'all' ? 'All' : f === 'today' ? 'Today' : 'This Week'}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            )}
 
             {/* Content */}
             {isLoading ? (
@@ -277,12 +368,8 @@ export default function BookingsScreen() {
                 <FlatList
                     data={filteredBookings}
                     keyExtractor={(item) => item.id}
-                    renderItem={({ item }) => (
-                        <BookingCard
-                            booking={item}
-                            onPress={() => handleBookingPress(item.id)}
-                        />
-                    )}
+                    renderItem={renderBookingItem}
+                    getItemLayout={getItemLayout}
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
                     refreshControl={
@@ -322,7 +409,8 @@ const styles = StyleSheet.create({
     },
     tab: {
         flex: 1,
-        paddingVertical: Spacing.sm,
+        height: 48,
+        justifyContent: 'center',
         alignItems: 'center',
         borderRadius: Radius.md,
         backgroundColor: Colors.dark.surface,
@@ -448,5 +536,55 @@ const styles = StyleSheet.create({
     retryText: {
         ...Typography.button,
         color: Colors.dark.text,
+    },
+    statsRow: {
+        flexDirection: 'row',
+        paddingHorizontal: Spacing.lg,
+        paddingBottom: Spacing.md,
+        gap: Spacing.sm,
+    },
+    statCard: {
+        flex: 1,
+        backgroundColor: Colors.dark.surface,
+        borderRadius: Radius.md,
+        padding: Spacing.md,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: Colors.dark.border,
+    },
+    statNumber: {
+        ...Typography.h2,
+        color: Colors.dark.text,
+    },
+    statLabel: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+        marginTop: 2,
+    },
+    subFilterRow: {
+        flexDirection: 'row',
+        paddingHorizontal: Spacing.lg,
+        paddingBottom: Spacing.sm,
+        gap: Spacing.xs,
+    },
+    subFilterChip: {
+        paddingHorizontal: Spacing.md,
+        paddingVertical: 6,
+        borderRadius: Radius.full,
+        backgroundColor: Colors.dark.surface,
+        borderWidth: 1,
+        borderColor: Colors.dark.border,
+    },
+    subFilterChipActive: {
+        backgroundColor: Colors.dark.primary + '20',
+        borderColor: Colors.dark.primary,
+    },
+    subFilterText: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+        fontWeight: '500',
+    },
+    subFilterTextActive: {
+        color: Colors.dark.primary,
     },
 });

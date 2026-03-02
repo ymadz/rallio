@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import MapView, { Marker, Region, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors, Spacing, Typography, Radius } from '@/constants/Colors';
 import { Card } from '@/components/ui';
 import { useCourtStore, useFilteredVenues, Venue } from '@/store/court-store';
@@ -159,8 +159,8 @@ export default function MapScreen() {
                             styles.markerContainer,
                             selectedVenue?.id === venue.id && styles.markerSelected
                         ]}>
-                            <Ionicons
-                                name="tennisball"
+                            <MaterialCommunityIcons
+                                name="badminton"
                                 size={20}
                                 color={selectedVenue?.id === venue.id ? Colors.dark.text : Colors.dark.primary}
                             />
@@ -212,12 +212,7 @@ export default function MapScreen() {
                 </View>
             )}
 
-            {/* Venue Count Badge */}
-            <View style={styles.countBadge}>
-                <Text style={styles.countText}>
-                    {venuesWithCoords.length} court{venuesWithCoords.length !== 1 ? 's' : ''} nearby
-                </Text>
-            </View>
+
 
             {/* Selected Venue Card */}
             {selectedVenue && (
@@ -297,7 +292,7 @@ const styles = StyleSheet.create({
     controlsContainer: {
         position: 'absolute',
         right: Spacing.lg,
-        top: 140,
+        top: 100,
         gap: Spacing.md,
     },
     controlButton: {
@@ -317,7 +312,7 @@ const styles = StyleSheet.create({
     },
     loadingContainer: {
         position: 'absolute',
-        top: 140,
+        top: 100,
         left: Spacing.lg,
         backgroundColor: 'rgba(18, 18, 26, 0.9)',
         paddingHorizontal: Spacing.md,
@@ -326,21 +321,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: Colors.dark.border,
     },
-    countBadge: {
-        position: 'absolute',
-        top: 200,
-        left: Spacing.lg,
-        backgroundColor: 'rgba(18, 18, 26, 0.9)',
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.xs,
-        borderRadius: Radius.full,
-        borderWidth: 1,
-        borderColor: Colors.dark.border,
-    },
-    countText: {
-        ...Typography.caption,
-        color: Colors.dark.text,
-    },
+
     markerContainer: {
         width: 40,
         height: 40,

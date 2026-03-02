@@ -151,10 +151,23 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
       .eq('reservation_id', params.reservationId)
       .eq('status', 'succeeded')
 
-    const totalRefunded = completedRefunds?.reduce((sum, r) => sum + r.amount, 0) || 0
-    const refundableAmount = totalPaid - totalRefunded
+    const totalRefunded = completedRefunds?.reduce((sum, r) => r.amount + sum, 0) || 0
 
-    if (refundableAmount <= 0) {
+    // For bulk payments, ensure we don't refund more than the reservation amount
+    // reservation.amount_paid is in pesos, refundableAmount is in pesos 
+    // Wait, the UI expects it to be in centavos, and `adminProcessRefundAction` expects it to be in centavos.
+    // Paymongo expects it to be in centavos.
+    // 
+    // Wait, `payments` table saves it in pesos (`amount: numeric(12,2)`). 
+    // The previous code had `refundableAmount = totalPaid - totalRefunded`, where `totalPaid` is from `payments` (pesos) and `totalRefunded` is from `refunds` (centavos? wait, no, `adminProcessRefundAction` divides by 100 for display, so `refunds` must be in centavos.)
+    // Let's explicitly save the refund amount in centavos.
+
+    // totalPaid is in pesos. Convert to centavos.
+    const totalPaidCentavos = Math.round(totalPaid * 100)
+    // totalRefunded is already in centavos.
+    const refundableAmountCentavos = totalPaidCentavos - totalRefunded
+
+    if (refundableAmountCentavos <= 0) {
       return { success: false, error: 'No refundable amount remaining' }
     }
 
@@ -173,9 +186,8 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
     const paymongoPaymentId = paymentToRefund.external_id || paymentToRefund.metadata?.paymongo_payment?.id
 
     // For bulk payments, ensure we don't refund more than the reservation amount
-    // reservation.amount_paid is in pesos, refundableAmount is in centavos — convert to same unit
     const amountPaidCentavos = Math.round(reservation.amount_paid * 100)
-    const actualRefundAmount = Math.min(refundableAmount, amountPaidCentavos)
+    const actualRefundAmountCentavos = Math.min(refundableAmountCentavos, amountPaidCentavos)
 
     // 5. Create refund record
     const { data: refundRecord, error: insertError } = await supabase
@@ -184,7 +196,7 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
         payment_id: paymentToRefund.id,
         reservation_id: params.reservationId,
         user_id: user.id,
-        amount: Math.round(actualRefundAmount), // actualRefundAmount is already in centavos
+        amount: Math.round(actualRefundAmountCentavos), // actualRefundAmount is already in centavos
         currency: 'PHP',
         status: 'pending',
         payment_external_id: paymongoPaymentId,

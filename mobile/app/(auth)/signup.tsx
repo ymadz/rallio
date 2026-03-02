@@ -16,6 +16,7 @@ import { Colors, Spacing, Typography } from '@/constants/Colors';
 import { Button, Input, Card } from '@/components/ui';
 import { useAuthStore } from '@/store/auth-store';
 import { Ionicons } from '@expo/vector-icons';
+import * as WebBrowser from 'expo-web-browser';
 
 export default function SignupScreen() {
     const [firstName, setFirstName] = useState('');
@@ -23,6 +24,7 @@ export default function SignupScreen() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [termsAccepted, setTermsAccepted] = useState(false);
 
     const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -50,6 +52,10 @@ export default function SignupScreen() {
             newErrors.confirmPassword = 'Passwords do not match';
         }
 
+        if (!termsAccepted) {
+            newErrors.terms = 'You must accept the Terms of Service to continue';
+        }
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -65,11 +71,12 @@ export default function SignupScreen() {
         if (error) {
             Alert.alert('Signup Failed', error.message);
         } else {
-            Alert.alert(
-                'Check your email',
-                'We sent you a verification link. Please check your email to continue.',
-                [{ text: 'OK', onPress: () => router.replace('/login') }]
-            );
+            // Cast: expo-router typed routes regenerate on `expo start`;
+            // /(auth)/verify-email becomes valid once the dev server runs.
+            router.replace({
+                pathname: '/(auth)/verify-email' as any,
+                params: { email },
+            });
         }
     };
 
@@ -167,19 +174,51 @@ export default function SignupScreen() {
                         <Button
                             onPress={handleSignup}
                             loading={isLoading}
+                            disabled={!termsAccepted || isLoading}
                             fullWidth
                             style={styles.signupButton}
                         >
                             Create Account
                         </Button>
 
-                        {/* Terms */}
-                        <Text style={styles.terms}>
-                            By signing up, you agree to our{' '}
-                            <Text style={styles.termsLink}>Terms of Service</Text>
-                            {' '}and{' '}
-                            <Text style={styles.termsLink}>Privacy Policy</Text>
-                        </Text>
+                        {/* Terms checkbox */}
+                        <TouchableOpacity
+                            style={styles.termsRow}
+                            onPress={() => setTermsAccepted(v => !v)}
+                            activeOpacity={0.7}
+                        >
+                            <Ionicons
+                                name={termsAccepted ? 'checkbox' : 'square-outline'}
+                                size={22}
+                                color={termsAccepted ? Colors.dark.primary : Colors.dark.textSecondary}
+                                style={styles.checkbox}
+                            />
+                            <Text style={styles.terms}>
+                                I agree to the{' '}
+                                <Text
+                                    style={styles.termsLink}
+                                    onPress={(e) => {
+                                        e.stopPropagation();
+                                        WebBrowser.openBrowserAsync('https://rallio.app/terms');
+                                    }}
+                                >
+                                    Terms of Service
+                                </Text>
+                                {' '}and{' '}
+                                <Text
+                                    style={styles.termsLink}
+                                    onPress={(e) => {
+                                        e.stopPropagation();
+                                        WebBrowser.openBrowserAsync('https://rallio.app/privacy');
+                                    }}
+                                >
+                                    Privacy Policy
+                                </Text>
+                            </Text>
+                        </TouchableOpacity>
+                        {errors.terms && (
+                            <Text style={styles.termsError}>{errors.terms}</Text>
+                        )}
 
                         {/* Divider */}
                         <View style={styles.divider}>
@@ -259,15 +298,31 @@ const styles = StyleSheet.create({
     },
     signupButton: {
         marginTop: Spacing.md,
-        marginBottom: Spacing.md,
+        marginBottom: Spacing.sm,
+    },
+    termsRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: Spacing.sm,
+        marginBottom: Spacing.sm,
+    },
+    checkbox: {
+        marginTop: 1,
     },
     terms: {
         ...Typography.caption,
-        color: Colors.dark.textTertiary,
-        textAlign: 'center',
+        color: Colors.dark.textSecondary,
+        flex: 1,
+        lineHeight: 20,
     },
     termsLink: {
         color: Colors.dark.primary,
+        fontWeight: '600',
+    },
+    termsError: {
+        ...Typography.caption,
+        color: Colors.dark.error,
+        marginBottom: Spacing.sm,
     },
     footer: {
         flexDirection: 'row',

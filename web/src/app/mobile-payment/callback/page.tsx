@@ -7,12 +7,18 @@ import { useSearchParams } from 'next/navigation'
 function CallbackContent() {
     const searchParams = useSearchParams()
     const status = searchParams.get('status')
+    const appLink = searchParams.get('appLink') // Get Expo linking parameter from URL
     const [message, setMessage] = useState('Processing payment...')
 
     useEffect(() => {
         // Determine deep link based on status
-        // Redirect to callback route with status parameter
-        const target = `rallio://checkout/callback?status=${status === 'success' ? 'success' : 'failed'}`
+        // Redirect to callback route safely handling existing query params
+        let target = `rallio://checkout/callback?status=${status === 'success' ? 'success' : 'failed'}`;
+
+        if (appLink) {
+            const separator = appLink.includes('?') ? '&' : '?';
+            target = `${appLink}${separator}status=${status === 'success' ? 'success' : 'failed'}`;
+        }
 
         setMessage(status === 'success' ? 'Payment Successful!' : 'Payment Cancelled')
 
@@ -23,7 +29,7 @@ function CallbackContent() {
         }, 1000)
 
         return () => clearTimeout(timer)
-    }, [status])
+    }, [status, appLink])
 
     return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 p-4">
@@ -41,7 +47,7 @@ function CallbackContent() {
 
                 <button
                     onClick={() => {
-                        const target = `rallio://checkout/callback?status=${status === 'success' ? 'success' : 'failed'}`
+                        const target = appLink ? `${appLink}?status=${status === 'success' ? 'success' : 'failed'}` : `rallio://checkout/callback?status=${status === 'success' ? 'success' : 'failed'}`
                         window.location.href = target
                     }}
                     className="mt-6 w-full rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"

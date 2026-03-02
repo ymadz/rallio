@@ -1,14 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     View,
     Text,
     StyleSheet,
-
+    FlatList,
     ScrollView,
     Image,
     TouchableOpacity,
     ActivityIndicator,
     Dimensions,
+    NativeSyntheticEvent,
+    NativeScrollEvent,
     Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,6 +19,8 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Colors, Spacing, Typography, Radius } from '@/constants/Colors';
 import { Card, Button, Avatar } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
+import AvailabilityBottomSheet from '@/components/venue/AvailabilityBottomSheet';
+import { isVenueOpen, formatOperatingHours } from '@/lib/utils/date';
 
 const { width } = Dimensions.get('window');
 
@@ -54,46 +58,16 @@ interface Venue {
     phone: string | null;
     email: string | null;
     website: string | null;
+    image_url?: string | null;
     metadata: { amenities?: string[] } | null;
     courts?: Court[];
+    hasActiveDiscounts?: boolean;
+    activeDiscountLabels?: string[];
+    discountRules?: any[];
+    holidayPricing?: any[];
 }
 
-// Helper to check if venue is currently open
-const isVenueOpen = (hours: Venue['opening_hours']): boolean => {
-    if (!hours || typeof hours === 'string') return true; // Assume open if no structured data
-
-    const now = new Date();
-    const day = now.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
-    const currentTime = now.getHours() * 60 + now.getMinutes();
-
-    const todayHours = hours[day];
-    if (!todayHours) return false;
-
-    const [openHour, openMin] = todayHours.open.split(':').map(Number);
-    const [closeHour, closeMin] = todayHours.close.split(':').map(Number);
-    const openTime = openHour * 60 + (openMin || 0);
-    const closeTime = closeHour * 60 + (closeMin || 0);
-
-    return currentTime >= openTime && currentTime < closeTime;
-};
-
-// Helper to format opening hours
-const formatOpeningHours = (hours: Venue['opening_hours']) => {
-    if (!hours) return null;
-    if (typeof hours === 'string') return [hours];
-
-    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-    const formatted = days.map(day => {
-        const schedule = hours[day];
-        if (!schedule) return null;
-        return {
-            day: day.charAt(0).toUpperCase() + day.slice(1, 3),
-            hours: `${schedule.open} - ${schedule.close}`
-        };
-    }).filter(Boolean);
-
-    return formatted;
-};
+// Helper functions imported from @/lib/utils/date
 
 export default function VenueDetailsScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -102,7 +76,9 @@ export default function VenueDetailsScreen() {
     const [averageRating, setAverageRating] = useState<number>(0);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+    const [activeImageIndex, setActiveImageIndex] = useState(0);
+    const flatListRef = useRef<FlatList>(null);
+    const [scheduleCourt, setScheduleCourt] = useState<Court | null>(null);
 
     useEffect(() => {
         if (id) {
@@ -128,6 +104,7 @@ export default function VenueDetailsScreen() {
                 phone,
                 email,
                 website,
+                image_url,
                 metadata,
                 courts (
                     id,
@@ -151,7 +128,38 @@ export default function VenueDetailsScreen() {
         if (fetchError) {
             setError(fetchError.message);
         } else {
-            setVenue(data);
+            // Fetch discounts for this venue
+            const { data: rules } = await supabase
+                .from('discount_rules')
+                .select('id, name, description, discount_value, discount_unit')
+                .eq('venue_id', id)
+                .eq('is_active', true);
+
+            const { data: holidays } = await supabase
+                .from('holiday_pricing')
+                .select('id, name, price_multiplier')
+                .eq('venue_id', id)
+                .eq('is_active', true);
+
+            const activeDiscountLabels = [
+                ...(rules || []).map((r: any) =>
+                    r.discount_unit === 'percent' ? `${r.discount_value}% OFF` : `₱${r.discount_value} OFF`
+                ),
+                ...(holidays || []).map((h: any) => {
+                    if (h.price_multiplier < 1) return `${Math.round((1 - h.price_multiplier) * 100)}% OFF`;
+                    return `+${Math.round((h.price_multiplier - 1) * 100)}%`;
+                }),
+            ];
+
+            const hasActiveDiscounts = activeDiscountLabels.length > 0;
+
+            setVenue({
+                ...data,
+                hasActiveDiscounts,
+                activeDiscountLabels,
+                discountRules: rules || [],
+                holidayPricing: holidays || [],
+            });
         }
         setIsLoading(false);
     };
@@ -199,10 +207,20 @@ export default function VenueDetailsScreen() {
         }
     };
 
-    // Get all images from all courts
-    const allImages = venue?.courts
+    // Get all images: court_images first, then fall back to venue image_url
+    const courtImages = venue?.courts
         ?.flatMap((c) => c.court_images || [])
-        .sort((a, b) => (a.is_primary ? -1 : 1)) || [];
+        .sort((a, b) => (a.is_primary ? -1 : b.is_primary ? 1 : 0)) || [];
+    const allImages: { url: string; is_primary: boolean }[] = courtImages.length > 0
+        ? courtImages
+        : venue?.image_url
+            ? [{ url: venue.image_url, is_primary: true }]
+            : [];
+
+    const handleGalleryScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+        const index = Math.round(e.nativeEvent.contentOffset.x / width);
+        setActiveImageIndex(index);
+    };
 
     // Format currency
     const formatPrice = (price: number) => `₱${price.toLocaleString()}`;
@@ -214,7 +232,7 @@ export default function VenueDetailsScreen() {
 
     // Venue status
     const isOpen = venue ? isVenueOpen(venue.opening_hours) : false;
-    const openingHours = venue ? formatOpeningHours(venue.opening_hours) : null;
+    const openingHours = venue ? formatOperatingHours(venue.opening_hours) : null;
 
     // Render stars
     const renderStars = (rating: number) => {
@@ -267,37 +285,40 @@ export default function VenueDetailsScreen() {
                 <View style={styles.imageGallery}>
                     {allImages.length > 0 ? (
                         <>
-                            <Image
-                                source={{ uri: allImages[selectedImageIndex]?.url }}
-                                style={styles.mainImage}
+                            <FlatList
+                                ref={flatListRef}
+                                data={allImages}
+                                keyExtractor={(_, i) => String(i)}
+                                horizontal
+                                pagingEnabled
+                                showsHorizontalScrollIndicator={false}
+                                onScroll={handleGalleryScroll}
+                                scrollEventThrottle={16}
+                                renderItem={({ item }) => (
+                                    <Image
+                                        source={{ uri: item.url }}
+                                        style={styles.mainImage}
+                                        resizeMode="cover"
+                                    />
+                                )}
                             />
                             {allImages.length > 1 && (
-                                <ScrollView
-                                    horizontal
-                                    showsHorizontalScrollIndicator={false}
-                                    style={styles.thumbnailScroll}
-                                    contentContainerStyle={styles.thumbnailContainer}
-                                >
-                                    {allImages.map((img, index) => (
-                                        <TouchableOpacity
-                                            key={index}
-                                            onPress={() => setSelectedImageIndex(index)}
-                                        >
-                                            <Image
-                                                source={{ uri: img.url }}
-                                                style={[
-                                                    styles.thumbnail,
-                                                    selectedImageIndex === index && styles.thumbnailSelected
-                                                ]}
-                                            />
-                                        </TouchableOpacity>
+                                <View style={styles.dotsRow}>
+                                    {allImages.map((_, i) => (
+                                        <View
+                                            key={i}
+                                            style={[
+                                                styles.dot,
+                                                i === activeImageIndex && styles.dotActive,
+                                            ]}
+                                        />
                                     ))}
-                                </ScrollView>
+                                </View>
                             )}
                         </>
                     ) : (
                         <View style={styles.imagePlaceholder}>
-                            <Ionicons name="image-outline" size={64} color={Colors.dark.textTertiary} />
+                            <MaterialIcons name="sports-tennis" size={64} color={Colors.dark.textTertiary} />
                         </View>
                     )}
                 </View>
@@ -319,6 +340,55 @@ export default function VenueDetailsScreen() {
                         <Ionicons name="location" size={16} color={Colors.dark.textSecondary} />
                         <Text style={styles.address}>{venue.address}</Text>
                     </View>
+
+                    {/* Active Discounts Display (Matches Web) */}
+                    {venue.hasActiveDiscounts && (venue.discountRules?.length || venue.holidayPricing?.length) ? (
+                        <View style={styles.discountsContainer}>
+                            {venue.discountRules?.map((rule: any) => (
+                                <View key={rule.id} style={styles.discountCard}>
+                                    <View style={styles.discountCardHeader}>
+                                        <Ionicons name="pricetag-outline" size={16} color={Colors.dark.primary} style={styles.discountIcon} />
+                                        <Text style={styles.discountCardTitle}>
+                                            <Text style={styles.discountValueText}>
+                                                {rule.discount_unit === 'percent'
+                                                    ? `${rule.discount_value}% OFF`
+                                                    : `₱${rule.discount_value} OFF`}
+                                            </Text>
+                                            <Text style={styles.discountDash}> — </Text>
+                                            <Text style={styles.discountNameText}>{rule.name}</Text>
+                                        </Text>
+                                    </View>
+                                    {rule.description ? (
+                                        <Text style={styles.discountCardDescription}>{rule.description}</Text>
+                                    ) : null}
+                                </View>
+                            ))}
+
+                            {venue.holidayPricing?.map((holiday: any) => {
+                                const isDiscount = holiday.price_multiplier < 1;
+                                const tagColor = isDiscount ? Colors.dark.success : Colors.dark.warning;
+                                const bgColor = isDiscount ? Colors.dark.success + '10' : Colors.dark.warning + '10';
+                                const borderColor = isDiscount ? Colors.dark.success + '30' : Colors.dark.warning + '30';
+
+                                return (
+                                    <View key={holiday.id} style={[styles.discountCard, { backgroundColor: bgColor, borderColor: borderColor }]}>
+                                        <View style={styles.discountCardHeader}>
+                                            <Ionicons name="calendar-outline" size={16} color={tagColor} style={styles.discountIcon} />
+                                            <Text style={styles.discountCardTitle}>
+                                                <Text style={[styles.discountValueText, { color: tagColor }]}>
+                                                    {isDiscount
+                                                        ? `${Math.round((1 - holiday.price_multiplier) * 100)}% OFF`
+                                                        : `+${Math.round((holiday.price_multiplier - 1) * 100)}%`}
+                                                </Text>
+                                                <Text style={styles.discountDash}> — </Text>
+                                                <Text style={styles.discountNameText}>{holiday.name}</Text>
+                                            </Text>
+                                        </View>
+                                    </View>
+                                );
+                            })}
+                        </View>
+                    ) : null}
 
                     {/* Rating Summary */}
                     {reviews.length > 0 && (
@@ -488,6 +558,18 @@ export default function VenueDetailsScreen() {
                     <View style={{ height: 40 }} />
                 </View>
             </ScrollView>
+
+            {/* Availability Bottom Sheet */}
+            {scheduleCourt && venue && (
+                <AvailabilityBottomSheet
+                    visible={!!scheduleCourt}
+                    onClose={() => setScheduleCourt(null)}
+                    courtId={scheduleCourt.id}
+                    courtName={scheduleCourt.name}
+                    venueId={venue.id}
+                    hourlyRate={scheduleCourt.hourly_rate}
+                />
+            )}
         </SafeAreaView>
     );
 }
@@ -534,9 +616,8 @@ const styles = StyleSheet.create({
         width: '100%',
     },
     mainImage: {
-        width: '100%',
+        width: width,
         height: 280,
-        resizeMode: 'cover',
     },
     imagePlaceholder: {
         width: '100%',
@@ -545,25 +626,24 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    thumbnailScroll: {
+    dotsRow: {
         position: 'absolute',
         bottom: Spacing.md,
         left: 0,
         right: 0,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 6,
     },
-    thumbnailContainer: {
-        paddingHorizontal: Spacing.md,
-        gap: Spacing.sm,
+    dot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: 'rgba(255,255,255,0.45)',
     },
-    thumbnail: {
-        width: 60,
-        height: 60,
-        borderRadius: Radius.sm,
-        borderWidth: 2,
-        borderColor: 'transparent',
-    },
-    thumbnailSelected: {
-        borderColor: Colors.dark.primary,
+    dotActive: {
+        width: 18,
+        backgroundColor: '#fff',
     },
     content: {
         padding: Spacing.lg,
@@ -607,6 +687,53 @@ const styles = StyleSheet.create({
         ...Typography.body,
         color: Colors.dark.textSecondary,
         flex: 1,
+    },
+    discountsContainer: {
+        marginTop: Spacing.sm,
+        marginBottom: Spacing.md,
+        gap: Spacing.sm,
+    },
+    discountCard: {
+        backgroundColor: Colors.dark.primary + '08',
+        borderWidth: 1,
+        borderColor: Colors.dark.primary + '20',
+        borderRadius: Radius.md,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.sm,
+    },
+    discountCardHeader: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+    },
+    discountIcon: {
+        marginRight: Spacing.xs,
+        marginTop: 2,
+    },
+    discountCardTitle: {
+        flex: 1,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+    },
+    discountValueText: {
+        ...Typography.caption,
+        color: Colors.dark.primary,
+        fontWeight: 'bold',
+    },
+    discountDash: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+    },
+    discountNameText: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+        textTransform: 'uppercase',
+    },
+    discountCardDescription: {
+        ...Typography.bodySmall,
+        color: Colors.dark.textTertiary,
+        marginTop: 4,
+        marginLeft: 22,
+        textTransform: 'uppercase',
     },
     ratingRow: {
         flexDirection: 'row',
@@ -754,6 +881,23 @@ const styles = StyleSheet.create({
     actionButtonPrimaryText: {
         ...Typography.button,
         color: Colors.dark.text,
+    },
+    actionButtonSecondary: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: Spacing.sm,
+        paddingHorizontal: Spacing.md,
+        borderRadius: Radius.md,
+        borderWidth: 1,
+        borderColor: Colors.dark.primary + '40',
+        backgroundColor: Colors.dark.primary + '10',
+        gap: Spacing.xs,
+    },
+    actionButtonSecondaryText: {
+        ...Typography.button,
+        color: Colors.dark.primary,
+        fontSize: 13,
     },
     reviewCard: {
         marginBottom: Spacing.sm,

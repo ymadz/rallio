@@ -6,9 +6,10 @@ import {
     Image,
     TouchableOpacity,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors, Spacing, Typography, Radius } from '@/constants/Colors';
 import { Card } from '@/components/ui';
+import { isVenueOpen } from '@/lib/utils/date';
 
 interface Court {
     id: string;
@@ -28,6 +29,11 @@ interface Venue {
     distance?: number; // in km
     rating?: number;
     review_count?: number;
+    thumbnail_url?: string;
+    image_url?: string | null;
+    opening_hours?: any;
+    hasActiveDiscounts?: boolean;
+    activeDiscountLabels?: string[];
 }
 
 interface CourtCardProps {
@@ -36,11 +42,12 @@ interface CourtCardProps {
 }
 
 export function CourtCard({ venue, onPress }: CourtCardProps) {
-    // Get primary image or first available
-    const primaryImage = venue.courts
+    // Prefer venue's own image_url, then precomputed thumbnail, then nested court_images
+    const nestedImage = venue.courts
         ?.flatMap((c) => c.court_images || [])
-        .find((img) => img.is_primary);
-    const imageUrl = primaryImage?.url || venue.courts?.[0]?.court_images?.[0]?.url;
+        .find((img) => img.is_primary)?.url
+        ?? venue.courts?.[0]?.court_images?.[0]?.url;
+    const imageUrl = venue.image_url ?? venue.thumbnail_url ?? nestedImage;
 
     // Calculate price range
     const prices = venue.courts?.map((c) => c.hourly_rate).filter(Boolean) || [];
@@ -56,6 +63,8 @@ export function CourtCard({ venue, onPress }: CourtCardProps) {
             : `${formatPrice(minPrice)} - ${formatPrice(maxPrice)}/hr`
         : null;
 
+    const isOpen = isVenueOpen(venue.opening_hours);
+
     return (
         <TouchableOpacity activeOpacity={0.7} onPress={onPress}>
             <Card variant="default" padding="none" style={styles.card}>
@@ -65,9 +74,22 @@ export function CourtCard({ venue, onPress }: CourtCardProps) {
                         <Image source={{ uri: imageUrl }} style={styles.image} />
                     ) : (
                         <View style={styles.imagePlaceholder}>
-                            <Ionicons name="tennisball-outline" size={32} color={Colors.dark.textTertiary} />
+                            <MaterialCommunityIcons name="badminton" size={36} color={Colors.dark.textTertiary} />
                         </View>
                     )}
+                    {/* Badges Stack */}
+                    <View style={styles.badgeContainer}>
+                        <View style={[styles.statusBadge, isOpen ? styles.statusOpen : styles.statusClosed]}>
+                            <Text style={styles.statusText}>{isOpen ? 'OPEN' : 'CLOSED'}</Text>
+                        </View>
+                        {venue.hasActiveDiscounts && venue.activeDiscountLabels?.map((label, i) => (
+                            <View key={i} style={styles.discountBadge}>
+                                <Ionicons name="pricetag" size={12} color={Colors.dark.text} />
+                                <Text style={styles.discountText}>{label}</Text>
+                            </View>
+                        ))}
+                    </View>
+
                     {/* Distance badge */}
                     {venue.distance !== undefined && (
                         <View style={styles.distanceBadge}>
@@ -152,6 +174,57 @@ const styles = StyleSheet.create({
         ...Typography.caption,
         color: Colors.dark.text,
         fontWeight: '500',
+    },
+    badgeContainer: {
+        position: 'absolute',
+        top: Spacing.sm,
+        left: Spacing.sm,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+        maxWidth: '70%',
+    },
+    statusBadge: {
+        paddingHorizontal: Spacing.sm,
+        paddingVertical: 4,
+        borderRadius: Radius.full,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 1.41,
+        elevation: 2,
+    },
+    statusOpen: {
+        backgroundColor: Colors.dark.success, // Adjust color if specific green needed
+    },
+    statusClosed: {
+        backgroundColor: Colors.dark.textSecondary,
+    },
+    statusText: {
+        color: '#fff', // White text
+        fontSize: 10,
+        fontWeight: 'bold',
+        letterSpacing: 0.5,
+    },
+    discountBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.dark.primary, // Using primary color (typically blueish in this app)
+        paddingHorizontal: Spacing.sm,
+        paddingVertical: 4,
+        borderRadius: Radius.full,
+        gap: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 1.41,
+        elevation: 2,
+    },
+    discountText: {
+        color: '#fff',
+        fontSize: 10,
+        fontWeight: 'bold',
+        letterSpacing: 0.5,
     },
     content: {
         padding: Spacing.md,

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
+import { useLocationStore } from '@/store/location-store';
 
 interface Court {
     id: string;
@@ -7,22 +8,36 @@ interface Court {
     hourly_rate: number;
     court_type: string;
     is_active: boolean;
-    court_images?: { url: string; is_primary: boolean }[];
+    capacity: number;
+    court_images?: { url: string; is_primary: boolean; display_order: number }[];
+    court_amenities?: { amenities: { name: string } | null }[];
+    court_ratings?: { overall_rating: number }[];
 }
 
 export interface Venue {
     id: string;
     name: string;
+    description?: string;
     address: string;
     latitude?: number;
     longitude?: number;
-    opening_hours?: string;
+    opening_hours?: any;
+    metadata?: Record<string, any>;
+    image_url?: string | null;
     courts?: Court[];
     court_count?: number;
+    // Derived / computed fields
+    amenities: string[];
     distance?: number;
     rating?: number;
     review_count?: number;
+    thumbnail_url?: string;
+    activeDiscountCount?: number;
+    hasActiveDiscounts?: boolean;
+    activeDiscountLabels?: string[];
 }
+
+export type SortBy = 'nearest' | 'rating' | 'price_low' | 'price_high' | null;
 
 interface CourtState {
     venues: Venue[];
@@ -34,6 +49,7 @@ interface CourtState {
         maxPrice: number | null;
         maxDistance: number | null;
         minRating: number | null;
+        sortBy: SortBy;
     };
 }
 
@@ -58,6 +74,7 @@ export const useCourtStore = create<CourtStore>()((set, get) => ({
         maxPrice: null,
         maxDistance: null,
         minRating: null,
+        sortBy: null,
     },
 
     // Actions
@@ -68,29 +85,40 @@ export const useCourtStore = create<CourtStore>()((set, get) => ({
             const { data, error } = await supabase
                 .from('venues')
                 .select(`
-          id,
-          name,
-          address,
-          latitude,
-          longitude,
-          opening_hours,
-          courts (
-            id,
-            name,
-            hourly_rate,
-            court_type,
-            is_active,
-            court_images (
-              url,
-              is_primary,
-              display_order
-            )
-          )
-        `)
+                    id,
+                    name,
+                    description,
+                    address,
+                    latitude,
+                    longitude,
+                    opening_hours,
+                    metadata,
+                    image_url,
+                    courts (
+                        id,
+                        name,
+                        hourly_rate,
+                        court_type,
+                        is_active,
+                        capacity,
+                        court_images (
+                            url,
+                            is_primary,
+                            display_order
+                        ),
+                        court_amenities (
+                            amenities (
+                                name
+                            )
+                        ),
+                        court_ratings (
+                            overall_rating
+                        )
+                    )
+                `)
                 .eq('is_active', true)
                 .eq('is_verified', true)
                 .eq('courts.is_active', true)
-                .eq('courts.is_verified', true)
                 .order('name');
 
             if (error) {
@@ -98,16 +126,90 @@ export const useCourtStore = create<CourtStore>()((set, get) => ({
                 return;
             }
 
-            set({
-                venues: data || [],
-                isLoading: false,
-                error: null,
+            // Fetch active discounts to attach to venues
+            const venueIds = (data || []).map((v: any) => v.id);
+            let activeDiscountMap: Record<string, number> = {};
+            let activeDiscountLabelsMap: Record<string, string[]> = {};
+
+            if (venueIds.length > 0) {
+                const { data: rules } = await supabase
+                    .from('discount_rules')
+                    .select('venue_id, name, discount_value, discount_unit')
+                    .in('venue_id', venueIds)
+                    .eq('is_active', true);
+
+                const { data: holidays } = await supabase
+                    .from('holiday_pricing')
+                    .select('venue_id, name, price_multiplier')
+                    .in('venue_id', venueIds)
+                    .eq('is_active', true);
+
+                venueIds.forEach((id: string) => {
+                    const venueRules = rules?.filter((r: any) => r.venue_id === id) || [];
+                    const venueHolidays = holidays?.filter((h: any) => h.venue_id === id) || [];
+                    activeDiscountMap[id] = venueRules.length + venueHolidays.length;
+
+                    activeDiscountLabelsMap[id] = [
+                        ...venueRules.map((r: any) =>
+                            r.discount_unit === 'percent' ? `${r.discount_value}% OFF` : `₱${r.discount_value} OFF`
+                        ),
+                        ...venueHolidays.map((h: any) => {
+                            if (h.price_multiplier < 1) return `${Math.round((1 - h.price_multiplier) * 100)}% OFF`;
+                            return `+${Math.round((h.price_multiplier - 1) * 100)}%`;
+                        }),
+                    ];
+                });
+            }
+
+            const calculateDistance = useLocationStore.getState().calculateDistance;
+
+            const venues: Venue[] = (data || []).map((venue: any) => {
+                // Flatten unique amenity names from all courts
+                const amenitySet = new Set<string>();
+                venue.courts?.forEach((court: Court) => {
+                    court.court_amenities?.forEach((ca) => {
+                        const name = ca.amenities?.name;
+                        if (name) amenitySet.add(name);
+                    });
+                });
+
+                // Compute average rating across all courts' ratings
+                const allRatings: number[] = [];
+                venue.courts?.forEach((court: Court) => {
+                    court.court_ratings?.forEach((cr) => {
+                        if (cr.overall_rating) allRatings.push(cr.overall_rating);
+                    });
+                });
+                const avgRating = allRatings.length > 0
+                    ? allRatings.reduce((a, b) => a + b, 0) / allRatings.length
+                    : undefined;
+
+                // Compute distance from user location (returns km or null)
+                const distance = (venue.latitude && venue.longitude)
+                    ? calculateDistance(Number(venue.latitude), Number(venue.longitude)) ?? undefined
+                    : undefined;
+
+                // Pick primary image (or first available) as thumbnail
+                // Prefer the venue's own image_url, then fall back to court_images
+                const allImages = venue.courts?.flatMap((c: Court) => c.court_images || []) ?? [];
+                const primary = allImages.find((img: { url: string; is_primary: boolean }) => img.is_primary) ?? allImages[0];
+
+                return {
+                    ...venue,
+                    amenities: Array.from(amenitySet),
+                    rating: avgRating,
+                    review_count: allRatings.length,
+                    distance,
+                    thumbnail_url: venue.image_url ?? primary?.url,
+                    activeDiscountCount: activeDiscountMap[venue.id] || 0,
+                    hasActiveDiscounts: (activeDiscountMap[venue.id] || 0) > 0,
+                    activeDiscountLabels: activeDiscountLabelsMap[venue.id] || [],
+                };
             });
+
+            set({ venues, isLoading: false, error: null });
         } catch (err) {
-            set({
-                error: 'Failed to fetch venues',
-                isLoading: false
-            });
+            set({ error: 'Failed to fetch venues', isLoading: false });
         }
     },
 
@@ -117,10 +219,7 @@ export const useCourtStore = create<CourtStore>()((set, get) => ({
 
     setFilter: (key, value) => {
         set((state) => ({
-            filters: {
-                ...state.filters,
-                [key]: value,
-            },
+            filters: { ...state.filters, [key]: value },
         }));
     },
 
@@ -131,6 +230,7 @@ export const useCourtStore = create<CourtStore>()((set, get) => ({
                 maxPrice: null,
                 maxDistance: null,
                 minRating: null,
+                sortBy: null,
             },
             searchQuery: '',
         });
@@ -141,10 +241,11 @@ export const useCourtStore = create<CourtStore>()((set, get) => ({
     },
 }));
 
-// Selector for filtered venues
+// Selector for filtered + sorted venues
 export const useFilteredVenues = () => {
     const { venues, searchQuery, filters } = useCourtStore();
-    return venues.filter((venue) => {
+
+    const filtered = venues.filter((venue) => {
         // Search filter
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
@@ -153,15 +254,13 @@ export const useFilteredVenues = () => {
             if (!matchesName && !matchesAddress) return false;
         }
 
-        // Amenities filter
+        // Amenities filter — must have ALL selected amenities
         if (filters.amenities && filters.amenities.length > 0) {
-            // Note: In a real app, you'd check if venue.amenities includes ALL selected amenities
-            // For now, we'll assume venue objects have an amenities array (might need to be added to fetch)
-            // If venue.amenities is missing in current data shape, this filter might always fail or pass depending on logic.
-            // Let's assume we will fetch it or it's implicitly part of `courts` relation logic if we updated the query.
-            // Given the current fetch query doesn't explicitly return top-level amenities list, 
-            // we might need to derive it from `courts` or just update the fetch query later.
-            // For this task, I'll add the logic assuming the data will be there.
+            const venueAmenities = venue.amenities || [];
+            const hasAll = filters.amenities.every((a) =>
+                venueAmenities.some((va) => va.toLowerCase() === a.toLowerCase())
+            );
+            if (!hasAll) return false;
         }
 
         // Max price filter
@@ -177,11 +276,40 @@ export const useFilteredVenues = () => {
             if ((venue.rating || 0) < filters.minRating) return false;
         }
 
-        // Distance filter (if location available)
-        if (filters.maxDistance && venue.distance !== undefined) {
+        // Distance filter
+        if (filters.maxDistance != null && venue.distance !== undefined) {
             if (venue.distance > filters.maxDistance) return false;
         }
 
         return true;
+    });
+
+    // Sort
+    const { sortBy } = filters;
+    if (!sortBy) return filtered;
+
+    return [...filtered].sort((a, b) => {
+        switch (sortBy) {
+            case 'nearest': {
+                const da = a.distance ?? Infinity;
+                const db = b.distance ?? Infinity;
+                return da - db;
+            }
+            case 'rating': {
+                return (b.rating ?? 0) - (a.rating ?? 0);
+            }
+            case 'price_low': {
+                const pa = Math.min(...(a.courts?.map((c) => c.hourly_rate) || [Infinity]));
+                const pb = Math.min(...(b.courts?.map((c) => c.hourly_rate) || [Infinity]));
+                return pa - pb;
+            }
+            case 'price_high': {
+                const pa = Math.min(...(a.courts?.map((c) => c.hourly_rate) || [Infinity]));
+                const pb = Math.min(...(b.courts?.map((c) => c.hourly_rate) || [Infinity]));
+                return pb - pa;
+            }
+            default:
+                return 0;
+        }
     });
 };

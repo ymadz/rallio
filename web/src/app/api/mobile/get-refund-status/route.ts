@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRefundStatusAction } from '@/app/actions/refund-actions'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 export async function GET(request: NextRequest) {
     try {
-        const supabase = await createClient()
+        const authHeader = request.headers.get('Authorization')
+        if (!authHeader) {
+            return NextResponse.json({ success: false, error: 'Missing Authorization header' }, { status: 401 })
+        }
+
+        // Initialize Supabase client with the Authorization header (mobile sends Bearer token)
+        const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            { global: { headers: { Authorization: authHeader } } }
+        )
 
         // Verify authentication
         const { data: { user }, error: authError } = await supabase.auth.getUser()

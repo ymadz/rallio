@@ -11,8 +11,15 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Typography, Radius } from '@/constants/Colors';
 import { Button } from '@/components/ui/Button';
-import { useCourtStore } from '@/store/court-store';
+import { useCourtStore, SortBy } from '@/store/court-store';
 import { BlurView } from 'expo-blur';
+
+const SORT_OPTIONS: { label: string; value: SortBy }[] = [
+    { label: 'Nearest', value: 'nearest' },
+    { label: 'Highest Rated', value: 'rating' },
+    { label: 'Price: Low → High', value: 'price_low' },
+    { label: 'Price: High → Low', value: 'price_high' },
+];
 
 interface FilterBottomSheetProps {
     visible: boolean;
@@ -49,6 +56,7 @@ export function FilterBottomSheet({ visible, onClose }: FilterBottomSheetProps) 
         setFilter('maxPrice', localFilters.maxPrice);
         setFilter('amenities', localFilters.amenities);
         setFilter('minRating', localFilters.minRating);
+        setFilter('sortBy', localFilters.sortBy);
         onClose();
     };
 
@@ -59,6 +67,7 @@ export function FilterBottomSheet({ visible, onClose }: FilterBottomSheetProps) 
             amenities: [],
             maxDistance: null,
             minRating: null,
+            sortBy: null,
         });
         onClose();
     };
@@ -83,6 +92,13 @@ export function FilterBottomSheet({ visible, onClose }: FilterBottomSheetProps) 
         setLocalFilters({ ...localFilters, maxPrice: price });
     };
 
+    const toggleSortBy = (value: SortBy) => {
+        setLocalFilters({
+            ...localFilters,
+            sortBy: localFilters.sortBy === value ? null : value,
+        });
+    };
+
     return (
         <Modal
             visible={visible}
@@ -103,6 +119,30 @@ export function FilterBottomSheet({ visible, onClose }: FilterBottomSheetProps) 
                     </View>
 
                     <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                        {/* Sort By */}
+                        <View style={styles.section}>
+                            <Text style={styles.sectionTitle}>Sort By</Text>
+                            <View style={styles.priceContainer}>
+                                {SORT_OPTIONS.map((opt) => (
+                                    <TouchableOpacity
+                                        key={opt.value}
+                                        style={[
+                                            styles.priceChip,
+                                            localFilters.sortBy === opt.value && styles.activeChip,
+                                        ]}
+                                        onPress={() => toggleSortBy(opt.value)}
+                                    >
+                                        <Text style={[
+                                            styles.priceText,
+                                            localFilters.sortBy === opt.value && styles.activeChipText,
+                                        ]}>
+                                            {opt.label}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </View>
+
                         {/* Price Range */}
                         <View style={styles.section}>
                             <Text style={styles.sectionTitle}>Max Hourly Rate</Text>
