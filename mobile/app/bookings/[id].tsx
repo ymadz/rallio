@@ -9,10 +9,11 @@ import {
     Alert,
     ScrollView,
     TextInput,
-    Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Typography, Radius } from '@/constants/Colors';
 import { Card, Button } from '@/components/ui';
@@ -95,12 +96,26 @@ export default function BookingDetailsScreen() {
         if (!booking) return;
         try {
             setIsResumingPayment(true);
+
+            // Generate deep link return URL for Expo Go compatibility
+            const redirectUrl = Linking.createURL(`/bookings/${booking.id}`);
+
             const result = await apiPost('/api/mobile/resume-payment', {
                 reservationId: booking.id,
+                appLink: redirectUrl
             });
 
             if (result.success && result.checkoutUrl) {
-                await Linking.openURL(result.checkoutUrl);
+                // Open PayMongo Checkout via WebBrowser so it returns back to the app smoothly
+                const browserResult = await WebBrowser.openAuthSessionAsync(
+                    result.checkoutUrl,
+                    redirectUrl
+                );
+
+                if (browserResult.type === 'success') {
+                    Alert.alert('Payment Resumed', 'Checking your payment status...');
+                    fetchBookingDetails();
+                }
             } else {
                 Alert.alert('Error', result.error || 'Failed to create payment link');
             }
@@ -342,22 +357,7 @@ export default function BookingDetailsScreen() {
             </View>
 
             <ScrollView style={styles.content}>
-                {/* QR Code Section (Only for valid active bookings) */}
-                {booking.status !== 'cancelled' && booking.status !== 'refunded' && (
-                    <View style={styles.qrContainer}>
-                        <Card variant="default" style={styles.qrCard}>
-                            <QRCode
-                                value={booking.id}
-                                size={200}
-                                backgroundColor="white"
-                                color="black"
-                            />
-                            <Text style={styles.qrLabel}>Scan at Venue</Text>
-                        </Card>
-                    </View>
-                )}
-
-                {/* Refund Status Banner */}
+                {/* Status Banner */}
                 {refundStatus && (
                     <View style={[styles.refundBanner, { backgroundColor: Colors.dark.warning + '20', borderColor: Colors.dark.warning }]}>
                         <ActivityIndicator size="small" color={Colors.dark.warning} />
