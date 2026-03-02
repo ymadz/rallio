@@ -120,32 +120,6 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Stats */}
-        <Text style={styles.sectionTitle}>Your Stats</Text>
-        <Card variant="glass" padding="md" style={styles.statsCard}>
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{player?.total_games_played || 0}</Text>
-              <Text style={styles.statLabel}>Games</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{player?.total_wins || 0}</Text>
-              <Text style={styles.statLabel}>Wins</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{player?.skill_level || '-'}</Text>
-              <Text style={styles.statLabel}>Skill</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{player?.rating || '-'}</Text>
-              <Text style={styles.statLabel}>Rating</Text>
-            </View>
-          </View>
-        </Card>
-
         {/* Nearby Courts */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Courts Near You</Text>
