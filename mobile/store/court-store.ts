@@ -11,7 +11,7 @@ interface Court {
     capacity: number;
     court_images?: { url: string; is_primary: boolean; display_order: number }[];
     court_amenities?: { amenities: { name: string } | null }[];
-    court_ratings?: { rating: number }[];
+    court_ratings?: { overall_rating: number }[];
 }
 
 export interface Venue {
@@ -106,7 +106,7 @@ export const useCourtStore = create<CourtStore>()((set, get) => ({
                             )
                         ),
                         court_ratings (
-                            rating
+                            overall_rating
                         )
                     )
                 `)
@@ -136,7 +136,7 @@ export const useCourtStore = create<CourtStore>()((set, get) => ({
                 const allRatings: number[] = [];
                 venue.courts?.forEach((court: Court) => {
                     court.court_ratings?.forEach((cr) => {
-                        if (cr.rating) allRatings.push(cr.rating);
+                        if (cr.overall_rating) allRatings.push(cr.overall_rating);
                     });
                 });
                 const avgRating = allRatings.length > 0
