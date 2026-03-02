@@ -1918,19 +1918,13 @@ export async function removeParticipant(
     const costPerGame = parseFloat(session.cost_per_game || '0')
     const amountOwed = gamesPlayed * costPerGame
 
-    // 6. Update participant with metadata about removal
+    // 6. Update participant record
     const { error: updateError } = await supabase
       .from('queue_participants')
       .update({
         status: 'left',
         left_at: new Date().toISOString(),
         amount_owed: amountOwed,
-        metadata: {
-          ...participant.metadata,
-          removed_by: user.id,
-          removal_reason: reason,
-          removed_at: new Date().toISOString(),
-        },
       })
       .eq('id', participant.id)
 
@@ -1992,8 +1986,10 @@ export async function waiveFee(
       return { success: false, error: 'User not authenticated' }
     }
 
-    // 2. Get participant details
-    const { data: participant, error: participantError } = await supabase
+    // 2. Use service client for all reads (Queue Master is not the participant, RLS blocks regular client)
+    const serviceClient = createServiceClient()
+
+    const { data: participant, error: participantError } = await serviceClient
       .from('queue_participants')
       .select('*')
       .eq('id', participantId)
@@ -2004,7 +2000,7 @@ export async function waiveFee(
     }
 
     // 3. Get queue session details separately to verify organizer
-    const { data: queueSession, error: sessionError } = await supabase
+    const { data: queueSession, error: sessionError } = await serviceClient
       .from('queue_sessions')
       .select('id, organizer_id, court_id')
       .eq('id', participant.queue_session_id)
@@ -2020,21 +2016,11 @@ export async function waiveFee(
     }
 
     // 5. Update participant to waive fee using service client (bypasses RLS for admin operation)
-    const serviceClient = createServiceClient()
     const { error: updateError } = await serviceClient
       .from('queue_participants')
       .update({
         amount_owed: 0,
         payment_status: 'paid',
-        metadata: {
-          ...(participant.metadata || {}),
-          fee_waived: {
-            waived_at: new Date().toISOString(),
-            waived_by: user.id,
-            reason: reason,
-            original_amount: participant.amount_owed,
-          },
-        },
       })
       .eq('id', participantId)
 
@@ -2082,8 +2068,10 @@ export async function markAsPaid(
       return { success: false, error: 'User not authenticated' }
     }
 
-    // 2. Get participant details
-    const { data: participant, error: participantError } = await supabase
+    // 2. Use service client for all reads (Queue Master is not the participant, RLS blocks regular client)
+    const serviceClient = createServiceClient()
+
+    const { data: participant, error: participantError } = await serviceClient
       .from('queue_participants')
       .select('*')
       .eq('id', participantId)
@@ -2108,7 +2096,7 @@ export async function markAsPaid(
     })
 
     // 3. Get queue session details separately to verify organizer
-    const { data: queueSession, error: sessionError } = await supabase
+    const { data: queueSession, error: sessionError } = await serviceClient
       .from('queue_sessions')
       .select('id, organizer_id, court_id')
       .eq('id', participant.queue_session_id)
@@ -2138,20 +2126,10 @@ export async function markAsPaid(
     }
 
     // 6. Update participant to mark as paid using service client (bypasses RLS for admin operation)
-    const serviceClient = createServiceClient()
     const { error: updateError } = await serviceClient
       .from('queue_participants')
       .update({
         payment_status: 'paid',
-        metadata: {
-          ...(participant.metadata || {}),
-          cash_payment: {
-            marked_paid_at: new Date().toISOString(),
-            marked_paid_by: user.id,
-            amount_paid: participant.amount_owed,
-            payment_method: 'cash',
-          },
-        },
       })
       .eq('id', participantId)
 

@@ -46,7 +46,9 @@ export function PaymentManagementModal({
     setError(null)
 
     try {
+      console.log('💵 [PaymentModal] Calling markAsPaid server action...')
       const result = await markAsPaid(participant.id)
+      console.log('💵 [PaymentModal] Server action result:', JSON.stringify(result))
 
       if (!result.success) {
         throw new Error(result.error || 'Failed to mark as paid')
@@ -57,6 +59,11 @@ export function PaymentManagementModal({
       onClose()
     } catch (err: any) {
       console.error('❌ [PaymentModal] Mark as paid error:', err)
+      console.error('❌ [PaymentModal] Error details:', {
+        message: err.message,
+        name: err.name,
+        stack: err.stack,
+      })
       setError(err.message || 'Failed to mark as paid')
     } finally {
       setIsSubmitting(false)
