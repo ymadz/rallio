@@ -351,7 +351,7 @@ export async function validateBookingAvailabilityAction(data: {
     // A. Check Past Time
     // Strict absolute offset independent of server parsing logic.
     if (slot.start.getTime() < Date.now() - 60000) { // Add 1 minute grace period
-      const dateStr = slot.start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+      const dateStr = slot.start.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
       return { available: false, conflictDate: dateStr, error: `Cannot book a time in the past: ${dateStr}` }
     }
 
@@ -368,7 +368,7 @@ export async function validateBookingAvailabilityAction(data: {
 
     if (!dayHours) {
       // Venue closed on this day
-      const dateStr = slot.start.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
+      const dateStr = slot.start.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', weekday: 'long', month: 'short', day: 'numeric' })
       return { available: false, conflictDate: dateStr, error: `Venue is closed on ${dateStr}` }
     }
 
@@ -389,8 +389,8 @@ export async function validateBookingAvailabilityAction(data: {
 
     if (slotStartMinutes < openMinutes || slotEndMinutes > closeMinutes) {
       // Slot is outside operating hours
-      const dateStr = slot.start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
-      const timeStr = slot.start.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+      const dateStr = slot.start.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric' })
+      const timeStr = slot.start.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' })
       return { available: false, conflictDate: dateStr, error: `Venue is closed at ${timeStr} on ${dayName}s (Open: ${dayHours.open} - ${dayHours.close})` }
     }
 
@@ -414,7 +414,7 @@ export async function validateBookingAvailabilityAction(data: {
     ])
 
     if (queueConflicts.data && queueConflicts.data.length > 0) {
-      const dateStr = slot.start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+      const dateStr = slot.start.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
       return { available: false, conflictDate: dateStr, error: `Queue Session conflict on ${dateStr}` }
     }
 
@@ -433,7 +433,7 @@ export async function validateBookingAvailabilityAction(data: {
     }) || []
 
     if (realConflicts.length > 0) {
-      const dateStr = slot.start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+      const dateStr = slot.start.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
       return { available: false, conflictDate: dateStr, error: `Already reserved on ${dateStr}` }
     }
   }
