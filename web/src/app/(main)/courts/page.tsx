@@ -147,7 +147,7 @@ export default function CourtsPage() {
                     totalReviews: court.review_count || 0,
                     category: 'Recommended for You',
                     location: venueObj.city || venueObj.address,
-                    image_url: court.images?.[0]?.url || venueObj.image_url || 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?q=80&w=2670&auto=format&fit=crop',
+                    image_url: court.images?.[0]?.url || venueObj.image_url || null,
                     is_ml_recommendation: true // The flag for the sparkbadge!
                   };
                 });
