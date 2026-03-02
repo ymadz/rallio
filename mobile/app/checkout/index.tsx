@@ -369,25 +369,104 @@ export default function CheckoutScreen() {
             </View>
 
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-                {/* Booking Summary */}
+                {/* Unified Booking Summary & Price Details */}
                 <Text style={styles.sectionTitle}>Booking Summary</Text>
                 <Card variant="glass" padding="md" style={styles.summaryCard}>
-                    <Text style={styles.courtName}>{bookingData.courtName}</Text>
-                    <Text style={styles.venueName}>{bookingData.venueName}</Text>
+                    {/* Court Info */}
+                    <View style={styles.summarySectionBlock}>
+                        <Text style={styles.summaryLabel}>Court</Text>
+                        <Text style={styles.courtName}>{bookingData.courtName}</Text>
+                        <Text style={styles.venueName}>{bookingData.venueName}</Text>
+                    </View>
 
-                    <View style={styles.summaryDetails}>
-                        <View style={styles.summaryItem}>
-                            <Ionicons name="calendar-outline" size={16} color={Colors.dark.textSecondary} />
-                            <Text style={styles.summaryText}>
-                                {format(new Date(bookingData.date), 'EEE, MMM d')}
+                    {/* Date & Time */}
+                    <View style={styles.summarySectionBlock}>
+                        <Text style={styles.summaryLabel}>Date & Time</Text>
+                        <Text style={styles.summaryMainText}>
+                            {format(new Date(bookingData.date), 'EEEE, MMM d, yyyy')}
+                        </Text>
+                        <Text style={styles.summarySubText}>
+                            {formatTime(bookingData.startTime)} - {formatTime(bookingData.endTime)}
+                        </Text>
+
+                        {bookingData.recurrenceWeeks && bookingData.recurrenceWeeks > 1 && (
+                            <View style={styles.recurrenceBadges}>
+                                <View style={styles.recurrenceBadge}>
+                                    <Text style={styles.recurrenceBadgeText}>{bookingData.recurrenceWeeks} Weeks Selection</Text>
+                                </View>
+                                {(bookingData.selectedDays?.length || 0) > 1 && (
+                                    <View style={[styles.recurrenceBadge, styles.weeklyBadge]}>
+                                        <Text style={[styles.recurrenceBadgeText, styles.weeklyBadgeText]}>
+                                            {bookingData.selectedDays?.length}x Weekly
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
+                        )}
+                    </View>
+
+                    {/* Divider */}
+                    <View style={styles.divider} />
+
+                    {/* Price Breakdown */}
+                    <View style={styles.priceContainer}>
+                        <View style={styles.priceRow}>
+                            <Text style={styles.priceLabel}>
+                                Court Fee (₱{bookingData.hourlyRate.toFixed(2)} × {bookingData.duration} {bookingData.duration > 1 ? 'hrs' : 'hr'})
+                                {bookingData.recurrenceWeeks && bookingData.recurrenceWeeks > 1 ? ` × ${bookingData.recurrenceWeeks * (bookingData.selectedDays?.length || 1)} sessions` : ''}
+                            </Text>
+                            <Text style={styles.priceValue}>₱{(subtotal + discountAmount).toLocaleString()}</Text>
+                        </View>
+
+                        {/* Discount Tags */}
+                        {hasDiscounts && discountLabels.length > 0 && (
+                            <View style={[styles.discountBadgesContainer, { marginTop: Spacing.sm }]}>
+                                {discountLabels.map((label, idx) => (
+                                    <View key={idx} style={styles.discountBadge}>
+                                        <Ionicons name="pricetag" size={14} color={Colors.dark.primary} style={{ marginTop: 2 }} />
+                                        <Text style={styles.discountBadgeText}>{label}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+
+                        {discountAmount > 0 && (
+                            <>
+                                <View style={styles.priceRow}>
+                                    <Text style={[styles.priceLabel, { color: Colors.dark.success }]}>Discount</Text>
+                                    <Text style={[styles.priceValue, { color: Colors.dark.success }]}>-₱{discountAmount.toLocaleString()}</Text>
+                                </View>
+                                <View style={[styles.priceRow, { paddingTop: Spacing.xs }]}>
+                                    <Text style={[styles.priceLabel, { fontWeight: '600' }]}>Subtotal</Text>
+                                    <Text style={[styles.priceValue, { fontWeight: '600' }]}>₱{subtotal.toLocaleString()}</Text>
+                                </View>
+                            </>
+                        )}
+
+                        <View style={[styles.priceRow, { marginTop: Spacing.xs }]}>
+                            <Text style={styles.priceLabel}>Platform Fee (5%)</Text>
+                            <Text style={styles.priceValue}>₱{platformFee.toFixed(2)}</Text>
+                        </View>
+                    </View>
+
+                    {/* Total Area */}
+                    <View style={[styles.totalPriceRow, { marginTop: Spacing.md }]}>
+                        <View style={styles.priceRow}>
+                            <Text style={styles.totalPriceLabel}>Total Amount</Text>
+                            <Text style={styles.totalPriceValue}>
+                                ₱{(isDownPaymentRequired ? downPaymentAmount : total).toLocaleString()}
                             </Text>
                         </View>
-                        <View style={styles.summaryItem}>
-                            <Ionicons name="time-outline" size={16} color={Colors.dark.textSecondary} />
-                            <Text style={styles.summaryText}>
-                                {formatTime(bookingData.startTime)} - {formatTime(bookingData.endTime)}
-                            </Text>
-                        </View>
+
+                        {isDownPaymentRequired && (
+                            <View style={styles.downPaymentBox}>
+                                <View>
+                                    <Text style={styles.dpBoxTitle}>REMAINING BALANCE</Text>
+                                    <Text style={styles.dpBoxSub}>To be paid at the venue</Text>
+                                </View>
+                                <Text style={styles.dpBoxValue}>₱{remainingBalance.toLocaleString()}</Text>
+                            </View>
+                        )}
                     </View>
                 </Card>
 
@@ -441,59 +520,6 @@ export default function CheckoutScreen() {
                         {paymentMethod === 'cash' && <View style={styles.radioInner} />}
                     </View>
                 </TouchableOpacity>
-
-                {/* Split Payment Removed */}
-
-                <Text style={styles.sectionTitle}>Price Details</Text>
-                <Card variant="default" padding="md">
-                    <View style={styles.priceRow}>
-                        <Text style={styles.priceLabel}>
-                            ₱{bookingData.hourlyRate} × {bookingData.duration} hr
-                            {bookingData.recurrenceWeeks && bookingData.recurrenceWeeks > 1 ? ` × ${bookingData.recurrenceWeeks} wks` : ''}
-                        </Text>
-                        <Text style={styles.priceValue}>₱{subtotal.toLocaleString()}</Text>
-                    </View>
-                    <View style={styles.priceRow}>
-                        <Text style={styles.priceLabel}>Platform fee (5%)</Text>
-                        <Text style={styles.priceValue}>₱{platformFee.toFixed(2)}</Text>
-                    </View>
-
-                    {/* Show discount labels if venue has them (since price reflects it from backend/booking calculation) */}
-                    {hasDiscounts && discountLabels.length > 0 && (
-                        <View style={styles.discountBadgesContainer}>
-                            {discountLabels.map((label, idx) => (
-                                <View key={idx} style={styles.discountBadge}>
-                                    <Ionicons name="pricetag" size={14} color={Colors.dark.primary} style={{ marginTop: 2 }} />
-                                    <Text style={styles.discountBadgeText}>{label}</Text>
-                                </View>
-                            ))}
-                        </View>
-                    )}
-
-                    {discountAmount > 0 && (
-                        <View style={styles.priceRow}>
-                            <Text style={[styles.priceLabel, { color: Colors.dark.success }]}>Discount</Text>
-                            <Text style={[styles.priceValue, { color: Colors.dark.success }]}>-₱{discountAmount.toLocaleString()}</Text>
-                        </View>
-                    )}
-                    <View style={[styles.priceRow, styles.totalPriceRow]}>
-                        <Text style={styles.totalPriceLabel}>Total</Text>
-                        <Text style={styles.totalPriceValue}>₱{total.toLocaleString()}</Text>
-                    </View>
-
-                    {isDownPaymentRequired && (
-                        <>
-                            <View style={[styles.priceRow, { marginTop: Spacing.sm, paddingTop: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.dark.border }]}>
-                                <Text style={[styles.priceLabel, { color: Colors.dark.primary, fontWeight: '600' }]}>Down Payment (Pay Online)</Text>
-                                <Text style={[styles.priceValue, { color: Colors.dark.primary, fontWeight: '600' }]}>₱{downPaymentAmount.toLocaleString()}</Text>
-                            </View>
-                            <View style={styles.priceRow}>
-                                <Text style={styles.priceLabel}>Remaining Balance (Pay at Venue)</Text>
-                                <Text style={styles.priceValue}>₱{remainingBalance.toLocaleString()}</Text>
-                            </View>
-                        </>
-                    )}
-                </Card>
 
                 {/* Cancellation Policy */}
                 <TouchableOpacity
@@ -582,19 +608,77 @@ const styles = StyleSheet.create({
         color: Colors.dark.textSecondary,
         marginBottom: Spacing.md,
     },
-    summaryDetails: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: Spacing.md,
+    summaryLabel: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+        marginBottom: 2,
     },
-    summaryItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
+    summaryMainText: {
+        ...Typography.body,
+        fontWeight: '600',
+        color: Colors.dark.text,
     },
-    summaryText: {
+    summarySubText: {
         ...Typography.bodySmall,
         color: Colors.dark.textSecondary,
+    },
+    summarySectionBlock: {
+        marginBottom: Spacing.md,
+    },
+    recurrenceBadges: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: Spacing.sm,
+        marginTop: Spacing.sm,
+    },
+    recurrenceBadge: {
+        backgroundColor: Colors.dark.primary + '15',
+        paddingHorizontal: Spacing.sm,
+        paddingVertical: 4,
+        borderRadius: Radius.sm,
+    },
+    recurrenceBadgeText: {
+        ...Typography.caption,
+        color: Colors.dark.primary,
+        fontWeight: '600',
+    },
+    weeklyBadge: {
+        backgroundColor: Colors.dark.primary + '15',
+    },
+    weeklyBadgeText: {
+        color: Colors.dark.primary,
+    },
+    divider: {
+        height: 1,
+        backgroundColor: Colors.dark.border,
+        marginVertical: Spacing.sm,
+    },
+    priceContainer: {
+        paddingVertical: Spacing.sm,
+    },
+    downPaymentBox: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: Colors.dark.primary + '10',
+        padding: Spacing.md,
+        borderRadius: Radius.md,
+        marginTop: Spacing.md,
+    },
+    dpBoxTitle: {
+        ...Typography.caption,
+        color: Colors.dark.primary,
+        fontWeight: 'bold',
+        letterSpacing: 0.5,
+    },
+    dpBoxSub: {
+        ...Typography.bodySmall,
+        color: Colors.dark.textSecondary,
+        marginTop: 2,
+    },
+    dpBoxValue: {
+        ...Typography.h3,
+        color: Colors.dark.text,
     },
     paymentOption: {
         flexDirection: 'row',
