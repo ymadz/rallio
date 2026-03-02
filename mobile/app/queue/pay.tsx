@@ -54,7 +54,7 @@ export default function QueuePaymentScreen() {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.access_token) throw new Error('Not authenticated');
 
-            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.254.170:3000';
+            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.254.178:3000';
 
             // Create checkout session
             const response = await fetch(`${apiUrl}/api/mobile/create-checkout`, {

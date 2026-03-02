@@ -165,7 +165,7 @@ export default function CheckoutScreen() {
                 throw new Error('User not authenticated (No session)');
             }
 
-            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.254.170:3000';
+            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.254.178:3000';
 
             // Prepare payload for Server Action Wrapper
             const reservationPayload = {
