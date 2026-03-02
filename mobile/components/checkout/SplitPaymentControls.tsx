@@ -15,7 +15,7 @@ export default function SplitPaymentControls() {
         getPerPlayerAmount,
     } = useCheckoutStore();
 
-    const maxPlayers = bookingData?.numPlayers || bookingData?.capacity || 4;
+    const maxPlayers = bookingData?.capacity || 4;
     const total = getTotalAmount();
     const perPlayer = getPerPlayerAmount();
 

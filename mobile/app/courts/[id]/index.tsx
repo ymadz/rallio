@@ -20,6 +20,7 @@ import { Colors, Spacing, Typography, Radius } from '@/constants/Colors';
 import { Card, Button, Avatar } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import AvailabilityBottomSheet from '@/components/venue/AvailabilityBottomSheet';
+import { isVenueOpen, formatOperatingHours } from '@/lib/utils/date';
 
 const { width } = Dimensions.get('window');
 
@@ -60,44 +61,11 @@ interface Venue {
     image_url?: string | null;
     metadata: { amenities?: string[] } | null;
     courts?: Court[];
+    hasActiveDiscounts?: boolean;
+    activeDiscountLabels?: string[];
 }
 
-// Helper to check if venue is currently open
-const isVenueOpen = (hours: Venue['opening_hours']): boolean => {
-    if (!hours || typeof hours === 'string') return true; // Assume open if no structured data
-
-    const now = new Date();
-    const day = now.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
-    const currentTime = now.getHours() * 60 + now.getMinutes();
-
-    const todayHours = hours[day];
-    if (!todayHours) return false;
-
-    const [openHour, openMin] = todayHours.open.split(':').map(Number);
-    const [closeHour, closeMin] = todayHours.close.split(':').map(Number);
-    const openTime = openHour * 60 + (openMin || 0);
-    const closeTime = closeHour * 60 + (closeMin || 0);
-
-    return currentTime >= openTime && currentTime < closeTime;
-};
-
-// Helper to format opening hours
-const formatOpeningHours = (hours: Venue['opening_hours']) => {
-    if (!hours) return null;
-    if (typeof hours === 'string') return [hours];
-
-    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-    const formatted = days.map(day => {
-        const schedule = hours[day];
-        if (!schedule) return null;
-        return {
-            day: day.charAt(0).toUpperCase() + day.slice(1, 3),
-            hours: `${schedule.open} - ${schedule.close}`
-        };
-    }).filter(Boolean);
-
-    return formatted;
-};
+// Helper functions imported from @/lib/utils/date
 
 export default function VenueDetailsScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -158,7 +126,36 @@ export default function VenueDetailsScreen() {
         if (fetchError) {
             setError(fetchError.message);
         } else {
-            setVenue(data);
+            // Fetch discounts for this venue
+            const { data: rules } = await supabase
+                .from('discount_rules')
+                .select('name, discount_value, discount_unit')
+                .eq('venue_id', id)
+                .eq('is_active', true);
+
+            const { data: holidays } = await supabase
+                .from('holiday_pricing')
+                .select('name, price_multiplier')
+                .eq('venue_id', id)
+                .eq('is_active', true);
+
+            const activeDiscountLabels = [
+                ...(rules || []).map((r: any) =>
+                    r.discount_unit === 'percent' ? `${r.discount_value}% OFF` : `₱${r.discount_value} OFF`
+                ),
+                ...(holidays || []).map((h: any) => {
+                    if (h.price_multiplier < 1) return `${Math.round((1 - h.price_multiplier) * 100)}% OFF`;
+                    return `+${Math.round((h.price_multiplier - 1) * 100)}%`;
+                }),
+            ];
+
+            const hasActiveDiscounts = activeDiscountLabels.length > 0;
+
+            setVenue({
+                ...data,
+                hasActiveDiscounts,
+                activeDiscountLabels
+            });
         }
         setIsLoading(false);
     };
@@ -231,7 +228,7 @@ export default function VenueDetailsScreen() {
 
     // Venue status
     const isOpen = venue ? isVenueOpen(venue.opening_hours) : false;
-    const openingHours = venue ? formatOpeningHours(venue.opening_hours) : null;
+    const openingHours = venue ? formatOperatingHours(venue.opening_hours) : null;
 
     // Render stars
     const renderStars = (rating: number) => {
@@ -340,6 +337,18 @@ export default function VenueDetailsScreen() {
                         <Text style={styles.address}>{venue.address}</Text>
                     </View>
 
+                    {/* Active Discounts Display (Matches Web) */}
+                    {venue.hasActiveDiscounts && venue.activeDiscountLabels && (
+                        <View style={styles.discountsContainer}>
+                            {venue.activeDiscountLabels.map((label, idx) => (
+                                <View key={idx} style={styles.discountBadgeDetail}>
+                                    <Ionicons name="pricetag" size={14} color={Colors.dark.primary} style={{ marginTop: 2 }} />
+                                    <Text style={styles.discountTextDetail}>{label}</Text>
+                                </View>
+                            ))}
+                        </View>
+                    )}
+
                     {/* Rating Summary */}
                     {reviews.length > 0 && (
                         <View style={styles.ratingRow}>
@@ -410,14 +419,7 @@ export default function VenueDetailsScreen() {
                                 {/* Court actions */}
                                 <View style={styles.courtActions}>
                                     <TouchableOpacity
-                                        style={styles.actionButtonSecondary}
-                                        onPress={() => setScheduleCourt(court)}
-                                    >
-                                        <Ionicons name="time-outline" size={16} color={Colors.dark.primary} />
-                                        <Text style={styles.actionButtonSecondaryText}>Schedule</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={[styles.actionButtonPrimary, { flex: 1 }]}
+                                        style={styles.actionButtonPrimary}
                                         onPress={() => router.push(`/courts/${id}/book?court=${court.id}`)}
                                     >
                                         <Ionicons name="calendar" size={16} color={Colors.dark.text} />
@@ -644,6 +646,29 @@ const styles = StyleSheet.create({
         ...Typography.body,
         color: Colors.dark.textSecondary,
         flex: 1,
+    },
+    discountsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: Spacing.sm,
+        marginTop: Spacing.xs,
+        marginBottom: Spacing.sm,
+    },
+    discountBadgeDetail: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.dark.primary + '15', // Soft primary background
+        borderWidth: 1,
+        borderColor: Colors.dark.primary + '30',
+        paddingHorizontal: Spacing.md,
+        paddingVertical: 6,
+        borderRadius: Radius.full,
+        gap: Spacing.xs,
+    },
+    discountTextDetail: {
+        ...Typography.caption,
+        color: Colors.dark.primary,
+        fontWeight: 'bold',
     },
     ratingRow: {
         flexDirection: 'row',

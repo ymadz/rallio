@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Typography, Radius } from '@/constants/Colors';
 import { Card, Button } from '@/components/ui';
 import { useCheckoutStore } from '@/store/checkout-store';
+import { useCourtStore } from '@/store/court-store';
 import { useAuthStore } from '@/store/auth-store';
 import { supabase } from '@/lib/supabase';
 import { format } from 'date-fns';
@@ -40,6 +41,13 @@ export default function CheckoutScreen() {
         setBookingReference,
         resetCheckout,
     } = useCheckoutStore();
+
+    const { getVenueById } = useCourtStore();
+
+    // Get venue to check for discounts
+    const venue = bookingData ? getVenueById(bookingData.venueId) : null;
+    const hasDiscounts = venue?.hasActiveDiscounts || false;
+    const discountLabels = venue?.activeDiscountLabels || [];
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [step, setStep] = useState<'review' | 'payment' | 'processing' | 'success'>('review');
@@ -166,7 +174,6 @@ export default function CheckoutScreen() {
                 endTimeISO: `${format(new Date(bookingData.date), 'yyyy-MM-dd')}T${bookingData.endTime}:00`, // Duration logic handled by server if needed, but passing endISO is clearer
                 totalAmount: total, // GRAND TOTAL (Pre-calculated with discount)
                 discountAmount: discountAmount, // Pass discount info if backend needs it
-                numPlayers: bookingData.numPlayers,
                 paymentType: 'full',
                 paymentMethod: paymentMethod, // 'cash' or 'e-wallet'
                 notes: bookingData.notes,
@@ -381,12 +388,6 @@ export default function CheckoutScreen() {
                                 {formatTime(bookingData.startTime)} - {formatTime(bookingData.endTime)}
                             </Text>
                         </View>
-                        <View style={styles.summaryItem}>
-                            <Ionicons name="people-outline" size={16} color={Colors.dark.textSecondary} />
-                            <Text style={styles.summaryText}>
-                                {bookingData.numPlayers} players
-                            </Text>
-                        </View>
                     </View>
                 </Card>
 
@@ -441,13 +442,7 @@ export default function CheckoutScreen() {
                     </View>
                 </TouchableOpacity>
 
-                {/* Split Payment */}
-                {bookingData.numPlayers > 1 && (
-                    <>
-                        <Text style={styles.sectionTitle}>Split Payment</Text>
-                        <SplitPaymentControls />
-                    </>
-                )}
+                {/* Split Payment Removed */}
 
                 <Text style={styles.sectionTitle}>Price Details</Text>
                 <Card variant="default" padding="md">
@@ -462,6 +457,19 @@ export default function CheckoutScreen() {
                         <Text style={styles.priceLabel}>Platform fee (5%)</Text>
                         <Text style={styles.priceValue}>₱{platformFee.toFixed(2)}</Text>
                     </View>
+
+                    {/* Show discount labels if venue has them (since price reflects it from backend/booking calculation) */}
+                    {hasDiscounts && discountLabels.length > 0 && (
+                        <View style={styles.discountBadgesContainer}>
+                            {discountLabels.map((label, idx) => (
+                                <View key={idx} style={styles.discountBadge}>
+                                    <Ionicons name="pricetag" size={14} color={Colors.dark.primary} style={{ marginTop: 2 }} />
+                                    <Text style={styles.discountBadgeText}>{label}</Text>
+                                </View>
+                            ))}
+                        </View>
+                    )}
+
                     {discountAmount > 0 && (
                         <View style={styles.priceRow}>
                             <Text style={[styles.priceLabel, { color: Colors.dark.success }]}>Discount</Text>
@@ -649,6 +657,39 @@ const styles = StyleSheet.create({
     priceLabel: {
         ...Typography.body,
         color: Colors.dark.textSecondary,
+    },
+    priceTotalValue: {
+        ...Typography.h3,
+        color: Colors.dark.text,
+    },
+    discountBadgesContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: Spacing.sm,
+        marginTop: Spacing.xs,
+        marginBottom: Spacing.xs,
+    },
+    discountBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.dark.primary + '15',
+        borderWidth: 1,
+        borderColor: Colors.dark.primary + '30',
+        paddingHorizontal: Spacing.sm,
+        paddingVertical: 4,
+        borderRadius: Radius.full,
+        gap: 4,
+    },
+    discountBadgeText: {
+        ...Typography.caption,
+        color: Colors.dark.primary,
+        fontWeight: 'bold',
+    },
+    bottomSafeArea: {
+        marginTop: Spacing.sm,
+        paddingTop: Spacing.sm,
+        borderTopWidth: 1,
+        borderTopColor: Colors.dark.border,
     },
     priceValue: {
         ...Typography.body,

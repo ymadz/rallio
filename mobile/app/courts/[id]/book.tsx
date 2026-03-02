@@ -15,6 +15,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Typography, Radius } from '@/constants/Colors';
 import { Card, Button } from '@/components/ui';
+import { apiGetPublic, apiPostPublic } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { useCheckoutStore } from '@/store/checkout-store';
 import { format, addDays } from 'date-fns';
@@ -55,7 +56,6 @@ export default function BookingScreen() {
     const [selectedDate, setSelectedDate] = useState<Date>(new Date());
     const [selectedTime, setSelectedTime] = useState<string | null>(null);
     const [endTime, setEndTime] = useState<string | null>(null);
-    const [numPlayers, setNumPlayers] = useState<number>(4);
     const [notes, setNotes] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -103,7 +103,18 @@ export default function BookingScreen() {
         return (endH - startH) + 1;
     }, [selectedTime, endTime]);
 
-    const totalPrice = (selectedCourt?.hourly_rate || 0) * duration;
+    const actualSlotCount = useMemo(() => {
+        if (!selectedDate) return 1;
+        const startDayIndex = selectedDate.getDay();
+        const uniqueSelectedDays = selectedDays.length > 0
+            ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
+            : [startDayIndex];
+
+        return recurrenceWeeks * uniqueSelectedDays.length;
+    }, [selectedDate, recurrenceWeeks, selectedDays]);
+
+    const baseSessionPrice = (selectedCourt?.hourly_rate || 0) * duration;
+    const totalPrice = baseSessionPrice * actualSlotCount;
 
     const [discountResults, setDiscountResults] = useState<{
         totalDiscount: number;
@@ -201,18 +212,13 @@ export default function BookingScreen() {
             try {
                 setIsLoadingSlots(true);
 
-                const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.254.170:3000';
                 const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
-                const response = await fetch(
-                    `${apiUrl}/api/mobile/get-time-slots?courtId=${encodeURIComponent(selectedCourtId)}&date=${dateStr}`
-                );
+                const json = await apiGetPublic('/api/mobile/get-time-slots', {
+                    courtId: selectedCourtId,
+                    date: dateStr
+                });
 
-                if (!response.ok) {
-                    throw new Error(`Time slots fetch failed: ${response.status}`);
-                }
-
-                const json = await response.json();
                 setTimeSlots(json.slots || []);
 
             } catch (err) {
@@ -279,17 +285,7 @@ export default function BookingScreen() {
 
             console.log('Validating availability...', validationPayload);
 
-            const response = await fetch(`${apiUrl}/api/mobile/validate-booking`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(validationPayload)
-            });
-
-            if (!response.ok) {
-                throw new Error('Validation API failed');
-            }
-
-            const result = await response.json();
+            const result = await apiPostPublic('/api/mobile/validate-booking', validationPayload);
 
             if (!result.available) {
                 Alert.alert('Unavailable', result.error || 'Selected time is not available.');
@@ -306,9 +302,9 @@ export default function BookingScreen() {
         setIsValidatingRecurrence(false);
 
         // Pass discount info separately
-        // Multiply discount by weeks if applicable
+        // The totalDiscount from engine is already multiplied by actualSlotCount
         setDiscount(
-            discountResults.totalDiscount * recurrenceWeeks, // Assuming discount is per session
+            discountResults.totalDiscount,
             discountResults.discounts.length > 0 ? discountResults.discounts[0].type : undefined,
             discountResults.discounts.map((d: any) => d.name).join(', ')
         );
@@ -325,7 +321,6 @@ export default function BookingScreen() {
             hourlyRate: selectedCourt.hourly_rate,
             capacity: selectedCourt.capacity,
             duration: duration,
-            numPlayers: numPlayers,
             notes: notes.trim() || undefined,
             recurrenceWeeks: recurrenceWeeks,
             selectedDays: selectedDays, // Add this
@@ -439,7 +434,7 @@ export default function BookingScreen() {
                 {/* Repeat Booking Selection */}
                 <Text style={styles.sectionTitle}>Repeat Booking</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
-                    {[1, 4, 8].map((weeks) => (
+                    {[1, 2, 3, 4].map((weeks) => (
                         <TouchableOpacity
                             key={weeks}
                             style={[
@@ -464,6 +459,45 @@ export default function BookingScreen() {
                         </TouchableOpacity>
                     ))}
                 </ScrollView>
+
+                {/* Multi-Day Selection */}
+                {recurrenceWeeks >= 1 && (
+                    <>
+                        <Text style={styles.sectionTitle}>Include Days</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
+                            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((dayStr, index) => {
+                                const isPrimaryDay = index === selectedDate?.getDay();
+                                const isSelected = selectedDays.includes(index);
+
+                                return (
+                                    <TouchableOpacity
+                                        key={dayStr}
+                                        disabled={isPrimaryDay}
+                                        style={[
+                                            styles.courtChip,
+                                            isSelected && styles.courtChipSelected,
+                                            isPrimaryDay && { opacity: 0.5 }
+                                        ]}
+                                        onPress={() => {
+                                            if (isSelected) {
+                                                setSelectedDays(prev => prev.filter(d => d !== index));
+                                            } else {
+                                                setSelectedDays(prev => [...prev, index].sort());
+                                            }
+                                        }}
+                                    >
+                                        <Text style={[
+                                            styles.courtChipText,
+                                            isSelected && styles.courtChipTextSelected,
+                                        ]}>
+                                            {dayStr}
+                                        </Text>
+                                    </TouchableOpacity>
+                                )
+                            })}
+                        </ScrollView>
+                    </>
+                )}
 
                 {/* Time Selection */}
                 {selectedDate && (
@@ -576,28 +610,6 @@ export default function BookingScreen() {
                     </>
                 )}
 
-                {/* Number of Players */}
-                {selectedTime && selectedCourt && (
-                    <>
-                        <Text style={styles.sectionTitle}>Number of Players</Text>
-                        <View style={styles.playersRow}>
-                            <TouchableOpacity
-                                style={styles.playerButton}
-                                onPress={() => setNumPlayers(Math.max(1, numPlayers - 1))}
-                            >
-                                <Ionicons name="remove" size={24} color={Colors.dark.text} />
-                            </TouchableOpacity>
-                            <Text style={styles.playersCount}>{numPlayers}</Text>
-                            <TouchableOpacity
-                                style={styles.playerButton}
-                                onPress={() => setNumPlayers(Math.min(selectedCourt.capacity, numPlayers + 1))}
-                            >
-                                <Ionicons name="add" size={24} color={Colors.dark.text} />
-                            </TouchableOpacity>
-                        </View>
-                    </>
-                )}
-
                 {/* Notes */}
                 {selectedTime && (
                     <>
@@ -644,14 +656,14 @@ export default function BookingScreen() {
                             <View style={styles.summaryRow}>
                                 <Text style={styles.summaryLabel}>Recurrence</Text>
                                 <Text style={[styles.summaryValue, { color: Colors.dark.primary }]}>
-                                    {recurrenceWeeks} Weeks
+                                    {recurrenceWeeks} Weeks ({selectedDays.length} days/week)
                                 </Text>
                             </View>
                         )}
 
                         <View style={[styles.summaryRow, styles.totalRow]}>
                             <Text style={styles.totalLabel}>Total</Text>
-                            <Text style={styles.totalValue}>₱{(totalPrice * recurrenceWeeks).toLocaleString()}</Text>
+                            <Text style={styles.totalValue}>₱{totalPrice.toLocaleString()}</Text>
                         </View>
 
                         {discountResults.discounts.length > 0 && (
@@ -674,7 +686,7 @@ export default function BookingScreen() {
                                 ))}
                                 <View style={[styles.summaryRow, styles.finalPriceRow]}>
                                     <Text style={styles.finalPriceLabel}>Final Price</Text>
-                                    <Text style={styles.finalPriceValue}>₱{(discountResults.finalPrice * recurrenceWeeks).toLocaleString()}</Text>
+                                    <Text style={styles.finalPriceValue}>₱{discountResults.finalPrice.toLocaleString()}</Text>
                                 </View>
                             </View>
                         )}

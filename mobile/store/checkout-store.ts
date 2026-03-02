@@ -16,7 +16,6 @@ export interface BookingData {
     hourlyRate: number;
     capacity: number;
     duration: number;
-    numPlayers: number;
     notes?: string;
     recurrenceWeeks?: number; // 1 = single, 4 = 4 weeks, etc.
     selectedDays?: number[]; // [0, 2, 4] for Sun, Tue, Thu

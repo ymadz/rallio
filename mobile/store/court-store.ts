@@ -32,6 +32,9 @@ export interface Venue {
     rating?: number;
     review_count?: number;
     thumbnail_url?: string;
+    activeDiscountCount?: number;
+    hasActiveDiscounts?: boolean;
+    activeDiscountLabels?: string[];
 }
 
 export type SortBy = 'nearest' | 'rating' | 'price_low' | 'price_high' | null;
@@ -123,6 +126,41 @@ export const useCourtStore = create<CourtStore>()((set, get) => ({
                 return;
             }
 
+            // Fetch active discounts to attach to venues
+            const venueIds = (data || []).map((v: any) => v.id);
+            let activeDiscountMap: Record<string, number> = {};
+            let activeDiscountLabelsMap: Record<string, string[]> = {};
+
+            if (venueIds.length > 0) {
+                const { data: rules } = await supabase
+                    .from('discount_rules')
+                    .select('venue_id, name, discount_value, discount_unit')
+                    .in('venue_id', venueIds)
+                    .eq('is_active', true);
+
+                const { data: holidays } = await supabase
+                    .from('holiday_pricing')
+                    .select('venue_id, name, price_multiplier')
+                    .in('venue_id', venueIds)
+                    .eq('is_active', true);
+
+                venueIds.forEach((id: string) => {
+                    const venueRules = rules?.filter((r: any) => r.venue_id === id) || [];
+                    const venueHolidays = holidays?.filter((h: any) => h.venue_id === id) || [];
+                    activeDiscountMap[id] = venueRules.length + venueHolidays.length;
+
+                    activeDiscountLabelsMap[id] = [
+                        ...venueRules.map((r: any) =>
+                            r.discount_unit === 'percent' ? `${r.discount_value}% OFF` : `₱${r.discount_value} OFF`
+                        ),
+                        ...venueHolidays.map((h: any) => {
+                            if (h.price_multiplier < 1) return `${Math.round((1 - h.price_multiplier) * 100)}% OFF`;
+                            return `+${Math.round((h.price_multiplier - 1) * 100)}%`;
+                        }),
+                    ];
+                });
+            }
+
             const calculateDistance = useLocationStore.getState().calculateDistance;
 
             const venues: Venue[] = (data || []).map((venue: any) => {
@@ -163,6 +201,9 @@ export const useCourtStore = create<CourtStore>()((set, get) => ({
                     review_count: allRatings.length,
                     distance,
                     thumbnail_url: venue.image_url ?? primary?.url,
+                    activeDiscountCount: activeDiscountMap[venue.id] || 0,
+                    hasActiveDiscounts: (activeDiscountMap[venue.id] || 0) > 0,
+                    activeDiscountLabels: activeDiscountLabelsMap[venue.id] || [],
                 };
             });
 
