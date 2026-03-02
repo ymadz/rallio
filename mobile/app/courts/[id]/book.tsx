@@ -265,13 +265,13 @@ export default function BookingScreen() {
             // Use the centralized API validation
             const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.254.178:3000';
             const dateStr = format(selectedDate, 'yyyy-MM-dd');
-            const startISO = `${dateStr}T${selectedTime}:00`;
+            const startISO = `${dateStr}T${selectedTime}:00+08:00`;
             // Calculate end ISO properly for the validation check
             // duration is in hours.
             const [startH] = selectedTime.split(':').map(Number);
             const endH = startH + duration;
             // Handle endH > 23 if needed, but for simple validation:
-            const endISO = `${dateStr}T${endH.toString().padStart(2, '0')}:00:00`;
+            const endISO = `${dateStr}T${endH.toString().padStart(2, '0')}:00:00+08:00`;
             // Note: date-fns might be safer for date math but this matches existing simple logic
 
             // Prepare payload
