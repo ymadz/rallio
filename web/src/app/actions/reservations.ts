@@ -179,6 +179,10 @@ export async function getAvailableTimeSlotsAction(
   }
 
   // Generate all possible hourly slots using the effective range
+  // The venue close hour determines the absolute latest a booking can end.
+  // We use <= to include the slot that starts at the close hour if needed,
+  // but wait, if it closes at 22:00, the last 1-hour slot starts at 21:00.
+  // Actually, some venues might allow booking *up to* closing time.
   const allSlots: TimeSlot[] = []
   for (let hour = effectiveOpenHour; hour < effectiveCloseHour; hour++) {
     const timeString = `${hour.toString().padStart(2, '0')}:00`
