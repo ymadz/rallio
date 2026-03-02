@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-
-const STORAGE_KEY = 'rallio_home_tour_seen'
+import { createClient } from '@/lib/supabase/client'
 
 interface TutorialStep {
   target: string
@@ -72,13 +71,30 @@ export function HomeTutorial() {
     return stepTarget
   }
 
-  // Check localStorage on mount
+  // Check on mount
   useEffect(() => {
-    const done = localStorage.getItem(STORAGE_KEY)
-    if (!done) {
-      // Delay slightly so layout can settle (especially sidebar sizing)
-      const timer = setTimeout(() => setShowTutorial(true), 800)
-      return () => clearTimeout(timer)
+    let timer: NodeJS.Timeout
+    const checkTutorial = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data } = await supabase
+        .from('tutorials')
+        .select('home_tour_seen')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (!data?.home_tour_seen) {
+        // Delay slightly so layout can settle (especially sidebar sizing)
+        timer = setTimeout(() => setShowTutorial(true), 800)
+      }
+    }
+    
+    checkTutorial()
+    
+    return () => {
+      if (timer) clearTimeout(timer)
     }
   }, [])
 
@@ -127,10 +143,25 @@ export function HomeTutorial() {
     }
   }, [measureTarget])
 
-  const completeTutorial = useCallback(() => {
-    localStorage.setItem(STORAGE_KEY, 'true')
+  const completeTutorial = useCallback(async () => {
     setShowTutorial(false)
     setCurrentStep(0)
+    
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data } = await supabase
+      .from('tutorials')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    if (data) {
+      await supabase.from('tutorials').update({ home_tour_seen: true }).eq('user_id', user.id)
+    } else {
+      await supabase.from('tutorials').insert({ user_id: user.id, home_tour_seen: true })
+    }
   }, [])
 
   const handleNext = () => {

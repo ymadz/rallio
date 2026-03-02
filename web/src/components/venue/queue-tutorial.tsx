@@ -1,9 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-
-const STORAGE_KEY_SCHEDULE = 'rallio_qm_tour_schedule_seen'
-const STORAGE_KEY_SETTINGS = 'rallio_qm_tour_settings_seen'
+import { createClient } from '@/lib/supabase/client'
 
 interface TutorialStep {
   target: string
@@ -102,26 +100,42 @@ export function QueueTutorial({ isOpen, view }: QueueTutorialProps) {
   const overlayRef = useRef<HTMLDivElement>(null)
 
   const STPES = view === 'schedule' ? SCHEDULE_STEPS : SETTINGS_STEPS
-  const STORAGE_KEY = view === 'schedule' ? STORAGE_KEY_SCHEDULE : STORAGE_KEY_SETTINGS
+  const DB_KEY = view === 'schedule' ? 'qm_tour_schedule_seen' : 'qm_tour_settings_seen'
 
-  // Check localStorage whenever view or isOpen changes
+  // Check whenever view or isOpen changes
   useEffect(() => {
-    if (isOpen) {
-      const done = localStorage.getItem(STORAGE_KEY)
-      if (!done) {
-        // Reset step if view changed
+    let timer: NodeJS.Timeout
+    const checkTutorial = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data } = await supabase
+        .from('tutorials')
+        .select(DB_KEY)
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      // @ts-ignore - dynamic key access
+      if (!data?.[DB_KEY]) {
         setCurrentStep(0)
-        // Delay to allow DOM layout to settle, especially on the settings view toggle
-        const timer = setTimeout(() => setShowTutorial(true), 600)
-        return () => clearTimeout(timer)
+        timer = setTimeout(() => setShowTutorial(true), 600)
       } else {
         setShowTutorial(false)
       }
+    }
+
+    if (isOpen) {
+      checkTutorial()
     } else {
       setShowTutorial(false)
       setCurrentStep(0)
     }
-  }, [isOpen, view, STORAGE_KEY])
+    
+    return () => {
+      if (timer) clearTimeout(timer)
+    }
+  }, [isOpen, view, DB_KEY])
 
   // Automatically scroll to the target only when the step changes
   useEffect(() => {
@@ -188,11 +202,26 @@ export function QueueTutorial({ isOpen, view }: QueueTutorialProps) {
     }
   }, [measureTarget])
 
-  const completeTutorial = useCallback(() => {
-    localStorage.setItem(STORAGE_KEY, 'true')
+  const completeTutorial = useCallback(async () => {
     setShowTutorial(false)
     setCurrentStep(0)
-  }, [STORAGE_KEY])
+    
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data } = await supabase
+        .from('tutorials')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle()
+        
+    if (data) {
+        await supabase.from('tutorials').update({ [DB_KEY]: true }).eq('user_id', user.id)
+    } else {
+        await supabase.from('tutorials').insert({ user_id: user.id, [DB_KEY]: true })
+    }
+  }, [DB_KEY])
 
   const handleNext = () => {
     if (currentStep < STPES.length - 1) {
@@ -208,12 +237,32 @@ export function QueueTutorial({ isOpen, view }: QueueTutorialProps) {
     }
   }
 
-  const handleSkip = () => {
-     // If they skip, aggressively mark both seen so they aren't bugged again
-     localStorage.setItem(STORAGE_KEY_SCHEDULE, 'true')
-     localStorage.setItem(STORAGE_KEY_SETTINGS, 'true')
+  const handleSkip = async () => {
      setShowTutorial(false)
      setCurrentStep(0)
+     
+     const supabase = createClient()
+     const { data: { user } } = await supabase.auth.getUser()
+     if (!user) return
+     
+     const { data } = await supabase
+        .from('tutorials')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle()
+        
+     if (data) {
+         await supabase.from('tutorials').update({ 
+             qm_tour_schedule_seen: true, 
+             qm_tour_settings_seen: true 
+         }).eq('user_id', user.id)
+     } else {
+         await supabase.from('tutorials').insert({ 
+             user_id: user.id, 
+             qm_tour_schedule_seen: true, 
+             qm_tour_settings_seen: true 
+         })
+     }
   }
 
   if (!showTutorial || !targetRect || !STPES[currentStep]) return null
