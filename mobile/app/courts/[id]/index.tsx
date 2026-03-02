@@ -63,6 +63,8 @@ interface Venue {
     courts?: Court[];
     hasActiveDiscounts?: boolean;
     activeDiscountLabels?: string[];
+    discountRules?: any[];
+    holidayPricing?: any[];
 }
 
 // Helper functions imported from @/lib/utils/date
@@ -129,13 +131,13 @@ export default function VenueDetailsScreen() {
             // Fetch discounts for this venue
             const { data: rules } = await supabase
                 .from('discount_rules')
-                .select('name, discount_value, discount_unit')
+                .select('id, name, description, discount_value, discount_unit')
                 .eq('venue_id', id)
                 .eq('is_active', true);
 
             const { data: holidays } = await supabase
                 .from('holiday_pricing')
-                .select('name, price_multiplier')
+                .select('id, name, price_multiplier')
                 .eq('venue_id', id)
                 .eq('is_active', true);
 
@@ -154,7 +156,9 @@ export default function VenueDetailsScreen() {
             setVenue({
                 ...data,
                 hasActiveDiscounts,
-                activeDiscountLabels
+                activeDiscountLabels,
+                discountRules: rules || [],
+                holidayPricing: holidays || [],
             });
         }
         setIsLoading(false);
@@ -338,16 +342,53 @@ export default function VenueDetailsScreen() {
                     </View>
 
                     {/* Active Discounts Display (Matches Web) */}
-                    {venue.hasActiveDiscounts && venue.activeDiscountLabels && (
+                    {venue.hasActiveDiscounts && (venue.discountRules?.length || venue.holidayPricing?.length) ? (
                         <View style={styles.discountsContainer}>
-                            {venue.activeDiscountLabels.map((label, idx) => (
-                                <View key={idx} style={styles.discountBadgeDetail}>
-                                    <Ionicons name="pricetag" size={14} color={Colors.dark.primary} style={{ marginTop: 2 }} />
-                                    <Text style={styles.discountTextDetail}>{label}</Text>
+                            {venue.discountRules?.map((rule: any) => (
+                                <View key={rule.id} style={styles.discountCard}>
+                                    <View style={styles.discountCardHeader}>
+                                        <Ionicons name="pricetag-outline" size={16} color={Colors.dark.primary} style={styles.discountIcon} />
+                                        <Text style={styles.discountCardTitle}>
+                                            <Text style={styles.discountValueText}>
+                                                {rule.discount_unit === 'percent'
+                                                    ? `${rule.discount_value}% OFF`
+                                                    : `₱${rule.discount_value} OFF`}
+                                            </Text>
+                                            <Text style={styles.discountDash}> — </Text>
+                                            <Text style={styles.discountNameText}>{rule.name}</Text>
+                                        </Text>
+                                    </View>
+                                    {rule.description ? (
+                                        <Text style={styles.discountCardDescription}>{rule.description}</Text>
+                                    ) : null}
                                 </View>
                             ))}
+
+                            {venue.holidayPricing?.map((holiday: any) => {
+                                const isDiscount = holiday.price_multiplier < 1;
+                                const tagColor = isDiscount ? Colors.dark.success : Colors.dark.warning;
+                                const bgColor = isDiscount ? Colors.dark.success + '10' : Colors.dark.warning + '10';
+                                const borderColor = isDiscount ? Colors.dark.success + '30' : Colors.dark.warning + '30';
+
+                                return (
+                                    <View key={holiday.id} style={[styles.discountCard, { backgroundColor: bgColor, borderColor: borderColor }]}>
+                                        <View style={styles.discountCardHeader}>
+                                            <Ionicons name="calendar-outline" size={16} color={tagColor} style={styles.discountIcon} />
+                                            <Text style={styles.discountCardTitle}>
+                                                <Text style={[styles.discountValueText, { color: tagColor }]}>
+                                                    {isDiscount
+                                                        ? `${Math.round((1 - holiday.price_multiplier) * 100)}% OFF`
+                                                        : `+${Math.round((holiday.price_multiplier - 1) * 100)}%`}
+                                                </Text>
+                                                <Text style={styles.discountDash}> — </Text>
+                                                <Text style={styles.discountNameText}>{holiday.name}</Text>
+                                            </Text>
+                                        </View>
+                                    </View>
+                                );
+                            })}
                         </View>
-                    )}
+                    ) : null}
 
                     {/* Rating Summary */}
                     {reviews.length > 0 && (
@@ -648,27 +689,51 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     discountsContainer: {
+        marginTop: Spacing.sm,
+        marginBottom: Spacing.md,
+        gap: Spacing.sm,
+    },
+    discountCard: {
+        backgroundColor: Colors.dark.primary + '08',
+        borderWidth: 1,
+        borderColor: Colors.dark.primary + '20',
+        borderRadius: Radius.md,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.sm,
+    },
+    discountCardHeader: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+    },
+    discountIcon: {
+        marginRight: Spacing.xs,
+        marginTop: 2,
+    },
+    discountCardTitle: {
+        flex: 1,
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: Spacing.sm,
-        marginTop: Spacing.xs,
-        marginBottom: Spacing.sm,
     },
-    discountBadgeDetail: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: Colors.dark.primary + '15', // Soft primary background
-        borderWidth: 1,
-        borderColor: Colors.dark.primary + '30',
-        paddingHorizontal: Spacing.md,
-        paddingVertical: 6,
-        borderRadius: Radius.full,
-        gap: Spacing.xs,
-    },
-    discountTextDetail: {
+    discountValueText: {
         ...Typography.caption,
         color: Colors.dark.primary,
         fontWeight: 'bold',
+    },
+    discountDash: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+    },
+    discountNameText: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+        textTransform: 'uppercase',
+    },
+    discountCardDescription: {
+        ...Typography.bodySmall,
+        color: Colors.dark.textTertiary,
+        marginTop: 4,
+        marginLeft: 22,
+        textTransform: 'uppercase',
     },
     ratingRow: {
         flexDirection: 'row',
