@@ -6,7 +6,7 @@ import {
     Image,
     TouchableOpacity,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors, Spacing, Typography, Radius } from '@/constants/Colors';
 import { Card } from '@/components/ui';
 
@@ -65,7 +65,7 @@ export function CourtCard({ venue, onPress }: CourtCardProps) {
                         <Image source={{ uri: imageUrl }} style={styles.image} />
                     ) : (
                         <View style={styles.imagePlaceholder}>
-                            <Ionicons name="tennisball-outline" size={32} color={Colors.dark.textTertiary} />
+                            <MaterialCommunityIcons name="badminton" size={36} color={Colors.dark.textTertiary} />
                         </View>
                     )}
                     {/* Distance badge */}
