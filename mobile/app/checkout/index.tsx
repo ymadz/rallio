@@ -213,6 +213,10 @@ export default function CheckoutScreen() {
             if (paymentMethod === 'e-wallet' || isDownPaymentRequired) {
                 console.log(`Mobile Checkout: Initiating ${isDownPaymentRequired ? 'Down Payment' : 'Full Payment'} via PayMongo...`);
 
+                // Add return URL for Expo Go compatibility
+                const redirectUrl = Linking.createURL('/checkout');
+                console.log('Mobile Checkout: Deep link return URL:', redirectUrl);
+
                 const checkoutResponse = await fetch(`${apiUrl}/api/mobile/create-checkout`, {
                     method: 'POST',
                     headers: {
@@ -224,7 +228,8 @@ export default function CheckoutScreen() {
                         amount: isDownPaymentRequired ? downPaymentAmount : total,
                         description: `Booking for ${bookingData.courtName} at ${bookingData.venueName}`,
                         recurrenceGroupId: recurrenceGroupId,
-                        isDownPayment: isDownPaymentRequired
+                        isDownPayment: isDownPaymentRequired,
+                        redirectUrl: redirectUrl
                     })
                 });
 
@@ -234,10 +239,6 @@ export default function CheckoutScreen() {
                     throw new Error(checkoutResult.error || 'Failed to create checkout session');
                 }
 
-                // Add return URL for Expo Go compatibility
-                const redirectUrl = Linking.createURL('/checkout');
-                console.log('Mobile Checkout: Deep link return URL:', redirectUrl);
-
                 // Open PayMongo Checkout via WebBrowser so it returns back to the app smoothly
                 const browserResult = await WebBrowser.openAuthSessionAsync(
                     checkoutResult.checkoutUrl,
@@ -246,10 +247,27 @@ export default function CheckoutScreen() {
 
                 console.log('Mobile Checkout: Browser returned', browserResult.type);
 
-                // Set pending ID for AppState check when return
-                setPendingReservationId(primaryReservationId);
+                if (browserResult.type === 'success' && browserResult.url) {
+                    const parsedUrl = Linking.parse(browserResult.url);
+                    if (parsedUrl.queryParams?.status === 'success') {
+                        setStep('success');
+                        setIsProcessing(false);
+                        return;
+                    } else if (parsedUrl.queryParams?.status === 'failed') {
+                        Alert.alert('Payment Failed', 'Your payment was cancelled or failed.');
+                        setStep('review');
+                        setIsProcessing(false);
+                        return;
+                    }
+                }
 
-                // Keep processing state while waiting for return from browser
+                // If user closed the browser securely or deep link missed
+                setPendingReservationId(primaryReservationId);
+                setIsProcessing(false);
+
+                Alert.alert('Payment Pending', 'If you completed the payment, your booking will be confirmed shortly. You can check its status in the Bookings tab.', [
+                    { text: 'View Bookings', onPress: () => { resetCheckout(); router.replace('/(tabs)/bookings'); } }
+                ]);
                 return;
             }
 
