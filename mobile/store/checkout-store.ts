@@ -47,6 +47,10 @@ interface CheckoutState {
     reservationId?: string;
     downPaymentPercentage?: number;
 
+    // Split Payment
+    isSplitPayment: boolean;
+    splitPlayerCount: number;
+
     // Actions
     setBookingData: (data: BookingData) => void;
     setCurrentStep: (step: CheckoutStep) => void;
@@ -55,6 +59,7 @@ interface CheckoutState {
     setDiscount: (amount: number, type?: string, reason?: string) => void;
     setDownPaymentPercentage: (percentage: number) => void;
     setBookingReference: (reference: string, reservationId: string) => void;
+    setSplitPayment: (enabled: boolean, playerCount?: number) => void;
     resetCheckout: () => void;
 
     // Computed values
@@ -63,6 +68,7 @@ interface CheckoutState {
     getTotalAmount: () => number;
     getDownPaymentAmount: () => number;
     getRemainingBalance: () => number;
+    getPerPlayerAmount: () => number;
 }
 
 const initialState = {
@@ -78,6 +84,8 @@ const initialState = {
     bookingReference: undefined,
     reservationId: undefined,
     downPaymentPercentage: undefined,
+    isSplitPayment: false,
+    splitPlayerCount: 2,
 };
 
 export const useCheckoutStore = create<CheckoutState>()(
@@ -106,6 +114,12 @@ export const useCheckoutStore = create<CheckoutState>()(
 
             setBookingReference: (reference, reservationId) =>
                 set({ bookingReference: reference, reservationId }),
+
+            setSplitPayment: (enabled, playerCount) =>
+                set({
+                    isSplitPayment: enabled,
+                    splitPlayerCount: playerCount ?? get().splitPlayerCount,
+                }),
 
             resetCheckout: () => set(initialState),
 
@@ -160,6 +174,13 @@ export const useCheckoutStore = create<CheckoutState>()(
                 const total = state.getTotalAmount();
                 const downPayment = state.getDownPaymentAmount();
                 return Math.round((total - downPayment) * 100) / 100;
+            },
+
+            getPerPlayerAmount: () => {
+                const state = get();
+                const total = state.getTotalAmount();
+                if (!state.isSplitPayment || state.splitPlayerCount < 2) return total;
+                return Math.ceil((total / state.splitPlayerCount) * 100) / 100;
             },
         }),
         {

@@ -31,18 +31,20 @@ export function Button({
     const buttonStyles: ViewStyle[] = [
         styles.base,
         styles[variant],
-        styles[`size_${size}`],
-        fullWidth && styles.fullWidth,
-        (disabled || loading) && styles.disabled,
-        style as ViewStyle,
+        styles[`size_${size}`]
     ];
+
+    if (fullWidth) buttonStyles.push(styles.fullWidth);
+    if (disabled || loading) buttonStyles.push(styles.disabled);
+    if (style) buttonStyles.push(style as ViewStyle);
 
     const textStyles: TextStyle[] = [
         styles.text,
         styles[`text_${variant}`],
-        styles[`text_${size}`],
-        (disabled || loading) && styles.textDisabled,
+        styles[`text_${size}`]
     ];
+
+    if (disabled || loading) textStyles.push(styles.textDisabled);
 
     return (
         <TouchableOpacity

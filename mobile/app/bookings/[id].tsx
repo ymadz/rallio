@@ -8,7 +8,8 @@ import {
     ActivityIndicator,
     Alert,
     ScrollView,
-    TextInput
+    TextInput,
+    Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -16,8 +17,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Typography, Radius } from '@/constants/Colors';
 import { Card, Button } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
+import { apiPost, apiGet } from '@/lib/api';
 import QRCode from 'react-native-qrcode-svg';
 import { format } from 'date-fns';
+import RescheduleBottomSheet from '@/components/booking/RescheduleBottomSheet';
+import SubmitReviewBottomSheet from '@/components/venue/SubmitReviewBottomSheet';
 
 type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'no_show' | 'pending_payment' | 'paid' | 'refunded';
 
@@ -51,6 +55,12 @@ export default function BookingDetailsScreen() {
     const [refundReason, setRefundReason] = useState('');
     const [isSubmittingRefund, setIsSubmittingRefund] = useState(false);
 
+    // Reschedule, Review, Resume Payment states
+    const [showReschedule, setShowReschedule] = useState(false);
+    const [showReview, setShowReview] = useState(false);
+    const [canReview, setCanReview] = useState(false);
+    const [isResumingPayment, setIsResumingPayment] = useState(false);
+
     useEffect(() => {
         fetchBookingDetails();
     }, [id]);
@@ -61,6 +71,45 @@ export default function BookingDetailsScreen() {
             checkRefundStatus();
         }
     }, [booking]);
+
+    // Check if user can leave a review
+    useEffect(() => {
+        if (booking && booking.court_id && ['completed', 'confirmed'].includes(booking.status)) {
+            const endTime = new Date(booking.end_time);
+            if (endTime < new Date()) {
+                checkCanReview();
+            }
+        }
+    }, [booking]);
+
+    const checkCanReview = async () => {
+        try {
+            const result = await apiGet('/api/mobile/can-review', { courtId: booking?.court_id as string });
+            setCanReview(result.canReview === true);
+        } catch {
+            setCanReview(false);
+        }
+    };
+
+    const handleResumePayment = async () => {
+        if (!booking) return;
+        try {
+            setIsResumingPayment(true);
+            const result = await apiPost('/api/mobile/resume-payment', {
+                reservationId: booking.id,
+            });
+
+            if (result.success && result.checkoutUrl) {
+                await Linking.openURL(result.checkoutUrl);
+            } else {
+                Alert.alert('Error', result.error || 'Failed to create payment link');
+            }
+        } catch (error: any) {
+            Alert.alert('Error', error.message || 'Failed to resume payment');
+        } finally {
+            setIsResumingPayment(false);
+        }
+    };
 
     const checkRefundStatus = async () => {
         try {
@@ -249,6 +298,20 @@ export default function BookingDetailsScreen() {
     const hoursUntilStart = (startTime.getTime() - Date.now()) / (1000 * 60 * 60);
     const isWithin24Hours = hoursUntilStart < 24;
     const isPaid = ['paid', 'confirmed'].includes(booking.status) && booking.total_amount > 0;
+    const isPastBooking = endTime < new Date();
+
+    // Reschedule eligibility: upcoming, not already rescheduled, 24h+ away
+    const canReschedule = isUpcoming &&
+        !isPastBooking &&
+        ['confirmed', 'pending_payment', 'partially_paid'].includes(booking.status) &&
+        hoursUntilStart >= 24 &&
+        !(booking as any).metadata?.rescheduled;
+
+    // Resume payment eligibility
+    const canResumePayment = ['pending_payment', 'partially_paid'].includes(booking.status) && !isPastBooking;
+
+    // View receipt eligibility
+    const hasReceipt = ['confirmed', 'paid', 'completed', 'partially_paid'].includes(booking.status);
 
     // Determine button label
     let buttonLabel = 'Cancel Booking';
@@ -337,20 +400,96 @@ export default function BookingDetailsScreen() {
                     </View>
                 </Card>
 
-                {/* Actions */}
-                {canCancel && !refundStatus && (
-                    <Button
-                        variant="secondary"
-                        style={[styles.cancelButton, isWithin24Hours && isPaid && { opacity: 0.5 }]}
-                        onPress={handleCancelReservation}
-                        disabled={isButtonDisabled}
-                    >
-                        {isCancelling ? 'Processing...' : buttonLabel}
-                    </Button>
-                )}
+                {/* Action Buttons */}
+                <View style={styles.actionButtons}>
+                    {/* Resume Payment */}
+                    {canResumePayment && (
+                        <Button
+                            style={styles.primaryActionButton}
+                            onPress={handleResumePayment}
+                            disabled={isResumingPayment}
+                        >
+                            {isResumingPayment ? 'Creating payment link...' : '💳 Resume Payment'}
+                        </Button>
+                    )}
+
+                    {/* Reschedule */}
+                    {canReschedule && (
+                        <TouchableOpacity
+                            style={styles.secondaryActionButton}
+                            onPress={() => setShowReschedule(true)}
+                        >
+                            <Ionicons name="swap-horizontal" size={18} color={Colors.dark.primary} />
+                            <Text style={styles.secondaryActionText}>Reschedule</Text>
+                        </TouchableOpacity>
+                    )}
+
+                    {/* View Receipt */}
+                    {hasReceipt && (
+                        <TouchableOpacity
+                            style={styles.secondaryActionButton}
+                            onPress={() => router.push(`/bookings/${id}/receipt`)}
+                        >
+                            <Ionicons name="receipt-outline" size={18} color={Colors.dark.primary} />
+                            <Text style={styles.secondaryActionText}>View Receipt</Text>
+                        </TouchableOpacity>
+                    )}
+
+                    {/* Leave Review */}
+                    {canReview && isPastBooking && (
+                        <TouchableOpacity
+                            style={styles.secondaryActionButton}
+                            onPress={() => setShowReview(true)}
+                        >
+                            <Ionicons name="star-outline" size={18} color={Colors.dark.warning} />
+                            <Text style={[styles.secondaryActionText, { color: Colors.dark.warning }]}>Leave Review</Text>
+                        </TouchableOpacity>
+                    )}
+
+                    {/* Cancel / Refund */}
+                    {canCancel && !refundStatus && (
+                        <Button
+                            variant="secondary"
+                            style={[styles.cancelButton, isWithin24Hours && isPaid && { opacity: 0.5 }]}
+                            onPress={handleCancelReservation}
+                            disabled={isButtonDisabled}
+                        >
+                            {isCancelling ? 'Processing...' : buttonLabel}
+                        </Button>
+                    )}
+                </View>
 
                 <View style={{ height: 40 }} />
             </ScrollView>
+
+            {/* Reschedule Bottom Sheet */}
+            <RescheduleBottomSheet
+                visible={showReschedule}
+                onClose={() => setShowReschedule(false)}
+                onSuccess={() => {
+                    setShowReschedule(false);
+                    Alert.alert('Success', 'Booking rescheduled successfully!');
+                    fetchBookingDetails();
+                }}
+                reservationId={booking.id}
+                courtId={booking.court_id}
+                currentStartTime={booking.start_time}
+                currentEndTime={booking.end_time}
+            />
+
+            {/* Review Bottom Sheet */}
+            <SubmitReviewBottomSheet
+                visible={showReview}
+                onClose={() => setShowReview(false)}
+                onSuccess={() => {
+                    setShowReview(false);
+                    setCanReview(false);
+                    Alert.alert('Thanks!', 'Your review has been submitted.');
+                }}
+                courtId={booking.court_id}
+                courtName={booking.courts?.name || 'Court'}
+                reservationId={booking.id}
+            />
 
             {/* Refund Reason Modal */}
             {showRefundModal && (
@@ -504,7 +643,30 @@ const styles = StyleSheet.create({
     },
     cancelButton: {
         borderColor: Colors.dark.error,
+        marginTop: Spacing.sm,
+    },
+    actionButtons: {
+        gap: Spacing.sm,
         marginTop: Spacing.md,
+    },
+    primaryActionButton: {
+        backgroundColor: Colors.dark.primary,
+    },
+    secondaryActionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: Spacing.sm,
+        paddingVertical: Spacing.md,
+        borderRadius: Radius.md,
+        borderWidth: 1,
+        borderColor: Colors.dark.border,
+        backgroundColor: Colors.dark.surface,
+    },
+    secondaryActionText: {
+        ...Typography.body,
+        color: Colors.dark.primary,
+        fontWeight: '600',
     },
     modalOverlay: {
         flex: 1,

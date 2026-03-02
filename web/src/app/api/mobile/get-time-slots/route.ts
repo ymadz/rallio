@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url)
         const courtId = searchParams.get('courtId')
         const date = searchParams.get('date') // expected format: yyyy-MM-dd
+        const excludeReservationId = searchParams.get('excludeReservationId') || undefined
 
         if (!courtId || !date) {
             return NextResponse.json(
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
             )
         }
 
-        const slots = await getAvailableTimeSlotsAction(courtId, date)
+        const slots = await getAvailableTimeSlotsAction(courtId, date, excludeReservationId)
 
         return NextResponse.json({ slots })
     } catch (error: any) {

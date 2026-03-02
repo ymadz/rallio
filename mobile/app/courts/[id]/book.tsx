@@ -22,6 +22,7 @@ import {
     calculateApplicableDiscounts,
     type ApplicableDiscount,
 } from '@/lib/discount-utils';
+import BookingTutorial from '@/components/booking/BookingTutorial';
 
 interface Court {
     id: string;
@@ -710,6 +711,9 @@ export default function BookingScreen() {
                     </Button>
                 </View>
             )}
+
+            {/* First-time booking tutorial */}
+            <BookingTutorial />
         </SafeAreaView>
     );
 }

@@ -19,6 +19,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Colors, Spacing, Typography, Radius } from '@/constants/Colors';
 import { Card, Button, Avatar } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
+import AvailabilityBottomSheet from '@/components/venue/AvailabilityBottomSheet';
 
 const { width } = Dimensions.get('window');
 
@@ -107,6 +108,7 @@ export default function VenueDetailsScreen() {
     const [error, setError] = useState<string | null>(null);
     const [activeImageIndex, setActiveImageIndex] = useState(0);
     const flatListRef = useRef<FlatList>(null);
+    const [scheduleCourt, setScheduleCourt] = useState<Court | null>(null);
 
     useEffect(() => {
         if (id) {
@@ -408,7 +410,14 @@ export default function VenueDetailsScreen() {
                                 {/* Court actions */}
                                 <View style={styles.courtActions}>
                                     <TouchableOpacity
-                                        style={styles.actionButtonPrimary}
+                                        style={styles.actionButtonSecondary}
+                                        onPress={() => setScheduleCourt(court)}
+                                    >
+                                        <Ionicons name="time-outline" size={16} color={Colors.dark.primary} />
+                                        <Text style={styles.actionButtonSecondaryText}>Schedule</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.actionButtonPrimary, { flex: 1 }]}
                                         onPress={() => router.push(`/courts/${id}/book?court=${court.id}`)}
                                     >
                                         <Ionicons name="calendar" size={16} color={Colors.dark.text} />
@@ -506,6 +515,18 @@ export default function VenueDetailsScreen() {
                     <View style={{ height: 40 }} />
                 </View>
             </ScrollView>
+
+            {/* Availability Bottom Sheet */}
+            {scheduleCourt && venue && (
+                <AvailabilityBottomSheet
+                    visible={!!scheduleCourt}
+                    onClose={() => setScheduleCourt(null)}
+                    courtId={scheduleCourt.id}
+                    courtName={scheduleCourt.name}
+                    venueId={venue.id}
+                    hourlyRate={scheduleCourt.hourly_rate}
+                />
+            )}
         </SafeAreaView>
     );
 }
@@ -770,6 +791,23 @@ const styles = StyleSheet.create({
     actionButtonPrimaryText: {
         ...Typography.button,
         color: Colors.dark.text,
+    },
+    actionButtonSecondary: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: Spacing.sm,
+        paddingHorizontal: Spacing.md,
+        borderRadius: Radius.md,
+        borderWidth: 1,
+        borderColor: Colors.dark.primary + '40',
+        backgroundColor: Colors.dark.primary + '10',
+        gap: Spacing.xs,
+    },
+    actionButtonSecondaryText: {
+        ...Typography.button,
+        color: Colors.dark.primary,
+        fontSize: 13,
     },
     reviewCard: {
         marginBottom: Spacing.sm,

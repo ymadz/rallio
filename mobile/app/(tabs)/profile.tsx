@@ -124,9 +124,9 @@ export default function ProfileScreen() {
                             <Text style={[styles.tagText, styles.skillTagText]}>{getSkillLabel(player?.skill_level)}</Text>
                         </View>
                         {(player?.play_style || player?.preferred_play_style || 'All').split(',').map((style, index) => (
-                            <View key={index} style={styles.tag}>
+                            <View key={`style-${style.trim()}-${index}`} style={styles.tag}>
                                 <Text style={styles.tagText}>
-                                    {style === 'All' ? 'All Styles' : style}
+                                    {style.trim() === 'All' ? 'All Styles' : style.trim()}
                                 </Text>
                             </View>
                         ))}
@@ -244,9 +244,9 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: 0,
         right: 0,
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         backgroundColor: Colors.dark.surface,
         alignItems: 'center',
         justifyContent: 'center',
@@ -347,9 +347,9 @@ const styles = StyleSheet.create({
         borderColor: Colors.dark.border,
     },
     menuIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: Spacing.md,

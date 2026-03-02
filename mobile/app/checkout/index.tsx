@@ -20,6 +20,7 @@ import { useCheckoutStore } from '@/store/checkout-store';
 import { useAuthStore } from '@/store/auth-store';
 import { supabase } from '@/lib/supabase';
 import { format } from 'date-fns';
+import SplitPaymentControls from '@/components/checkout/SplitPaymentControls';
 
 type PaymentMethod = 'e-wallet' | 'cash';
 
@@ -440,7 +441,13 @@ export default function CheckoutScreen() {
                     </View>
                 </TouchableOpacity>
 
-
+                {/* Split Payment */}
+                {bookingData.numPlayers > 1 && (
+                    <>
+                        <Text style={styles.sectionTitle}>Split Payment</Text>
+                        <SplitPaymentControls />
+                    </>
+                )}
 
                 <Text style={styles.sectionTitle}>Price Details</Text>
                 <Card variant="default" padding="md">

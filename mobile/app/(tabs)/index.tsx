@@ -17,6 +17,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { useLocationStore, formatDistance } from '@/store/location-store';
 import { useCourtStore, Venue } from '@/store/court-store';
 import { supabase } from '@/lib/supabase';
+import ActiveBookingBanner from '@/components/booking/ActiveBookingBanner';
 
 interface NearbyQueue {
   id: string;
@@ -171,6 +172,9 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </Card>
         )}
+
+        {/* Active Booking Banner */}
+        <ActiveBookingBanner />
 
         {/* Quick Actions */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
@@ -410,6 +414,11 @@ const styles = StyleSheet.create({
     ...Typography.body,
     color: Colors.dark.primary,
     marginBottom: Spacing.md,
+    padding: Spacing.sm, // Increase touch target
+    minHeight: 44,
+    minWidth: 44,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   quickActions: {
     flexDirection: 'row',
@@ -488,6 +497,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     borderRadius: Radius.md,
     gap: Spacing.xs,
+    minHeight: 44,
   },
   enableButtonText: {
     ...Typography.button,
