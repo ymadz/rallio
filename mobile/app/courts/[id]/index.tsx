@@ -1,14 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     View,
     Text,
     StyleSheet,
-
+    FlatList,
     ScrollView,
     Image,
     TouchableOpacity,
     ActivityIndicator,
     Dimensions,
+    NativeSyntheticEvent,
+    NativeScrollEvent,
     Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -102,7 +104,8 @@ export default function VenueDetailsScreen() {
     const [averageRating, setAverageRating] = useState<number>(0);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+    const [activeImageIndex, setActiveImageIndex] = useState(0);
+    const flatListRef = useRef<FlatList>(null);
 
     useEffect(() => {
         if (id) {
@@ -202,7 +205,12 @@ export default function VenueDetailsScreen() {
     // Get all images from all courts
     const allImages = venue?.courts
         ?.flatMap((c) => c.court_images || [])
-        .sort((a, b) => (a.is_primary ? -1 : 1)) || [];
+        .sort((a, b) => (a.is_primary ? -1 : b.is_primary ? 1 : 0)) || [];
+
+    const handleGalleryScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+        const index = Math.round(e.nativeEvent.contentOffset.x / width);
+        setActiveImageIndex(index);
+    };
 
     // Format currency
     const formatPrice = (price: number) => `₱${price.toLocaleString()}`;
@@ -267,37 +275,40 @@ export default function VenueDetailsScreen() {
                 <View style={styles.imageGallery}>
                     {allImages.length > 0 ? (
                         <>
-                            <Image
-                                source={{ uri: allImages[selectedImageIndex]?.url }}
-                                style={styles.mainImage}
+                            <FlatList
+                                ref={flatListRef}
+                                data={allImages}
+                                keyExtractor={(_, i) => String(i)}
+                                horizontal
+                                pagingEnabled
+                                showsHorizontalScrollIndicator={false}
+                                onScroll={handleGalleryScroll}
+                                scrollEventThrottle={16}
+                                renderItem={({ item }) => (
+                                    <Image
+                                        source={{ uri: item.url }}
+                                        style={styles.mainImage}
+                                        resizeMode="cover"
+                                    />
+                                )}
                             />
                             {allImages.length > 1 && (
-                                <ScrollView
-                                    horizontal
-                                    showsHorizontalScrollIndicator={false}
-                                    style={styles.thumbnailScroll}
-                                    contentContainerStyle={styles.thumbnailContainer}
-                                >
-                                    {allImages.map((img, index) => (
-                                        <TouchableOpacity
-                                            key={index}
-                                            onPress={() => setSelectedImageIndex(index)}
-                                        >
-                                            <Image
-                                                source={{ uri: img.url }}
-                                                style={[
-                                                    styles.thumbnail,
-                                                    selectedImageIndex === index && styles.thumbnailSelected
-                                                ]}
-                                            />
-                                        </TouchableOpacity>
+                                <View style={styles.dotsRow}>
+                                    {allImages.map((_, i) => (
+                                        <View
+                                            key={i}
+                                            style={[
+                                                styles.dot,
+                                                i === activeImageIndex && styles.dotActive,
+                                            ]}
+                                        />
                                     ))}
-                                </ScrollView>
+                                </View>
                             )}
                         </>
                     ) : (
                         <View style={styles.imagePlaceholder}>
-                            <Ionicons name="image-outline" size={64} color={Colors.dark.textTertiary} />
+                            <MaterialIcons name="sports-tennis" size={64} color={Colors.dark.textTertiary} />
                         </View>
                     )}
                 </View>
@@ -534,9 +545,8 @@ const styles = StyleSheet.create({
         width: '100%',
     },
     mainImage: {
-        width: '100%',
+        width: width,
         height: 280,
-        resizeMode: 'cover',
     },
     imagePlaceholder: {
         width: '100%',
@@ -545,25 +555,24 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    thumbnailScroll: {
+    dotsRow: {
         position: 'absolute',
         bottom: Spacing.md,
         left: 0,
         right: 0,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 6,
     },
-    thumbnailContainer: {
-        paddingHorizontal: Spacing.md,
-        gap: Spacing.sm,
+    dot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: 'rgba(255,255,255,0.45)',
     },
-    thumbnail: {
-        width: 60,
-        height: 60,
-        borderRadius: Radius.sm,
-        borderWidth: 2,
-        borderColor: 'transparent',
-    },
-    thumbnailSelected: {
-        borderColor: Colors.dark.primary,
+    dotActive: {
+        width: 18,
+        backgroundColor: '#fff',
     },
     content: {
         padding: Spacing.lg,

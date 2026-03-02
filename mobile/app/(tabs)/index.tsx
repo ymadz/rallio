@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-
+  Image,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
@@ -324,13 +324,21 @@ export default function HomeScreen() {
               >
                 <Card variant="default" padding="sm" style={styles.nearbyCard}>
                   <View style={styles.nearbyCardContent}>
-                    <View style={styles.venueIconContainer}>
-                      <MaterialCommunityIcons
-                        name="badminton"
-                        size={24}
-                        color={Colors.dark.primary}
+                    {venue.thumbnail_url ? (
+                      <Image
+                        source={{ uri: venue.thumbnail_url }}
+                        style={styles.venueThumbnail}
+                        resizeMode="cover"
                       />
-                    </View>
+                    ) : (
+                      <View style={styles.venueIconContainer}>
+                        <MaterialCommunityIcons
+                          name="badminton"
+                          size={24}
+                          color={Colors.dark.primary}
+                        />
+                      </View>
+                    )}
                     <View style={styles.nearbyInfo}>
                       <Text style={styles.nearbyName} numberOfLines={1}>
                         {venue.name}
@@ -504,6 +512,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  venueThumbnail: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.md,
+  },
   nearbyInfo: {
     flex: 1,
   },
@@ -584,7 +597,7 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   queueCard: {
-    marginBottom: 0,
+    marginBottom: Spacing.lg,
   },
   queueCardHeader: {
     flexDirection: 'row',

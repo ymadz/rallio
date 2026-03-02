@@ -30,6 +30,7 @@ export interface Venue {
     distance?: number;
     rating?: number;
     review_count?: number;
+    thumbnail_url?: string;
 }
 
 export type SortBy = 'nearest' | 'rating' | 'price_low' | 'price_high' | null;
@@ -148,12 +149,17 @@ export const useCourtStore = create<CourtStore>()((set, get) => ({
                     ? calculateDistance(Number(venue.latitude), Number(venue.longitude)) ?? undefined
                     : undefined;
 
+                // Pick primary image (or first available) as thumbnail
+                const allImages = venue.courts?.flatMap((c: Court) => c.court_images || []) ?? [];
+                const primary = allImages.find((img: { url: string; is_primary: boolean }) => img.is_primary) ?? allImages[0];
+
                 return {
                     ...venue,
                     amenities: Array.from(amenitySet),
                     rating: avgRating,
                     review_count: allRatings.length,
                     distance,
+                    thumbnail_url: primary?.url,
                 };
             });
 
