@@ -2,13 +2,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 
-// Environment variables - these are replaced at build time by Metro
-// Fallback values from .env for development
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL
-    || 'https://angddotiqwhhktqdkiyx.supabase.co';
+// Environment variables - replaced at build time by Metro bundler from .env
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
-    || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFuZ2Rkb3RpcXdoaGt0cWRraXl4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0MzMxNTksImV4cCI6MjA3OTAwOTE1OX0.dKpIkOzctWTg9RKQ69aa1SNat84bCC3GZzE-RoZm1EA';
+if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+        'Missing Supabase environment variables.\n' +
+        'Ensure EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY are set in your .env file.'
+    );
+}
 
 // SSR-safe storage adapter - prevents "window is not defined" error during web SSR
 const getStorage = () => {

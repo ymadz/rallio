@@ -265,6 +265,7 @@ export const useAuthStore = create<AuthStore>()(
                     email,
                     password,
                     options: {
+                        emailRedirectTo: Linking.createURL('auth/callback'),
                         data: {
                             first_name: metadata.firstName,
                             last_name: metadata.lastName,

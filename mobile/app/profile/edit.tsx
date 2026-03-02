@@ -10,10 +10,12 @@ import {
     Alert,
     KeyboardAvoidingView,
     Platform,
+    ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { Colors, Spacing, Typography, Radius } from '@/constants/Colors';
 import { Card, Button, Avatar } from '@/components/ui';
 import { useAuthStore } from '@/store/auth-store';
@@ -57,6 +59,67 @@ export default function EditProfileScreen() {
 
     const [selectedStyles, setSelectedStyles] = useState<string[]>(initialStyles);
     const [isSaving, setIsSaving] = useState(false);
+    const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+    const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatar_url ?? null);
+
+    const pickAndUploadAvatar = async () => {
+        if (!user) return;
+
+        // Request media library permission
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('Permission Required', 'Please allow access to your photo library to change your avatar.');
+            return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.5,
+        });
+
+        if (result.canceled || !result.assets[0]?.uri) return;
+
+        setIsUploadingAvatar(true);
+        try {
+            const uri = result.assets[0].uri;
+            const ext = uri.split('.').pop() ?? 'jpg';
+            const path = `avatars/${user.id}-${Date.now()}.${ext}`;
+
+            // Fetch file as buffer
+            const response = await fetch(uri);
+            const buffer = await response.arrayBuffer();
+
+            const { error: uploadError } = await supabase.storage
+                .from('avatars')
+                .upload(path, buffer, {
+                    contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+                    upsert: true,
+                });
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('avatars')
+                .getPublicUrl(path);
+
+            // Persist to profile
+            const { error: updateError } = await supabase
+                .from('profiles')
+                .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
+                .eq('id', user.id);
+
+            if (updateError) throw updateError;
+
+            setAvatarUrl(publicUrl);
+            await fetchProfile();
+        } catch (err: any) {
+            Alert.alert('Upload Failed', err.message || 'Could not upload photo. Please try again.');
+        } finally {
+            setIsUploadingAvatar(false);
+        }
+    };
 
     const toggleStyle = (style: string) => {
         if (style === 'All') {
@@ -89,7 +152,7 @@ export default function EditProfileScreen() {
                     first_name: firstName.trim(),
                     last_name: lastName.trim(),
                     display_name: displayName.trim() || `${firstName} ${lastName}`.trim(),
-                    // bio: bio.trim(), // Commented out due to schema error "Could not find the 'bio' column"
+                    bio: bio.trim(),
                     updated_at: new Date().toISOString(),
                 })
                 .eq('id', user.id);
@@ -126,6 +189,8 @@ export default function EditProfileScreen() {
 
     const fullName = `${firstName} ${lastName}`.trim() || 'Player';
 
+    const currentAvatarUrl = avatarUrl ?? profile?.avatar_url;
+
     return (
         <SafeAreaView style={styles.container}>
             <KeyboardAvoidingView
@@ -152,10 +217,30 @@ export default function EditProfileScreen() {
 
                     {/* Avatar Section */}
                     <View style={styles.avatarSection}>
-                        <Avatar source={profile?.avatar_url} name={fullName} size="xl" />
-                        <TouchableOpacity style={styles.changePhotoButton}>
-                            <Ionicons name="camera" size={18} color={Colors.dark.primary} />
-                            <Text style={styles.changePhotoText}>Change Photo</Text>
+                        <View style={styles.avatarWrapper}>
+                            <Avatar source={currentAvatarUrl} name={fullName} size="xl" />
+                            {isUploadingAvatar && (
+                                <View style={styles.avatarLoadingOverlay}>
+                                    <ActivityIndicator color={Colors.dark.primary} />
+                                </View>
+                            )}
+                        </View>
+                        <TouchableOpacity
+                            style={styles.changePhotoButton}
+                            onPress={pickAndUploadAvatar}
+                            disabled={isUploadingAvatar}
+                        >
+                            <Ionicons
+                                name="camera"
+                                size={18}
+                                color={isUploadingAvatar ? Colors.dark.textTertiary : Colors.dark.primary}
+                            />
+                            <Text style={[
+                                styles.changePhotoText,
+                                isUploadingAvatar && styles.changePhotoTextDisabled,
+                            ]}>
+                                {isUploadingAvatar ? 'Uploading…' : 'Change Photo'}
+                            </Text>
                         </TouchableOpacity>
                     </View>
 
@@ -311,6 +396,20 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: Spacing.xl,
     },
+    avatarWrapper: {
+        position: 'relative',
+    },
+    avatarLoadingOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        borderRadius: 9999,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     changePhotoButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -320,6 +419,9 @@ const styles = StyleSheet.create({
     changePhotoText: {
         ...Typography.body,
         color: Colors.dark.primary,
+    },
+    changePhotoTextDisabled: {
+        color: Colors.dark.textTertiary,
     },
     section: {
         paddingHorizontal: Spacing.lg,
