@@ -296,7 +296,7 @@ export default function CheckoutScreen() {
 
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: '#f9fafb', justifyContent: 'center', padding: 16 }]}>
-                <View style={{ backgroundColor: '#ffffff', borderRadius: 12, padding: 32, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}>
+                <View style={{ backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, padding: 32, alignItems: 'center' }}>
                     <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#dcfce7', alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
                         <Ionicons name="checkmark" size={32} color="#16a34a" />
                     </View>
@@ -310,16 +310,20 @@ export default function CheckoutScreen() {
                     </Text>
 
                     <TouchableOpacity
-                        style={{ width: '100%', backgroundColor: '#0f766e', paddingVertical: 14, borderRadius: 8, alignItems: 'center', marginBottom: 12 }}
+                        style={{ width: '100%', backgroundColor: '#159882', paddingVertical: 14, borderRadius: 6, alignItems: 'center', marginBottom: 12 }}
                         onPress={() => {
-                            Alert.alert('Coming Soon', 'Mobile receipt viewing is currently under construction. You can view your booking details in the Bookings tab.');
+                            if (successfulReservationId) {
+                                router.push(`/(tabs)/bookings/${successfulReservationId}/receipt` as any);
+                            } else {
+                                Alert.alert('Receipt Unavailable', 'Your receipt is still generating.');
+                            }
                         }}
                     >
                         <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>View Receipt</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={{ width: '100%', backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#e5e7eb', paddingVertical: 14, borderRadius: 8, alignItems: 'center', marginBottom: 32 }}
+                        style={{ width: '100%', backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#e5e7eb', paddingVertical: 14, borderRadius: 6, alignItems: 'center', marginBottom: 32 }}
                         onPress={handleDone}
                     >
                         <Text style={{ color: '#111827', fontSize: 16, fontWeight: '600' }}>Back to Bookings</Text>

@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json()
-        const { reservationId } = body
+        const { reservationId, appLink } = body
 
         if (!reservationId) {
             return NextResponse.json(
@@ -90,8 +90,8 @@ export async function POST(request: NextRequest) {
         const protocol = host.includes('localhost') || host.includes('192.168.') ? 'http' : 'https'
         const baseUrl = `${protocol}://${host}`
 
-        const bridgeSuccessUrl = `${baseUrl}/mobile-payment/callback?status=success`
-        const bridgeFailedUrl = `${baseUrl}/mobile-payment/callback?status=failed`
+        const bridgeSuccessUrl = `${baseUrl}/mobile-payment/callback?status=success${appLink ? `&appLink=${encodeURIComponent(appLink)}` : ''}`
+        const bridgeFailedUrl = `${baseUrl}/mobile-payment/callback?status=failed${appLink ? `&appLink=${encodeURIComponent(appLink)}` : ''}`
 
         // Create payment record
         const paymentId = crypto.randomUUID()
