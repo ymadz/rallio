@@ -7,7 +7,7 @@
 import { supabase } from './supabase';
 
 const getApiUrl = () =>
-  process.env.EXPO_PUBLIC_API_URL || 'http://rallio-amad.vercel.app';
+  process.env.EXPO_PUBLIC_API_URL || 'http://192.168.254.178:3000';
 
 /**
  * Get the current user's access token from the Supabase session.

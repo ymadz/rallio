@@ -8,11 +8,12 @@ import {
     TouchableOpacity,
     ActivityIndicator,
     Alert,
-    Linking,
     TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Typography, Radius } from '@/constants/Colors';
 import { Card, Button } from '@/components/ui';
@@ -165,7 +166,7 @@ export default function CheckoutScreen() {
                 throw new Error('User not authenticated (No session)');
             }
 
-            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://rallio-amad.vercel.app';
+            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.254.178:3000';
 
             // Prepare payload for Server Action Wrapper
             const reservationPayload = {
@@ -233,8 +234,17 @@ export default function CheckoutScreen() {
                     throw new Error(checkoutResult.error || 'Failed to create checkout session');
                 }
 
-                // Open PayMongo Checkout
-                await Linking.openURL(checkoutResult.checkoutUrl);
+                // Add return URL for Expo Go compatibility
+                const redirectUrl = Linking.createURL('/checkout');
+                console.log('Mobile Checkout: Deep link return URL:', redirectUrl);
+
+                // Open PayMongo Checkout via WebBrowser so it returns back to the app smoothly
+                const browserResult = await WebBrowser.openAuthSessionAsync(
+                    checkoutResult.checkoutUrl,
+                    redirectUrl
+                );
+
+                console.log('Mobile Checkout: Browser returned', browserResult.type);
 
                 // Set pending ID for AppState check when return
                 setPendingReservationId(primaryReservationId);

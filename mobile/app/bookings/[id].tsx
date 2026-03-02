@@ -113,7 +113,7 @@ export default function BookingDetailsScreen() {
 
     const checkRefundStatus = async () => {
         try {
-            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://rallio-amad.vercel.app';
+            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.254.178:3000';
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.access_token) return;
 
@@ -208,7 +208,7 @@ export default function BookingDetailsScreen() {
             setIsCancelling(true);
 
             // Call API
-            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://rallio-amad.vercel.app';
+            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.254.178:3000';
             const { data: { session } } = await supabase.auth.getSession();
 
             if (!session?.access_token) throw new Error('Not authenticated');
@@ -245,7 +245,7 @@ export default function BookingDetailsScreen() {
 
         try {
             setIsSubmittingRefund(true);
-            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://rallio-amad.vercel.app';
+            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.254.178:3000';
             const { data: { session } } = await supabase.auth.getSession();
 
             if (!session?.access_token) throw new Error('Not authenticated');

@@ -263,7 +263,7 @@ export default function BookingScreen() {
         setIsValidatingRecurrence(true);
         try {
             // Use the centralized API validation
-            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://rallio-amad.vercel.app';
+            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.254.178:3000';
             const dateStr = format(selectedDate, 'yyyy-MM-dd');
             const startISO = `${dateStr}T${selectedTime}:00`;
             // Calculate end ISO properly for the validation check
