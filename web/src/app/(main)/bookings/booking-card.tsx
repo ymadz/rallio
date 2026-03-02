@@ -320,22 +320,34 @@ export function BookingCard({
                                 <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-bold shadow-sm text-white ${paymentStatus.color === 'green' ? 'bg-green-500' :
                                     paymentStatus.color === 'yellow' ? 'bg-yellow-500' :
                                         paymentStatus.color === 'blue' ? 'bg-blue-500' :
-                                            paymentStatus.color === 'orange' ? 'bg-orange-500' :
-                                                'bg-red-500'
+                                            paymentStatus.color === 'gray' ? 'bg-gray-500' :
+                                                paymentStatus.color === 'orange' ? 'bg-orange-500' :
+                                                    'bg-red-500'
                                     }`}>
                                     {paymentStatus.label}
                                 </span>
                             </div>
                             <div>
                                 <p className="text-gray-500 mb-1">Amount</p>
-                                <p className="font-bold text-gray-900">₱{booking.total_amount.toFixed(2)}</p>
-                                {booking.status === 'partially_paid' && booking.amount_paid > 0 && (
-                                    <p className="text-xs text-amber-600 font-medium mt-0.5">
-                                        ₱{booking.amount_paid.toFixed(2)} paid · ₱{(booking.total_amount - booking.amount_paid).toFixed(2)} due
-                                    </p>
-                                )}
-                                {(booking.metadata?.recurrence_total && booking.metadata.recurrence_total > 1) && (
-                                    <p className="text-xs text-gray-400 mt-0.5">per session</p>
+                                {['pending_refund', 'refunded'].includes(booking.status) ? (
+                                    <>
+                                        <p className="font-bold text-gray-900 line-through text-gray-400">₱{booking.total_amount.toFixed(2)}</p>
+                                        <p className="text-xs text-orange-600 font-bold mt-0.5">
+                                            Refund {booking.status === 'refunded' ? 'Processed' : 'Requested'}: ₱{booking.amount_paid.toFixed(2)}
+                                        </p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <p className="font-bold text-gray-900">₱{booking.total_amount.toFixed(2)}</p>
+                                        {booking.status === 'partially_paid' && booking.amount_paid > 0 && (
+                                            <p className="text-xs text-amber-600 font-medium mt-0.5">
+                                                ₱{booking.amount_paid.toFixed(2)} paid · ₱{(booking.total_amount - booking.amount_paid).toFixed(2)} due
+                                            </p>
+                                        )}
+                                        {(booking.metadata?.recurrence_total && booking.metadata.recurrence_total > 1) && (
+                                            <p className="text-xs text-gray-400 mt-0.5">per session</p>
+                                        )}
+                                    </>
                                 )}
                             </div>
                         </>

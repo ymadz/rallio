@@ -258,7 +258,7 @@ export function GlobalAdminRefundManagement() {
             <p className="text-2xl font-bold">{stat.count}</p>
           </Card>
         ))}
-        
+
         <Card className="p-4 bg-green-50 text-green-700">
           <div className="flex items-center gap-2 mb-1">
             <DollarSign className="w-4 h-4" />
@@ -313,7 +313,7 @@ export function GlobalAdminRefundManagement() {
           <Undo2 className="w-16 h-16 mx-auto text-gray-300 mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">No Refunds Found</h3>
           <p className="text-gray-600">
-            {statusFilter !== 'all' 
+            {statusFilter !== 'all'
               ? `No refunds with status "${statusFilter}"`
               : 'No refund requests on the platform yet'}
           </p>
@@ -387,7 +387,7 @@ export function GlobalAdminRefundManagement() {
             <div className="p-6 border-b border-gray-200">
               <h2 className="text-xl font-bold text-gray-900">Refund Details</h2>
             </div>
-            
+
             <div className="p-6 space-y-4">
               {/* Status */}
               <div className="flex items-center justify-between">
@@ -456,7 +456,7 @@ export function GlobalAdminRefundManagement() {
               >
                 Close
               </Button>
-              
+
               {selectedRefund.status === 'pending' && (
                 <>
                   <Button

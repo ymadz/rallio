@@ -64,7 +64,7 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>Welcome back,</Text>
-            <Text style={styles.name}>{fullName} 👋</Text>
+            <Text style={styles.name}>{fullName}</Text>
           </View>
           <TouchableOpacity onPress={() => router.push('/profile')}>
             <Avatar source={profile?.avatar_url} name={fullName} size="md" />
