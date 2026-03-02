@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,18 @@ import { Card, Avatar, Skeleton } from '@/components/ui';
 import { useAuthStore } from '@/store/auth-store';
 import { useLocationStore, formatDistance } from '@/store/location-store';
 import { useCourtStore, Venue } from '@/store/court-store';
+import { supabase } from '@/lib/supabase';
+
+interface NearbyQueue {
+  id: string;
+  courtId: string;
+  courtName: string;
+  venueName: string;
+  status: 'open' | 'active';
+  currentPlayers: number;
+  maxPlayers: number;
+  estimatedWaitTime: number;
+}
 
 export default function HomeScreen() {
   const { profile, player } = useAuthStore();
@@ -27,9 +39,74 @@ export default function HomeScreen() {
     ? `${profile.first_name} ${profile.last_name || ''}`.trim()
     : 'Player';
 
+  const [nearbyQueues, setNearbyQueues] = useState<NearbyQueue[]>([]);
+  const [queuesLoading, setQueuesLoading] = useState(true);
+
   // Fetch venues on mount
   useEffect(() => {
     fetchVenues();
+  }, []);
+
+  // Fetch active queues on mount
+  useEffect(() => {
+    const fetchQueues = async () => {
+      try {
+        const now = new Date().toISOString();
+        const { data: sessions, error } = await supabase
+          .from('queue_sessions')
+          .select(`
+            id,
+            court_id,
+            status,
+            current_players,
+            max_players,
+            end_time,
+            courts (
+              name,
+              venues ( name )
+            )
+          `)
+          .in('status', ['open', 'active'])
+          .eq('is_public', true)
+          .gt('end_time', now)
+          .order('start_time', { ascending: true })
+          .limit(5);
+
+        if (error || !sessions) return;
+
+        // Fetch real participant counts
+        const ids = sessions.map((s: any) => s.id);
+        const { data: participants } = await supabase
+          .from('queue_participants')
+          .select('queue_session_id')
+          .in('queue_session_id', ids)
+          .is('left_at', null);
+
+        const counts: Record<string, number> = {};
+        participants?.forEach((p: any) => {
+          counts[p.queue_session_id] = (counts[p.queue_session_id] || 0) + 1;
+        });
+
+        setNearbyQueues(sessions.map((s: any) => {
+          const current = counts[s.id] ?? s.current_players ?? 0;
+          return {
+            id: s.id,
+            courtId: s.court_id,
+            courtName: s.courts?.name ?? 'Unknown Court',
+            venueName: s.courts?.venues?.name ?? 'Unknown Venue',
+            status: s.status,
+            currentPlayers: current,
+            maxPlayers: s.max_players,
+            estimatedWaitTime: current * 15,
+          };
+        }));
+      } catch (e) {
+        // Silent fail — non-critical section
+      } finally {
+        setQueuesLoading(false);
+      }
+    };
+    fetchQueues();
   }, []);
 
   // Get nearby venues sorted by distance
@@ -119,6 +196,69 @@ export default function HomeScreen() {
             <Text style={styles.actionText}>Join Queue</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Active Queues Nearby */}
+        {(queuesLoading || nearbyQueues.length > 0) && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Active Queues Nearby</Text>
+              <TouchableOpacity onPress={() => router.push('/queue')}>
+                <Text style={styles.seeAll}>See all</Text>
+              </TouchableOpacity>
+            </View>
+
+            {queuesLoading ? (
+              <View style={styles.queueList}>
+                {[1, 2].map((_, i) => (
+                  <Card key={i} variant="default" padding="md" style={styles.queueCard}>
+                    <Skeleton width="60%" height={16} style={{ marginBottom: 6 }} />
+                    <Skeleton width="40%" height={13} />
+                  </Card>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.queueList}>
+                {nearbyQueues.map((q) => (
+                  <TouchableOpacity
+                    key={q.id}
+                    activeOpacity={0.8}
+                    onPress={() => router.push(`/queue/${q.courtId}`)}
+                  >
+                    <Card variant="default" padding="md" style={styles.queueCard}>
+                      <View style={styles.queueCardHeader}>
+                        <View style={styles.queueCardTitles}>
+                          <Text style={styles.queueCourtName} numberOfLines={1}>{q.courtName}</Text>
+                          <Text style={styles.queueVenueName} numberOfLines={1}>{q.venueName}</Text>
+                        </View>
+                        <View style={[
+                          styles.queueBadge,
+                          q.status === 'active' ? styles.queueBadgeLive : styles.queueBadgeOpen,
+                        ]}>
+                          <Text style={[
+                            styles.queueBadgeText,
+                            q.status === 'active' ? styles.queueBadgeTextLive : styles.queueBadgeTextOpen,
+                          ]}>
+                            {q.status === 'active' ? 'Live' : 'Open'}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.queueCardMeta}>
+                        <View style={styles.queueMetaItem}>
+                          <Ionicons name="people-outline" size={14} color={Colors.dark.textSecondary} />
+                          <Text style={styles.queueMetaText}>{q.currentPlayers} waiting</Text>
+                        </View>
+                        <View style={styles.queueMetaItem}>
+                          <Ionicons name="time-outline" size={14} color={Colors.dark.textSecondary} />
+                          <Text style={styles.queueMetaText}>~{q.estimatedWaitTime} min</Text>
+                        </View>
+                      </View>
+                    </Card>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </>
+        )}
 
         {/* Nearby Courts */}
         <View style={styles.sectionHeader}>
@@ -438,5 +578,69 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'white',
     fontWeight: '600',
+  },
+  /* ── Active Queues ── */
+  queueList: {
+    gap: Spacing.sm,
+  },
+  queueCard: {
+    marginBottom: 0,
+  },
+  queueCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  queueCardTitles: {
+    flex: 1,
+  },
+  queueCourtName: {
+    ...Typography.body,
+    color: Colors.dark.text,
+    fontWeight: '600',
+  },
+  queueVenueName: {
+    ...Typography.bodySmall,
+    color: Colors.dark.textSecondary,
+    marginTop: 2,
+  },
+  queueBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+    alignSelf: 'flex-start',
+  },
+  queueBadgeLive: {
+    backgroundColor: Colors.dark.success + '25',
+  },
+  queueBadgeOpen: {
+    backgroundColor: '#F59E0B25',
+  },
+  queueBadgeText: {
+    ...Typography.caption,
+    fontWeight: '700',
+    fontSize: 11,
+  },
+  queueBadgeTextLive: {
+    color: Colors.dark.success,
+  },
+  queueBadgeTextOpen: {
+    color: '#F59E0B',
+  },
+  queueCardMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  queueMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  queueMetaText: {
+    ...Typography.bodySmall,
+    color: Colors.dark.textSecondary,
   },
 });
