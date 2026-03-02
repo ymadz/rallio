@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
     View,
     Text,
@@ -17,7 +17,11 @@ import { Colors, Spacing, Typography, Radius } from '@/constants/Colors';
 import { Card, Button } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useCheckoutStore } from '@/store/checkout-store';
-import { format, addDays, startOfDay, isBefore, isToday } from 'date-fns';
+import { format, addDays } from 'date-fns';
+import {
+    calculateApplicableDiscounts,
+    type ApplicableDiscount,
+} from '@/lib/discount-utils';
 
 interface Court {
     id: string;
@@ -40,27 +44,6 @@ interface TimeSlot {
     available: boolean;
     price?: number;
 }
-
-// Helper to get operating hours for a specific day
-const getOperatingHours = (
-    openingHours: Venue['opening_hours'],
-    date: Date
-): { openHour: number; closeHour: number } | null => {
-    if (!openingHours || typeof openingHours === 'string') {
-        // Default hours if no structured data
-        return { openHour: 6, closeHour: 22 };
-    }
-
-    const dayName = date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
-    const dayHours = openingHours[dayName];
-
-    if (!dayHours) return null; // Closed on this day
-
-    const [openHour] = dayHours.open.split(':').map(Number);
-    const [closeHour] = dayHours.close.split(':').map(Number);
-
-    return { openHour, closeHour };
-};
 
 export default function BookingScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -88,7 +71,7 @@ export default function BookingScreen() {
 
     const dateOptions = React.useMemo(() => {
         const dates = [];
-        for (let i = 0; i < 14; i++) {
+        for (let i = 0; i < 60; i++) {
             dates.push(addDays(new Date(), i));
         }
         return dates;
@@ -121,13 +104,44 @@ export default function BookingScreen() {
 
     const totalPrice = (selectedCourt?.hourly_rate || 0) * duration;
 
-    const discountResults = useMemo(() => {
-        return {
-            totalDiscount: 0,
-            discounts: [] as any[], // Typing as any[] to avoid strict shape issues if unused
-            finalPrice: totalPrice
-        };
-    }, [totalPrice]);
+    const [discountResults, setDiscountResults] = useState<{
+        totalDiscount: number;
+        discounts: ApplicableDiscount[];
+        finalPrice: number;
+    }>({ totalDiscount: 0, discounts: [], finalPrice: totalPrice });
+
+    // Recompute discounts whenever booking params change
+    useEffect(() => {
+        if (!venue || !selectedCourtId || !selectedDate || !selectedTime || totalPrice === 0) {
+            setDiscountResults({ totalDiscount: 0, discounts: [], finalPrice: totalPrice });
+            return;
+        }
+
+        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        const startISO = `${dateStr}T${selectedTime}:00`;
+        // End ISO: start hour + duration
+        const [startH] = selectedTime.split(':').map(Number);
+        const endH = startH + duration;
+        const endISO = `${dateStr}T${endH.toString().padStart(2, '0')}:00:00`;
+
+        calculateApplicableDiscounts({
+            venueId: venue.id,
+            startDate: startISO,
+            endDate: endISO,
+            recurrenceWeeks,
+            basePrice: totalPrice,
+        }).then((result) => {
+            if (result.success) {
+                setDiscountResults({
+                    totalDiscount: result.totalDiscount,
+                    discounts: result.discounts,
+                    finalPrice: result.finalPrice,
+                });
+            }
+        }).catch(() => {
+            setDiscountResults({ totalDiscount: 0, discounts: [], finalPrice: totalPrice });
+        });
+    }, [venue?.id, selectedCourtId, selectedDate, selectedTime, endTime, recurrenceWeeks, totalPrice]);
 
     // Fetch Data on Load
     useEffect(() => {
@@ -178,81 +192,39 @@ export default function BookingScreen() {
         }
     }, [selectedDate]);
 
-    // Fetch Time Slots when Court or Date Changes
+    // Fetch Time Slots when Court or Date Changes — via server API
     useEffect(() => {
         const fetchAvailability = async () => {
-            if (!selectedCourtId || !selectedDate || !venue) return;
+            if (!selectedCourtId || !selectedDate) return;
 
             try {
                 setIsLoadingSlots(true);
 
-                // Get operating hours
-                const hours = getOperatingHours(venue.opening_hours, selectedDate);
-                if (!hours) {
-                    setTimeSlots([]); // Closed
-                    return;
+                const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.254.170:3000';
+                const dateStr = format(selectedDate, 'yyyy-MM-dd');
+
+                const response = await fetch(
+                    `${apiUrl}/api/mobile/get-time-slots?courtId=${encodeURIComponent(selectedCourtId)}&date=${dateStr}`
+                );
+
+                if (!response.ok) {
+                    throw new Error(`Time slots fetch failed: ${response.status}`);
                 }
 
-                const { openHour, closeHour } = hours;
-
-                // Generate base slots
-                const slots: TimeSlot[] = [];
-                for (let h = openHour; h < closeHour; h++) {
-                    slots.push({
-                        time: `${h.toString().padStart(2, '0')}:00`,
-                        available: true,
-                    });
-                }
-
-                // Fetch existing reservations
-                const startOfDayStr = startOfDay(selectedDate).toISOString();
-                const endOfDayStr = startOfDay(addDays(selectedDate, 1)).toISOString();
-
-                const { data: reservations, error: resError } = await supabase
-                    .from('reservations')
-                    .select('start_time, end_time')
-                    .eq('court_id', selectedCourtId)
-                    .gte('start_time', startOfDayStr)
-                    .lt('start_time', endOfDayStr)
-                    .in('status', ['pending', 'confirmed', 'pending_payment', 'paid']);
-
-                if (resError) throw resError;
-
-                // Mark unavailable slots
-                const updatedSlots = slots.map(slot => {
-                    const slotHour = parseInt(slot.time.split(':')[0]);
-
-                    const isBooked = reservations?.some(res => {
-                        const startH = new Date(res.start_time).getHours();
-                        const endH = new Date(res.end_time).getHours();
-                        return slotHour >= startH && slotHour < endH;
-                    });
-
-                    // Also check if past time (if today)
-                    let isPast = false;
-                    if (isToday(selectedDate)) {
-                        const currentHour = new Date().getHours();
-                        if (slotHour <= currentHour) isPast = true;
-                    }
-
-                    return {
-                        ...slot,
-                        available: !isBooked && !isPast,
-                    };
-                });
-
-                setTimeSlots(updatedSlots);
+                const json = await response.json();
+                setTimeSlots(json.slots || []);
 
             } catch (err) {
                 console.error('Error fetching slots:', err);
-                // Don't block UI, just empty slots
+                // Don't block the UI — show empty grid
+                setTimeSlots([]);
             } finally {
                 setIsLoadingSlots(false);
             }
         };
 
         fetchAvailability();
-    }, [selectedCourtId, selectedDate, venue]);
+    }, [selectedCourtId, selectedDate]);
 
     const handleContinue = async () => {
         if (!selectedCourtId || !selectedDate || !selectedTime || !selectedCourt || !venue) {
