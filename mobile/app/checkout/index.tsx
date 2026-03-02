@@ -172,8 +172,8 @@ export default function CheckoutScreen() {
             // Prepare payload for Server Action Wrapper
             const reservationPayload = {
                 courtId: bookingData.courtId,
-                startTimeISO: `${format(new Date(bookingData.date), 'yyyy-MM-dd')}T${bookingData.startTime}:00`,
-                endTimeISO: `${format(new Date(bookingData.date), 'yyyy-MM-dd')}T${bookingData.endTime}:00`, // Duration logic handled by server if needed, but passing endISO is clearer
+                startTimeISO: `${format(new Date(bookingData.date), 'yyyy-MM-dd')}T${bookingData.startTime}:00+08:00`,
+                endTimeISO: `${format(new Date(bookingData.date), 'yyyy-MM-dd')}T${bookingData.endTime}:00+08:00`, // Duration logic handled by server if needed, but passing endISO is clearer
                 totalAmount: total, // GRAND TOTAL (Pre-calculated with discount)
                 discountAmount: discountAmount, // Pass discount info if backend needs it
                 paymentType: 'full',
