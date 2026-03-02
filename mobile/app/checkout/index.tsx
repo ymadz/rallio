@@ -101,6 +101,13 @@ export default function CheckoutScreen() {
     const [discountAmount, setDiscountAmount] = useState(0);
 
     useEffect(() => {
+        // Adjust total if discount is applied? 
+        // Note: The store `getTotalAmount` usually calculates based on its internal state. 
+        // Since we are adding local discount state, we subtract it here. 
+        // Ideally we should sync this to the store, but for parity fix, local calculation on display and submission is acceptable.
+    }, [discountAmount]);
+
+    useEffect(() => {
         if (!bookingData) {
             router.replace('/(tabs)/courts');
         }
@@ -119,13 +126,6 @@ export default function CheckoutScreen() {
     const subtotal = getSubtotal();
     const platformFee = getPlatformFeeAmount();
     const total = getTotalAmount() - discountAmount;
-
-    useEffect(() => {
-        // Adjust total if discount is applied? 
-        // Note: The store `getTotalAmount` usually calculates based on its internal state. 
-        // Since we are adding local discount state, we subtract it here. 
-        // Ideally we should sync this to the store, but for parity fix, local calculation on display and submission is acceptable.
-    }, [discountAmount]);
 
     const downPaymentAmount = getDownPaymentAmount();
     const remainingBalance = getRemainingBalance();
