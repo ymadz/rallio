@@ -295,25 +295,25 @@ export default function CheckoutScreen() {
         const displayIdShort = displayId !== '...' ? displayId.split('-')[0] : '...';
 
         return (
-            <SafeAreaView style={[styles.container, { backgroundColor: '#f9fafb', justifyContent: 'center', padding: 16 }]}>
-                <View style={{ backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, padding: 32, alignItems: 'center' }}>
-                    <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#dcfce7', alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
-                        <Ionicons name="checkmark" size={32} color="#16a34a" />
+            <SafeAreaView style={[styles.container, { backgroundColor: '#0f172a', justifyContent: 'center', padding: 16 }]}>
+                <View style={{ backgroundColor: '#1e293b', borderWidth: 1, borderColor: '#334155', borderRadius: 16, padding: 32, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 5 }}>
+                    <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#064e3b', alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
+                        <Ionicons name="checkmark" size={32} color="#10b981" />
                     </View>
 
-                    <Text style={{ fontSize: 24, fontWeight: '700', color: '#111827', marginBottom: 12 }}>
+                    <Text style={{ fontSize: 24, fontWeight: '700', color: '#f8fafc', marginBottom: 12 }}>
                         Payment Successful!
                     </Text>
 
-                    <Text style={{ fontSize: 16, color: '#4b5563', textAlign: 'center', marginBottom: 32, lineHeight: 24 }}>
+                    <Text style={{ fontSize: 16, color: '#94a3b8', textAlign: 'center', marginBottom: 32, lineHeight: 24 }}>
                         Your payment has been received and your court reservation is confirmed.
                     </Text>
 
                     <TouchableOpacity
-                        style={{ width: '100%', backgroundColor: '#159882', paddingVertical: 14, borderRadius: 6, alignItems: 'center', marginBottom: 12 }}
+                        style={{ width: '100%', backgroundColor: '#159882', paddingVertical: 14, borderRadius: 8, alignItems: 'center', marginBottom: 12 }}
                         onPress={() => {
                             if (successfulReservationId) {
-                                router.push(`/(tabs)/bookings/${successfulReservationId}/receipt` as any);
+                                router.push(`/bookings/${successfulReservationId}/receipt` as any);
                             } else {
                                 Alert.alert('Receipt Unavailable', 'Your receipt is still generating.');
                             }
@@ -323,13 +323,13 @@ export default function CheckoutScreen() {
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={{ width: '100%', backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#e5e7eb', paddingVertical: 14, borderRadius: 6, alignItems: 'center', marginBottom: 32 }}
+                        style={{ width: '100%', backgroundColor: 'transparent', borderWidth: 1, borderColor: '#334155', paddingVertical: 14, borderRadius: 8, alignItems: 'center', marginBottom: 32 }}
                         onPress={handleDone}
                     >
-                        <Text style={{ color: '#111827', fontSize: 16, fontWeight: '600' }}>Back to Bookings</Text>
+                        <Text style={{ color: '#f8fafc', fontSize: 16, fontWeight: '600' }}>Back to Bookings</Text>
                     </TouchableOpacity>
 
-                    <Text style={{ fontSize: 14, color: '#9ca3af' }}>
+                    <Text style={{ fontSize: 14, color: '#64748b' }}>
                         Reservation ID: {displayIdShort}...
                     </Text>
                 </View>
