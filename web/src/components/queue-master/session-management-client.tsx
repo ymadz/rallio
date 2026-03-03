@@ -1051,6 +1051,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
               avatarUrl: p.avatarUrl,
               skillLevel: p.skillLevel,
               gamesPlayed: p.gamesPlayed,
+              position: p.position,
             }))}
             gameFormat={session.gameFormat as 'singles' | 'doubles' | 'mixed'}
             onSuccess={handleModalSuccess}

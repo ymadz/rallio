@@ -15,6 +15,7 @@ interface MatchAssignmentModalProps {
     avatarUrl?: string
     skillLevel: number
     gamesPlayed: number
+    position?: number
   }>
   gameFormat: 'singles' | 'doubles' | 'mixed'
   onSuccess?: () => void
@@ -245,17 +246,24 @@ export function MatchAssignmentModal({
                           }`}
                       >
                         <div className="flex items-center gap-2 mb-2">
-                          {player.avatarUrl ? (
-                            <img
-                              src={player.avatarUrl}
-                              alt={player.playerName}
-                              className="w-8 h-8 rounded-full"
-                            />
-                          ) : (
-                            <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-xs font-medium text-gray-600">
-                              {player.playerName.charAt(0).toUpperCase()}
-                            </div>
-                          )}
+                          <div className="relative">
+                            {player.avatarUrl ? (
+                              <img
+                                src={player.avatarUrl}
+                                alt={player.playerName}
+                                className={`w-8 h-8 rounded-full border ${isSelected ? 'border-primary' : 'border-gray-200'}`}
+                              />
+                            ) : (
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${isSelected ? 'bg-primary text-white' : 'bg-gray-200 text-gray-600'}`}>
+                                {player.playerName.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            {player.position && (
+                              <div className="absolute -top-1 -right-1 w-4 h-4 bg-primary-dark text-white text-[8px] font-bold rounded-full flex items-center justify-center border border-white shadow-sm">
+                                #{player.position}
+                              </div>
+                            )}
+                          </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm text-gray-900 truncate">
                               {player.playerName}

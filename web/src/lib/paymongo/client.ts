@@ -14,6 +14,17 @@ import type {
   PayMongoError,
 } from './types'
 
+export type {
+  PayMongoSource,
+  PayMongoPaymentIntent,
+  PayMongoPayment,
+  CreateSourceParams,
+  CreatePaymentIntentParams,
+  CreatePaymentParams,
+  PayMongoResponse,
+  PayMongoError,
+} from './types'
+
 const PAYMONGO_API_URL = 'https://api.paymongo.com/v1'
 const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY
 

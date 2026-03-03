@@ -18,6 +18,7 @@ interface PaymentManagementModalProps {
     gamesPlayed: number
     amountOwed: number
     paymentStatus: 'unpaid' | 'partial' | 'paid'
+    position?: number
   }
   sessionId: string
   costPerGame: number
@@ -145,7 +146,7 @@ export function PaymentManagementModal({
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white p-6 rounded-t-2xl">
+        <div className="bg-primary text-white p-6 rounded-t-2xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
@@ -185,17 +186,24 @@ export function PaymentManagementModal({
           {/* Player Info */}
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
             <div className="flex items-center gap-3 mb-4">
-              {participant.avatarUrl ? (
-                <img
-                  src={participant.avatarUrl}
-                  alt={participant.playerName}
-                  className="w-12 h-12 rounded-full"
-                />
-              ) : (
-                <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center text-white font-bold text-lg">
-                  {participant.playerName.charAt(0).toUpperCase()}
-                </div>
-              )}
+              <div className="relative">
+                {participant.avatarUrl ? (
+                  <img
+                    src={participant.avatarUrl}
+                    alt={participant.playerName}
+                    className="w-12 h-12 rounded-full border-2 border-primary"
+                  />
+                ) : (
+                  <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center text-white font-bold text-lg">
+                    {participant.playerName.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                {participant.position && (
+                  <div className="absolute -top-1 -right-1 w-5 h-5 bg-primary-dark text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                    #{participant.position}
+                  </div>
+                )}
+              </div>
               <div className="flex-1">
                 <h3 className="font-semibold text-gray-900">{participant.playerName}</h3>
                 <span className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full border ${getStatusColor(participant.paymentStatus)} capitalize`}>
@@ -230,11 +238,10 @@ export function PaymentManagementModal({
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     onClick={() => setSelectedPaymentMethod('gcash')}
-                    className={`p-3 rounded-lg border-2 transition-all ${
-                      selectedPaymentMethod === 'gcash'
+                    className={`p-3 rounded-lg border-2 transition-all ${selectedPaymentMethod === 'gcash'
                         ? 'border-primary bg-primary/10'
                         : 'border-gray-200 hover:border-primary/30'
-                    }`}
+                      }`}
                   >
                     <div className="text-center">
                       <CreditCard className="w-6 h-6 mx-auto mb-1 text-primary" />
@@ -243,11 +250,10 @@ export function PaymentManagementModal({
                   </button>
                   <button
                     onClick={() => setSelectedPaymentMethod('paymaya')}
-                    className={`p-3 rounded-lg border-2 transition-all ${
-                      selectedPaymentMethod === 'paymaya'
+                    className={`p-3 rounded-lg border-2 transition-all ${selectedPaymentMethod === 'paymaya'
                         ? 'border-primary bg-primary/10'
                         : 'border-gray-200 hover:border-primary/30'
-                    }`}
+                      }`}
                   >
                     <div className="text-center">
                       <CreditCard className="w-6 h-6 mx-auto mb-1 text-green-600" />
