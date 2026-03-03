@@ -116,7 +116,7 @@ export function CancelBookingModal({
             <div className="relative z-10 w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden">
                 {/* Header */}
                 <div className={`px-6 py-4 flex items-center justify-between ${mode === 'refund'
-                    ? 'bg-gradient-to-r from-orange-500 to-orange-600'
+                    ? 'bg-gradient-to-r from-primary to-primary/90'
                     : 'bg-gradient-to-r from-red-500 to-red-600'
                     } text-white`}>
                     <h3 className="text-lg font-bold">
@@ -160,14 +160,14 @@ export function CancelBookingModal({
                     {/* Refund Info (paid bookings) */}
                     {mode === 'refund' && (
                         <>
-                            <div className="bg-orange-50 rounded-lg p-4 mb-5 border border-orange-200">
+                            <div className="bg-green-50 rounded-lg p-4 mb-5 border border-green-200">
                                 <div className="flex justify-between items-center mb-1">
-                                    <span className="text-sm text-orange-800">Refund Amount</span>
-                                    <span className="text-lg font-bold text-orange-900">
+                                    <span className="text-sm text-green-800">Refund Amount</span>
+                                    <span className="text-lg font-bold text-green-900">
                                         ₱{booking.amount_paid.toFixed(2)}
                                     </span>
                                 </div>
-                                <p className="text-xs text-orange-600">
+                                <p className="text-xs text-green-700">
                                     Refunds are typically processed within 5-10 business days after admin approval.
                                 </p>
                             </div>
@@ -181,7 +181,7 @@ export function CancelBookingModal({
                                     value={reason}
                                     onChange={(e) => setReason(e.target.value)}
                                     placeholder="Please explain why you're requesting a refund..."
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500"
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                                     rows={3}
                                 />
                             </div>
@@ -217,7 +217,7 @@ export function CancelBookingModal({
                             onClick={handleConfirm}
                             disabled={isLoading || (mode === 'refund' && !reason.trim())}
                             className={`flex-1 ${mode === 'refund'
-                                ? 'bg-orange-600 hover:bg-orange-700'
+                                ? 'bg-primary hover:bg-primary/90'
                                 : 'bg-red-600 hover:bg-red-700'
                                 }`}
                         >

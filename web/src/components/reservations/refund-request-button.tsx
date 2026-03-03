@@ -127,7 +127,7 @@ export function RefundRequestButton({
         size="sm"
         onClick={() => setIsOpen(true)}
         disabled={!canRequestRefund}
-        className="w-full text-orange-600 border-orange-200 hover:bg-orange-50 hover:text-orange-700"
+        className="w-full text-primary border-primary/30 hover:bg-primary/5 hover:text-primary"
       >
         <Undo2 className="w-4 h-4 mr-2" />
         Request Refund
@@ -199,7 +199,7 @@ export function RefundRequestButton({
               <Button
                 onClick={handleRequestRefund}
                 disabled={isLoading || !reason.trim()}
-                className="flex-1 bg-orange-600 hover:bg-orange-700"
+                className="flex-1 bg-primary hover:bg-primary/90"
               >
                 {isLoading ? (
                   <>
