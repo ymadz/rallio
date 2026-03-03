@@ -802,7 +802,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                       className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                     >
                       <div className="flex items-center gap-3 flex-1">
-                        <div className="relative">
+                        <div className="relative inline-block w-10 h-10 shrink-0">
                           {player.avatarUrl ? (
                             <img
                               src={player.avatarUrl}
@@ -814,8 +814,8 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                               {player.playerName.charAt(0).toUpperCase()}
                             </div>
                           )}
-                          <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-primary-dark text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white shadow-sm">
-                            #{player.position}
+                          <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-green-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border border-white shadow-sm z-10">
+                            {player.position}
                           </div>
                         </div>
                         <div className="flex-1">

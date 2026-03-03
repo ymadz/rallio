@@ -186,21 +186,21 @@ export function PaymentManagementModal({
           {/* Player Info */}
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
             <div className="flex items-center gap-3 mb-4">
-              <div className="relative">
+              <div className="relative inline-block w-12 h-12 shrink-0">
                 {participant.avatarUrl ? (
                   <img
                     src={participant.avatarUrl}
                     alt={participant.playerName}
-                    className="w-12 h-12 rounded-full border-2 border-primary"
+                    className="w-12 h-12 rounded-full border-2 border-primary bg-white object-cover"
                   />
                 ) : (
                   <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center text-white font-bold text-lg">
                     {participant.playerName.charAt(0).toUpperCase()}
                   </div>
                 )}
-                {participant.position && (
-                  <div className="absolute -top-1 -right-1 w-5 h-5 bg-primary-dark text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white shadow-sm">
-                    #{participant.position}
+                {participant.position !== undefined && (
+                  <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-green-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border border-white shadow-sm z-10">
+                    {participant.position}
                   </div>
                 )}
               </div>
@@ -239,8 +239,8 @@ export function PaymentManagementModal({
                   <button
                     onClick={() => setSelectedPaymentMethod('gcash')}
                     className={`p-3 rounded-lg border-2 transition-all ${selectedPaymentMethod === 'gcash'
-                        ? 'border-primary bg-primary/10'
-                        : 'border-gray-200 hover:border-primary/30'
+                      ? 'border-primary bg-primary/10'
+                      : 'border-gray-200 hover:border-primary/30'
                       }`}
                   >
                     <div className="text-center">
@@ -251,8 +251,8 @@ export function PaymentManagementModal({
                   <button
                     onClick={() => setSelectedPaymentMethod('paymaya')}
                     className={`p-3 rounded-lg border-2 transition-all ${selectedPaymentMethod === 'paymaya'
-                        ? 'border-primary bg-primary/10'
-                        : 'border-gray-200 hover:border-primary/30'
+                      ? 'border-primary bg-primary/10'
+                      : 'border-gray-200 hover:border-primary/30'
                       }`}
                   >
                     <div className="text-center">

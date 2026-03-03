@@ -246,21 +246,21 @@ export function MatchAssignmentModal({
                           }`}
                       >
                         <div className="flex items-center gap-2 mb-2">
-                          <div className="relative">
+                          <div className="relative inline-block w-8 h-8 shrink-0">
                             {player.avatarUrl ? (
                               <img
                                 src={player.avatarUrl}
                                 alt={player.playerName}
-                                className={`w-8 h-8 rounded-full border ${isSelected ? 'border-primary' : 'border-gray-200'}`}
+                                className={`w-8 h-8 rounded-full border object-cover bg-white ${isSelected ? 'border-primary' : 'border-gray-200'}`}
                               />
                             ) : (
                               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${isSelected ? 'bg-primary text-white' : 'bg-gray-200 text-gray-600'}`}>
                                 {player.playerName.charAt(0).toUpperCase()}
                               </div>
                             )}
-                            {player.position && (
-                              <div className="absolute -top-1 -right-1 w-4 h-4 bg-primary-dark text-white text-[8px] font-bold rounded-full flex items-center justify-center border border-white shadow-sm">
-                                #{player.position}
+                            {player.position !== undefined && (
+                              <div className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-green-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center border border-white shadow-sm z-10">
+                                {player.position}
                               </div>
                             )}
                           </div>
