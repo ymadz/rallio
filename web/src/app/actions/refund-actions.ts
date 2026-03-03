@@ -397,25 +397,38 @@ export async function adminProcessRefundAction(
     const { createServiceClient } = await import('@/lib/supabase/service')
     const serviceClient = createServiceClient()
 
+    // Get refund details with related venue info to check ownership
+    const { data: refund, error: refundError } = await serviceClient
+      .from('refunds')
+      .select(`
+        *,
+        reservations (
+          courts (
+            venues (
+              owner_id
+            )
+          )
+        )
+      `)
+      .eq('id', refundId)
+      .single()
+
+    if (refundError || !refund) {
+      return { success: false, error: 'Refund not found' }
+    }
+
     const { data: roles } = await serviceClient
       .from('user_roles')
       .select('role:roles(name)')
       .eq('user_id', user.id)
       .in('role.name', ['global_admin', 'court_admin'])
 
-    if (!roles || roles.length === 0) {
-      return { success: false, error: 'Not authorized to process refunds' }
-    }
+    const isGlobalAdmin = roles?.some(r => (r.role as any)?.name === 'global_admin') || false
+    const venueOwnerId = (refund.reservations as any)?.courts?.venues?.owner_id
+    const isVenueOwner = venueOwnerId === user.id
 
-    // Get refund details
-    const { data: refund, error: refundError } = await supabase
-      .from('refunds')
-      .select('*')
-      .eq('id', refundId)
-      .single()
-
-    if (refundError || !refund) {
-      return { success: false, error: 'Refund not found' }
+    if (!isGlobalAdmin && !isVenueOwner) {
+      return { success: false, error: 'Not authorized to process refunds for this venue' }
     }
 
     if (refund.status !== 'pending' && refund.status !== 'failed') {
@@ -459,6 +472,12 @@ export async function adminProcessRefundAction(
     }
 
     try {
+      console.log('🐞 [DEBUG] Submitting to PayMongo with:', {
+        payment_id: refund.payment_external_id,
+        amount: refund.amount,
+        amount_type: typeof refund.amount,
+        reason: refund.reason_code || 'requested_by_customer'
+      });
       const paymongoRefund = await createRefund({
         payment_id: refund.payment_external_id,
         amount: refund.amount,

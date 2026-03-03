@@ -51,7 +51,7 @@ export interface VenueWithDetails {
   image_url?: string | null
   activeDiscountCount?: number
   hasActiveDiscounts?: boolean
-  activeDiscountLabels?: string[]
+  activeDiscountLabels?: { label: string; isSurcharge?: boolean; description?: string; name?: string }[]
 }
 
 export interface CourtWithDetails {
@@ -456,14 +456,14 @@ async function processVenuesList(supabase: any, rawVenues: any[], latitude?: num
     // Fetch active discount rules per venue
     const { data: rules } = await supabase
       .from('discount_rules')
-      .select('venue_id, name, discount_value, discount_unit')
+      .select('venue_id, name, discount_value, discount_unit, description')
       .in('venue_id', venueIds)
       .eq('is_active', true)
 
     // Fetch active holiday pricing per venue
     const { data: holidays } = await supabase
       .from('holiday_pricing')
-      .select('venue_id, name, price_multiplier')
+      .select('venue_id, name, price_multiplier, description')
       .in('venue_id', venueIds)
       .eq('is_active', true)
 
@@ -472,12 +472,21 @@ async function processVenuesList(supabase: any, rawVenues: any[], latitude?: num
       const venueHolidays = holidays?.filter((h: any) => h.venue_id === id) || []
       activeDiscountMap[id] = venueRules.length + venueHolidays.length
       activeDiscountLabelsMap[id] = [
-        ...venueRules.map((r: any) =>
-          r.discount_unit === 'percent' ? `${r.discount_value}% OFF` : `₱${r.discount_value} OFF`
-        ),
+        ...venueRules.map((r: any) => ({
+          label: r.discount_unit === 'percent' ? `${r.discount_value}% OFF` : `₱${r.discount_value} OFF`,
+          isSurcharge: false,
+          name: r.name,
+          description: r.description
+        })),
         ...venueHolidays.map((h: any) => {
-          if (h.price_multiplier < 1) return `${Math.round((1 - h.price_multiplier) * 100)}% OFF`
-          return `+${Math.round((h.price_multiplier - 1) * 100)}%`
+          const isSurcharge = h.price_multiplier > 1
+          const factor = isSurcharge ? h.price_multiplier - 1 : 1 - h.price_multiplier
+          return {
+            label: isSurcharge ? `+${Math.round(factor * 100)}%` : `${Math.round(factor * 100)}% OFF`,
+            isSurcharge,
+            name: h.name,
+            description: h.description
+          }
         }),
       ]
     })

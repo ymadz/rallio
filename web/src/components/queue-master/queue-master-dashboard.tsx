@@ -5,6 +5,7 @@ import { getMyQueueMasterSessions, getQueueMasterStats } from '@/app/actions/que
 import { Plus, Calendar, TrendingUp, DollarSign, Users, Clock, PlayCircle, CheckCircle, XCircle, Loader2, AlertCircle } from 'lucide-react'
 import { useServerTime } from '@/hooks/use-server-time'
 import Link from 'next/link'
+import { StatusBadge } from '@/components/shared/status-badge'
 
 type SessionStatus = 'active' | 'pending' | 'past'
 
@@ -105,37 +106,7 @@ export function QueueMasterDashboard() {
     return effective
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'live': return 'bg-green-100 text-green-700 border-green-200'
-      case 'active': return 'bg-green-100 text-green-700 border-green-200'
-      case 'open': return 'bg-blue-100 text-blue-700 border-blue-200'
-      case 'cancelled': return 'bg-red-100 text-red-700 border-red-200'
-      case 'pending_payment': return 'bg-orange-100 text-orange-700 border-orange-200'
-      case 'completed': return 'bg-gray-100 text-gray-700 border-gray-200'
-      default: return 'bg-gray-100 text-gray-700 border-gray-200'
-    }
-  }
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'live': return <PlayCircle className="w-4 h-4" />
-      case 'active': return <PlayCircle className="w-4 h-4" />
-      case 'open': return <Clock className="w-4 h-4" />
-      case 'cancelled': return <XCircle className="w-4 h-4" />
-      case 'completed': return <CheckCircle className="w-4 h-4" />
-      case 'pending_payment': return <DollarSign className="w-4 h-4" />
-      default: return <Clock className="w-4 h-4" />
-    }
-  }
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'live': return 'Live Now'
-      case 'pending_payment': return 'Pending Payment'
-      default: return status.charAt(0).toUpperCase() + status.slice(1)
-    }
-  }
+  // getStatusColor, getStatusIcon, getStatusLabel removed in favor of StatusBadge
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -306,10 +277,7 @@ export function QueueMasterDashboard() {
                     </div>
                     <p className="text-sm text-gray-600">{session.venueName}</p>
                   </div>
-                  <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium ${getStatusColor(getDisplayStatus(session))}`}>
-                    {getStatusIcon(getDisplayStatus(session))}
-                    <span>{getStatusLabel(getDisplayStatus(session))}</span>
-                  </div>
+                  <StatusBadge status={getDisplayStatus(session)} />
                 </div>
 
                 {/* Session Info Grid */}

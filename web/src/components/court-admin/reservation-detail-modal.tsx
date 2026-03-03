@@ -203,7 +203,7 @@ export function ReservationDetailModal({
               </span>
               {reservation.metadata?.is_queue_session_reservation && (
                 <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-green-50 text-green-700 border border-green-200 text-sm font-medium">
-                  🎮 Queue
+                  Queue
                 </span>
               )}
             </div>

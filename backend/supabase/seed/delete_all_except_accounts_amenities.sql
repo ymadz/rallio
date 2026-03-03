@@ -45,7 +45,7 @@ DELETE FROM queue_sessions;
 -- =====================================================
 -- 5. PAYMENTS & REFUNDS
 -- =====================================================
-DELETE FROM promo_code_usage;
+
 DELETE FROM payment_splits;
 DELETE FROM refunds;
 DELETE FROM payments;
@@ -68,7 +68,6 @@ DELETE FROM courts;
 -- =====================================================
 DELETE FROM discount_rules;
 DELETE FROM holiday_pricing;
-DELETE FROM promo_codes;
 DELETE FROM blocked_dates;
 DELETE FROM venues;
 

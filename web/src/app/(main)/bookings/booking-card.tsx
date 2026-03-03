@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import { BookingReviewButton } from '@/components/venue/booking-review-button'
+import { StatusBadge } from '@/components/shared/status-badge'
 
 // Redefining interface to avoid circular deps or complex exports for now
 export interface Booking {
@@ -144,22 +145,6 @@ export function BookingCard({
 
 
     const bookingStatusBadge = (status: string, b: Booking) => {
-        const styles: Record<string, string> = {
-            reserved: 'bg-blue-500 text-white',
-            pending_payment: 'bg-amber-500 text-white',
-            pending: 'bg-amber-500 text-white',
-            partially_paid: 'bg-amber-600 text-white',
-
-            confirmed: 'bg-emerald-600 text-white',
-            ongoing: 'bg-green-500 text-white animate-pulse',
-            cancelled: 'bg-red-600 text-white',
-            rejected: 'bg-red-600 text-white',
-            pending_refund: 'bg-amber-600 text-white',
-            refunded: 'bg-gray-500 text-white',
-            completed: 'bg-primary text-white',
-            no_show: 'bg-gray-700 text-white',
-        }
-
         let displayStatus = status
         let displayLabel = ''
 
@@ -171,7 +156,7 @@ export function BookingCard({
         } else if (status === 'pending_payment') {
             const paymentMethod = b.metadata?.intended_payment_method || b.payments?.[0]?.payment_method
             if (paymentMethod === 'cash') {
-                displayStatus = 'reserved'
+                displayStatus = 'confirmed' // Map to confirmed style
                 displayLabel = 'Reserved'
             } else {
                 displayLabel = 'Pending Payment'
@@ -191,12 +176,7 @@ export function BookingCard({
         }
 
         return (
-            <span
-                className={`px-3 py-1.5 rounded-full text-xs font-bold shadow-lg ${styles[displayStatus] || 'bg-gray-500 text-white'
-                    }`}
-            >
-                {displayLabel}
-            </span>
+            <StatusBadge status={displayStatus} label={displayLabel} />
         )
     }
 
