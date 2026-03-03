@@ -75,6 +75,79 @@ export default async function HomePage() {
 
   return (
     <div className="min-h-screen bg-white">
+      {/* Keyframe styles for card effects */}
+      <style>{`
+        @keyframes card-breathe {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.85; transform: scale(1.04); }
+        }
+        @keyframes card-lift {
+          from { transform: translateY(0) scale(1); box-shadow: 0 4px 24px rgba(13,148,136,0.18); }
+          to   { transform: translateY(-4px) scale(1.02); box-shadow: 0 16px 40px rgba(13,148,136,0.35); }
+        }
+        .quick-card {
+          position: relative;
+          overflow: hidden;
+          border-radius: 1.5rem;
+          padding: 1.5rem;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          min-height: 160px;
+          border: 1px solid rgba(255,255,255,0.22);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.28), 0 4px 24px rgba(13,148,136,0.18);
+          transition: transform 0.32s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.32s ease;
+          text-decoration: none;
+        }
+        .quick-card:hover {
+          transform: translateY(-4px) scale(1.02);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.32), 0 16px 40px rgba(13,148,136,0.35);
+        }
+        .quick-card:hover .card-orbs {
+          animation: card-breathe 3s ease-in-out infinite;
+        }
+        .card-noise {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          z-index: 1;
+          opacity: 0.045;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+          background-size: 180px 180px;
+          mix-blend-mode: overlay;
+        }
+        .card-content {
+          position: relative;
+          z-index: 2;
+        }
+        .card-icon-wrap {
+          width: 48px;
+          height: 48px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(255,255,255,0.12);
+          backdrop-filter: blur(20px) saturate(1.8);
+          -webkit-backdrop-filter: blur(20px) saturate(1.8);
+          border: 1px solid rgba(255,255,255,0.35);
+          box-shadow: 0 0 0 4px rgba(255,255,255,0.06), 0 4px 16px rgba(0,0,0,0.10);
+          transition: background 0.28s ease, box-shadow 0.28s ease, transform 0.28s cubic-bezier(0.34,1.56,0.64,1);
+        }
+        .quick-card:hover .card-icon-wrap {
+          background: rgba(255,255,255,0.20);
+          box-shadow: 0 0 0 6px rgba(255,255,255,0.10), 0 6px 24px rgba(0,0,0,0.14);
+          transform: scale(1.08);
+        }
+        .card-label {
+          color: #fff;
+          font-size: 1.125rem;
+          font-weight: 600;
+          text-shadow: 0 1px 6px rgba(0,0,0,0.18);
+          letter-spacing: -0.01em;
+        }
+      `}</style>
+
       {/* Header */}
 
 
@@ -90,41 +163,67 @@ export default async function HomePage() {
 
         {/* Quick Actions - Large Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <Link
-            href="/courts"
-            className="bg-primary hover:bg-primary/90 rounded-2xl p-6 flex flex-col justify-between min-h-[160px] transition-colors"
+
+          {/* Book a Court Card */}
+          <Link href="/courts" className="quick-card"
+            style={{ background: [
+              'radial-gradient(ellipse 90% 70% at 15% 20%, rgba(20,184,166,0.65) 0%, transparent 55%)',
+              'radial-gradient(ellipse 70% 80% at 90% 95%, rgba(6,182,212,0.50) 0%, transparent 55%)',
+              'radial-gradient(ellipse 50% 50% at 55% 50%, rgba(153,246,228,0.18) 0%, transparent 60%)',
+              'linear-gradient(135deg, #0d9488 0%, #0f766e 100%)'
+            ].join(', ') }}
           >
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
+            <div className="card-noise" />
+            <div className="card-content" style={{display:'flex', flexDirection:'column', justifyContent:'space-between', height:'100%', gap:'2rem'}}>
+              <div className="card-icon-wrap">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <span className="card-label">Book a court</span>
             </div>
-            <span className="text-white text-lg font-semibold">Book a court</span>
           </Link>
 
-          <Link
-            href="/queue"
-            className="bg-primary hover:bg-primary/90 rounded-2xl p-6 flex flex-col justify-between min-h-[160px] transition-colors"
+          {/* Queue Card */}
+          <Link href="/queue" className="quick-card"
+            style={{ background: [
+              'radial-gradient(ellipse 80% 60% at 85% 15%, rgba(6,182,212,0.60) 0%, transparent 55%)',
+              'radial-gradient(ellipse 75% 75% at 10% 90%, rgba(20,184,166,0.55) 0%, transparent 55%)',
+              'radial-gradient(ellipse 40% 50% at 45% 45%, rgba(204,251,241,0.18) 0%, transparent 65%)',
+              'linear-gradient(145deg, #0f766e 0%, #0d9488 55%, #06b6d4 100%)'
+            ].join(', ') }}
           >
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 10H9m6 4a7 7 0 11-14 0 7 7 0 0114 0zM9 15h6" />
-              </svg>
+            <div className="card-noise" />
+            <div className="card-content" style={{display:'flex', flexDirection:'column', justifyContent:'space-between', height:'100%', gap:'2rem'}}>
+              <div className="card-icon-wrap">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 10H9m6 4a7 7 0 11-14 0 7 7 0 0114 0zM9 15h6" />
+                </svg>
+              </div>
+              <span className="card-label">Queue</span>
             </div>
-            <span className="text-white text-lg font-semibold">Queue</span>
           </Link>
 
-          <Link
-            href="/bookings"
-            className="bg-primary hover:bg-primary/90 rounded-2xl p-6 flex flex-col justify-between min-h-[160px] transition-colors"
+          {/* My Bookings Card */}
+          <Link href="/bookings" className="quick-card"
+            style={{ background: [
+              'radial-gradient(ellipse 75% 65% at 50% 5%, rgba(103,232,249,0.50) 0%, transparent 55%)',
+              'radial-gradient(ellipse 80% 70% at 95% 95%, rgba(13,148,136,0.65) 0%, transparent 50%)',
+              'radial-gradient(ellipse 45% 55% at 15% 60%, rgba(153,246,228,0.22) 0%, transparent 60%)',
+              'linear-gradient(155deg, #06b6d4 0%, #0d9488 55%, #0f766e 100%)'
+            ].join(', ') }}
           >
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
+            <div className="card-noise" />
+            <div className="card-content" style={{display:'flex', flexDirection:'column', justifyContent:'space-between', height:'100%', gap:'2rem'}}>
+              <div className="card-icon-wrap">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <span className="card-label">My Bookings</span>
             </div>
-            <span className="text-white text-lg font-semibold">My Bookings</span>
           </Link>
+
         </div>
 
         {/* Suggested Courts */}
