@@ -162,18 +162,15 @@ export default async function HomePage() {
           align-items: stretch;
           text-decoration: none;
           /* Studio-lighting gradient applied per-card via inline style prop */
-          border: 1px solid rgba(153,246,228,0.18);
           box-shadow:
             inset 0 1px 0 rgba(255,255,255,0.14),
             inset 0 -1px 0 rgba(0,0,0,0.08);
           transition:
             transform 0.36s cubic-bezier(0.34,1.56,0.64,1),
-            box-shadow 0.36s ease,
-            border-color 0.36s ease;
+            box-shadow 0.36s ease;
         }
         .suggested-card:hover {
           transform: translateY(-3px) scale(1.012);
-          border-color: rgba(153,246,228,0.32);
           box-shadow:
             inset 0 1px 0 rgba(255,255,255,0.18),
             inset 0 -1px 0 rgba(0,0,0,0.06),
