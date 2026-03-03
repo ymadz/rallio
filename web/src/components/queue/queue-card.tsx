@@ -1,7 +1,9 @@
+'use client'
+
 import Link from 'next/link'
 import { QueueSession } from '@/hooks/use-queue'
 import { QueueStatusBadge } from './queue-status-badge'
-import { Users, Clock, MapPin, ChevronRight, Calendar, Timer } from 'lucide-react'
+import { Users, Clock, MapPin, ChevronRight, Timer, Zap } from 'lucide-react'
 import { subHours, isBefore, format, differenceInSeconds } from 'date-fns'
 import { useEffect, useState } from 'react'
 import { useServerTime } from '@/hooks/use-server-time'
@@ -11,11 +13,54 @@ interface QueueCardProps {
   variant?: 'active' | 'available'
 }
 
+/** Overlapping circular avatar stack — shows up to 4, then a +N pill */
+function AvatarStack({ players, max = 4 }: { players: QueueSession['players']; max?: number }) {
+  const visible = players.slice(0, max)
+  const overflow = players.length - max
+
+  if (players.length === 0) return null
+
+  return (
+    <div className="flex items-center">
+      {visible.map((p, i) => (
+        <div
+          key={p.id}
+          className="w-7 h-7 rounded-full border-2 border-white flex items-center justify-center overflow-hidden"
+          style={{ marginLeft: i === 0 ? 0 : '-8px', zIndex: max - i }}
+          title={p.name}
+        >
+          {p.avatarUrl ? (
+            <img src={p.avatarUrl} alt={p.name} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center">
+              <span className="text-white text-[9px] font-bold leading-none">
+                {p.name.charAt(0).toUpperCase()}
+              </span>
+            </div>
+          )}
+        </div>
+      ))}
+      {overflow > 0 && (
+        <div
+          className="w-7 h-7 rounded-full border-2 border-white bg-gray-100 flex items-center justify-center text-[9px] font-bold text-gray-500"
+          style={{ marginLeft: '-8px', zIndex: 0 }}
+        >
+          +{overflow}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
   const { date: serverDate } = useServerTime()
   const isUserInQueue = queue.userPosition !== null
   const startTime = queue.startTime ? new Date(queue.startTime) : new Date()
-  const endTime = queue.endTime ? new Date(queue.endTime) : (queue.startTime ? new Date(new Date(queue.startTime).getTime() + 2 * 60 * 60 * 1000) : new Date())
+  const endTime = queue.endTime
+    ? new Date(queue.endTime)
+    : queue.startTime
+      ? new Date(new Date(queue.startTime).getTime() + 2 * 60 * 60 * 1000)
+      : new Date()
   const openTime = subHours(startTime, 12)
   const now = serverDate || new Date()
   const isLive = startTime <= now && endTime > now
@@ -24,27 +69,18 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
   const [isJoinable, setIsJoinable] = useState(false)
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      const now = serverDate || new Date()
-      if (isBefore(now, openTime)) {
-        setTimeUntilOpen(differenceInSeconds(openTime, now))
+    const check = () => {
+      const t = serverDate || new Date()
+      if (isBefore(t, openTime)) {
+        setTimeUntilOpen(differenceInSeconds(openTime, t))
         setIsJoinable(false)
       } else {
         setTimeUntilOpen(0)
         setIsJoinable(true)
       }
-    }, 1000)
-
-    // Initial check
-    const now = serverDate || new Date()
-    if (isBefore(now, openTime)) {
-      setTimeUntilOpen(differenceInSeconds(openTime, now))
-      setIsJoinable(false)
-    } else {
-      setTimeUntilOpen(0)
-      setIsJoinable(true)
     }
-
+    check()
+    const timer = setInterval(check, 1000)
     return () => clearInterval(timer)
   }, [queue.startTime, serverDate])
 
@@ -57,123 +93,144 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
     return `${h}:${formatTimeToken(m)}:${formatTimeToken(s)}`
   }
 
+  /* ── Available variant ── sleek, airy, modern card ─────────────── */
+  if (variant === 'available') {
+    return (
+      <Link
+        href={`/queue/${queue.courtId}`}
+        className="group block bg-white rounded-xl p-5 border border-gray-200 hover:border-teal-200 transition-all duration-300"
+      >
+        {/* Row 1 — Status badge (left) + Avatar stack (right) */}
+        <div className="flex items-center justify-between mb-4">
+          {/* Blue-tinted status pill */}
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-50 border border-teal-100 text-teal-600 text-xs font-semibold">
+            {isLive ? (
+              <Zap className="w-3 h-3 fill-teal-500 text-teal-500" />
+            ) : (
+              <Clock className="w-3 h-3" />
+            )}
+            <span>{isLive ? 'Live Now' : !isJoinable && timeUntilOpen > 0 ? `Opens ${formatCountdown(timeUntilOpen)}` : 'Open'}</span>
+          </div>
+
+          {/* Player avatar stack */}
+          <AvatarStack players={queue.players} />
+        </div>
+
+        {/* Row 2 — Primary: court name */}
+        <h3 className="text-xl font-bold text-gray-900 leading-tight tracking-tight mb-1 group-hover:text-teal-600 transition-colors duration-200">
+          {queue.courtName}
+        </h3>
+
+        {/* Row 3 — Secondary: venue */}
+        <div className="flex items-center gap-1.5 text-sm text-gray-400 mb-4">
+          <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+          <span className="truncate">{queue.venueName}</span>
+        </div>
+
+        {/* Row 4 — Metadata + CTA */}
+        <div className="flex items-end justify-between">
+          {/* Inline meta — time + players */}
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-gray-400 font-medium">
+              {format(startTime, 'h:mm a')} – {format(endTime, 'h:mm a')}
+            </span>
+            <span className="text-xs text-gray-400">
+              {queue.currentPlayers || 0}/{queue.maxPlayers} in queue
+              {queue.estimatedWaitTime != null && ` · ~${queue.estimatedWaitTime}m wait`}
+            </span>
+          </div>
+
+          {/* Pill CTA */}
+          {!isJoinable && timeUntilOpen > 0 ? (
+            <div className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-gray-100 text-gray-500 text-xs font-semibold">
+              <Timer className="w-3.5 h-3.5" />
+              <span className="font-mono">{formatCountdown(timeUntilOpen)}</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-gradient-to-r from-teal-600 to-emerald-500 text-white text-xs font-bold shadow-sm group-hover:scale-105 transition-all duration-200">
+              <span>Join Queue</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </div>
+          )}
+        </div>
+      </Link>
+    )
+  }
+
+  /* ── Active variant — same card shell, active-specific content ── */
   return (
     <Link
       href={`/queue/${queue.courtId}`}
-      className="block bg-white border border-gray-200 rounded-xl p-4 hover:shadow-lg transition-all duration-200 hover:border-primary/30"
+      className="group block bg-white rounded-xl p-5 border border-gray-200 hover:border-primary/40 transition-all duration-300"
     >
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-semibold text-gray-900">
-              {queue.courtName}
-            </h3>
-            <span className="text-xs font-mono text-gray-400 bg-gray-50 px-2 py-0.5 rounded">
-              #{queue.id.slice(0, 8)}
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 text-sm text-gray-500 mb-1">
-            <MapPin className="w-3.5 h-3.5" />
-            <span>{queue.venueName}</span>
-          </div>
-          <div className="flex items-center gap-1.5 text-xs text-gray-500">
-            <Calendar className="w-3.5 h-3.5" />
-            <span>
-              {format(startTime, 'MMM d')} • {format(startTime, 'h:mm a')} - {format(endTime, 'h:mm a')}
-            </span>
-          </div>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          <QueueStatusBadge status={displayStatus} size="sm" />
-          {!isJoinable && variant !== 'active' && timeUntilOpen > 0 && (
-            <div className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs font-medium border border-blue-100">
-              <Timer className="w-3 h-3" />
-              <span className="font-mono">{formatCountdown(timeUntilOpen)}</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Queue Info */}
-      <div className="grid grid-cols-2 gap-3 mb-3">
-        <div className="flex items-center gap-2 text-sm">
-          <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
-            <Users className="w-4 h-4 text-primary" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-500">Waiting</p>
-            <p className="font-semibold text-gray-900">
-              {queue.currentPlayers || 0}/{queue.maxPlayers}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 text-sm">
-          <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
-            <Clock className="w-4 h-4 text-blue-600" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-500">Wait Time</p>
-            <p className="font-semibold text-gray-900">
-              ~{queue.estimatedWaitTime}m
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* User Position (if in queue) */}
-      {variant === 'active' && isUserInQueue && (
-        <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 mb-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-600 mb-0.5">Your Position</p>
-              <p className="text-2xl font-bold text-primary">#{queue.userPosition}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs text-gray-600 mb-0.5">Players Ahead</p>
-              <p className="text-lg font-semibold text-gray-900">
-                {queue.userPosition! - 1}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Outstanding Balance Warning (if applicable) */}
-      {variant === 'active' && queue.userAmountOwed && queue.userAmountOwed > 0 && (
-        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div>
-                <p className="text-xs text-orange-700 font-medium">Payment Required</p>
-                <p className="text-sm text-orange-600">{queue.userGamesPlayed || 0} games played</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-lg font-bold text-orange-700">₱{queue.userAmountOwed.toFixed(2)}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Action Button */}
-      <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-        <span className={`text-sm font-medium ${isUserInQueue ? 'text-primary' : !isJoinable && variant !== 'active' ? 'text-gray-400' : 'text-gray-600'}`}>
-          {!isJoinable && variant !== 'active' ? (
-            `Opens at ${format(openTime, 'h:mm a')}`
+      {/* Row 1 — Status badge (left) + Avatar stack (right) */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-50 border border-teal-100 text-teal-600 text-xs font-semibold">
+          {isLive ? (
+            <Zap className="w-3 h-3 fill-teal-500 text-teal-500" />
           ) : (
-            variant === 'active' ? 'View Queue' : 'Join Queue'
+            <Clock className="w-3 h-3" />
           )}
-        </span>
-        {!isJoinable && variant !== 'active' ? (
-          <Clock className="w-5 h-5 text-gray-400" />
-        ) : (
-          <ChevronRight className="w-5 h-5 text-gray-400" />
-        )}
+          <span>{isLive ? 'Live Now' : displayStatus === 'completed' ? 'Completed' : 'Open'}</span>
+        </div>
+        <AvatarStack players={queue.players} />
+      </div>
+
+      {/* Court name */}
+      <h3 className="text-xl font-bold text-gray-900 leading-tight tracking-tight mb-1 group-hover:text-teal-600 transition-colors duration-200">
+        {queue.courtName}
+      </h3>
+
+      {/* Venue */}
+      <div className="flex items-center gap-1.5 text-sm text-gray-400 mb-4">
+        <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+        <span className="truncate">{queue.venueName}</span>
+      </div>
+
+      {/* User position block — teal pill */}
+      {isUserInQueue && (
+        <div className="flex items-center justify-between bg-primary/5 border border-primary/15 rounded-lg px-4 py-3 mb-3">
+          <div>
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider font-medium mb-0.5">Your Position</p>
+            <p className="text-2xl font-bold text-primary leading-none">#{queue.userPosition}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider font-medium mb-0.5">Players Ahead</p>
+            <p className="text-2xl font-bold text-gray-700 leading-none">{queue.userPosition! - 1}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Outstanding balance */}
+      {queue.userAmountOwed && queue.userAmountOwed > 0 && (
+        <div className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-lg px-4 py-3 mb-3">
+          <div>
+            <p className="text-[10px] text-orange-600 uppercase tracking-wider font-medium mb-0.5">Balance Due</p>
+            <p className="text-sm text-orange-600">{queue.userGamesPlayed || 0} games played</p>
+          </div>
+          <p className="text-lg font-bold text-orange-600">₱{queue.userAmountOwed.toFixed(2)}</p>
+        </div>
+      )}
+
+      {/* Row — time + players + CTA */}
+      <div className="flex items-end justify-between mt-1">
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-gray-400 font-medium">
+            {format(startTime, 'h:mm a')} – {format(endTime, 'h:mm a')}
+          </span>
+          <span className="text-xs text-gray-400">
+            {queue.currentPlayers || 0}/{queue.maxPlayers} in queue
+            {queue.estimatedWaitTime != null && ` · ~${queue.estimatedWaitTime}m wait`}
+          </span>
+        </div>
+
+        {/* Pill CTA */}
+        <div className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-gradient-to-r from-teal-600 to-emerald-500 text-white text-xs font-bold shadow-sm group-hover:scale-105 transition-all duration-200">
+          <span>View Queue</span>
+          <ChevronRight className="w-3.5 h-3.5" />
+        </div>
       </div>
     </Link>
   )
 }
+

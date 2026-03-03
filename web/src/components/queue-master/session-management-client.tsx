@@ -95,6 +95,10 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null)
   const [activeMatches, setActiveMatches] = useState<any[]>([])
 
+  // Close session confirmation modal state
+  const [showCloseConfirmModal, setShowCloseConfirmModal] = useState(false)
+  const [closeError, setCloseError] = useState<string | null>(null)
+
   // Session summary modal state
   const [showSummaryModal, setShowSummaryModal] = useState(false)
   const [sessionSummary, setSessionSummary] = useState<{
@@ -382,16 +386,19 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
     }
   }
 
-  const handleClose = async () => {
-    if (!confirm('Are you sure you want to close this session? This action cannot be undone.')) {
-      return
-    }
+  const handleClose = () => {
+    setCloseError(null)
+    setShowCloseConfirmModal(true)
+  }
 
+  const handleConfirmClose = async () => {
     setActionLoading('close')
+    setCloseError(null)
     try {
       const result = await closeQueueSession(sessionId)
       if (!result.success) throw new Error(result.error)
 
+      setShowCloseConfirmModal(false)
       // Show summary modal instead of redirecting immediately
       if (result.summary) {
         setSessionSummary(result.summary)
@@ -400,7 +407,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         router.push('/bookings')
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to close session')
+      setCloseError(err.message || 'Failed to close session')
     } finally {
       setActionLoading(null)
     }
@@ -779,6 +786,20 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
               return null
             })()}
 
+            {/* Doubles minimum-player notice */}
+            {session.gameFormat === 'doubles' && waitingPlayers.length < 4 && (
+              <div className="mb-4 flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 text-sm">
+                <Users className="w-5 h-5 flex-shrink-0 mt-0.5 text-blue-500" />
+                <div>
+                  <p className="font-semibold">Doubles — Minimum Players Required</p>
+                  <p className="text-blue-700 mt-0.5">
+                    A match cannot start until at least <span className="font-semibold">4 players</span> are in the waiting queue
+                    ({waitingPlayers.length} of 4 players joined).
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Waiting Players */}
             {waitingPlayers.length > 0 && (
               <div className="mb-6">
@@ -917,6 +938,93 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
       {/* Modals */}
       {session && (
         <>
+          {/* Close Session Confirmation Modal */}
+          {showCloseConfirmModal && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+                {/* Header */}
+                <div className="bg-gradient-to-r from-red-600 to-rose-600 text-white p-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                      <StopCircle className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold">Close Session?</h2>
+                      <p className="text-white/80 text-sm">{session.courtName} · {session.venueName}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Body */}
+                <div className="p-6 space-y-4">
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                    <p className="text-sm text-gray-700">
+                      You are about to <strong>permanently close</strong> this queue session.
+                      This will end all active matches and prevent new players from joining.
+                    </p>
+                    <p className="text-xs text-gray-500 mt-2">
+                      ⚠️ This action cannot be undone.
+                    </p>
+                  </div>
+
+                  {/* Session quick stats */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-center">
+                      <div className="text-xl font-bold text-gray-900">{session.players.length}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">Players</div>
+                    </div>
+                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-center">
+                      <div className="text-xl font-bold text-gray-900">{totalGamesPlayed}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">Games</div>
+                    </div>
+                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-center">
+                      <div className="text-xl font-bold text-gray-900">₱{totalRevenue.toFixed(0)}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">Revenue</div>
+                    </div>
+                  </div>
+
+                  {/* Error message */}
+                  {closeError && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start gap-2">
+                      <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                      <span className="text-sm">{closeError}</span>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center gap-3 pt-2">
+                    <button
+                      onClick={() => {
+                        setShowCloseConfirmModal(false)
+                        setCloseError(null)
+                      }}
+                      disabled={actionLoading === 'close'}
+                      className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleConfirmClose}
+                      disabled={actionLoading === 'close'}
+                      className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {actionLoading === 'close' ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Closing...
+                        </>
+                      ) : (
+                        <>
+                          <StopCircle className="w-4 h-4" />
+                          Close Session
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           <MatchAssignmentModal
             isOpen={showMatchAssignModal}
             onClose={() => setShowMatchAssignModal(false)}
