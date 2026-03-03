@@ -21,6 +21,7 @@ import {
 import { ReservationDetailModal } from './reservation-detail-modal'
 import { CourtAdminCalendar } from './court-admin-calendar'
 import { RefundManagement } from './refund-management'
+import { StatusBadge } from '@/components/shared/status-badge'
 
 interface Reservation {
   id: string
@@ -211,36 +212,7 @@ export function ReservationManagement() {
     loadReservations()
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'confirmed': return 'bg-green-100 text-green-700 border-green-200'
-      case 'ongoing': return 'bg-purple-100 text-purple-700 border-purple-200 animate-pulse'
-      case 'pending': return 'bg-yellow-100 text-yellow-700 border-yellow-200'
-      case 'pending_payment': return 'bg-orange-100 text-orange-700 border-orange-200'
-      case 'partially_paid': return 'bg-amber-100 text-amber-700 border-amber-200'
-      case 'reserved': return 'bg-primary/10 text-primary border-primary/20'
-      case 'cancelled':
-      case 'rejected': return 'bg-red-100 text-red-700 border-red-200'
-      case 'completed': return 'bg-primary/10 text-primary border-primary/20'
-      case 'no_show': return 'bg-gray-100 text-gray-700 border-gray-200'
-      default: return 'bg-gray-100 text-gray-700 border-gray-200'
-    }
-  }
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'confirmed': return <CheckCircle className="w-4 h-4" />
-      case 'ongoing': return <Clock className="w-4 h-4 animate-spin-slow" />
-      case 'pending':
-      case 'pending_payment':
-      case 'partially_paid':
-      case 'reserved': return <Clock className="w-4 h-4" />
-      case 'cancelled':
-      case 'rejected': return <XCircle className="w-4 h-4" />
-      case 'completed': return <CheckCircle className="w-4 h-4" />
-      default: return <Clock className="w-4 h-4" />
-    }
-  }
+  // getStatusColor and getStatusIcon removed in favor of generic StatusBadge
 
   /**
    * Get display-friendly status key and label for a reservation.
@@ -552,10 +524,7 @@ export function ReservationManagement() {
                             {(() => {
                               const { key, label } = getDisplayStatus(reservation)
                               return (
-                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium ${getStatusColor(key)}`}>
-                                  {getStatusIcon(key)}
-                                  <span>{label}</span>
-                                </span>
+                                <StatusBadge status={key} label={label} />
                               )
                             })()}
                             {reservation.metadata?.is_queue_session_reservation && (

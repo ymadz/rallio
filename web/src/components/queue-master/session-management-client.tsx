@@ -15,7 +15,9 @@ import {
   getActiveMatch,
   startMatch
 } from '@/app/actions/match-actions'
+import { PayMongoError } from '@/lib/paymongo/client'
 import { initiatePaymentAction } from '@/app/actions/payments'
+import { StatusBadge } from '@/components/shared/status-badge'
 import {
   Users,
   Clock,
@@ -514,17 +516,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
   const totalRevenue = session.players.reduce((sum, p) => sum + p.amountOwed, 0)
   const totalGamesPlayed = session.players.reduce((sum, p) => sum + p.gamesPlayed, 0)
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'live': return 'bg-green-100 text-green-700 border-green-200'
-      case 'active': return 'bg-green-100 text-green-700 border-green-200'
-      case 'open': return 'bg-blue-100 text-blue-700 border-blue-200'
-      case 'pending_payment': return 'bg-amber-100 text-amber-700 border-amber-200'
-      case 'completed': return 'bg-gray-100 text-gray-700 border-gray-200'
-      default: return 'bg-gray-100 text-gray-700 border-gray-200'
-    }
-  }
-
+  // getStatusColor removed in favor of StatusBadge
   const getDisplayStatus = () => {
     const now = serverDate || new Date()
     const status = session.status
@@ -595,10 +587,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
             </div>
             <p className="text-gray-600">{session.venueName}</p>
           </div>
-          <div className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium ${getStatusColor(getDisplayStatusKey())}`}>
-            <div className="w-2 h-2 rounded-full bg-current"></div>
-            <span>{getDisplayStatus()}</span>
-          </div>
+          <StatusBadge status={getDisplayStatusKey()} label={getDisplayStatus()} />
         </div>
       </div>
 

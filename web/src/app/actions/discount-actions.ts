@@ -32,6 +32,7 @@ export interface HolidayPricing {
   id: string;
   venue_id: string;
   name: string;
+  description: string | null;
   start_date: string;
   end_date: string;
   price_multiplier: number;
@@ -351,9 +352,9 @@ export async function calculateApplicableDiscounts(
       applicableDiscounts.push({
         type: isIncrease ? 'holiday_surcharge' : 'seasonal',
         name: holiday.name,
-        description: isIncrease
+        description: holiday.description || (isIncrease
           ? `${Math.round((holiday.price_multiplier - 1) * 100)}% holiday surcharge`
-          : `${Math.round((1 - holiday.price_multiplier) * 100)}% seasonal discount`,
+          : `${Math.round((1 - holiday.price_multiplier) * 100)}% seasonal discount`),
         amount: Math.abs(amount),
         isIncrease,
         priority: isIncrease ? 100 : 80, // Surcharges have highest priority

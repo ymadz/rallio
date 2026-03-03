@@ -74,6 +74,7 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
   // Holiday Pricing Form State
   const [holidayForm, setHolidayForm] = useState({
     name: '',
+    description: '',
     start_date: '',
     end_date: '',
     price_multiplier: 1.0,
@@ -243,11 +244,13 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
         price_multiplier: holiday.price_multiplier,
         fixed_surcharge: holiday.fixed_surcharge,
         is_active: holiday.is_active,
+        description: holiday.description || '',
       });
     } else {
       setEditingHoliday(null);
       setHolidayForm({
         name: '',
+        description: '',
         start_date: '',
         end_date: '',
         price_multiplier: 1.0,
@@ -562,6 +565,9 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
                           </Button>
                         </div>
                       </div>
+                      {holiday.description && (
+                        <CardDescription>{holiday.description}</CardDescription>
+                      )}
                     </CardHeader>
                     <CardContent className="pt-0">
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -576,10 +582,6 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
                           <p className="font-medium">
                             {new Date(holiday.end_date).toLocaleDateString()}
                           </p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Multiplier:</span>
-                          <p className="font-medium">{holiday.price_multiplier}x</p>
                         </div>
                         {holiday.fixed_surcharge && (
                           <div>
@@ -610,16 +612,28 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
           </DialogHeader>
 
           <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="rule-name">Name *</Label>
+              <Input
+                id="rule-name"
+                value={ruleForm.name}
+                onChange={(e) => setRuleForm({ ...ruleForm, name: e.target.value })}
+                placeholder="e.g., Weekend Warrior Special"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="rule-description">Description</Label>
+              <Textarea
+                id="rule-description"
+                value={ruleForm.description}
+                onChange={(e) => setRuleForm({ ...ruleForm, description: e.target.value })}
+                placeholder="Brief description of this discount (optional)"
+                rows={2}
+              />
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="rule-name">Rule Name *</Label>
-                <Input
-                  id="rule-name"
-                  value={ruleForm.name}
-                  onChange={(e) => setRuleForm({ ...ruleForm, name: e.target.value })}
-                  placeholder="e.g., Weekend Warrior Special"
-                />
-              </div>
               <div className="space-y-2">
                 <Label htmlFor="rule-type">Discount Type *</Label>
                 <Select
@@ -637,17 +651,21 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
                   </SelectContent>
                 </Select>
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="rule-description">Description</Label>
-              <Textarea
-                id="rule-description"
-                value={ruleForm.description}
-                onChange={(e) => setRuleForm({ ...ruleForm, description: e.target.value })}
-                placeholder="Brief description of this discount"
-                rows={2}
-              />
+              <div className="space-y-2">
+                <Label htmlFor="priority">Priority</Label>
+                <Input
+                  id="priority"
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={ruleForm.priority}
+                  onChange={(e) =>
+                    setRuleForm({ ...ruleForm, priority: parseInt(e.target.value) || 50 })
+                  }
+                />
+                <p className="text-xs text-muted-foreground">Higher value = applied first</p>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -741,21 +759,7 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="priority">Priority (Higher = Applied First)</Label>
-              <Input
-                id="priority"
-                type="number"
-                min="0"
-                max="100"
-                value={ruleForm.priority}
-                onChange={(e) =>
-                  setRuleForm({ ...ruleForm, priority: parseInt(e.target.value) || 50 })
-                }
-              />
-            </div>
-
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 pt-2">
               <Switch
                 id="rule-active"
                 checked={ruleForm.is_active}
@@ -778,7 +782,7 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
 
       {/* HOLIDAY PRICING MODAL */}
       <Dialog open={showHolidayModal} onOpenChange={setShowHolidayModal}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingHoliday ? 'Edit Holiday Pricing' : 'Create Holiday Pricing'}
@@ -797,6 +801,78 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
                 onChange={(e) => setHolidayForm({ ...holidayForm, name: e.target.value })}
                 placeholder="e.g., Christmas Holiday Surcharge"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="holiday-description">Description</Label>
+              <Textarea
+                id="holiday-description"
+                value={holidayForm.description || ''}
+                onChange={(e) => setHolidayForm({ ...holidayForm, description: e.target.value })}
+                placeholder="Brief description of this holiday (optional)"
+                rows={2}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="adjustment-type">Adjustment Type *</Label>
+                <Select
+                  value={holidayForm.price_multiplier > 1 ? 'surcharge' : 'discount'}
+                  onValueChange={(value: 'surcharge' | 'discount') => {
+                    const currentPercent = Math.abs((holidayForm.price_multiplier - 1) * 100);
+                    const newMultiplier = value === 'surcharge' ? (1 + currentPercent / 100) : (1 - currentPercent / 100);
+                    setHolidayForm({ ...holidayForm, price_multiplier: newMultiplier });
+                  }}
+                >
+                  <SelectTrigger id="adjustment-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="surcharge">Surcharge (+%)</SelectItem>
+                    <SelectItem value="discount">Discount (-%)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="adjustment-percent">Percentage (%) *</Label>
+                <Input
+                  id="adjustment-percent"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={Math.round(Math.abs((holidayForm.price_multiplier - 1) * 100))}
+                  onChange={(e) => {
+                    const percent = parseFloat(e.target.value) || 0;
+                    const isSurcharge = holidayForm.price_multiplier >= 1;
+                    const newMultiplier = isSurcharge ? 1 + percent / 100 : 1 - percent / 100;
+                    setHolidayForm({ ...holidayForm, price_multiplier: newMultiplier });
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="fixed-surcharge">
+                Fixed Surcharge (₱)
+              </Label>
+              <Input
+                id="fixed-surcharge"
+                type="number"
+                min="0"
+                step="0.01"
+                value={holidayForm.fixed_surcharge || ''}
+                onChange={(e) =>
+                  setHolidayForm({
+                    ...holidayForm,
+                    fixed_surcharge: parseFloat(e.target.value) || null,
+                  })
+                }
+                placeholder="Optional"
+              />
+              <p className="text-xs text-muted-foreground">Overrides the percentage adjustment if set</p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -824,46 +900,7 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="price-multiplier">
-                Price Multiplier (e.g., 1.3 = 30% increase, 0.8 = 20% discount)
-              </Label>
-              <Input
-                id="price-multiplier"
-                type="number"
-                min="0"
-                step="0.01"
-                value={holidayForm.price_multiplier}
-                onChange={(e) =>
-                  setHolidayForm({
-                    ...holidayForm,
-                    price_multiplier: parseFloat(e.target.value) || 1.0,
-                  })
-                }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="fixed-surcharge">
-                OR Fixed Surcharge (Optional - overrides multiplier)
-              </Label>
-              <Input
-                id="fixed-surcharge"
-                type="number"
-                min="0"
-                step="0.01"
-                value={holidayForm.fixed_surcharge || ''}
-                onChange={(e) =>
-                  setHolidayForm({
-                    ...holidayForm,
-                    fixed_surcharge: parseFloat(e.target.value) || null,
-                  })
-                }
-                placeholder="₱ amount"
-              />
-            </div>
-
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 pt-2">
               <Switch
                 id="holiday-active"
                 checked={holidayForm.is_active}

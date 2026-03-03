@@ -38,20 +38,29 @@ export function DiscountIndicator({ discounts }: DiscountIndicatorProps) {
             {discounts.holidays.map((holiday) => {
                 const isDiscount = holiday.price_multiplier < 1
                 return (
-                    <div key={holiday.id} className={`inline-flex items-start gap-2 rounded-lg px-3.5 py-2 ${
-                        isDiscount
-                            ? 'bg-green-50 border border-green-100'
-                            : 'bg-orange-50 border border-orange-100'
-                    }`}>
+                    <div key={holiday.id} className={`inline-flex items-start gap-2 rounded-lg px-3.5 py-2 ${isDiscount
+                        ? 'bg-green-50 border border-green-100'
+                        : 'bg-orange-50 border border-orange-100'
+                        }`}>
                         <svg className={`w-4 h-4 flex-shrink-0 mt-0.5 ${isDiscount ? 'text-green-600' : 'text-orange-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        <span className={`text-sm font-bold ${isDiscount ? 'text-green-700' : 'text-orange-700'}`}>
                             {isDiscount
-                                ? `${Math.round((1 - holiday.price_multiplier) * 100)}% OFF`
-                                : `+${Math.round((holiday.price_multiplier - 1) * 100)}%`}
-                        </span>
-                        <span className="text-sm text-gray-600">— {holiday.name}</span>
+                                ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                            }
+                        </svg>
+                        <div>
+                            <div className="flex items-center gap-1">
+                                <span className={`text-sm font-bold ${isDiscount ? 'text-green-700' : 'text-orange-700'}`}>
+                                    {isDiscount
+                                        ? `${Math.round((1 - holiday.price_multiplier) * 100)}% OFF`
+                                        : `+${Math.round((holiday.price_multiplier - 1) * 100)}%`}
+                                </span>
+                                <span className="text-sm text-gray-600">— {holiday.name}</span>
+                            </div>
+                            {holiday.description && (
+                                <p className="text-xs text-gray-400 mt-0.5">{holiday.description}</p>
+                            )}
+                        </div>
                     </div>
                 )
             })}

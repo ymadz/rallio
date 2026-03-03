@@ -17,6 +17,7 @@ import {
   Eye,
   DollarSign
 } from 'lucide-react'
+import { StatusBadge } from '@/components/shared/status-badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 
@@ -159,26 +160,7 @@ export function RefundManagement({ hideHeader = false }: { hideHeader?: boolean 
     }
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'succeeded': return 'bg-green-100 text-green-700 border-green-200'
-      case 'pending': return 'bg-yellow-100 text-yellow-700 border-yellow-200'
-      case 'processing': return 'bg-blue-100 text-blue-700 border-blue-200'
-      case 'failed': return 'bg-red-100 text-red-700 border-red-200'
-      case 'cancelled': return 'bg-gray-100 text-gray-700 border-gray-200'
-      default: return 'bg-gray-100 text-gray-700 border-gray-200'
-    }
-  }
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'succeeded': return <CheckCircle className="w-4 h-4" />
-      case 'pending': return <Clock className="w-4 h-4" />
-      case 'processing': return <RefreshCw className="w-4 h-4 animate-spin" />
-      case 'failed': return <XCircle className="w-4 h-4" />
-      default: return <Clock className="w-4 h-4" />
-    }
-  }
+  // Badge helpers removed in favor of generic StatusBadge
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('en-PH', {
@@ -357,10 +339,7 @@ export function RefundManagement({ hideHeader = false }: { hideHeader?: boolean 
                     <p className="font-bold text-gray-900">₱{(refund.amount / 100).toFixed(2)}</p>
                   </td>
                   <td className="px-4 py-4">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusColor(refund.status)}`}>
-                      {getStatusIcon(refund.status)}
-                      {refund.status.charAt(0).toUpperCase() + refund.status.slice(1)}
-                    </span>
+                    <StatusBadge status={refund.status} />
                   </td>
                   <td className="px-4 py-4">
                     <p className="text-sm text-gray-600">{formatDate(refund.created_at)}</p>
@@ -397,10 +376,7 @@ export function RefundManagement({ hideHeader = false }: { hideHeader?: boolean 
               {/* Status */}
               <div className="flex items-center justify-between">
                 <span className="text-gray-600">Status</span>
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusColor(selectedRefund.status)}`}>
-                  {getStatusIcon(selectedRefund.status)}
-                  {selectedRefund.status.charAt(0).toUpperCase() + selectedRefund.status.slice(1)}
-                </span>
+                <StatusBadge status={selectedRefund.status} />
               </div>
 
               {/* Amount */}
