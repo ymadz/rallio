@@ -2,10 +2,7 @@
 
 import { useState } from 'react'
 import { waiveFee, markAsPaid } from '@/app/actions/queue-actions'
-import { initiateQueuePaymentAction } from '@/app/actions/payments'
-import { X, DollarSign, CreditCard, Loader2, CheckCircle, AlertCircle, QrCode } from 'lucide-react'
-
-type PaymentMethod = 'gcash' | 'paymaya'
+import { X, DollarSign, Loader2, CheckCircle, AlertCircle } from 'lucide-react'
 
 interface PaymentManagementModalProps {
   isOpen: boolean
@@ -33,103 +30,39 @@ export function PaymentManagementModal({
   costPerGame,
   onSuccess,
 }: PaymentManagementModalProps) {
-  const [action, setAction] = useState<'mark-paid' | 'waive' | 'qr-code' | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isMarkingPaid, setIsMarkingPaid] = useState(false)
+  const [isWaiving, setIsWaiving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>('gcash')
-  const [paymentSuccess, setPaymentSuccess] = useState<string | null>(null)
 
   if (!isOpen) return null
 
   const handleMarkPaid = async () => {
-    console.log('💵 [PaymentModal] Mark as paid clicked for participant:', participant.id)
-    setIsSubmitting(true)
+    setIsMarkingPaid(true)
     setError(null)
-
     try {
-      console.log('💵 [PaymentModal] Calling markAsPaid server action...')
       const result = await markAsPaid(participant.id)
-      console.log('💵 [PaymentModal] Server action result:', JSON.stringify(result))
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to mark as paid')
-      }
-
-      console.log('✅ [PaymentModal] Mark as paid successful')
+      if (!result.success) throw new Error(result.error || 'Failed to mark as paid')
       onSuccess?.()
       onClose()
     } catch (err: any) {
-      console.error('❌ [PaymentModal] Mark as paid error:', err)
-      console.error('❌ [PaymentModal] Error details:', {
-        message: err.message,
-        name: err.name,
-        stack: err.stack,
-      })
       setError(err.message || 'Failed to mark as paid')
     } finally {
-      setIsSubmitting(false)
+      setIsMarkingPaid(false)
     }
   }
 
   const handleWaiveFee = async () => {
-    console.log('💸 [PaymentModal] Waive fee clicked for participant:', participant.id)
-    setIsSubmitting(true)
+    setIsWaiving(true)
     setError(null)
-
     try {
       const result = await waiveFee(participant.id, 'Waived by Queue Master')
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to waive fee')
-      }
-
-      console.log('✅ [PaymentModal] Waive fee successful')
+      if (!result.success) throw new Error(result.error || 'Failed to waive fee')
       onSuccess?.()
       onClose()
     } catch (err: any) {
-      console.error('❌ [PaymentModal] Waive fee error:', err)
-      setError(err.message || 'An error occurred')
+      setError(err.message || 'Failed to waive fee')
     } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  const handleGenerateQR = async () => {
-    console.log('🔐 [PaymentModal] Generate QR clicked:', {
-      participantId: participant.id,
-      userId: participant.userId,
-      sessionId,
-      paymentMethod: selectedPaymentMethod,
-      amountOwed: participant.amountOwed,
-    })
-
-    setIsSubmitting(true)
-    setError(null)
-    setPaymentSuccess(null)
-
-    try {
-      // Call the queue payment action (with userId for Queue Master)
-      const result = await initiateQueuePaymentAction(sessionId, selectedPaymentMethod, participant.userId)
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to generate payment QR code')
-      }
-
-      console.log('✅ [PaymentModal] QR code generated successfully:', {
-        checkoutUrl: result.checkoutUrl,
-        paymentId: result.paymentId,
-      })
-
-      // Open checkout URL in new tab
-      if (result.checkoutUrl) {
-        window.open(result.checkoutUrl, '_blank')
-        setPaymentSuccess('Payment QR code opened in new tab. Player can scan to pay.')
-      }
-    } catch (err: any) {
-      console.error('❌ [PaymentModal] QR generation error:', err)
-      setError(err.message || 'Failed to generate QR code')
-    } finally {
-      setIsSubmitting(false)
+      setIsWaiving(false)
     }
   }
 
@@ -142,9 +75,12 @@ export function PaymentManagementModal({
     }
   }
 
+  const isPaid = participant.paymentStatus === 'paid'
+  const isProcessing = isMarkingPaid || isWaiving
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full">
         {/* Header */}
         <div className="bg-primary text-white p-6 rounded-t-2xl">
           <div className="flex items-center justify-between">
@@ -159,27 +95,20 @@ export function PaymentManagementModal({
             </div>
             <button
               onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors"
+              disabled={isProcessing}
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors disabled:opacity-50"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-5">
           {/* Error Alert */}
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start gap-2">
               <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
               <span>{error}</span>
-            </div>
-          )}
-
-          {/* Success Alert */}
-          {paymentSuccess && (
-            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-start gap-2">
-              <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-              <span>{paymentSuccess}</span>
             </div>
           )}
 
@@ -230,212 +159,51 @@ export function PaymentManagementModal({
             </div>
           </div>
 
-          {/* Payment Method Selection for QR Code */}
-          {action === 'qr-code' && !paymentSuccess && (
-            <div className="space-y-4">
-              <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
-                <p className="text-sm font-medium text-gray-900 mb-3">Select Payment Method</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => setSelectedPaymentMethod('gcash')}
-                    className={`p-3 rounded-lg border-2 transition-all ${selectedPaymentMethod === 'gcash'
-                      ? 'border-primary bg-primary/10'
-                      : 'border-gray-200 hover:border-primary/30'
-                      }`}
-                  >
-                    <div className="text-center">
-                      <CreditCard className="w-6 h-6 mx-auto mb-1 text-primary" />
-                      <p className="text-sm font-medium text-gray-900">GCash</p>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => setSelectedPaymentMethod('paymaya')}
-                    className={`p-3 rounded-lg border-2 transition-all ${selectedPaymentMethod === 'paymaya'
-                      ? 'border-primary bg-primary/10'
-                      : 'border-gray-200 hover:border-primary/30'
-                      }`}
-                  >
-                    <div className="text-center">
-                      <CreditCard className="w-6 h-6 mx-auto mb-1 text-green-600" />
-                      <p className="text-sm font-medium text-gray-900">Maya</p>
-                    </div>
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-gray-700">
-                  Generate a <strong>{selectedPaymentMethod === 'gcash' ? 'GCash' : 'Maya'}</strong> payment QR code for{' '}
-                  <strong>₱{participant.amountOwed.toLocaleString()}</strong>?
-                </p>
-                <p className="text-xs text-gray-600 mt-2">
-                  Payment link will open in a new tab and can be shared with the player.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => {
-                    setAction(null)
-                    setError(null)
-                    setPaymentSuccess(null)
-                  }}
-                  disabled={isSubmitting}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-                >
-                  Back
-                </button>
-                <button
-                  onClick={handleGenerateQR}
-                  disabled={isSubmitting}
-                  className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <QrCode className="w-4 h-4" />
-                      Generate QR Code
-                    </>
-                  )}
-                </button>
-              </div>
+          {/* Actions */}
+          {isPaid ? (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+              <CheckCircle className="w-6 h-6 text-green-600 shrink-0" />
+              <p className="text-sm font-medium text-green-800">This player has already paid.</p>
             </div>
-          )}
-
-          {/* Payment Actions */}
-          {!action && (
-            <div className="space-y-3">
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
               <button
-                onClick={() => setAction('qr-code')}
-                disabled={participant.paymentStatus === 'paid'}
-                className="w-full flex items-center gap-3 p-4 border-2 border-primary/30 rounded-xl hover:bg-primary/5 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleMarkPaid}
+                disabled={isProcessing}
+                className="flex flex-col items-center gap-2 p-5 border-2 border-green-200 rounded-xl hover:bg-green-50 active:bg-green-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                  <QrCode className="w-5 h-5 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-gray-900">Generate Payment QR</p>
-                  <p className="text-sm text-gray-600">GCash or Maya payment link</p>
-                </div>
+                {isMarkingPaid ? (
+                  <Loader2 className="w-7 h-7 text-green-600 animate-spin" />
+                ) : (
+                  <CheckCircle className="w-7 h-7 text-green-600" />
+                )}
+                <span className="font-semibold text-gray-900 text-sm">Mark as Paid</span>
+                <span className="text-xs text-gray-500 text-center">Player paid in cash</span>
               </button>
 
               <button
-                onClick={() => setAction('mark-paid')}
-                disabled={participant.paymentStatus === 'paid'}
-                className="w-full flex items-center gap-3 p-4 border-2 border-green-200 rounded-xl hover:bg-green-50 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleWaiveFee}
+                disabled={isProcessing}
+                className="flex flex-col items-center gap-2 p-5 border-2 border-orange-200 rounded-xl hover:bg-orange-50 active:bg-orange-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-gray-900">Mark as Paid</p>
-                  <p className="text-sm text-gray-600">Player paid in cash</p>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setAction('waive')}
-                disabled={participant.paymentStatus === 'paid'}
-                className="w-full flex items-center gap-3 p-4 border-2 border-orange-200 rounded-xl hover:bg-orange-50 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <DollarSign className="w-5 h-5 text-orange-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-gray-900">Waive Payment</p>
-                  <p className="text-sm text-gray-600">Forgive the amount owed</p>
-                </div>
+                {isWaiving ? (
+                  <Loader2 className="w-7 h-7 text-orange-600 animate-spin" />
+                ) : (
+                  <DollarSign className="w-7 h-7 text-orange-600" />
+                )}
+                <span className="font-semibold text-gray-900 text-sm">Waive Payment</span>
+                <span className="text-xs text-gray-500 text-center">Forgive the amount owed</span>
               </button>
             </div>
           )}
 
-          {/* Confirmation for Mark Paid */}
-          {action === 'mark-paid' && (
-            <div className="space-y-4">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <p className="text-sm text-gray-700">
-                  Confirm that <strong>{participant.playerName}</strong> has paid <strong>₱{participant.amountOwed.toLocaleString()}</strong> in cash?
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setAction(null)}
-                  disabled={isSubmitting}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-                >
-                  Back
-                </button>
-                <button
-                  onClick={handleMarkPaid}
-                  disabled={isSubmitting}
-                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="w-4 h-4" />
-                      Confirm Payment
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Confirmation for Waive */}
-          {action === 'waive' && (
-            <div className="space-y-4">
-              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                <p className="text-sm text-gray-700 mb-2">
-                  Waive <strong>₱{participant.amountOwed.toLocaleString()}</strong> for <strong>{participant.playerName}</strong>?
-                </p>
-                <p className="text-xs text-gray-600">
-                  This action cannot be undone. The amount will be marked as paid with a $0 charge.
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setAction(null)}
-                  disabled={isSubmitting}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-                >
-                  Back
-                </button>
-                <button
-                  onClick={handleWaiveFee}
-                  disabled={isSubmitting}
-                  className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    'Confirm Waive'
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Close Button */}
-          {!action && (
-            <button
-              onClick={onClose}
-              className="w-full px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-            >
-              Close
-            </button>
-          )}
+          <button
+            onClick={onClose}
+            disabled={isProcessing}
+            className="w-full px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>

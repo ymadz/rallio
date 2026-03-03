@@ -166,24 +166,33 @@ export async function assignMatchFromQueue(
         skillLevel: players?.find(pl => pl.user_id === p.user_id)?.skill_level || 5,
       }))
 
-      // Sort by skill level descending
+      // Sort by skill level descending (highest first)
       const sorted = [...participantsWithSkill].sort((a, b) => b.skillLevel - a.skillLevel)
 
-      // Snake draft: alternate teams to balance skill
+      // Proper team balancing: snake draft algorithm
       const teamAList: typeof sorted = []
       const teamBList: typeof sorted = []
+      const teamSize = numPlayers / 2
 
-      for (const player of sorted) {
-        const sumA = teamAList.reduce((sum, p) => sum + p.skillLevel, 0)
-        const sumB = teamBList.reduce((sum, p) => sum + p.skillLevel, 0)
-
-        // Add to team with lower total skill (or team A if equal)
-        if (sumA <= sumB && teamAList.length < numPlayers / 2) {
-          teamAList.push(player)
-        } else if (teamBList.length < numPlayers / 2) {
-          teamBList.push(player)
+      for (let i = 0; i < sorted.length; i++) {
+        const player = sorted[i]
+        
+        // Snake draft pattern: 1st -> Team A, 2nd -> Team B, 3rd -> Team B, 4th -> Team A, etc.
+        // This ensures better balance than always adding to the team with lower total
+        if (i % 4 === 0 || i % 4 === 3) {
+          // Picks 1, 4, 5, 8, etc. go to Team A
+          if (teamAList.length < teamSize) {
+            teamAList.push(player)
+          } else {
+            teamBList.push(player)
+          }
         } else {
-          teamAList.push(player)
+          // Picks 2, 3, 6, 7, etc. go to Team B
+          if (teamBList.length < teamSize) {
+            teamBList.push(player)
+          } else {
+            teamAList.push(player)
+          }
         }
       }
 
@@ -194,8 +203,9 @@ export async function assignMatchFromQueue(
       const avgSkillB = teamBList.reduce((sum, p) => sum + p.skillLevel, 0) / teamBList.length
 
       console.log('[assignMatchFromQueue] 📊 Team balance:', {
-        teamA: { players: teamA.length, avgSkill: avgSkillA.toFixed(2) },
-        teamB: { players: teamB.length, avgSkill: avgSkillB.toFixed(2) },
+        teamA: { players: teamA.length, avgSkill: avgSkillA.toFixed(2), playerSkills: teamAList.map(p => p.skillLevel) },
+        teamB: { players: teamB.length, avgSkill: avgSkillB.toFixed(2), playerSkills: teamBList.map(p => p.skillLevel) },
+        skillDifference: Math.abs(avgSkillA - avgSkillB).toFixed(2),
       })
     } else {
       // Simple sequential split for casual games
@@ -488,13 +498,11 @@ async function updatePlayerRatingsAndStats(
 export async function recordMatchScore(
   matchId: string,
   scores: {
-    teamAScore: number
-    teamBScore: number
     winner: 'team_a' | 'team_b' | 'draw'
     metadata?: any
   }
 ) {
-  console.log('[recordMatchScore] 📊 Recording match score:', { matchId, scores })
+  console.log('[recordMatchScore] 📊 Recording match winner:', { matchId, winner: scores.winner })
 
   try {
     const supabase = await createClient()
@@ -537,7 +545,7 @@ export async function recordMatchScore(
 
     // Verify user is organizer
     if (match.queue_sessions?.organizer_id !== user.id) {
-      return { success: false, error: 'Unauthorized: Only queue master can record scores' }
+      return { success: false, error: 'Unauthorized: Only queue master can record results' }
     }
 
     // Validate match status
@@ -548,16 +556,17 @@ export async function recordMatchScore(
       return { success: false, error: 'Match not started yet. Please start the match first.' }
     }
     if (match.status === 'cancelled') {
-      return { success: false, error: 'Cannot record score for cancelled match' }
+      return { success: false, error: 'Cannot record result for cancelled match' }
     }
 
-    // Update match with final scores
+    // Update match with winner (no detailed scores, just winner)
     const updateData: any = {
-      score_a: scores.teamAScore,
-      score_b: scores.teamBScore,
       winner: scores.winner,
       status: 'completed',
       completed_at: new Date().toISOString(),
+      // Set dummy scores for backwards compatibility (1-0 for winner)
+      score_a: scores.winner === 'team_a' ? 1 : scores.winner === 'draw' ? 0 : 0,
+      score_b: scores.winner === 'team_b' ? 1 : scores.winner === 'draw' ? 0 : 0,
     }
 
     if (scores.metadata) {
@@ -576,7 +585,9 @@ export async function recordMatchScore(
 
     // Update participant stats
     const allPlayers = [...match.team_a_players, ...match.team_b_players]
-    const winners = scores.winner === 'team_a' ? match.team_a_players : match.team_b_players
+    const winners = scores.winner === 'team_a' ? match.team_a_players : 
+                   scores.winner === 'team_b' ? match.team_b_players : 
+                   [] // No winners in case of draw
     const costPerGame = parseFloat(match.queue_sessions?.cost_per_game || '0')
 
     for (const playerId of allPlayers) {
@@ -601,7 +612,8 @@ export async function recordMatchScore(
             games_played: newGamesPlayed,
             games_won: newGamesWon,
             amount_owed: newAmountOwed,
-            status: 'waiting', // Return to waiting after match
+            status: 'waiting',
+            joined_at: new Date().toISOString(), // Move to back of queue after match
           })
           .eq('id', participant.id)
       }
@@ -616,7 +628,7 @@ export async function recordMatchScore(
       winners
     )
 
-    console.log('[recordMatchScore] ✅ Score recorded successfully')
+    console.log('[recordMatchScore] ✅ Match winner recorded successfully:', scores.winner)
 
     revalidatePath(`/queue/${match.queue_sessions.court_id}`)
     revalidatePath('/queue')
@@ -624,7 +636,7 @@ export async function recordMatchScore(
     return { success: true }
   } catch (error: any) {
     console.error('[recordMatchScore] ❌ Error:', error)
-    return { success: false, error: error.message || 'Failed to record score' }
+    return { success: false, error: error.message || 'Failed to record match result' }
   }
 }
 
