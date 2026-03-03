@@ -802,8 +802,21 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                       className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                     >
                       <div className="flex items-center gap-3 flex-1">
-                        <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white font-bold">
-                          #{player.position}
+                        <div className="relative">
+                          {player.avatarUrl ? (
+                            <img
+                              src={player.avatarUrl}
+                              alt={player.playerName}
+                              className="w-10 h-10 rounded-full object-cover border-2 border-primary"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white font-bold">
+                              {player.playerName.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-primary-dark text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                            #{player.position}
+                          </div>
                         </div>
                         <div className="flex-1">
                           <div className="font-semibold text-gray-900">{player.playerName}</div>
@@ -852,8 +865,21 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                       className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center">
-                          <PlayCircle className="w-5 h-5 text-white" />
+                        <div className="relative">
+                          {player.avatarUrl ? (
+                            <img
+                              src={player.avatarUrl}
+                              alt={player.playerName}
+                              className="w-10 h-10 rounded-full object-cover border-2 border-green-500"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center text-white font-bold">
+                              {player.playerName.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 text-white rounded-full flex items-center justify-center border border-white">
+                            <Play className="w-2 h-2 fill-current" />
+                          </div>
                         </div>
                         <div>
                           <div className="font-semibold text-gray-900">{player.playerName}</div>

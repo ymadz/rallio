@@ -159,7 +159,7 @@ export function MatchAssignmentModal({
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-6 rounded-t-2xl">
+        <div className="bg-primary text-white p-6 rounded-t-2xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
@@ -206,7 +206,7 @@ export function MatchAssignmentModal({
                     {waitingPlayers.length >= playersNeeded && (
                       <button
                         onClick={pickRandom}
-                        className="flex items-center gap-2 px-3 py-1.5 text-sm bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors"
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm bg-primary-subtle text-primary-dark border border-primary-lighter rounded-lg hover:bg-primary hover:text-white transition-colors"
                       >
                         <Shuffle className="w-4 h-4" />
                         Pick Random
@@ -215,7 +215,7 @@ export function MatchAssignmentModal({
                     {selectedPlayers.length === playersNeeded && (
                       <button
                         onClick={() => autoBalance()}
-                        className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-50 text-purple-700 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors"
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm bg-primary-subtle text-primary-dark border border-primary-lighter rounded-lg hover:bg-primary hover:text-white transition-colors"
                       >
                         <Target className="w-4 h-4" />
                         Auto Balance
@@ -240,7 +240,7 @@ export function MatchAssignmentModal({
                           : inTeamB
                             ? 'border-orange-500 bg-orange-50'
                             : isSelected
-                              ? 'border-purple-500 bg-purple-50'
+                              ? 'border-primary bg-primary-subtle'
                               : 'border-gray-200 hover:border-gray-300'
                           }`}
                       >
@@ -415,7 +415,7 @@ export function MatchAssignmentModal({
             <button
               onClick={handleSubmit}
               disabled={isSubmitting || !teamsReady || waitingPlayers.length === 0}
-              className="flex-1 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="flex-1 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isSubmitting ? (
                 <>

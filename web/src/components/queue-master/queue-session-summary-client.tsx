@@ -360,20 +360,23 @@ export function QueueSessionSummaryClient({ sessionId }: Props) {
                     <tr key={participant.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          <div className="h-10 w-10 flex-shrink-0">
+                          <div className="relative h-10 w-10 flex-shrink-0">
                             {participant.avatarUrl ? (
                               <img
                                 src={participant.avatarUrl}
                                 alt={participant.playerName}
-                                className="h-10 w-10 rounded-full object-cover"
+                                className="h-10 w-10 rounded-full object-cover border-2 border-primary"
                               />
                             ) : (
-                              <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-                                <span className="text-gray-500 font-medium text-sm">
+                              <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center">
+                                <span className="text-white font-bold text-sm">
                                   {participant.playerName.charAt(0).toUpperCase()}
                                 </span>
                               </div>
                             )}
+                            <div className="absolute -top-1 -right-1 w-5 h-5 bg-primary-dark text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                              #{participant.position}
+                            </div>
                           </div>
                           <div className="ml-4">
                             <div className="text-sm font-medium text-gray-900">
@@ -397,9 +400,8 @@ export function QueueSessionSummaryClient({ sessionId }: Props) {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{winRate}%</td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
-                          className={`text-sm font-medium ${
-                            participant.amountOwed > 0 ? 'text-orange-600' : 'text-green-600'
-                          }`}
+                          className={`text-sm font-medium ${participant.amountOwed > 0 ? 'text-orange-600' : 'text-green-600'
+                            }`}
                         >
                           {formatCurrency(participant.amountOwed)}
                         </span>
@@ -452,11 +454,10 @@ export function QueueSessionSummaryClient({ sessionId }: Props) {
                   <div className="grid grid-cols-3 gap-4 items-center">
                     {/* Team 1 */}
                     <div
-                      className={`p-4 rounded-lg ${
-                        match.winnerTeam === 1
+                      className={`p-4 rounded-lg ${match.winnerTeam === 1
                           ? 'bg-green-50 border-2 border-green-200'
                           : 'bg-gray-50 border border-gray-200'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-xs font-medium text-gray-500">Team 1</span>
@@ -486,11 +487,10 @@ export function QueueSessionSummaryClient({ sessionId }: Props) {
 
                     {/* Team 2 */}
                     <div
-                      className={`p-4 rounded-lg ${
-                        match.winnerTeam === 2
+                      className={`p-4 rounded-lg ${match.winnerTeam === 2
                           ? 'bg-green-50 border-2 border-green-200'
                           : 'bg-gray-50 border border-gray-200'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-xs font-medium text-gray-500">Team 2</span>
