@@ -309,6 +309,8 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
             totalPlayers={queue.currentPlayers}
             gamesPlayed={participant.games_played || 0}
             status={participant.status || 'waiting'}
+            sessionStartTime={queue.startTime}
+            isSessionLive={isLive}
           />
         )}
 
