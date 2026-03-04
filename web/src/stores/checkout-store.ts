@@ -13,6 +13,8 @@ export interface BookingData {
   startTime: string
   endTime: string
   hourlyRate: number
+  allowDownPayment?: boolean
+  minimumDownPayment?: number
   capacity: number
   recurrenceWeeks?: number // 1 = single booking, 4 = 4 weeks, etc.
   selectedDays?: number[] // Array of day indices (0-6) for multi-day booking
@@ -72,7 +74,8 @@ interface CheckoutState {
   // Confirmation
   bookingReference?: string
   reservationId?: string
-  downPaymentPercentage?: number
+  isDownPayment: boolean
+  customDownPaymentAmount?: number
   isReserved: boolean
 
   // Actions
@@ -87,7 +90,8 @@ interface CheckoutState {
   setDiscountDetails: (details: { amount: number; type?: string; reason?: string; discounts?: any[] }) => void
   setPlatformFee: (percentage: number, enabled: boolean) => void
   setBookingReference: (reference: string, reservationId: string) => void
-  setDownPaymentPercentage: (percentage: number) => void
+  setIsDownPayment: (val: boolean) => void
+  setCustomDownPaymentAmount: (amount: number) => void
   setIsReserved: (val: boolean) => void
   resetCheckout: () => void
 
@@ -115,6 +119,8 @@ const initialState = {
   platformFeeEnabled: true,
   bookingReference: undefined,
   reservationId: undefined,
+  isDownPayment: false,
+  customDownPaymentAmount: undefined,
   isReserved: false,
 }
 
@@ -129,6 +135,8 @@ export const useCheckoutStore = create<CheckoutState>()(
           bookingData: data,
           currentStep: 'details',
           playerCount: Math.min(2, data.capacity), // Default to 2 players or capacity
+          isDownPayment: false,
+          customDownPaymentAmount: data.minimumDownPayment || 0,
         })
       },
 
@@ -213,7 +221,9 @@ export const useCheckoutStore = create<CheckoutState>()(
       setBookingReference: (reference, reservationId) =>
         set({ bookingReference: reference, reservationId }),
 
-      setDownPaymentPercentage: (percentage) => set({ downPaymentPercentage: percentage }),
+      setIsDownPayment: (val) => set({ isDownPayment: val }),
+      
+      setCustomDownPaymentAmount: (amount) => set({ customDownPaymentAmount: amount }),
       
       setIsReserved: (val) => set({ isReserved: val }),
 
@@ -279,9 +289,11 @@ export const useCheckoutStore = create<CheckoutState>()(
 
       getDownPaymentAmount: () => {
         const state = get()
-        if (state.paymentMethod !== 'cash' || !state.downPaymentPercentage) return 0
-        const total = state.getTotalAmount()
-        return Math.round((total * (state.downPaymentPercentage / 100)) * 100) / 100
+        if (!state.isDownPayment || !state.bookingData?.allowDownPayment) return 0
+        if (state.customDownPaymentAmount !== undefined && state.customDownPaymentAmount > 0) {
+          return state.customDownPaymentAmount
+        }
+        return state.bookingData.minimumDownPayment || 0
       },
 
       getRemainingBalance: () => {

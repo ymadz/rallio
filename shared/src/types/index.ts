@@ -70,6 +70,8 @@ export interface Court {
   surfaceType?: SurfaceType;
   capacity: number;
   hourlyRate: number;
+  allowDownPayment?: boolean;
+  minimumDownPayment?: number;
   isActive: boolean;
   metadata?: Record<string, any>;
   createdAt: Date;

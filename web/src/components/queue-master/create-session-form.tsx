@@ -69,7 +69,6 @@ export function CreateSessionForm() {
   const [costPerGame, setCostPerGame] = useState(50)
   const [isPublic, setIsPublic] = useState(true)
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'e-wallet'>('e-wallet')
-  const [downPaymentPercentage, setDownPaymentPercentage] = useState<number | undefined>(undefined)
 
   // Validation state
   const [validationState, setValidationState] = useState<{
@@ -370,7 +369,6 @@ export function CreateSessionForm() {
     fetchTimeSlots()
   }, [courtId, startDate])
 
-  // Load venue metadata when court changes
   useEffect(() => {
     const fetchVenueMetadata = async () => {
       if (!courtId) return
@@ -381,8 +379,7 @@ export function CreateSessionForm() {
       try {
         const result = await getVenueMetadataAction(selectedVenue.id)
         if (result.success && result.metadata) {
-          const percentage = parseFloat((result.metadata as any).down_payment_percentage || '20')
-          setDownPaymentPercentage(percentage)
+          // Do nothing, handled natively
         }
       } catch (err) {
         console.error('Error fetching venue metadata:', err)

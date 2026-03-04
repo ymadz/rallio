@@ -51,7 +51,7 @@ export function AvailabilityModal({
   capacity
 }: AvailabilityModalProps) {
   const router = useRouter()
-  const { setBookingData, setDiscountDetails, setDiscount, setDownPaymentPercentage } = useCheckoutStore()
+  const { setBookingData, setDiscountDetails, setDiscount } = useCheckoutStore()
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [recurrenceWeeks, setRecurrenceWeeks] = useState<number>(1)
   const [selectedDays, setSelectedDays] = useState<number[]>([]) // [0-6] for Sun-Sat
@@ -111,7 +111,6 @@ export function AvailabilityModal({
     fetchTimeSlots()
   }, [selectedDate, courtId, isOpen])
 
-  // Fetch venue metadata (down payment percentage)
   useEffect(() => {
     async function fetchVenueMetadata() {
       if (!venueId || !isOpen) return
@@ -119,8 +118,7 @@ export function AvailabilityModal({
       try {
         const result = await getVenueMetadataAction(venueId)
         if (result.success && result.metadata) {
-          const percentage = parseFloat((result.metadata as any).down_payment_percentage || '20')
-          setDownPaymentPercentage(percentage)
+           // Do nothing, Handled natively
         }
       } catch (error) {
         console.error('Error fetching venue metadata:', error)
@@ -128,7 +126,7 @@ export function AvailabilityModal({
     }
 
     fetchVenueMetadata()
-  }, [venueId, isOpen, setDownPaymentPercentage])
+  }, [venueId, isOpen])
 
   // Helpers needed for effects
   const getDuration = (): number => {

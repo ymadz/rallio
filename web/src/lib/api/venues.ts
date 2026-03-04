@@ -63,6 +63,8 @@ export interface CourtWithDetails {
   court_type: 'indoor' | 'outdoor'
   capacity: number
   hourly_rate: number
+  allow_down_payment?: boolean
+  minimum_down_payment?: number
   is_active: boolean
   metadata: Record<string, any> | null
   amenities: Array<{ id: string; name: string; icon: string | null }>
@@ -189,6 +191,8 @@ export async function getVenues(filters: VenueFilters = {}, retries = 2): Promis
           name,
           court_type,
           hourly_rate,
+          allow_down_payment,
+          minimum_down_payment,
           is_active,
           is_verified,
           surface_type,
@@ -301,6 +305,8 @@ export async function getVenues(filters: VenueFilters = {}, retries = 2): Promis
           name,
           court_type,
           hourly_rate,
+          allow_down_payment,
+          minimum_down_payment,
           is_active,
           is_verified,
           surface_type,
@@ -607,6 +613,8 @@ export async function getVenueById(
           court_type,
           capacity,
           hourly_rate,
+          allow_down_payment,
+          minimum_down_payment,
           is_active,
           metadata,
           court_amenities (

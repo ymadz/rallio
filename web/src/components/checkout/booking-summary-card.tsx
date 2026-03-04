@@ -37,7 +37,7 @@ export function BookingSummaryCard({
     platformFeePercentage,
     platformFeeEnabled,
     paymentMethod,
-    downPaymentPercentage,
+    isDownPayment,
     getDownPaymentAmount,
     getRemainingBalance,
   } = useCheckoutStore()
@@ -55,7 +55,7 @@ export function BookingSummaryCard({
   const perPlayer = getPerPlayerAmount()
   const downPaymentAmount = getDownPaymentAmount()
   const remainingBalance = getRemainingBalance()
-  const isCashWithDownpayment = paymentMethod === 'cash' && downPaymentPercentage && downPaymentPercentage > 0 && downPaymentAmount > 0
+  const isDownPaymentVisible = isDownPayment && downPaymentAmount > 0
 
   let duration = 1
   try {
@@ -250,11 +250,11 @@ export function BookingSummaryCard({
             {isSplitPayment ? 'Your Share' : 'Total Amount'}
           </span>
           <span className="text-2xl font-bold text-primary">
-            ₱{(isSplitPayment ? perPlayer : (isCashWithDownpayment ? downPaymentAmount : total)).toFixed(2)}
+            ₱{(isSplitPayment ? perPlayer : (isDownPaymentVisible ? downPaymentAmount : total)).toFixed(2)}
           </span>
         </div>
 
-        {isCashWithDownpayment && (
+        {isDownPaymentVisible && (
           <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center bg-primary/5 -mx-6 px-6 py-3">
             <div>
               <p className="text-xs font-semibold text-primary uppercase tracking-wider">Remaining Balance</p>

@@ -47,7 +47,7 @@ export function QueueSessionModal({
     capacity
 }: QueueSessionModalProps) {
     const router = useRouter()
-    const { setBookingData, setDiscountDetails, setDiscount, setDownPaymentPercentage } = useCheckoutStore()
+    const { setBookingData, setDiscountDetails, setDiscount } = useCheckoutStore()
     const [selectedDate, setSelectedDate] = useState<Date>(new Date())
     const [recurrenceWeeks, setRecurrenceWeeks] = useState<number>(1)
     const [selectedDays, setSelectedDays] = useState<number[]>([])
@@ -113,7 +113,6 @@ export function QueueSessionModal({
         fetchTimeSlots()
     }, [selectedDate, courtId, isOpen])
 
-    // Fetch venue metadata (down payment percentage)
     useEffect(() => {
         async function fetchVenueMetadata() {
             if (!venueId || !isOpen) return
@@ -121,8 +120,7 @@ export function QueueSessionModal({
             try {
                 const result = await getVenueMetadataAction(venueId)
                 if (result.success && result.metadata) {
-                    const percentage = parseFloat((result.metadata as any).down_payment_percentage || '20')
-                    setDownPaymentPercentage(percentage)
+                    // Do nothing, handled by venue-courts configuration
                 }
             } catch (error) {
                 console.error('Error fetching venue metadata:', error)
@@ -130,7 +128,7 @@ export function QueueSessionModal({
         }
 
         fetchVenueMetadata()
-    }, [venueId, isOpen, setDownPaymentPercentage])
+    }, [venueId, isOpen])
 
     // Helpers
     const getDuration = (): number => {

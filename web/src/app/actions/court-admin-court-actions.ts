@@ -125,6 +125,8 @@ export async function createCourt(venueId: string, courtData: {
   court_type: 'indoor' | 'outdoor'
   capacity?: number
   hourly_rate: number
+  allow_down_payment?: boolean
+  minimum_down_payment?: number
   amenities?: string[] // Array of amenity IDs
 }) {
   const supabase = await createClient()
@@ -157,6 +159,8 @@ export async function createCourt(venueId: string, courtData: {
         court_type: courtData.court_type,
         capacity: courtData.capacity || 4,
         hourly_rate: courtData.hourly_rate,
+        allow_down_payment: courtData.allow_down_payment || false,
+        minimum_down_payment: courtData.minimum_down_payment || 0,
         is_active: true,
       })
       .select()
@@ -202,6 +206,8 @@ export async function updateCourt(courtId: string, updates: {
   court_type?: 'indoor' | 'outdoor'
   capacity?: number
   hourly_rate?: number
+  allow_down_payment?: boolean
+  minimum_down_payment?: number
   is_active?: boolean
   amenities?: string[] // Array of amenity IDs
 }) {

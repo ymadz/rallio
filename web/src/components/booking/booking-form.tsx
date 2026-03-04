@@ -156,6 +156,8 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
       // So here we pass `selectedCourt.hourlyRate`. 
 
       hourlyRate: selectedCourt.hourlyRate, // Fix: Pass actual hourly rate, handle discount separately
+      allowDownPayment: selectedCourt.allow_down_payment,
+      minimumDownPayment: selectedCourt.minimum_down_payment,
       capacity: selectedCourt.capacity,
       recurrenceWeeks: recurrenceWeeks
     })

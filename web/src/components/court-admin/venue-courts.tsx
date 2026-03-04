@@ -24,6 +24,8 @@ interface Court {
   hourly_rate: number
   is_active: boolean
   is_verified: boolean
+  allow_down_payment?: boolean
+  minimum_down_payment?: number
   amenities?: Array<{ amenity_id: string }>
 }
 
@@ -48,6 +50,8 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
     surface_type: 'hardcourt',
     capacity: 4,
     hourly_rate: 500,
+    allow_down_payment: false,
+    minimum_down_payment: 0,
     amenities: [] as string[]
   })
 
@@ -103,6 +107,8 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
         surface_type: 'hardcourt',
         capacity: 4,
         hourly_rate: 500,
+        allow_down_payment: false,
+        minimum_down_payment: 0,
         amenities: []
       })
     } catch (err: any) {
@@ -121,6 +127,8 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
       surface_type: court.surface_type || 'hardcourt',
       capacity: court.capacity || 4,
       hourly_rate: court.hourly_rate,
+      allow_down_payment: court.allow_down_payment || false,
+      minimum_down_payment: court.minimum_down_payment || 0,
       amenities: court.amenities?.map(a => a.amenity_id) || []
     })
     setShowEditModal(true)
@@ -147,6 +155,8 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
         surface_type: 'hardcourt',
         capacity: 4,
         hourly_rate: 500,
+        allow_down_payment: false,
+        minimum_down_payment: 0,
         amenities: []
       })
     } catch (err: any) {
@@ -391,6 +401,36 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                 </div>
               </div>
 
+              {/* Down Payment Options */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col justify-center">
+                  <label className="flex items-center gap-2 cursor-pointer mt-4">
+                    <input
+                      type="checkbox"
+                      checked={formData.allow_down_payment}
+                      onChange={(e) => setFormData({ ...formData, allow_down_payment: e.target.checked })}
+                      className="w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary"
+                    />
+                    <span className="text-sm font-medium text-gray-700">Allow Down Payment</span>
+                  </label>
+                </div>
+
+                {formData.allow_down_payment && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Min. Down Payment (₱) *</label>
+                    <input
+                      type="number"
+                      required={formData.allow_down_payment}
+                      min="0"
+                      step="10"
+                      value={formData.minimum_down_payment}
+                      onChange={(e) => setFormData({ ...formData, minimum_down_payment: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    />
+                  </div>
+                )}
+              </div>
+
               {/* Amenities Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -562,6 +602,36 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   />
                 </div>
+              </div>
+
+              {/* Down Payment Options */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col justify-center">
+                  <label className="flex items-center gap-2 cursor-pointer mt-4">
+                    <input
+                      type="checkbox"
+                      checked={formData.allow_down_payment}
+                      onChange={(e) => setFormData({ ...formData, allow_down_payment: e.target.checked })}
+                      className="w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary"
+                    />
+                    <span className="text-sm font-medium text-gray-700">Allow Down Payment</span>
+                  </label>
+                </div>
+
+                {formData.allow_down_payment && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Min. Down Payment (₱) *</label>
+                    <input
+                      type="number"
+                      required={formData.allow_down_payment}
+                      min="0"
+                      step="10"
+                      value={formData.minimum_down_payment}
+                      onChange={(e) => setFormData({ ...formData, minimum_down_payment: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Amenities Selection */}
