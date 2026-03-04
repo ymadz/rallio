@@ -465,6 +465,24 @@ export async function recordMatchScore(
       }).eq('id', matchId)
     }
 
+    // Fallback: Directly reset participants to 'waiting' in case the RPC didn't
+    // This handles edge cases where the RPC's FOREACH loop silently skips updates
+    const allPlayerIds = [...(match.team_a_players || []), ...(match.team_b_players || [])]
+    console.log('[recordMatchScore] 🔄 Fallback: resetting participants to waiting:', allPlayerIds)
+
+    for (const playerId of allPlayerIds) {
+      const { error: partError } = await supabase
+        .from('queue_participants')
+        .update({ status: 'waiting' })
+        .eq('queue_session_id', match.queue_session_id)
+        .eq('user_id', playerId)
+        .eq('status', 'playing') // Only update if still playing (idempotent)
+
+      if (partError) {
+        console.error('[recordMatchScore] ⚠️ Fallback failed for player', playerId, partError)
+      }
+    }
+
     console.log('[recordMatchScore] ✅ Match winner recorded successfully:', scores.winner)
 
     revalidatePath(`/queue/${match.queue_sessions.court_id}`)
