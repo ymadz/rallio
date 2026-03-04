@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   getQueueDetails,
@@ -89,6 +89,8 @@ export function useQueue(courtId: string) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const supabase = createClient()
+  const fetchRef = useRef<() => Promise<void>>(() => Promise.resolve())
+  const debounceRef = useRef<NodeJS.Timeout | null>(null)
 
   // Fetch queue data
   const fetchQueue = async () => {
@@ -159,6 +161,17 @@ export function useQueue(courtId: string) {
     }
   }
 
+  // Keep fetchQueue ref up to date so real-time callbacks always call the latest version
+  fetchRef.current = fetchQueue
+
+  // Debounced fetch for real-time events (avoids flooding on batch updates)
+  const debouncedFetch = () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      fetchRef.current()
+    }, 300)
+  }
+
   // Initial fetch
   useEffect(() => {
     fetchQueue()
@@ -168,22 +181,35 @@ export function useQueue(courtId: string) {
   useEffect(() => {
     if (!queue?.id) return
 
-    console.log('[useQueue] 🔔 Setting up real-time subscription for queue:', queue.id)
+    const sessionId = queue.id
+    console.log('[useQueue] 🔔 Setting up real-time subscription for queue:', sessionId)
 
     const channel = supabase
-      .channel(`queue-${queue.id}`)
+      .channel(`queue-${sessionId}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'queue_participants',
-          filter: `queue_session_id=eq.${queue.id}`,
+          filter: `queue_session_id=eq.${sessionId}`,
         },
         (payload) => {
           console.log('[useQueue] 🔔 Queue participants changed:', payload)
-          // Refresh queue data when participants change
-          fetchQueue()
+          debouncedFetch()
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'matches',
+          filter: `queue_session_id=eq.${sessionId}`,
+        },
+        (payload) => {
+          console.log('[useQueue] 🔔 Match changed:', payload)
+          debouncedFetch()
         }
       )
       .on(
@@ -192,21 +218,24 @@ export function useQueue(courtId: string) {
           event: 'UPDATE',
           schema: 'public',
           table: 'queue_sessions',
-          filter: `id=eq.${queue.id}`,
+          filter: `id=eq.${sessionId}`,
         },
         (payload) => {
           console.log('[useQueue] 🔔 Queue session updated:', payload)
-          // Refresh queue data when session changes
-          fetchQueue()
+          debouncedFetch()
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log('[useQueue] 🔔 Subscription status:', status)
+      })
 
     return () => {
       console.log('[useQueue] 🔕 Cleaning up real-time subscription')
+      if (debounceRef.current) clearTimeout(debounceRef.current)
       supabase.removeChannel(channel)
     }
   }, [queue?.id])
+
 
   const joinQueue = async () => {
     console.log('[useQueue] ➕ Joining queue')
