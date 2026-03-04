@@ -318,7 +318,7 @@ export function BookingCard({
                                 {['pending_refund', 'refunded'].includes(booking.status) ? (
                                     <>
                                         <p className="font-bold text-gray-900 line-through text-gray-400">₱{booking.total_amount.toFixed(2)}</p>
-                                        <p className="text-xs text-orange-600 font-bold mt-0.5">
+                                        <p className="text-xs text-primary font-bold mt-0.5">
                                             Refund {booking.status === 'refunded' ? 'Processed' : 'Requested'}: ₱{booking.amount_paid.toFixed(2)}
                                         </p>
                                     </>
@@ -357,7 +357,7 @@ export function BookingCard({
                             variant="outline"
                             size="sm"
                             onClick={() => onRefundBooking(booking)}
-                            className="w-full text-orange-600 border-orange-200 hover:bg-orange-50 hover:text-orange-700"
+                            className="w-full text-primary border-primary/30 hover:bg-primary/5 hover:text-primary"
                         >
                             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
                             Request Refund
@@ -365,7 +365,7 @@ export function BookingCard({
                     )}
 
                     {booking.status === 'pending_refund' && (
-                        <div className="w-full p-2 bg-orange-50 border border-orange-200 rounded-md text-center text-sm text-orange-700 font-medium">
+                        <div className="w-full p-2 bg-green-50 border border-green-200 rounded-md text-center text-sm text-green-700 font-medium">
                             Refund Request Pending Approval
                         </div>
                     )}

@@ -360,7 +360,7 @@ export function QueueSessionSummaryClient({ sessionId }: Props) {
                     <tr key={participant.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          <div className="relative h-10 w-10 flex-shrink-0">
+                          <div className="relative inline-block h-10 w-10 flex-shrink-0">
                             {participant.avatarUrl ? (
                               <img
                                 src={participant.avatarUrl}
@@ -374,8 +374,8 @@ export function QueueSessionSummaryClient({ sessionId }: Props) {
                                 </span>
                               </div>
                             )}
-                            <div className="absolute -top-1 -right-1 w-5 h-5 bg-primary-dark text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white shadow-sm">
-                              #{participant.position}
+                            <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-green-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border border-white shadow-sm z-10">
+                              {participant.position}
                             </div>
                           </div>
                           <div className="ml-4">
@@ -455,8 +455,8 @@ export function QueueSessionSummaryClient({ sessionId }: Props) {
                     {/* Team 1 */}
                     <div
                       className={`p-4 rounded-lg ${match.winnerTeam === 1
-                          ? 'bg-green-50 border-2 border-green-200'
-                          : 'bg-gray-50 border border-gray-200'
+                        ? 'bg-green-50 border-2 border-green-200'
+                        : 'bg-gray-50 border border-gray-200'
                         }`}
                     >
                       <div className="flex items-center gap-2 mb-2">
@@ -488,8 +488,8 @@ export function QueueSessionSummaryClient({ sessionId }: Props) {
                     {/* Team 2 */}
                     <div
                       className={`p-4 rounded-lg ${match.winnerTeam === 2
-                          ? 'bg-green-50 border-2 border-green-200'
-                          : 'bg-gray-50 border border-gray-200'
+                        ? 'bg-green-50 border-2 border-green-200'
+                        : 'bg-gray-50 border border-gray-200'
                         }`}
                     >
                       <div className="flex items-center gap-2 mb-2">

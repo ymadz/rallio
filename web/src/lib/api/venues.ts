@@ -743,15 +743,63 @@ export async function searchNearby(
 
     if (error) {
       console.error('PostGIS query error, falling back to client-side calculation:', error)
-      // Fallback to getting all venues and calculating distance client-side
       const { venues: allVenues } = await getVenues({ latitude, longitude, radiusKm, limit })
       return allVenues
     }
 
-    return venues || []
+    if (!venues || venues.length === 0) return []
+
+    // ── Enrich RPC results with images ──────────────────────────────────
+    // The nearby_venues RPC returns bare venue rows without image_url or
+    // court images. Fetch those separately and merge them in.
+    const venueIds = venues.map((v: any) => v.id)
+
+    const { data: enriched } = await supabase
+      .from('venues')
+      .select(`
+        id,
+        image_url,
+        courts (
+          id,
+          name,
+          hourly_rate,
+          court_type,
+          is_active,
+          images:court_images (
+            url,
+            is_primary,
+            display_order
+          )
+        )
+      `)
+      .in('id', venueIds)
+      .eq('is_active', true)
+      .eq('courts.is_active', true)
+
+    // Build a lookup map for O(1) merge
+    const enrichMap: Record<string, any> = {}
+    for (const e of (enriched || [])) {
+      enrichMap[e.id] = e
+    }
+
+    // Merge image data into RPC venue rows and convert distance_km → distance
+    return venues.map((v: any) => {
+      const extra = enrichMap[v.id] || {}
+      return {
+        ...v,
+        image_url: extra.image_url ?? null,
+        courts: extra.courts || [],
+        // processVenuesList style minimal fields for NearbyVenues component
+        minPrice: 0,
+        maxPrice: 0,
+        totalCourts: (extra.courts || []).length,
+        activeCourtCount: (extra.courts || []).length,
+        amenities: [],
+        distance: v.distance_km ?? undefined,
+      } as VenueWithDetails
+    })
   } catch (error) {
     console.error('Error searching nearby venues:', error)
-    // Fallback
     const { venues } = await getVenues({ latitude, longitude, radiusKm, limit })
     return venues
   }

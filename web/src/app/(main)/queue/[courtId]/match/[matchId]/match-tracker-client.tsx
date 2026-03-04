@@ -58,9 +58,8 @@ export function MatchTrackerClient({ courtId, matchId }: MatchTrackerClientProps
   const [error, setError] = useState<string | null>(null)
   const [elapsedTime, setElapsedTime] = useState(0)
 
-  // Score entry (Queue Master only)
-  const [scoreA, setScoreA] = useState(0)
-  const [scoreB, setScoreB] = useState(0)
+  // Match result selection (Queue Master only)
+  const [selectedWinner, setSelectedWinner] = useState<'team_a' | 'team_b' | 'draw' | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Load match data
@@ -89,9 +88,8 @@ export function MatchTrackerClient({ courtId, matchId }: MatchTrackerClientProps
 
       setMatch(matchData)
 
-      // Initialize scores if match has existing scores
-      if (matchData.score_a !== null) setScoreA(matchData.score_a)
-      if (matchData.score_b !== null) setScoreB(matchData.score_b)
+      // Initialize winner if match has existing result
+      if (matchData.winner) setSelectedWinner(matchData.winner)
 
       // Fetch player details for Team A
       const { data: teamAData } = await supabase
@@ -198,24 +196,19 @@ export function MatchTrackerClient({ courtId, matchId }: MatchTrackerClientProps
   }
 
   const handleRecordScore = async () => {
-    if (scoreA === 0 && scoreB === 0) {
-      setError('Please enter valid scores')
+    if (!selectedWinner) {
+      setError('Please select a match result')
       return
     }
 
     setIsSubmitting(true)
     try {
-      const winner: 'team_a' | 'team_b' | 'draw' =
-        scoreA > scoreB ? 'team_a' : scoreB > scoreA ? 'team_b' : 'draw'
-
       const result = await recordMatchScore(matchId, {
-        teamAScore: scoreA,
-        teamBScore: scoreB,
-        winner,
+        winner: selectedWinner,
       })
 
       if (!result.success) {
-        setError(result.error || 'Failed to record score')
+        setError(result.error || 'Failed to record match result')
       } else {
         // Navigate back to queue details
         setTimeout(() => {
@@ -223,7 +216,7 @@ export function MatchTrackerClient({ courtId, matchId }: MatchTrackerClientProps
         }, 2000)
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to record score')
+      setError(err.message || 'Failed to record match result')
     } finally {
       setIsSubmitting(false)
     }
@@ -315,23 +308,21 @@ export function MatchTrackerClient({ courtId, matchId }: MatchTrackerClientProps
             </div>
           </div>
 
-          {/* Score */}
+          {/* Winner Display */}
           <div className="text-center">
-            <div className="flex items-center justify-center gap-4">
-              <div className="text-6xl font-bold text-gray-900">
-                {match.score_a !== null ? match.score_a : scoreA}
-              </div>
-              <div className="text-4xl font-bold text-gray-400">:</div>
-              <div className="text-6xl font-bold text-gray-900">
-                {match.score_b !== null ? match.score_b : scoreB}
-              </div>
-            </div>
-            {match.winner && (
-              <div className="mt-4 flex items-center justify-center gap-2 text-green-700">
-                <Trophy className="w-5 h-5" />
-                <span className="font-semibold">
+            {match.winner ? (
+              <div className="flex items-center justify-center gap-2 text-green-700">
+                <Trophy className="w-8 h-8" />
+                <span className="text-2xl font-bold">
                   {match.winner === 'team_a' ? 'Team A Wins!' : match.winner === 'team_b' ? 'Team B Wins!' : 'Draw!'}
                 </span>
+                <Trophy className="w-8 h-8" />
+              </div>
+            ) : (
+              <div className="text-lg text-gray-500 font-medium">
+                {match.status === 'scheduled' && 'Match not started yet'}
+                {match.status === 'in_progress' && 'Match in progress...'}
+                {match.status === 'cancelled' && 'Match cancelled'}
               </div>
             )}
           </div>
@@ -383,70 +374,81 @@ export function MatchTrackerClient({ courtId, matchId }: MatchTrackerClientProps
 
           {match.status === 'in_progress' && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Team A Score</label>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setScoreA(Math.max(0, scoreA - 1))}
-                      className="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold transition-colors"
-                    >
-                      -
-                    </button>
-                    <input
-                      type="number"
-                      value={scoreA}
-                      onChange={(e) => setScoreA(Math.max(0, parseInt(e.target.value) || 0))}
-                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-center text-xl font-bold focus:ring-2 focus:ring-primary focus:border-transparent"
-                    />
-                    <button
-                      onClick={() => setScoreA(scoreA + 1)}
-                      className="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold transition-colors"
-                    >
-                      +
-                    </button>
+              <h4 className="text-lg font-semibold text-gray-900 text-center">Select Match Result</h4>
+              
+              <div className="grid grid-cols-1 gap-3">
+                {/* Team A Wins */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedWinner('team_a')}
+                  className={`p-4 border-2 rounded-lg transition-all text-left ${
+                    selectedWinner === 'team_a'
+                      ? 'border-green-500 bg-green-50'
+                      : 'border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                      <Users className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="font-semibold text-gray-900">Team A Wins</span>
+                    {selectedWinner === 'team_a' && <Trophy className="w-6 h-6 text-green-600 ml-auto" />}
                   </div>
-                </div>
+                </button>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Team B Score</label>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setScoreB(Math.max(0, scoreB - 1))}
-                      className="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold transition-colors"
-                    >
-                      -
-                    </button>
-                    <input
-                      type="number"
-                      value={scoreB}
-                      onChange={(e) => setScoreB(Math.max(0, parseInt(e.target.value) || 0))}
-                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-center text-xl font-bold focus:ring-2 focus:ring-primary focus:border-transparent"
-                    />
-                    <button
-                      onClick={() => setScoreB(scoreB + 1)}
-                      className="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold transition-colors"
-                    >
-                      +
-                    </button>
+                {/* Team B Wins */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedWinner('team_b')}
+                  className={`p-4 border-2 rounded-lg transition-all text-left ${
+                    selectedWinner === 'team_b'
+                      ? 'border-green-500 bg-green-50'
+                      : 'border-gray-200 bg-white hover:border-red-300 hover:bg-red-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center">
+                      <Users className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="font-semibold text-gray-900">Team B Wins</span>
+                    {selectedWinner === 'team_b' && <Trophy className="w-6 h-6 text-green-600 ml-auto" />}
                   </div>
-                </div>
+                </button>
+
+                {/* Draw */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedWinner('draw')}
+                  className={`p-4 border-2 rounded-lg transition-all text-center ${
+                    selectedWinner === 'draw'
+                      ? 'border-yellow-500 bg-yellow-50'
+                      : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center justify-center gap-3">
+                    <div className="w-8 h-8 bg-gray-400 rounded-lg flex items-center justify-center">
+                      <span className="text-white font-bold">=</span>
+                    </div>
+                    <span className="font-semibold text-gray-900">Draw / Tie</span>
+                    {selectedWinner === 'draw' && <CheckCircle className="w-6 h-6 text-yellow-600" />}
+                  </div>
+                </button>
               </div>
 
               <button
                 onClick={handleRecordScore}
-                disabled={isSubmitting || (scoreA === 0 && scoreB === 0)}
+                disabled={isSubmitting || !selectedWinner}
                 className="w-full px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    Recording Score...
+                    Recording Result...
                   </>
                 ) : (
                   <>
                     <CheckCircle className="w-5 h-5" />
-                    End Match & Record Score
+                    End Match & Record Result
                   </>
                 )}
               </button>

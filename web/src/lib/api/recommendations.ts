@@ -76,8 +76,14 @@ export async function getRecommendationsForUser(userId: string, limit: number = 
             review_count: court.court_ratings?.length || 0,
         } as any));
 
-    } catch (error) {
-        console.error("Error connecting to ML recommendation service:", error);
-        return [];
+    } catch (error: any) {
+        // ECONNREFUSED = ML service not running (expected in dev). Suppress verbose stack.
+        const isOffline = error?.cause?.code === 'ECONNREFUSED' || error?.message?.includes('fetch failed')
+        if (!isOffline) {
+            console.error("Error connecting to ML recommendation service:", error)
+        } else if (process.env.NODE_ENV !== 'production') {
+            console.warn("[ML] Recommendation service offline — skipping (start the Python service to enable)")
+        }
+        return []
     }
 }

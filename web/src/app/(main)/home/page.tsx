@@ -35,6 +35,7 @@ export default async function HomePage() {
       id,
       name,
       address,
+      image_url,
       latitude,
       longitude,
       opening_hours,
@@ -146,6 +147,194 @@ export default async function HomePage() {
           text-shadow: 0 1px 6px rgba(0,0,0,0.18);
           letter-spacing: -0.01em;
         }
+
+        /* ── Suggested Court Card: Studio-Lighting Surface ── */
+        @keyframes suggested-shimmer {
+          0%, 100% { opacity: 0; }
+          50% { opacity: 1; }
+        }
+        .suggested-card {
+          position: relative;
+          overflow: hidden;
+          border-radius: 1.25rem;
+          padding: 0;
+          display: flex;
+          align-items: stretch;
+          text-decoration: none;
+          /* Studio-lighting gradient applied per-card via inline style prop */
+          box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.14),
+            inset 0 -1px 0 rgba(0,0,0,0.08);
+          transition:
+            transform 0.36s cubic-bezier(0.34,1.56,0.64,1),
+            box-shadow 0.36s ease;
+        }
+        .suggested-card:hover {
+          transform: translateY(-3px) scale(1.012);
+          box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.18),
+            inset 0 -1px 0 rgba(0,0,0,0.06),
+            0 4px 16px rgba(13,148,136,0.22),
+            0 20px 48px rgba(8,70,64,0.28);
+        }
+        /* High-frequency matte noise overlay */
+        .suggested-card-noise {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          z-index: 1;
+          opacity: 0.055;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='sn'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23sn)' opacity='1'/%3E%3C/svg%3E");
+          background-size: 150px 150px;
+          mix-blend-mode: overlay;
+        }
+        /* Diagonal highlight sweep – the "studio light" */
+        .suggested-card-highlight {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          z-index: 2;
+          background: linear-gradient(
+            135deg,
+            rgba(204,251,241,0.16) 0%,
+            rgba(153,246,228,0.06) 30%,
+            transparent 55%,
+            rgba(0,0,0,0.04) 100%
+          );
+        }
+        /* Subtle shimmer on hover */
+        .suggested-card:hover .suggested-card-shimmer {
+          animation: suggested-shimmer 2.4s ease-in-out infinite;
+        }
+        .suggested-card-shimmer {
+          position: absolute;
+          top: -20%;
+          left: -30%;
+          width: 80%;
+          height: 140%;
+          pointer-events: none;
+          z-index: 3;
+          background: linear-gradient(
+            125deg,
+            transparent 30%,
+            rgba(255,255,255,0.05) 48%,
+            rgba(255,255,255,0.08) 50%,
+            rgba(255,255,255,0.05) 52%,
+            transparent 70%
+          );
+          transform: rotate(-15deg);
+          opacity: 0;
+        }
+        .suggested-card-body {
+          position: relative;
+          z-index: 4;
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          padding: 0.875rem 1rem 0.875rem calc(15% + 0.875rem);
+          width: 100%;
+        }
+        /* Full-height left-edge image strip (~15% width) */
+        .suggested-card-strip {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 15%;
+          height: 100%;
+          overflow: hidden;
+          z-index: 1;
+          border-radius: 1.25rem 0 0 1.25rem;
+        }
+        .suggested-card-strip img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+        }
+        /* Soft right-edge fade so strip dissolves into card gradient */
+        .suggested-card-strip::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(to right, transparent 40%, rgba(15,118,110,0.72) 100%);
+        }
+        /* Placeholder strip (no image) */
+        .suggested-card-strip-placeholder {
+          width: 100%;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(255,255,255,0.05);
+          border-right: 1px solid rgba(255,255,255,0.06);
+        }
+        .suggested-card-info {
+          flex: 1;
+          min-width: 0;
+        }
+        .suggested-card-name {
+          color: #fff;
+          font-weight: 600;
+          font-size: 0.875rem;
+          letter-spacing: -0.01em;
+          line-height: 1.3;
+          text-shadow: 0 1px 4px rgba(0,0,0,0.22);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .suggested-card-address {
+          color: rgba(204,251,241,0.72);
+          font-size: 0.75rem;
+          line-height: 1.4;
+          margin-top: 2px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .suggested-card-price {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          margin-top: 6px;
+          padding: 3px 10px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.10);
+          backdrop-filter: blur(8px);
+          border: 1px solid rgba(255,255,255,0.12);
+          color: #ccfbf1;
+          font-size: 0.75rem;
+          font-weight: 600;
+          letter-spacing: 0.01em;
+        }
+        .suggested-card-arrow {
+          flex-shrink: 0;
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(255,255,255,0.08);
+          border: 1px solid rgba(255,255,255,0.12);
+          transition: background 0.28s ease, transform 0.28s cubic-bezier(0.34,1.56,0.64,1);
+        }
+        .suggested-card:hover .suggested-card-arrow {
+          background: rgba(255,255,255,0.16);
+          transform: translateX(2px);
+        }
+        /* Empty state */
+        .suggested-empty {
+          position: relative;
+          overflow: hidden;
+          border-radius: 1.25rem;
+          padding: 2rem;
+          text-align: center;
+          background:
+            radial-gradient(ellipse 100% 80% at 15% 20%, rgba(153,246,228,0.22) 0%, transparent 55%),
+            linear-gradient(135deg, #0f766e 0%, #084640 100%);
+          border: 1px solid rgba(153,246,228,0.14);
+        }
       `}</style>
 
       {/* Header */}
@@ -235,14 +424,64 @@ export default async function HomePage() {
             </Link>
           </div>
 
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {suggestedVenues && suggestedVenues.length > 0 ? (
-              suggestedVenues.slice(0, 2).map((venue: any) => {
-                // Get primary image or first available image
-                const primaryImage = venue.courts
+              suggestedVenues.slice(0, 2).map((venue: any, idx: number) => {
+                // ── Per-card radial gradient presets ──────────────────────────
+                // Each preset has a different light-source origin, ellipse sizes,
+                // stop positions, and base diagonal — creating naturally varied surfaces.
+                const CARD_GRADIENTS: string[][] = [
+                  // 0 · Spotlight: top-left → shadow: bottom-right
+                  [
+                    'radial-gradient(ellipse 115% 95% at 5% 8%,   rgba(153,246,228,0.44) 0%, transparent 50%)',
+                    'radial-gradient(ellipse 80%  70% at 88% 92%, rgba(5,80,60,0.58)     0%, transparent 52%)',
+                    'radial-gradient(ellipse 55%  50% at 48% 52%, rgba(20,184,166,0.10)  0%, transparent 62%)',
+                    'linear-gradient(135deg, #0f766e 0%, #09564e 42%, #073d37 100%)',
+                  ],
+                  // 1 · Spotlight: top-right → shadow: bottom-left
+                  [
+                    'radial-gradient(ellipse 110% 90% at 95% 6%,  rgba(153,246,228,0.40) 0%, transparent 50%)',
+                    'radial-gradient(ellipse 85%  72% at 6%  90%, rgba(5,80,60,0.52)     0%, transparent 54%)',
+                    'radial-gradient(ellipse 50%  55% at 52% 50%, rgba(20,184,166,0.09)  0%, transparent 65%)',
+                    'linear-gradient(225deg, #0f766e 0%, #0a5a52 40%, #073d37 100%)',
+                  ],
+                  // 2 · Spotlight: bottom-left → shadow: top-right
+                  [
+                    'radial-gradient(ellipse 100% 105% at 4% 94%, rgba(153,246,228,0.38) 0%, transparent 52%)',
+                    'radial-gradient(ellipse 78%  65%  at 92% 8%, rgba(4,70,52,0.60)     0%, transparent 50%)',
+                    'radial-gradient(ellipse 60%  50%  at 50% 55%,rgba(20,184,166,0.11)  0%, transparent 60%)',
+                    'linear-gradient(315deg, #0d9488 0%, #0a5c55 45%, #052e29 100%)',
+                  ],
+                  // 3 · Spotlight: bottom-right → shadow: top-left
+                  [
+                    'radial-gradient(ellipse 105% 95% at 96% 95%, rgba(153,246,228,0.40) 0%, transparent 50%)',
+                    'radial-gradient(ellipse 80%  68% at 8%  5%,  rgba(4,70,52,0.58)     0%, transparent 52%)',
+                    'radial-gradient(ellipse 52%  52% at 50% 48%, rgba(20,184,166,0.10)  0%, transparent 64%)',
+                    'linear-gradient(315deg, #0f766e 0%, #084640 50%, #052e29 100%)',
+                  ],
+                  // 4 · Spotlight: top-center crown → dark sides
+                  [
+                    'radial-gradient(ellipse 90%  80% at 50% 4%,  rgba(153,246,228,0.42) 0%, transparent 50%)',
+                    'radial-gradient(ellipse 68%  80% at 5%  80%, rgba(5,80,60,0.40)     0%, transparent 54%)',
+                    'radial-gradient(ellipse 68%  80% at 95% 78%, rgba(4,70,52,0.36)     0%, transparent 54%)',
+                    'linear-gradient(180deg, #0d9488 0%, #085e55 40%, #052e29 100%)',
+                  ],
+                  // 5 · Spotlight: left-edge glancing → right shadow
+                  [
+                    'radial-gradient(ellipse 72%  125% at 2% 50%,  rgba(153,246,228,0.40) 0%, transparent 52%)',
+                    'radial-gradient(ellipse 62%  90%  at 98% 48%, rgba(4,70,52,0.58)     0%, transparent 50%)',
+                    'radial-gradient(ellipse 50%  55%  at 50% 50%, rgba(20,184,166,0.10)  0%, transparent 65%)',
+                    'linear-gradient(90deg, #0f766e 0%, #0a5a52 42%, #073d37 100%)',
+                  ],
+                ]
+                const cardBg = CARD_GRADIENTS[idx % CARD_GRADIENTS.length].join(', ')
+
+                // Prefer venue-level cover image, fall back to court image
+                const courtPrimaryImg = venue.courts
                   ?.flatMap((c: any) => c.court_images || [])
                   .find((img: any) => img.is_primary)
-                const imageUrl = primaryImage?.url || venue.courts?.[0]?.court_images?.[0]?.url
+                const courtFallbackImg = venue.courts?.[0]?.court_images?.[0]?.url
+                const imageUrl = (venue as any).image_url || courtPrimaryImg?.url || courtFallbackImg
 
                 // Calculate price range
                 const rawPrices = venue.courts?.map((c: any) => c.hourly_rate) || []
@@ -254,44 +493,71 @@ export default async function HomePage() {
                   <Link
                     key={venue.id}
                     href={`/courts/${venue.id}`}
-                    className="flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-xl hover:border-primary/30 hover:shadow-sm transition-all"
+                    className="suggested-card"
+                    style={{ background: cardBg }}
                   >
-                    <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
-                      {imageUrl ? (
-                        <img src={imageUrl} alt={venue.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+
+                    {/* Noise texture layer */}
+                    <div className="suggested-card-noise" />
+                    {/* Diagonal studio highlight */}
+                    <div className="suggested-card-highlight" />
+                    {/* Shimmer sweep on hover */}
+                    <div className="suggested-card-shimmer" />
+
+                    <div className="suggested-card-body">
+                      {/* Left-edge image strip */}
+                      <div className="suggested-card-strip">
+                        {imageUrl ? (
+                          <img src={imageUrl} alt={venue.name} />
+                        ) : (
+                          <div className="suggested-card-strip-placeholder">
+                            <svg style={{ width: 14, height: 14, color: 'rgba(153,246,228,0.4)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Venue info */}
+                      <div className="suggested-card-info">
+                        <div className="suggested-card-name">{venue.name}</div>
+                        <div className="suggested-card-address">{venue.address}</div>
+                        {minPrice !== null && maxPrice !== null && (
+                          <span className="suggested-card-price">
+                            <svg style={{ width: 12, height: 12 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                            </svg>
+                            {minPrice === maxPrice
+                              ? formatCurrency(minPrice)
+                              : `${formatCurrency(minPrice)} – ${formatCurrency(maxPrice)}`}
+                            /hr
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Arrow button */}
+                      <div className="suggested-card-arrow">
+                        <svg style={{ width: 16, height: 16, color: 'rgba(204,251,241,0.8)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                         </svg>
-                      )}
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-gray-900 truncate">{venue.name}</h3>
-                      <p className="text-sm text-gray-500 truncate">{venue.address}</p>
-                      {minPrice !== null && maxPrice !== null && (
-                        <p className="text-xs text-primary font-medium mt-1">
-                          {minPrice === maxPrice
-                            ? formatCurrency(minPrice)
-                            : `${formatCurrency(minPrice)} - ${formatCurrency(maxPrice)}`}
-                          /hr
-                        </p>
-                      )}
-                    </div>
-                    <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
                   </Link>
                 )
               })
             ) : (
-              <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 text-center">
-                <p className="text-sm text-gray-500 mb-2">No courts available at the moment</p>
-                <Link
-                  href="/courts"
-                  className="text-sm font-medium text-primary hover:text-primary/80"
-                >
-                  Browse all courts
-                </Link>
+              <div className="suggested-empty">
+                <div className="suggested-card-noise" />
+                <div className="suggested-card-highlight" />
+                <div style={{ position: 'relative', zIndex: 4 }}>
+                  <p style={{ color: 'rgba(204,251,241,0.7)', fontSize: '0.875rem', marginBottom: '0.5rem' }}>No courts available at the moment</p>
+                  <Link
+                    href="/courts"
+                    style={{ color: '#99f6e4', fontSize: '0.875rem', fontWeight: 600, textDecoration: 'underline', textUnderlineOffset: '3px' }}
+                  >
+                    Browse all courts
+                  </Link>
+                </div>
               </div>
             )}
           </div>

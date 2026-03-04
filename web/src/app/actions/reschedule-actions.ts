@@ -63,15 +63,27 @@ export async function rescheduleReservationAction(
     const oldEnd = new Date(booking.end_time)
     const durationInMinutes = differenceInMinutes(oldEnd, oldStart)
 
-    // Construct new start Date object
-    // newDate is likely 00:00:00, so set hours/minutes from newStartTime
+    // Construct new start timestamp with explicit Asia/Manila timezone offset.
+    // The client sends a Date representing the selected calendar day, but its
+    // internal UTC value may correspond to the previous day (e.g. Mar 24 00:00
+    // PHT = Mar 23 16:00 UTC). Using setHours() on the server (UTC) would apply
+    // hours in UTC, causing date/time drift. Instead, extract the intended
+    // calendar date in Asia/Manila and build the ISO string with +08:00 offset.
     const [hours, minutes] = newStartTime.split(':').map(Number)
-    const newStartDateTime = new Date(newDate)
-    newStartDateTime.setHours(hours, minutes, 0, 0)
 
+    const dateStr = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Manila',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).format(new Date(newDate)) // 'yyyy-MM-dd' in Manila timezone
+
+    const hoursStr = hours.toString().padStart(2, '0')
+    const minutesStr = minutes.toString().padStart(2, '0')
+    const newStartISO = `${dateStr}T${hoursStr}:${minutesStr}:00+08:00`
+
+    const newStartDateTime = new Date(newStartISO)
     const newEndDateTime = addMinutes(newStartDateTime, durationInMinutes)
-
-    const newStartISO = newStartDateTime.toISOString()
     const newEndISO = newEndDateTime.toISOString()
 
     // 5. Check Availability (excluding current booking)

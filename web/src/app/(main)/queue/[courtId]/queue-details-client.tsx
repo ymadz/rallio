@@ -7,13 +7,13 @@ import { QueueNotificationBanner } from '@/components/queue/queue-notification-b
 import { PlayerCard } from '@/components/queue/player-card'
 import { QueueStatusBadge } from '@/components/queue/queue-status-badge'
 import { QueuePositionTracker } from '@/components/queue/queue-position-tracker'
-import { PaymentSummaryWidget } from '@/components/queue/payment-summary-widget'
 import { MatchHistoryViewer } from '@/components/queue/match-history-viewer'
 import { SessionManagementClient } from '@/components/queue-master/session-management-client'
 
-import { Users, Clock, Activity, Loader2, AlertCircle, Trophy, Calendar } from 'lucide-react'
+import { Users, Clock, Activity, Loader2, AlertCircle, Trophy, Calendar, X, CreditCard } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { initiateQueuePaymentAction } from '@/app/actions/payments'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { differenceInSeconds, subHours, isBefore, format } from 'date-fns'
@@ -69,6 +69,9 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
     amountOwed: number
     gamesPlayed: number
   } | null>(null)
+  const [isInitiatingPayment, setIsInitiatingPayment] = useState(false)
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'gcash' | 'paymaya' | null>(null)
+  const [paymentError, setPaymentError] = useState<string | null>(null)
   const supabase = createClient()
 
   // Get current user ID
@@ -117,6 +120,29 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
     setIsJoining(true)
     await joinQueue()
     setIsJoining(false)
+  }
+
+  const handleQueuePayment = async (method: 'gcash' | 'paymaya') => {
+    if (!participant) return
+    setIsInitiatingPayment(true)
+    setSelectedPaymentMethod(method)
+    setPaymentError(null)
+
+    try {
+      const result = await initiateQueuePaymentAction(participant.id, method)
+      if (!result.success) {
+        setPaymentError(result.error || 'Failed to initiate payment')
+        return
+      }
+      if (result.checkoutUrl) {
+        window.location.href = result.checkoutUrl
+      }
+    } catch (err: any) {
+      setPaymentError(err.message || 'Payment failed')
+    } finally {
+      setIsInitiatingPayment(false)
+      setSelectedPaymentMethod(null)
+    }
   }
 
   const handleLeaveQueue = async () => {
@@ -279,38 +305,17 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
           />
         )}
 
-        {/* Payment Summary Widget (if amount owed) */}
-        {isUserInQueue && participant && participant.amount_owed > 0 && queue && (
-          <PaymentSummaryWidget
-            participantId={participant.id}
-            amountOwed={participant.amount_owed}
-            gamesPlayed={participant.games_played || 0}
-            costPerGame={parseFloat((queue as any).cost_per_game || '0')}
-            paymentStatus={participant.payment_status || 'pending'}
-            courtId={courtId}
-          />
-        )}
-
-        {/* Match History Toggle (if in queue) */}
+        {/* Match History Button (if in queue) */}
         {isUserInQueue && currentUserId && (
           <div className="flex gap-3">
             <button
-              onClick={() => setShowMatchHistory(!showMatchHistory)}
+              onClick={() => setShowMatchHistory(true)}
               className="flex-1 px-4 py-3 bg-white border-2 border-gray-200 text-gray-700 rounded-lg hover:border-primary hover:text-primary transition-colors font-medium flex items-center justify-center gap-2"
             >
               <Trophy className="w-5 h-5" />
-              {showMatchHistory ? 'Hide Match History' : 'View Match History'}
+              View Match History
             </button>
           </div>
-        )}
-
-        {/* Match History Viewer */}
-        {showMatchHistory && isUserInQueue && currentUserId && queue && (
-          <MatchHistoryViewer
-            sessionId={queue.id}
-            userId={currentUserId}
-            courtId={courtId}
-          />
         )}
 
         {/* Current Queue List */}
@@ -451,9 +456,23 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
         ) : (
           <div className="bg-white border border-gray-200 rounded-xl p-6">
             <h3 className="font-semibold text-gray-900 mb-3">Leave Queue</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              You&apos;re currently at position #{queue.userPosition}. You can leave anytime without penalty.
-            </p>
+
+            {/* Outstanding balance warning */}
+            {participant && participant.amount_owed > 0 && participant.payment_status !== 'paid' && (
+              <div className="flex items-start gap-2 bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4">
+                <AlertCircle className="w-4 h-4 text-orange-600 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-orange-700">
+                  You have an outstanding balance of <span className="font-bold">₱{participant.amount_owed.toFixed(2)}</span>. You must pay before leaving.
+                </p>
+              </div>
+            )}
+
+            {!(participant && participant.amount_owed > 0 && participant.payment_status !== 'paid') && (
+              <p className="text-sm text-gray-600 mb-4">
+                You&apos;re currently at position #{queue.userPosition}. You can leave anytime without penalty.
+              </p>
+            )}
+
             <button
               onClick={handleLeaveQueue}
               disabled={isLeaving}
@@ -533,25 +552,33 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
               )}
             </button>
           ) : (
-            <button
-              onClick={handleLeaveQueue}
-              disabled={isLeaving}
-              className="w-full border-2 border-red-300 text-red-600 py-4 rounded-xl font-semibold hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg"
-            >
-              {isLeaving ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Leaving...</span>
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                  <span>Leave Queue</span>
-                </>
+            <div className="space-y-2">
+              {participant && participant.amount_owed > 0 && participant.payment_status !== 'paid' && (
+                <div className="flex items-center gap-2 text-orange-600 text-xs font-medium justify-center">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>Outstanding balance: ₱{participant.amount_owed.toFixed(2)}</span>
+                </div>
               )}
-            </button>
+              <button
+                onClick={handleLeaveQueue}
+                disabled={isLeaving}
+                className="w-full border-2 border-red-300 text-red-600 py-4 rounded-xl font-semibold hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg"
+              >
+                {isLeaving ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Leaving...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    <span>Leave Queue</span>
+                  </>
+                )}
+              </button>
+            </div>
           )}
         </div>
 
@@ -561,47 +588,112 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
         {paymentRequiredInfo?.show && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
-                  <AlertCircle className="w-6 h-6 text-orange-600" />
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
+                    <AlertCircle className="w-6 h-6 text-orange-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Payment Required</h3>
+                    <p className="text-sm text-gray-500">Settle your balance to leave the queue</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Payment Required</h3>
-                  <p className="text-sm text-gray-500">You must settle your balance before leaving</p>
-                </div>
+                <button
+                  onClick={() => { setPaymentRequiredInfo(null); setPaymentError(null) }}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
               </div>
 
-              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-orange-700">Games Played</span>
-                  <span className="font-semibold text-orange-900">{paymentRequiredInfo.gamesPlayed}</span>
-                </div>
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-5">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-orange-700">Amount Owed</span>
-                  <span className="text-xl font-bold text-orange-900">₱{paymentRequiredInfo.amountOwed.toFixed(2)}</span>
+                  <span className="text-2xl font-bold text-orange-900">₱{paymentRequiredInfo.amountOwed.toFixed(2)}</span>
                 </div>
               </div>
 
-              <p className="text-sm text-gray-600 mb-6">
-                Please pay your outstanding balance to the Queue Master before leaving the queue.
-              </p>
+              {paymentError && (
+                <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-sm text-red-700">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  {paymentError}
+                </div>
+              )}
 
-              <div className="flex gap-3">
+              <p className="text-sm text-gray-600 mb-4">Choose a payment method to settle your balance:</p>
+
+              <div className="space-y-3">
                 <button
-                  onClick={() => setPaymentRequiredInfo(null)}
-                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                  onClick={() => handleQueuePayment('gcash')}
+                  disabled={isInitiatingPayment}
+                  className="w-full flex items-center justify-center gap-3 py-3.5 rounded-xl font-semibold text-white transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: '#007DED' }}
                 >
-                  Close
+                  {isInitiatingPayment && selectedPaymentMethod === 'gcash' ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Redirecting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="w-5 h-5" />
+                      <span>Pay with GCash</span>
+                    </>
+                  )}
                 </button>
-                {participant && (
-                  <Link
-                    href="#payment-widget"
-                    onClick={() => setPaymentRequiredInfo(null)}
-                    className="flex-1 px-4 py-2.5 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium text-center"
-                  >
-                    Pay Now
-                  </Link>
-                )}
+
+                <button
+                  onClick={() => handleQueuePayment('paymaya')}
+                  disabled={isInitiatingPayment}
+                  className="w-full flex items-center justify-center gap-3 py-3.5 rounded-xl font-semibold text-white transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: '#34A853' }}
+                >
+                  {isInitiatingPayment && selectedPaymentMethod === 'paymaya' ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Redirecting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="w-5 h-5" />
+                      <span>Pay with Maya</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => { setPaymentRequiredInfo(null); setPaymentError(null) }}
+                  className="w-full px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium text-sm"
+                >
+                  Pay Later
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Match History Modal */}
+        {showMatchHistory && isUserInQueue && currentUserId && queue && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <div className="bg-white w-full sm:rounded-xl sm:max-w-lg max-h-[85vh] flex flex-col shadow-xl">
+              <div className="flex items-center justify-between p-5 border-b border-gray-100">
+                <div className="flex items-center gap-2">
+                  <Trophy className="w-5 h-5 text-primary" />
+                  <h3 className="text-lg font-semibold text-gray-900">Match History</h3>
+                </div>
+                <button
+                  onClick={() => setShowMatchHistory(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+              <div className="overflow-y-auto flex-1 p-5">
+                <MatchHistoryViewer
+                  sessionId={queue.id}
+                  userId={currentUserId}
+                  courtId={courtId}
+                />
               </div>
             </div>
           </div>
