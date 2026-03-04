@@ -45,7 +45,9 @@ export interface InitiatePaymentResult {
  */
 export async function initiatePaymentAction(
   reservationId: string,
-  paymentMethod: PaymentMethod
+  paymentMethod: PaymentMethod,
+  customAmount?: number,
+  installmentIds?: string[]
 ): Promise<InitiatePaymentResult> {
   console.log('[initiatePaymentAction] 🚀 Starting payment initiation')
   console.log('[initiatePaymentAction] Input:', {
@@ -153,17 +155,15 @@ export async function initiatePaymentAction(
 
     // If reservation is already partially paid, we are charging the remaining balance
     if (reservation.status === 'partially_paid' && reservation.amount_paid > 0) {
-      amountToCharge = reservation.total_amount - reservation.amount_paid
-      description += ' (Remaining Balance)'
+      amountToCharge = customAmount ?? (reservation.total_amount - reservation.amount_paid)
+      description += customAmount ? ' (Installment)' : ' (Remaining Balance)'
+    } else if (customAmount) {
+      amountToCharge = customAmount
+      description += ' (Partial Payment)'
     } else {
-      // Check intent: is this meant to be a cash booking (with a down payment)?
-      const isIntendedCash = reservation.metadata?.intended_payment_method === 'cash' ||
-        reservation.payment_type === 'cash' ||
-        reservation.payment_method === 'cash' ||
-        paymentMethod === 'cash'
-
-      // If it's a cash booking but requires a down payment, charge the down payment amount online.
-      if (isIntendedCash && reservation.metadata?.down_payment_amount && (reservation.status === 'pending_payment' || reservation.status === 'reserved')) {
+      // Check if this reservation has a down payment amount stored in metadata
+      // This applies to BOTH e-wallet and cash payments when user selected down payment
+      if (reservation.metadata?.down_payment_amount && (reservation.status === 'pending_payment' || reservation.status === 'reserved')) {
         amountToCharge = Number(reservation.metadata.down_payment_amount)
         isDownPayment = true
         description += ' (Down Payment)'
@@ -324,6 +324,7 @@ export async function initiatePaymentAction(
         is_split_payment: reservation.payment_type === 'split',
         recurrence_group_id: recurrenceGroupId,
         is_down_payment: isDownPayment,
+        installment_ids: installmentIds,
       },
     }
     console.log('[initiatePaymentAction] Payment data:', paymentData)
@@ -452,7 +453,8 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
     }
 
     const isDownPayment = payment.metadata?.is_down_payment === true || payment.metadata?.is_down_payment === 'true'
-    const newReservationStatus = isDownPayment ? 'partially_paid' : 'confirmed'
+    // Status will be updated dynamically later based on the actual amount paid
+    let newReservationStatus = isDownPayment ? 'partially_paid' : 'confirmed'
 
     // Idempotency check: If payment is already completed
     if (payment.status === 'completed') {
@@ -622,27 +624,63 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
 
     // Update reservation with comprehensive error handling
     console.log(`Updating reservation to ${newReservationStatus}:`, payment.reservation_id)
-    // Fetch latest reservation first to get current amount_paid
+    // Fetch latest reservation first to get current amount_paid and metadata
     const { data: currentRes } = await supabase
       .from('reservations')
-      .select('amount_paid')
+      .select('status, amount_paid, metadata, total_amount')
       .eq('id', payment.reservation_id)
       .single()
+
+    // Update installment status if payment was for specific installments
+    let reservationMetadata = currentRes?.metadata || {}
+    const installmentIds = payment.metadata?.installment_ids
+    if (reservationMetadata.payment_plan) {
+      const updatedPlan = { ...reservationMetadata.payment_plan }
+      if (installmentIds && Array.isArray(installmentIds)) {
+        updatedPlan.installments = updatedPlan.installments.map((inst: any) =>
+          installmentIds.includes(inst.id)
+            ? { ...inst, status: 'paid', paidAt: new Date().toISOString(), paymentId: paymentResult.id }
+            : inst
+        )
+      } else if (!isDownPayment && (currentRes?.amount_paid || 0) + payment.amount >= (payment.metadata?.reservation_total_amount || 1000000)) {
+        // Only mark everything as paid if it was a total-balance final payment
+        updatedPlan.installments = updatedPlan.installments.map((inst: any) => ({
+          ...inst,
+          status: 'paid',
+          paidAt: inst.status === 'paid' ? inst.paidAt : new Date().toISOString(),
+          paymentId: inst.status === 'paid' ? inst.paymentId : paymentResult.id
+        }))
+      }
+      reservationMetadata = {
+        ...reservationMetadata,
+        payment_plan: updatedPlan
+      }
+    }
+
+    // Ensure we have the total amount for status calculation
+    const totalAmount = currentRes?.total_amount || 0
+    const amountPaidIncludingNew = (currentRes?.amount_paid || 0) + payment.amount
 
     // For recurring down payments, use per-reservation share, not total payment
     let newAmountPaid: number
     if (isDownPayment) {
       // Get the reservation metadata for this specific reservation's down payment share
-      const { data: firstResForMeta } = await supabase
-        .from('reservations')
-        .select('metadata')
-        .eq('id', payment.reservation_id)
-        .single()
-      newAmountPaid = firstResForMeta?.metadata?.down_payment_amount
-        ? Number(firstResForMeta.metadata.down_payment_amount)
+      newAmountPaid = reservationMetadata?.down_payment_amount
+        ? Number(reservationMetadata.down_payment_amount)
         : payment.amount
     } else {
-      newAmountPaid = (currentRes?.amount_paid || 0) + payment.amount
+      newAmountPaid = amountPaidIncludingNew
+    }
+
+    // DYNAMIC STATUS UPDATE:
+    // 1. If the booking is awaiting reschedule approval, KEEP that status!
+    // 2. Otherwise, update to confirmed or partially_paid based on balance.
+    if (currentRes?.status === 'pending_reschedule') {
+        newReservationStatus = 'pending_reschedule'
+    } else if (totalAmount > 0 && newAmountPaid >= totalAmount) {
+        newReservationStatus = 'confirmed'
+    } else {
+        newReservationStatus = 'partially_paid'
     }
 
     const { data: updatedReservation, error: reservationError } = await supabase
@@ -650,6 +688,7 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
       .update({
         status: newReservationStatus,
         amount_paid: newAmountPaid,
+        metadata: reservationMetadata
       })
       .eq('id', payment.reservation_id)
       .select('id, status')
@@ -959,12 +998,24 @@ export async function processPaymentByReservationAction(reservationId: string): 
 
       const { data: reservation } = await supabase
         .from('reservations')
-        .select('status, id, amount_paid, recurrence_group_id, metadata')
+        .select('status, id, amount_paid, total_amount, recurrence_group_id, metadata')
         .eq('id', reservationId)
         .single()
 
       const isDownPaymentAction = payment.metadata?.is_down_payment === true || payment.metadata?.is_down_payment === 'true'
-      const targetStatus = isDownPaymentAction ? 'partially_paid' : 'confirmed'
+      
+      // Calculate amount paid after this completion
+      let calculatedAmountPaidAfter: number
+      if (isDownPaymentAction) {
+          calculatedAmountPaidAfter = reservation?.metadata?.down_payment_amount 
+              ? parseFloat(reservation.metadata.down_payment_amount) 
+              : payment.amount
+      } else {
+          calculatedAmountPaidAfter = (reservation?.amount_paid || 0) + payment.amount
+      }
+
+      const totalAmount = reservation?.total_amount || 0
+      const targetStatus = (totalAmount > 0 && calculatedAmountPaidAfter >= totalAmount) ? 'confirmed' : 'partially_paid'
 
       if (reservation?.status === 'confirmed' || (reservation?.status === 'partially_paid' && targetStatus === 'partially_paid')) {
         console.log(`[processPaymentByReservationAction] Reservation already ${reservation.status}`)
@@ -1015,15 +1066,13 @@ export async function processPaymentByReservationAction(reservationId: string): 
           }
         }
       } else {
-        const { error: updateError } = await supabase
-          .from('reservations')
-          .update({
-            status: targetStatus,
-            amount_paid: targetStatus === 'confirmed' && !isDownPaymentAction
-              ? (reservation?.amount_paid || 0) + payment.amount
-              : payment.amount,
-          })
-          .eq('id', reservationId)
+          const { error: updateError } = await supabase
+            .from('reservations')
+            .update({
+              status: targetStatus,
+              amount_paid: calculatedAmountPaidAfter,
+            })
+            .eq('id', reservationId)
 
         if (updateError) {
           console.error('[processPaymentByReservationAction] Failed to confirm reservation:', updateError)

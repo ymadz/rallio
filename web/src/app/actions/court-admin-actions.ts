@@ -97,7 +97,7 @@ export async function getDashboardStats() {
       .from('reservations')
       .select('id')
       .in('court_id', courtIds)
-      .eq('status', 'pending')
+      .in('status', ['pending', 'pending_reschedule'])
 
     // Get upcoming reservations (next 7 days)
     const { data: upcomingReservations } = await supabase
@@ -106,7 +106,7 @@ export async function getDashboardStats() {
       .in('court_id', courtIds)
       .gte('start_time', tomorrow.toISOString())
       .lt('start_time', nextWeek.toISOString())
-      .in('status', ['pending', 'confirmed'])
+      .in('status', ['pending', 'confirmed', 'partially_paid', 'pending_payment', 'pending_reschedule'])
 
     // Get this month's revenue
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
@@ -1342,6 +1342,146 @@ export async function getVenueQueueHistory(filters?: {
     return { success: true, sessions: formattedSessions }
   } catch (error: any) {
     console.error('Error fetching queue history:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
+ * Approve a reschedule request
+ */
+export async function approveReschedule(reservationId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { success: false, error: 'Not authenticated' }
+  }
+
+  try {
+    // 1. Fetch and verify
+    const { data: booking } = await supabase
+      .from('reservations')
+      .select('*, court:courts!inner(venue_id, venues!inner(owner_id, name), name)')
+      .eq('id', reservationId)
+      .single()
+
+    if (!booking || (booking.court as any).venues.owner_id !== user.id) {
+      return { success: false, error: 'Unauthorized' }
+    }
+
+    if (booking.status !== 'pending_reschedule') {
+      return { success: false, error: 'Reservation is not in pending_reschedule status' }
+    }
+
+    // 2. Determine target status
+    const previousStatus = booking.metadata?.rescheduled_from?.status || 'confirmed'
+    
+    // We can also double check if it's fully paid now? 
+    // Usually, if it was partially_paid, it should stay partially_paid.
+    const targetStatus = previousStatus === 'pending_reschedule' ? 'confirmed' : previousStatus
+
+    // 3. Update status
+    const { error: updateError } = await supabase
+      .from('reservations')
+      .update({
+        status: targetStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', reservationId)
+
+    if (updateError) throw updateError
+
+    // 4. Notify user
+    await createNotification({
+      userId: booking.user_id,
+      ...NotificationTemplates.bookingRescheduled(
+        (booking.court as any).venues.name,
+        new Date(booking.start_time).toLocaleString(),
+        booking.id
+      )
+    })
+
+    revalidatePath('/court-admin/reservations')
+    revalidatePath('/bookings')
+    return { success: true }
+
+  } catch (error: any) {
+    console.error('Error approving reschedule:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
+ * Reject a reschedule request
+ */
+export async function rejectReschedule(reservationId: string, reason: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { success: false, error: 'Not authenticated' }
+  }
+
+  try {
+    // 1. Fetch and verify
+    const { data: booking } = await supabase
+      .from('reservations')
+      .select('*, court:courts!inner(venue_id, venues!inner(owner_id, name), name)')
+      .eq('id', reservationId)
+      .single()
+
+    if (!booking || (booking.court as any).venues.owner_id !== user.id) {
+      return { success: false, error: 'Unauthorized' }
+    }
+
+    if (booking.status !== 'pending_reschedule') {
+      return { success: false, error: 'Reservation is not in pending_reschedule status' }
+    }
+
+    const from = booking.metadata?.rescheduled_from
+    if (!from) {
+      return { success: false, error: 'Missing rescheduling history in metadata' }
+    }
+
+    // 2. Restore old values
+    const restoredMetadata = { ...booking.metadata }
+    delete restoredMetadata.rescheduled_from
+    restoredMetadata.rescheduled = false
+    
+    // Restore old payment plan if existed
+    if (from.old_payment_plan) {
+        restoredMetadata.payment_plan = from.old_payment_plan
+    }
+
+    const { error: updateError } = await supabase
+      .from('reservations')
+      .update({
+        start_time: from.start_time,
+        end_time: from.end_time,
+        status: from.status || 'confirmed',
+        metadata: restoredMetadata,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', reservationId)
+
+    if (updateError) throw updateError
+
+    // 3. Notify user
+    await createNotification({
+      userId: booking.user_id,
+      ...NotificationTemplates.bookingRescheduleRejected(
+        (booking.court as any).venues.name,
+        reason,
+        booking.id
+      )
+    })
+
+    revalidatePath('/court-admin/reservations')
+    revalidatePath('/bookings')
+    return { success: true }
+
+  } catch (error: any) {
+    console.error('Error rejecting reschedule:', error)
     return { success: false, error: error.message }
   }
 }

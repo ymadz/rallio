@@ -66,6 +66,7 @@ interface BookingCardProps {
     onRefundBooking: (booking: Booking) => void
     onResumePayment: (booking: Booking, paymentMethod?: 'gcash' | 'paymaya') => void
     onReschedule: (booking: Booking) => void
+    onOpenPaymentPlan: (booking: Booking) => void
     setBookings: React.Dispatch<React.SetStateAction<Booking[]>>
 }
 
@@ -78,9 +79,10 @@ export function BookingCard({
     onRefundBooking,
     onResumePayment,
     onReschedule,
+    onOpenPaymentPlan,
     setBookings
 }: BookingCardProps) {
-    const activeStatuses = ['pending_payment', 'pending', 'confirmed', 'partially_paid', 'reserved']
+    const activeStatuses = ['pending_payment', 'pending', 'confirmed', 'partially_paid', 'reserved', 'pending_reschedule']
     const startDate = new Date(booking.start_time)
     const endDate = new Date(booking.end_time)
 
@@ -105,7 +107,9 @@ export function BookingCard({
             return { label: 'Paid', color: 'green', needsPayment: false }
         }
         if (['confirmed', 'ongoing', 'completed'].includes(b.status) && !isFullyPaid) {
-            return { label: 'Pay at Venue', color: 'orange', needsPayment: false }
+            return isCashBooking(b) 
+                ? { label: 'Pay at Venue', color: 'orange', needsPayment: false }
+                : { label: 'Balance Due', color: 'amber', needsPayment: true }
         }
         if (isCashBooking(b) && b.status === 'pending_payment') {
             return { label: 'Pay at Venue', color: 'blue', needsPayment: false }
@@ -142,10 +146,8 @@ export function BookingCard({
         const startTime = new Date(b.start_time)
         const now = serverDate || new Date()
         const hoursUntilStart = differenceInHours(startTime, now)
-        return activeStatuses.includes(b.status) && hoursUntilStart >= 24
+        return activeStatuses.includes(b.status) && hoursUntilStart >= 24 && b.status !== 'pending_reschedule'
     }
-
-
 
     const bookingStatusBadge = (status: string, b: Booking) => {
         let displayStatus = status
@@ -168,7 +170,9 @@ export function BookingCard({
             displayStatus = 'pending_payment'
             displayLabel = 'Pending Payment'
         } else if (status === 'partially_paid') {
-            displayLabel = 'Partially Paid'
+            displayLabel = isCashBooking(b) ? 'Down Payment Paid' : 'Balance Due'
+        } else if (status === 'pending_reschedule') {
+            displayLabel = 'Reschedule Pending Approval'
         } else if (status === 'ongoing') {
             displayLabel = 'Ongoing'
         } else if (status === 'cancelled' && b.cancellation_reason) {
@@ -370,10 +374,15 @@ export function BookingCard({
                         </div>
                     )}
 
+                    {booking.status === 'pending_reschedule' && (
+                        <div className="w-full p-2 bg-blue-50 border border-blue-200 rounded-md text-center text-sm text-blue-700 font-medium">
+                            Reschedule Request Pending Approval
+                        </div>
+                    )}
+
                     {paymentStatus.needsPayment && (!isCashBooking(booking) || booking.status === 'partially_paid') && !['cancelled', 'completed', 'refunded', 'pending_refund', 'no_show'].includes(booking.status) && (
                         <Button
-                            className="w-full bg-primary hover:bg-primary/90"
-                            size="sm"
+                            className="w-full bg-primary hover:bg-primary/90 h-auto py-2.5"
                             onClick={() => onResumePayment(booking, 'gcash')}
                             disabled={resumingPaymentId === booking.id}
                         >
@@ -387,16 +396,34 @@ export function BookingCard({
                                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                                     </svg>
-                                    Continue Payment
+                                    <div className="flex flex-col items-center">
+                                        <span>Continue Payment</span>
+                                        <span className="text-[10px] opacity-90 font-medium">Pay in Full</span>
+                                    </div>
                                 </>
                             )}
                         </Button>
                     )}
 
+                    {booking.status === 'partially_paid' && booking.metadata?.payment_plan && (
+                        <Button
+                            variant="outline"
+                            className="w-full border-primary text-primary hover:bg-primary/5 font-bold h-auto py-2.5"
+                            onClick={() => onOpenPaymentPlan(booking)}
+                        >
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <div className="flex flex-col items-center">
+                                <span>Manage Payment Plan</span>
+                                <span className="text-[10px] opacity-90 font-medium">Pay in Installments</span>
+                            </div>
+                        </Button>
+                    )}
+
                     {isCashBooking(booking) && booking.status === 'pending_payment' && (
                         <Button
-                            className="w-full bg-primary hover:bg-primary/90 mt-2"
-                            size="sm"
+                            className="w-full bg-primary hover:bg-primary/90 mt-2 h-auto py-2.5"
                             onClick={() => onResumePayment(booking, 'gcash')}
                             disabled={resumingPaymentId === booking.id}
                         >
@@ -410,7 +437,10 @@ export function BookingCard({
                                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                                     </svg>
-                                    Pay via E-Wallet
+                                    <div className="flex flex-col items-center">
+                                        <span>Pay via E-Wallet</span>
+                                        <span className="text-[10px] opacity-90 font-medium">Pay in Full</span>
+                                    </div>
                                 </>
                             )}
                         </Button>

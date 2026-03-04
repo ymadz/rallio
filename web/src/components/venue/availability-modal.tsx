@@ -34,6 +34,8 @@ interface AvailabilityModalProps {
   venueId: string
   venueName: string
   capacity: number
+  allowDownPayment?: boolean
+  minimumDownPayment?: number
   discounts?: {
     rules: any[]
     holidays: any[]
@@ -48,7 +50,9 @@ export function AvailabilityModal({
   hourlyRate,
   venueId,
   venueName,
-  capacity
+  capacity,
+  allowDownPayment = false,
+  minimumDownPayment = 0,
 }: AvailabilityModalProps) {
   const router = useRouter()
   const { setBookingData, setDiscountDetails, setDiscount } = useCheckoutStore()
@@ -369,6 +373,8 @@ export function AvailabilityModal({
           capacity,
           recurrenceWeeks,
           selectedDays,
+          allowDownPayment,
+          minimumDownPayment,
         })
 
         // Set discount details if calculated

@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card'
 
 import { RescheduleModal } from '@/components/booking/reschedule-modal'
 import { CancelBookingModal } from '@/components/booking/cancel-booking-modal'
+import { PaymentPlanModal } from '@/components/booking/payment-plan-modal'
 import { useServerTime } from '@/hooks/use-server-time'
 import Link from 'next/link'
 
@@ -27,6 +28,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [reschedulingBooking, setReschedulingBooking] = useState<Booking | null>(null)
   const [cancelModalBooking, setCancelModalBooking] = useState<Booking | null>(null)
+  const [paymentPlanBooking, setPaymentPlanBooking] = useState<Booking | null>(null)
   const [resumingPaymentId, setResumingPaymentId] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'today' | 'week'>('all')
   // activeTab state is now managed by the Tabs component, but we can track it if needed for filtering logic separate from rendering
@@ -35,7 +37,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
   // We will keep `activeTab` and sync it with Tabs onValueChange to keep logic simple without rewriting everything right away.
   const [activeTab, setActiveTab] = useState('upcoming')
 
-  const activeStatuses = ['pending_payment', 'pending', 'confirmed', 'partially_paid', 'reserved']
+  const activeStatuses = ['pending_payment', 'pending', 'confirmed', 'partially_paid', 'reserved', 'pending_reschedule']
 
   const filteredBookings = bookings.filter((booking) => {
     const startTime = new Date(booking.start_time)
@@ -236,14 +238,15 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                   onResumePayment={handleResumePayment}
                   onCancelBooking={handleCancelBooking}
                   onRefundBooking={handleRefundBooking}
-                  onReschedule={setReschedulingBooking}
+                   onReschedule={setReschedulingBooking}
+                  onOpenPaymentPlan={setPaymentPlanBooking}
                   setBookings={setBookings}
                 />
               ))}
             </div>
           )}
         </TabsContent>
-
+ 
         <TabsContent value="history">
           {filteredBookings.length === 0 ? (
             <Card className="p-12 text-center">
@@ -270,6 +273,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                   onCancelBooking={handleCancelBooking}
                   onRefundBooking={handleRefundBooking}
                   onReschedule={setReschedulingBooking}
+                  onOpenPaymentPlan={setPaymentPlanBooking}
                   setBookings={setBookings}
                 />
               ))}
@@ -277,6 +281,14 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
           )}
         </TabsContent>
       </Tabs>
+ 
+      {paymentPlanBooking && (
+        <PaymentPlanModal
+          isOpen={!!paymentPlanBooking}
+          onClose={() => setPaymentPlanBooking(null)}
+          reservationId={paymentPlanBooking.id}
+        />
+      )}
 
       {reschedulingBooking && (
         <RescheduleModal

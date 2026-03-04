@@ -38,8 +38,8 @@ export function StatusBadge({
     let defaultLabel = normalizedStatus.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
 
     // Mappings
-    if (['pending', 'waiting', 'pending_payment', 'partially_paid', 'pending_refund', 'upcoming'].includes(normalizedStatus)) {
-        Icon = Clock
+    if (['pending', 'waiting', 'pending_payment', 'partially_paid', 'pending_refund', 'upcoming', 'pending_reschedule'].includes(normalizedStatus)) {
+        Icon = normalizedStatus === 'pending_reschedule' ? Calendar : Clock
         bgClass = 'bg-yellow-50'
         textClass = 'text-yellow-700'
         borderClass = 'border-yellow-200'
@@ -49,6 +49,7 @@ export function StatusBadge({
         else if (normalizedStatus === 'pending_payment') defaultLabel = 'Awaiting Payment'
         else if (normalizedStatus === 'partially_paid') defaultLabel = 'Partially Paid'
         else if (normalizedStatus === 'pending_refund') defaultLabel = 'Pending Refund'
+        else if (normalizedStatus === 'pending_reschedule') defaultLabel = 'Pending Reschedule'
     }
     else if (['processing'].includes(normalizedStatus)) {
         Icon = RefreshCw

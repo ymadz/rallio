@@ -15,6 +15,8 @@ interface Court {
   capacity: number
   hourly_rate: number
   is_active: boolean
+  allow_down_payment?: boolean
+  minimum_down_payment?: number
 }
 
 interface VenueDetailsClientProps {
@@ -143,6 +145,8 @@ export function VenueDetailsClient({ courts, venueId, venueName, discounts }: Ve
           venueId={venueId}
           venueName={venueName}
           capacity={selectedCourt.capacity}
+          allowDownPayment={selectedCourt.allow_down_payment || false}
+          minimumDownPayment={selectedCourt.minimum_down_payment || 0}
         />
       )}
 

@@ -69,6 +69,7 @@ export function CreateSessionForm() {
   const [costPerGame, setCostPerGame] = useState(50)
   const [isPublic, setIsPublic] = useState(true)
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'e-wallet'>('e-wallet')
+  const [downPaymentPercentage, setDownPaymentPercentage] = useState<number | undefined>(undefined)
 
   // Validation state
   const [validationState, setValidationState] = useState<{
@@ -1156,7 +1157,7 @@ export function CreateSessionForm() {
                         )}
                       >
                         <div className="font-semibold text-gray-900 text-sm">Cash</div>
-                        <div className="text-[10px] text-gray-600">Pay at venue</div>
+                        <div className="text-[10px] text-gray-600">Pay remaining balance</div>
                         {paymentMethod === 'cash' && (
                           <div className="absolute top-2 right-2 text-primary">
                             <CheckCircle className="w-3 h-3" />
@@ -1172,8 +1173,8 @@ export function CreateSessionForm() {
                       ) : (
                         <p>
                           {downPaymentPercentage && downPaymentPercentage > 0
-                            ? `Pay a ${downPaymentPercentage}% down payment (₱${((totalAmount * downPaymentPercentage) / 100).toFixed(2)}) online. Pay the rest at the venue.`
-                            : 'Pay at venue. Session pending until paid.'}
+                            ? `Pay a ${downPaymentPercentage}% down payment (₱${((totalAmount * downPaymentPercentage) / 100).toFixed(2)}) online. Please complete the remaining balance for your session.`
+                            : 'Pay in cash. Booking will be pending until payment is verified.'}
                         </p>
                       )}
                     </div>

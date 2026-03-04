@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { SupabaseClient } from '@supabase/supabase-js'
 import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
 import { calculatePlatformFeeAmount } from '@/lib/platform-settings'
+import { generatePaymentPlan } from '@/lib/payment-plan'
 
 export async function createReservation(
     supabase: SupabaseClient,
@@ -22,6 +23,8 @@ export async function createReservation(
         recurrenceWeeks?: number
         selectedDays?: number[] // Array of day indices (0-6)
         isReserved?: boolean
+        isDownPayment?: boolean
+        downPaymentAmount?: number
     }) {
     const recurrenceWeeks = data.recurrenceWeeks || 1
     const selectedDays = data.selectedDays || []
@@ -95,7 +98,7 @@ export async function createReservation(
         const currentStartTimeISO = slot.start.toISOString()
         const currentEndTimeISO = slot.end.toISOString()
 
-        const conflictStatuses = ['pending_payment', 'confirmed', 'ongoing', 'pending_refund', 'completed', 'no_show']
+        const conflictStatuses = ['pending_payment', 'partially_paid', 'confirmed', 'ongoing', 'pending_refund', 'completed', 'no_show', 'pending_reschedule', 'reserved']
 
         const [reservationConflicts, queueConflicts] = await Promise.all([
             adminDb
@@ -127,7 +130,7 @@ export async function createReservation(
         // Filter reservation conflicts — ALL active reservations are real conflicts
         // (including the user's own pending reservations, since those hold the slot)
         const realConflicts = reservationConflicts.data?.filter(conflict => {
-            return ['pending_payment', 'partially_paid', 'confirmed', 'ongoing'].includes(conflict.status)
+            return ['pending_payment', 'partially_paid', 'confirmed', 'ongoing', 'pending_reschedule', 'reserved'].includes(conflict.status)
         }) || []
 
         if (realConflicts.length > 0) {
@@ -219,11 +222,22 @@ export async function createReservation(
         slots: targetSlots.length
     })
 
-    // Calculate down payment if applicable (based on total including platform fee)
+    // Calculate down payment if applicable
+    // Use user-provided down payment amount (from checkout store) if available;
+    // otherwise fall back to venue-level percentage.
     const venueData = court.venues as any;
     const venueMetadata = venueData ? (Array.isArray(venueData) ? venueData[0]?.metadata : venueData.metadata) : null;
-    const downPaymentPercentage = parseFloat(venueMetadata?.down_payment_percentage || '20')
-    const downPaymentAmount = data.paymentMethod === 'cash' ? Math.round((perInstanceAmount * downPaymentPercentage / 100) * 100) / 100 : undefined;
+    const venueDownPaymentPercentage = parseFloat(venueMetadata?.down_payment_percentage || '20')
+    
+    let downPaymentAmount: number | undefined = undefined
+    if (data.isDownPayment && data.downPaymentAmount && data.downPaymentAmount > 0) {
+        // User explicitly chose down payment with a custom amount
+        // The amount is the total they entered, split across slots
+        downPaymentAmount = Math.round((data.downPaymentAmount / targetSlots.length) * 100) / 100
+    } else if (data.paymentMethod === 'cash') {
+        // Legacy fallback: cash payments use venue percentage
+        downPaymentAmount = Math.round((perInstanceAmount * venueDownPaymentPercentage / 100) * 100) / 100
+    }
 
     for (let i = 0; i < targetSlots.length; i++) {
         const slot = targetSlots[i]
@@ -270,8 +284,11 @@ export async function createReservation(
                     court_amount: courtAmountPerSlot,
                     platform_fee: platformFeePerSlot,
                     platform_fee_percentage: platformFeeEnabled ? platformFeePercentage : 0,
-                    down_payment_percentage: data.paymentMethod === 'cash' ? downPaymentPercentage : undefined,
-                    down_payment_amount: data.paymentMethod === 'cash' ? downPaymentAmount : undefined,
+                    down_payment_percentage: data.isDownPayment ? venueDownPaymentPercentage : (data.paymentMethod === 'cash' ? venueDownPaymentPercentage : undefined),
+                    down_payment_amount: downPaymentAmount,
+                    payment_plan: downPaymentAmount && downPaymentAmount < perInstanceAmount 
+                        ? generatePaymentPlan(perInstanceAmount, downPaymentAmount, slot.start, new Date())
+                        : undefined,
                     recurrence_index: i,
                     recurrence_total: targetSlots.length,
                     // Add week-specific metadata for proper display

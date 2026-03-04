@@ -3,7 +3,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service' // Use service client for admin updates
 import { revalidatePath } from 'next/cache'
-import { differenceInMinutes, addMinutes } from 'date-fns'
+import { differenceInMinutes, addMinutes, startOfDay } from 'date-fns'
+import { generatePaymentPlan } from '@/lib/payment-plan'
 
 interface RescheduleResult {
     success: boolean
@@ -92,7 +93,7 @@ export async function rescheduleReservationAction(
 
     // We can reuse the logic from getAvailableTimeSlots OR just query directly for conflicts
     // Query for conflicts excluding this ID
-    const conflictStatuses = ['pending_payment', 'partially_paid', 'confirmed', 'ongoing', 'pending_refund', 'completed', 'no_show']
+    const conflictStatuses = ['pending_payment', 'partially_paid', 'confirmed', 'ongoing', 'pending_refund', 'completed', 'no_show', 'pending_reschedule', 'reserved']
 
     const { data: conflicts, error: conflictError } = await adminDb
         .from('reservations')
@@ -138,22 +139,47 @@ export async function rescheduleReservationAction(
     // However, direct API calls could bypass.
     // MVP: Skip.
 
-    // 7. Update Reservation using SERVICE CLIENT to bypass RLS
+    // 7. Handle Payment Plan recalculation if applicable
+    let updatedMetadata: any = {
+        ...(booking.metadata || {}),
+        rescheduled: true,
+        rescheduled_from: {
+            start_time: booking.start_time,
+            end_time: booking.end_time,
+            status: booking.status,
+            old_payment_plan: booking.metadata?.payment_plan,
+            rescheduled_at: new Date().toISOString()
+        }
+    }
+
+    if (booking.metadata?.payment_plan) {
+        // Generate a new plan from "now" to the new booking date
+        const newPlan = generatePaymentPlan(
+            parseFloat(booking.total_amount),
+            parseFloat(booking.amount_paid || '0'),
+            newStartDateTime,
+            new Date()
+        )
+        
+        // Preserve history of already paid installments if they were in the metadata
+        const oldPlan = booking.metadata.payment_plan
+        if (oldPlan?.installments) {
+            const paidInstallments = oldPlan.installments.filter((i: any) => i.status === 'paid')
+            newPlan.installments = [...paidInstallments, ...newPlan.installments]
+        }
+        
+        updatedMetadata.payment_plan = newPlan
+    }
+
+    // 8. Update Reservation to PENDING_RESCHEDULE
     const { error: updateError } = await adminDb
         .from('reservations')
         .update({
             start_time: newStartISO,
             end_time: newEndISO,
+            status: 'pending_reschedule',
             updated_at: new Date().toISOString(),
-            metadata: {
-                ...booking.metadata,
-                rescheduled: true,
-                rescheduled_from: {
-                    start_time: booking.start_time,
-                    end_time: booking.end_time,
-                    rescheduled_at: new Date().toISOString()
-                }
-            }
+            metadata: updatedMetadata
         })
         .eq('id', bookingId)
 

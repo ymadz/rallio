@@ -171,7 +171,7 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
                                                         <span className="font-bold text-amber-900">₱{(booking.total_amount - booking.amount_paid).toFixed(2)}</span>
                                                     </div>
                                                     <p className="text-xs text-amber-700 mt-1">
-                                                        Please pay the remaining balance in cash at the venue before your session.
+                                                        Please pay the remaining balance before your session.
                                                     </p>
                                                 </>
                                             ) : booking.status === 'confirmed' && booking.amount_paid >= booking.total_amount ? (

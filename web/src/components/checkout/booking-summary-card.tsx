@@ -258,7 +258,6 @@ export function BookingSummaryCard({
           <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center bg-primary/5 -mx-6 px-6 py-3">
             <div>
               <p className="text-xs font-semibold text-primary uppercase tracking-wider">Remaining Balance</p>
-              <p className="text-xs text-gray-500">To be paid at the venue</p>
             </div>
             <p className="text-xl font-bold text-gray-900">₱{remainingBalance.toFixed(2)}</p>
           </div>

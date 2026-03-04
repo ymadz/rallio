@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { approveReservation, rejectReservation, markReservationAsPaid } from '@/app/actions/court-admin-actions'
+import { approveReservation, rejectReservation, markReservationAsPaid, approveReschedule, rejectReschedule } from '@/app/actions/court-admin-actions'
 import {
   X,
   CheckCircle,
@@ -136,6 +136,44 @@ export function ReservationDetailModal({
     }
   }
 
+  const handleApproveReschedule = async () => {
+    setIsApproving(true)
+    try {
+      const result = await approveReschedule(reservation.id)
+      if (result.success) {
+        onClose()
+      } else {
+        alert(result.error || 'Failed to approve reschedule')
+      }
+    } catch (error: any) {
+      alert(error.message || 'Failed to approve reschedule')
+    } finally {
+      setIsApproving(false)
+    }
+  }
+
+  const handleRejectReschedule = async () => {
+    if (!rejectReason.trim()) {
+      alert('Please provide a reason for rejection')
+      return
+    }
+
+    setIsRejecting(true)
+    try {
+      const result = await rejectReschedule(reservation.id, rejectReason)
+      if (result.success) {
+        onClose()
+      } else {
+        alert(result.error || 'Failed to reject reschedule')
+      }
+    } catch (error: any) {
+      alert(error.message || 'Failed to reject reschedule')
+    } finally {
+      setIsRejecting(false)
+    }
+  }
+
+
   // Helper to determine display status
   const getDisplayStatus = () => {
     // Check for cancelled reservation with reason (implies rejection)
@@ -153,6 +191,7 @@ export function ReservationDetailModal({
       case 'partially_paid': return 'bg-amber-100 text-amber-700 border-amber-200'
       case 'cancelled':
       case 'rejected': return 'bg-red-100 text-red-700 border-red-200'
+      case 'pending_reschedule': return 'bg-orange-100 text-orange-700 border-orange-200'
       case 'completed': return 'bg-blue-100 text-blue-700 border-blue-200'
       default: return 'bg-gray-100 text-gray-700 border-gray-200'
     }
@@ -170,6 +209,11 @@ export function ReservationDetailModal({
   const isPendingPayment = () => {
     return reservation.status === 'pending_payment' || reservation.status === 'partially_paid'
   }
+
+  const isPendingReschedule = () => {
+    return reservation.status === 'pending_reschedule'
+  }
+
 
 
 
@@ -247,6 +291,23 @@ export function ReservationDetailModal({
               <div className="font-medium text-gray-900">{reservation.court?.name}</div>
               <div className="text-sm text-gray-500">{reservation.court?.venue?.name}</div>
             </div>
+
+            {reservation.status === 'pending_reschedule' && reservation.metadata?.rescheduled_from && (
+              <div className="mt-4 p-3 bg-orange-50 border border-orange-100 rounded-lg">
+                <div className="flex items-center gap-2 text-orange-800 text-xs font-bold uppercase mb-2">
+                  <Calendar className="w-3 h-3" />
+                  Original Schedule (Before Reschedule)
+                </div>
+                <div className="text-sm text-orange-700">
+                  <p>{new Date(reservation.metadata.rescheduled_from.start_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                  <p>
+                    {new Date(reservation.metadata.rescheduled_from.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                    {' - '}
+                    {new Date(reservation.metadata.rescheduled_from.end_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Date & Time */}
@@ -356,13 +417,13 @@ export function ReservationDetailModal({
               <textarea
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="Please provide a reason for rejecting this reservation..."
+                placeholder={isPendingReschedule() ? "Reason for rejecting reschedule..." : "Please provide a reason for rejecting this reservation..."}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                 rows={3}
               />
               <div className="flex items-center gap-2 mt-3">
                 <button
-                  onClick={handleReject}
+                  onClick={isPendingReschedule() ? handleRejectReschedule : handleReject}
                   disabled={isRejecting || !rejectReason.trim()}
                   className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -448,6 +509,36 @@ export function ReservationDetailModal({
             >
               <XCircle className="w-5 h-5" />
               <span>Reject</span>
+            </button>
+          </div>
+        )}
+
+        {/* Pending Reschedule Actions */}
+        {isPendingReschedule() && !showRejectForm && (
+          <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 flex items-center gap-3">
+            <button
+              onClick={handleApproveReschedule}
+              disabled={isApproving}
+              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isApproving ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Approving...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-5 h-5" />
+                  <span>Approve New Schedule</span>
+                </>
+              )}
+            </button>
+            <button
+              onClick={() => setShowRejectForm(true)}
+              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 border-2 border-red-600 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+            >
+              <XCircle className="w-5 h-5" />
+              <span>Reject Request</span>
             </button>
           </div>
         )}

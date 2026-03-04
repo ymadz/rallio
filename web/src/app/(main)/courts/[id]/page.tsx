@@ -40,6 +40,8 @@ async function getVenueByIdServer(venueId: string) {
         hourly_rate,
         is_active,
         is_verified,
+        allow_down_payment,
+        minimum_down_payment,
         metadata,
         court_amenities (
           amenities (

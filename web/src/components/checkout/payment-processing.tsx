@@ -20,11 +20,11 @@ export function PaymentProcessing() {
     playerPayments,
     paymentMethod,
     isReserved,
+    isDownPayment,
     getPerPlayerAmount,
     getTotalAmount,
     getDownPaymentAmount,
     getRemainingBalance,
-    downPaymentPercentage,
     setCurrentStep,
     setBookingReference,
     resetCheckout,
@@ -241,6 +241,8 @@ export function PaymentProcessing() {
             recurrenceWeeks: bookingData.recurrenceWeeks,
             selectedDays: bookingData.selectedDays,
             isReserved: isReserved,
+            isDownPayment: isDownPayment,
+            downPaymentAmount: isDownPayment ? getDownPaymentAmount() : undefined,
           })
 
           if (!reservationResult.success || !reservationResult.reservationId) {
@@ -289,8 +291,8 @@ export function PaymentProcessing() {
         }
 
         // Step 2: Initiate payment for e-wallet or cash down payment
-        // Pass the actual payment method so initiatePaymentAction can detect
-        // cash + down payment and charge only the deposit amount.
+        // When isDownPayment is true, the reservation metadata already has
+        // down_payment_amount set. The backend reads that to charge the correct amount.
         const paymentResult = await initiatePaymentAction(confirmedReservationId, paymentMethod === 'cash' ? 'cash' : 'gcash')
 
         if (!paymentResult.success || !paymentResult.checkoutUrl) {
@@ -397,8 +399,8 @@ export function PaymentProcessing() {
 
   const downPaymentAmount = getDownPaymentAmount()
   const remainingBalance = getRemainingBalance()
-  const isCashWithDownPayment = paymentMethod === 'cash' && downPaymentAmount > 0
-  const amountToPay = isCashWithDownPayment
+  const isDownPaymentPayment = isDownPayment && downPaymentAmount > 0
+  const amountToPay = isDownPaymentPayment
     ? downPaymentAmount
     : isSplitPayment
       ? getPerPlayerAmount()
@@ -416,7 +418,7 @@ export function PaymentProcessing() {
   }
 
   // Show loading/redirecting state for e-wallet payments AND cash+down payment AND reserve-only flows
-  if (loading && (paymentMethod === 'e-wallet' || isCashWithDownPayment || isReserved)) {
+  if (loading && (paymentMethod === 'e-wallet' || isDownPaymentPayment || isReserved)) {
     return (
       <div className="space-y-6">
         <div className="bg-white border border-primary/20 rounded-xl p-6">
@@ -429,7 +431,7 @@ export function PaymentProcessing() {
               {isReserved
                 ? 'Securing your reservation...'
                 : paymentStatus === 'processing'
-                  ? isCashWithDownPayment
+                    ? isDownPaymentPayment
                     ? 'Redirecting you to pay your down payment...'
                     : 'Redirecting you to secure payment...'
                   : 'Creating your reservation and preparing payment checkout...'
@@ -758,17 +760,17 @@ export function PaymentProcessing() {
             <div className="space-y-4">
               <div className="bg-gradient-to-br from-primary to-primary/80 rounded-xl p-6 text-white text-center">
                 <p className="text-sm text-white/80 mb-2">
-                  {isCashWithDownPayment ? `Down Payment (${downPaymentPercentage}%)` : 'Amount to Pay'}
+                  {isDownPaymentPayment ? 'Down Payment' : 'Amount to Pay'}
                 </p>
                 <p className="text-4xl font-bold">₱{amountToPay.toFixed(2)}</p>
-                {isCashWithDownPayment && (
+                {isDownPaymentPayment && (
                   <p className="text-sm text-white/70 mt-2">
                     Pay online now to secure your slot
                   </p>
                 )}
               </div>
 
-              {isCashWithDownPayment && (
+              {isDownPaymentPayment && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
                   <div className="flex items-start gap-3">
                     <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -777,7 +779,7 @@ export function PaymentProcessing() {
                     <div className="flex-1">
                       <p className="text-sm font-medium text-amber-900 mb-1">Remaining Balance: ₱{remainingBalance.toFixed(2)}</p>
                       <p className="text-xs text-amber-800">
-                        You'll pay the remaining <strong>₱{remainingBalance.toFixed(2)}</strong> in cash at the venue before your session.
+                        Remaining balance: <strong>₱{remainingBalance.toFixed(2)}</strong>.
                       </p>
                     </div>
                   </div>
@@ -792,9 +794,9 @@ export function PaymentProcessing() {
                   <div className="flex-1">
                     <p className="text-sm font-medium text-orange-900 mb-2">Important:</p>
                     <p className="text-xs text-orange-800">
-                      {isCashWithDownPayment
-                        ? <>After paying the down payment online, your booking will be marked as <strong>"Partially Paid"</strong>. Please bring <strong>₱{remainingBalance.toFixed(2)}</strong> in cash to the venue before your scheduled time.</>
-                        : <>Your booking will be marked as <strong>"Pending Payment"</strong>. Please bring the exact amount to the venue before your scheduled time. Failure to pay may result in booking cancellation and account restrictions.</>
+                      {isDownPaymentPayment
+                        ? <>After paying the down payment online, your booking will be marked as <strong>"Partially Paid"</strong>.</>
+                        : <>Your booking will be marked as <strong>"Pending Payment"</strong>. Failure to pay may result in booking cancellation and account restrictions.</>
                       }
                     </p>
                   </div>
@@ -809,12 +811,11 @@ export function PaymentProcessing() {
                   <div className="flex-1">
                     <p className="text-sm font-medium text-blue-900 mb-2">Instructions:</p>
                     <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
-                      {isCashWithDownPayment ? (
+                      {isDownPaymentPayment ? (
                         <>
                           <li>Click "Pay Down Payment" to proceed to online payment</li>
                           <li>Complete the ₱{amountToPay.toFixed(2)} payment via GCash</li>
                           <li>Save your booking reference number</li>
-                          <li>Bring ₱{remainingBalance.toFixed(2)} cash to the venue</li>
                           <li>Present your booking reference to the venue staff</li>
                         </>
                       ) : (
@@ -822,8 +823,8 @@ export function PaymentProcessing() {
                           <li>Save your booking reference number</li>
                           <li>Arrive at least 15 minutes before your scheduled time</li>
                           <li>Present your booking reference to the venue staff</li>
-                          <li>Pay the exact amount in cash</li>
-                          <li>Receive your payment receipt and court access</li>
+                          <li>Complete the payment for your session</li>
+                          <li>Receive your court access</li>
                         </>
                       )}
                     </ol>
@@ -848,7 +849,7 @@ export function PaymentProcessing() {
             disabled={paymentMethod === 'e-wallet' && paymentStatus !== 'success'}
             className="px-8 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {paymentMethod === 'e-wallet' ? 'Complete Booking' : isCashWithDownPayment ? 'Pay Down Payment' : 'Confirm Booking'}
+            {paymentMethod === 'e-wallet' ? 'Complete Booking' : isDownPaymentPayment ? 'Pay Down Payment' : 'Confirm Booking'}
           </button>
         </div>
       </div>

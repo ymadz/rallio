@@ -82,7 +82,7 @@ export async function getAvailableTimeSlotsAction(
   // Get existing reservations AND queue sessions for this court on this date
   // Query for the entire day range to catch any overlapping bookings
   const dateOnlyString = format(date, 'yyyy-MM-dd')
-  const activeStatuses = ['pending_payment', 'partially_paid', 'confirmed', 'ongoing', 'pending_refund', 'completed', 'no_show']
+  const activeStatuses = ['pending_payment', 'partially_paid', 'confirmed', 'ongoing', 'pending_refund', 'completed', 'no_show', 'pending_reschedule', 'reserved']
 
   // Use timezone-aware date range (Asia/Manila = +08:00)
   // Query from midnight to end of day in the venue's timezone
@@ -357,7 +357,7 @@ export async function validateBookingAvailabilityAction(data: {
 
     const currentStartTimeISO = slot.start.toISOString()
     const currentEndTimeISO = slot.end.toISOString()
-    const conflictStatuses = ['pending_payment', 'partially_paid', 'confirmed', 'ongoing', 'pending_refund', 'completed', 'no_show']
+    const conflictStatuses = ['pending_payment', 'partially_paid', 'confirmed', 'ongoing', 'pending_refund', 'completed', 'no_show', 'pending_reschedule', 'reserved']
 
     // B. Check Operating Hours using UTC-safe Manila offset
     const manilaSlotStart = new Date(slot.start.getTime() + MANILA_OFFSET_MS)
@@ -460,6 +460,8 @@ export async function createReservationAction(data: {
   recurrenceWeeks?: number
   selectedDays?: number[] // Array of day indices (0-6)
   isReserved?: boolean
+  isDownPayment?: boolean
+  downPaymentAmount?: number
 }): Promise<{ success: boolean; reservationId?: string; error?: string; count?: number; downPaymentRequired?: boolean; downPaymentAmount?: number }> {
   const supabase = await createClient()
 

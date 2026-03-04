@@ -20,6 +20,8 @@ export type NotificationType =
   | 'queue_approval_approved'
   | 'queue_approval_rejected'
   | 'refund_processed'
+  | 'booking_rescheduled'
+  | 'booking_reschedule_rejected'
   | 'system_announcement'
 
 interface NotificationData {
@@ -228,5 +230,27 @@ export const NotificationTemplates = {
     message: `Your refund of ₱${amount.toFixed(2)} has been processed and will be credited to your account within 5-7 business days.`,
     actionUrl: `/bookings/${bookingId}`,
     metadata: { amount, booking_id: bookingId },
+  }),
+
+  /**
+   * Booking reschedule approved
+   */
+  bookingRescheduled: (venueName: string, newTime: string, bookingId: string): Omit<NotificationData, 'userId'> => ({
+    type: 'booking_rescheduled',
+    title: '✅ Reschedule Approved',
+    message: `Your reschedule request for ${venueName} has been approved! New time: ${newTime}`,
+    actionUrl: `/bookings/${bookingId}`,
+    metadata: { venue_name: venueName, new_time: newTime, booking_id: bookingId },
+  }),
+
+  /**
+   * Booking reschedule rejected
+   */
+  bookingRescheduleRejected: (venueName: string, reason: string, bookingId: string): Omit<NotificationData, 'userId'> => ({
+    type: 'booking_reschedule_rejected',
+    title: '❌ Reschedule Rejected',
+    message: `Your reschedule request for ${venueName} was rejected. Reason: ${reason}`,
+    actionUrl: `/bookings/${bookingId}`,
+    metadata: { venue_name: venueName, reason, booking_id: bookingId },
   }),
 }
