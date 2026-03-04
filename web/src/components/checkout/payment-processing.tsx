@@ -30,7 +30,6 @@ export function PaymentProcessing() {
     discountAmount,
     discountType,
     discountReason,
-    promoCodeId,
   } = useCheckoutStore()
 
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null)
@@ -231,7 +230,6 @@ export function PaymentProcessing() {
             discountApplied: verifiedDiscountAmount,
             discountType: verifiedDiscountType,
             discountReason: verifiedDiscountReason,
-            promoCodeId: promoCodeId,
             recurrenceWeeks: bookingData.recurrenceWeeks,
             selectedDays: bookingData.selectedDays,
           })
