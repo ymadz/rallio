@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { SidebarNav } from '@/components/layout/sidebar-nav'
 import { UserHeader } from '@/components/layout/user-header'
+import { ActiveMatchBanner } from '@/components/active-match-banner'
 
 export default async function MainLayout({
   children,
@@ -55,7 +56,10 @@ export default async function MainLayout({
             gender: player?.gender,
           }}
         />
-        <main className="min-h-screen pb-16 md:pb-0">{children}</main>
+        <main className="min-h-screen pb-16 md:pb-0">
+          <ActiveMatchBanner />
+          {children}
+        </main>
       </div>
     </div>
   )

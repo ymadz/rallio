@@ -225,35 +225,6 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
 
   return (
     <>
-      {/* Notification Banner */}
-      <QueueNotificationBanner
-        notifications={notifications}
-        onDismiss={dismissNotification}
-      />
-
-      {/* Active Match Alert */}
-      {activeMatch && (
-        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-5 shadow-lg">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center animate-pulse">
-                <Activity className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h3 className="font-bold text-green-900 text-lg">You Have an Active Match!</h3>
-                <p className="text-sm text-green-700">Match #{activeMatch.match_number} is ready</p>
-              </div>
-            </div>
-            <Link
-              href={`/queue/${courtId}/match/${activeMatch.id}`}
-              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold shadow-md"
-            >
-              View Match
-            </Link>
-          </div>
-        </div>
-      )}
-
       <div className="space-y-6">
         {/* Court Info Header */}
         <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">

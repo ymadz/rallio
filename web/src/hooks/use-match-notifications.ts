@@ -62,20 +62,6 @@ export function useMatchNotifications(userId?: string) {
             if (matchDetails) {
               setActiveMatch(matchDetails)
 
-              // Show notification toast
-              toast.success("You're assigned to a match!", {
-                description: `Match #${match.match_number} • ${matchDetails.queue_sessions?.courts?.name || 'Court'}`,
-                duration: 10000,
-                action: {
-                  label: 'View Match',
-                  onClick: () => {
-                    router.push(
-                      `/queue/${matchDetails.queue_sessions?.court_id}/match/${match.id}`
-                    )
-                  },
-                },
-              })
-
               // Play notification sound
               playNotificationSound()
             }
