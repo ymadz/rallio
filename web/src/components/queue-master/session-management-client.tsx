@@ -750,7 +750,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                 return (
                   <button
                     onClick={handleAssignMatch}
-                    disabled={!isStarted || waitingPlayers.length < (session.gameFormat === 'singles' ? 2 : 4)}
+                    disabled={!isStarted || waitingPlayers.length < (session.gameFormat === 'doubles' ? 4 : 2)}
                     title={!isStarted ? 'Session has not started yet' : undefined}
                     className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -926,10 +926,10 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-500">Mode</span>
                 <span className={`px-2.5 py-1 text-xs font-bold rounded-full border ${session.mode === 'competitive'
-                    ? 'bg-purple-50 text-purple-700 border-purple-200'
-                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  ? 'bg-purple-50 text-purple-700 border-purple-200'
+                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                   }`}>
-                  {session.mode === 'competitive' ? '🏆 Competitive' : '🎾 Casual'}
+                  {session.mode === 'competitive' ? 'Competitive' : 'Casual'}
                 </span>
               </div>
               <div className="flex items-center justify-between text-sm">
