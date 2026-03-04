@@ -704,7 +704,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                             onClick={() => handleOpenScoreModal(match)}
                             className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors"
                           >
-                            Record Score
+                            Record Winner
                           </button>
                         )}
                       </div>
