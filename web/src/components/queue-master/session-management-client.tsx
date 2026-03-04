@@ -434,6 +434,8 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
   }
 
   const handleModalSuccess = async () => {
+    // Brief delay to ensure DB transaction from RPC is fully committed
+    await new Promise(resolve => setTimeout(resolve, 500))
     await loadSession()
   }
 
