@@ -130,7 +130,9 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
     }
 
     fetchParticipant()
-  }, [queue?.id, currentUserId])
+    // Re-fetch participant whenever queue players list updates (triggered by real-time subscription)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queue?.id, currentUserId, queue?.players])
 
 
 
