@@ -31,6 +31,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
   const [isLeaving, setIsLeaving] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [participant, setParticipant] = useState<any>(null)
+  const [profileCompleted, setProfileCompleted] = useState<boolean | null>(null)
 
   const [timeUntilOpen, setTimeUntilOpen] = useState<number | null>(null)
 
@@ -74,11 +75,19 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
   const [paymentError, setPaymentError] = useState<string | null>(null)
   const supabase = createClient()
 
-  // Get current user ID
+  // Get current user ID and profile completeness
   useEffect(() => {
     async function getCurrentUser() {
       const { data: { user } } = await supabase.auth.getUser()
-      setCurrentUserId(user?.id || null)
+      if (!user) return
+      setCurrentUserId(user.id)
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('profile_completed')
+        .eq('id', user.id)
+        .single()
+      setProfileCompleted(profile?.profile_completed ?? false)
     }
     getCurrentUser()
   }, [])
@@ -399,60 +408,90 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
         {/* Join/Leave Queue Form - hidden from organizer */}
         {!isUserInQueue ? (
           <div className="bg-white border border-gray-200 rounded-xl p-6">
-            <h3 className="font-semibold text-gray-900 mb-3">Join Queue</h3>
-
-            {timeUntilOpen !== null && timeUntilOpen > 0 ? (
-              <div className="space-y-4">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
-                  <Clock className="w-8 h-8 text-blue-500 mx-auto mb-2" />
-                  <h4 className="font-semibold text-blue-900 mb-1">Queue Opens Soon</h4>
-                  <p className="text-sm text-blue-700 mb-3">
-                    Joining opens 12 hours before the session starts.
-                  </p>
-                  <div className="text-2xl font-bold text-blue-600 font-mono">
-                    {formatTime(timeUntilOpen)}
-                  </div>
-                </div>
-                <div className="flex items-start gap-2 text-sm text-gray-500">
-                  <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                  <span>You can join this queue starting at {format(subHours(new Date(queue.startTime), 12), 'h:mm a')}</span>
-                </div>
-              </div>
-            ) : (
+            {profileCompleted === false ? (
+              // Profile incomplete gate
               <>
-                <div className="space-y-3 mb-6">
-                  <div className="flex items-start gap-2 text-sm text-gray-600">
-                    <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <div className="flex items-start gap-4 mb-5">
+                  <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
-                    <span>You will be notified when it&apos;s your turn</span>
                   </div>
-                  <div className="flex items-start gap-2 text-sm text-gray-600">
-                    <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span>Cancel anytime without penalty</span>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 mb-1">Complete Your Profile First</h3>
+                    <p className="text-sm text-gray-500">
+                      You need to set up your player profile before joining a queue. This helps the queue master balance teams by skill level.
+                    </p>
                   </div>
                 </div>
-                <button
-                  onClick={handleJoinQueue}
-                  disabled={isJoining || queue.players.length >= queue.maxPlayers}
-                  className="w-full bg-primary text-white py-3.5 rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                <Link
+                  href="/setup-profile?from=queue"
+                  className="w-full flex items-center justify-center gap-2 bg-primary text-white py-3.5 rounded-lg font-semibold hover:bg-primary/90 transition-colors"
                 >
-                  {isJoining ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      <span>Joining...</span>
-                    </>
-                  ) : queue.players.length >= queue.maxPlayers ? (
-                    <span>Queue Full</span>
-                  ) : (
-                    <>
-                      <Users className="w-5 h-5" />
-                      <span>Join Queue</span>
-                    </>
-                  )}
-                </button>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  Set Up Profile
+                </Link>
+              </>
+            ) : (
+              // Normal Join Queue UI
+              <>
+                <h3 className="font-semibold text-gray-900 mb-3">Join Queue</h3>
+                {timeUntilOpen !== null && timeUntilOpen > 0 ? (
+                  <div className="space-y-4">
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                      <Clock className="w-8 h-8 text-blue-500 mx-auto mb-2" />
+                      <h4 className="font-semibold text-blue-900 mb-1">Queue Opens Soon</h4>
+                      <p className="text-sm text-blue-700 mb-3">
+                        Joining opens 12 hours before the session starts.
+                      </p>
+                      <div className="text-2xl font-bold text-blue-600 font-mono">
+                        {formatTime(timeUntilOpen)}
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2 text-sm text-gray-500">
+                      <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                      <span>You can join this queue starting at {format(subHours(new Date(queue.startTime), 12), 'h:mm a')}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-3 mb-6">
+                      <div className="flex items-start gap-2 text-sm text-gray-600">
+                        <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span>You will be notified when it&apos;s your turn</span>
+                      </div>
+                      <div className="flex items-start gap-2 text-sm text-gray-600">
+                        <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span>Cancel anytime without penalty</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleJoinQueue}
+                      disabled={isJoining || queue.players.length >= queue.maxPlayers}
+                      className="w-full bg-primary text-white py-3.5 rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {isJoining ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <span>Joining...</span>
+                        </>
+                      ) : queue.players.length >= queue.maxPlayers ? (
+                        <span>Queue Full</span>
+                      ) : (
+                        <>
+                          <Users className="w-5 h-5" />
+                          <span>Join Queue</span>
+                        </>
+                      )}
+                    </button>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -502,25 +541,37 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
         {/* Mobile Bottom Bar - Fixed position for join/leave button */}
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 z-50">
           {!isUserInQueue ? (
-            <button
-              onClick={handleJoinQueue}
-              disabled={isJoining || queue.players.length >= queue.maxPlayers}
-              className="w-full bg-primary text-white py-4 rounded-xl font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg"
-            >
-              {isJoining ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Joining...</span>
-                </>
-              ) : queue.players.length >= queue.maxPlayers ? (
-                <span>Queue Full</span>
-              ) : (
-                <>
-                  <Users className="w-5 h-5" />
-                  <span>Join Queue</span>
-                </>
-              )}
-            </button>
+            profileCompleted === false ? (
+              <Link
+                href="/setup-profile?from=queue"
+                className="w-full flex items-center justify-center gap-2 bg-amber-500 text-white py-4 rounded-xl font-semibold hover:bg-amber-600 transition-colors shadow-lg"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                Set Up Profile to Join
+              </Link>
+            ) : (
+              <button
+                onClick={handleJoinQueue}
+                disabled={isJoining || queue.players.length >= queue.maxPlayers}
+                className="w-full bg-primary text-white py-4 rounded-xl font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg"
+              >
+                {isJoining ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Joining...</span>
+                  </>
+                ) : queue.players.length >= queue.maxPlayers ? (
+                  <span>Queue Full</span>
+                ) : (
+                  <>
+                    <Users className="w-5 h-5" />
+                    <span>Join Queue</span>
+                  </>
+                )}
+              </button>
+            )
           ) : (
             <div className="space-y-2">
               {participant && participant.amount_owed > 0 && participant.payment_status !== 'paid' && (
