@@ -457,6 +457,7 @@ export async function createReservationAction(data: {
   discountApplied?: number
   discountType?: string
   discountReason?: string
+  promoCodeId?: string
   recurrenceWeeks?: number
   selectedDays?: number[] // Array of day indices (0-6)
 }): Promise<{ success: boolean; reservationId?: string; error?: string; count?: number; downPaymentRequired?: boolean; downPaymentAmount?: number }> {

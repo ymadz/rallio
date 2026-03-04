@@ -2,6 +2,7 @@
 
 import { format } from 'date-fns'
 import { useCheckoutStore, CheckoutStep } from '@/stores/checkout-store'
+import { PromoCodeInput } from './promo-code-input'
 
 interface BookingSummaryCardProps {
   onContinue?: () => void
@@ -149,6 +150,8 @@ export function BookingSummaryCard({
             <p className="font-medium text-gray-900">{playerCount} players</p>
           </div>
         )}
+
+        <PromoCodeInput />
       </div>
 
       {/* Price Breakdown */}

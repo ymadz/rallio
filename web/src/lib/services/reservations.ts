@@ -1,7 +1,7 @@
-
 import { createServiceClient } from '@/lib/supabase/service'
 import { SupabaseClient } from '@supabase/supabase-js'
 import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
+import { validatePromoCodeAction } from '@/app/actions/promo-actions'
 import { calculatePlatformFeeAmount } from '@/lib/platform-settings'
 
 export async function createReservation(
@@ -19,6 +19,7 @@ export async function createReservation(
         discountApplied?: number
         discountType?: string
         discountReason?: string
+        promoCodeId?: string
         recurrenceWeeks?: number
         selectedDays?: number[] // Array of day indices (0-6)
     }) {
@@ -160,8 +161,13 @@ export async function createReservation(
     const basePricePerSlot = court.hourly_rate * durationHours
     const totalBasePrice = basePricePerSlot * targetSlots.length
 
-    // Calculate actual discounts on the backend
-    const discountResult = await calculateApplicableDiscounts({
+    // CONFLICT RESOLUTION (Shopee/Lazada Style)
+    let promoDiscountAmount = 0
+    let isExclusivePromo = false
+    let promoDetails: any = null
+
+    // 1. Fetch Standard Discounts
+    const standardDiscountResult = await calculateApplicableDiscounts({
         venueId: court.venue_id,
         courtId: data.courtId,
         startDate: targetSlots[0].start.toISOString(),
@@ -170,13 +176,47 @@ export async function createReservation(
         basePrice: totalBasePrice
     })
 
-    const finalTotalAmount = discountResult.finalPrice
-    const calculatedDiscountAmount = discountResult.totalDiscount
+    // 2. Fetch Promo Code if provided
+    if (data.promoCodeId) {
+        // We need to fetch the code from the ID first because validatePromoCodeAction expects the 'code'
+        // For simplicity in this Zero-SQL setup, we'll search all venues for this ID
+        const { data: venues } = await adminDb.from('venues').select('metadata')
+        const allPromos = venues?.flatMap(v => (v.metadata?.promo_codes || [])) || []
+        const promo = allPromos.find((p: any) => p.id === data.promoCodeId)
 
-    // We only log the primary discount name if one exists (for legacy discountType field)
-    let primaryDiscountName = ''
-    if (discountResult.discounts.length > 0) {
-        primaryDiscountName = discountResult.discounts[0].name
+        if (promo) {
+            const promoValidation = await validatePromoCodeAction(
+                promo.code,
+                court.venue_id,
+                totalBasePrice,
+                data.userId
+            )
+            if (promoValidation.success && promoValidation.data) {
+                promoDiscountAmount = promoValidation.data.discountAmount
+                isExclusivePromo = promoValidation.data.isExclusive
+                promoDetails = promoValidation.data
+            }
+        }
+    }
+
+    let finalTotalAmount = standardDiscountResult.finalPrice
+    let calculatedDiscountAmount = standardDiscountResult.totalDiscount
+    let primaryDiscountName = standardDiscountResult.discounts.length > 0 ? standardDiscountResult.discounts[0].name : ''
+    let discountReason = standardDiscountResult.discounts.map(d => d.description).join(', ')
+
+    // 3. Apply Conflict Resolution
+    if (isExclusivePromo) {
+        // EXCLUSIVE: Promo overrides standard discounts
+        finalTotalAmount = Math.max(0, totalBasePrice - promoDiscountAmount)
+        calculatedDiscountAmount = promoDiscountAmount
+        primaryDiscountName = `Promo: ${promoDetails.code}`
+        discountReason = `Exclusive Promo Override: ${promoDetails.code}`
+    } else if (promoDiscountAmount > 0) {
+        // STACKABLE: Standard + Promo
+        finalTotalAmount = Math.max(0, finalTotalAmount - promoDiscountAmount)
+        calculatedDiscountAmount += promoDiscountAmount
+        primaryDiscountName = `Stacked (Promo: ${promoDetails.code})`
+        discountReason = `${discountReason}; Promo: ${promoDetails.code}`
     }
 
     // 2.6 PLATFORM FEE CALCULATION (server-side to match what PayMongo charges)
@@ -209,6 +249,7 @@ export async function createReservation(
         ? calculatePlatformFeeAmount(courtAmountPerSlot, platformFeePercentage)
         : 0
     const perInstanceAmount = Math.round((courtAmountPerSlot + platformFeePerSlot) * 100) / 100
+    const perSlotDiscountAmount = calculatedDiscountAmount / targetSlots.length
 
     console.log('[createReservation] 💰 Price breakdown per slot:', {
         courtAmount: courtAmountPerSlot,
@@ -260,9 +301,9 @@ export async function createReservation(
                 payment_type: data.paymentType || 'full',
                 payment_method: data.paymentMethod || null,
                 cash_payment_deadline: cashPaymentDeadline,
-                discount_applied: perInstanceDiscount,
+                discount_applied: perSlotDiscountAmount,
                 discount_type: primaryDiscountName || null,
-                discount_reason: discountResult.discounts.map(d => d.description).join(', ') || null,
+                discount_reason: discountReason || null,
                 recurrence_group_id: recurrenceGroupId,
                 metadata: {
                     booking_origin: 'web_checkout',
@@ -272,12 +313,15 @@ export async function createReservation(
                     platform_fee_percentage: platformFeeEnabled ? platformFeePercentage : 0,
                     down_payment_percentage: data.paymentMethod === 'cash' ? downPaymentPercentage : undefined,
                     down_payment_amount: data.paymentMethod === 'cash' ? downPaymentAmount : undefined,
+                    promo_code_id: data.promoCodeId ?? null,
+                    promo_endorser: promoDetails?.endorser || null,
+                    is_exclusive_promo: isExclusivePromo,
                     recurrence_index: i,
                     recurrence_total: targetSlots.length,
                     // Add week-specific metadata for proper display
                     week_index: slot.weekIndex,
                     weeks_total: recurrenceWeeks,
-                    days_per_week: uniqueSelectedDays.length
+                    days_per_week: uniqueSelectedDays.length,
                 },
                 notes: data.notes ? (isRecurring ? `${data.notes} (Seq ${i + 1})` : data.notes) : null,
             })
@@ -312,6 +356,9 @@ export async function createReservation(
         if (i === 0) primaryReservationId = newRes.id
         createdReservationIds.push(newRes.id)
     }
+
+    // Record promo usage if applicable (Legacy Zero-SQL uses metadata)
+    // No longer calling recordPromoUsage to avoid table dependency
 
     return {
         success: true,
