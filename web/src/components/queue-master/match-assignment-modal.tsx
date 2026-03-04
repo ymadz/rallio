@@ -351,8 +351,10 @@ export function MatchAssignmentModal({
                             <span className="text-green-600 font-medium">Excellent</span>
                           ) : skillDifference < 2 ? (
                             <span className="text-blue-600 font-medium">Good</span>
+                          ) : skillDifference < 4 ? (
+                            <span className="text-orange-500 font-medium">Fair</span>
                           ) : (
-                            <span className="text-orange-600 font-medium">Fair</span>
+                            <span className="text-red-600 font-medium">Unfair</span>
                           )}
                         </span>
                       </div>
