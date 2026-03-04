@@ -408,7 +408,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
         {/* Join/Leave Queue Form - hidden from organizer */}
         {!isUserInQueue ? (
           <div className="bg-white border border-gray-200 rounded-xl p-6">
-            {profileCompleted === false ? (
+            {profileCompleted === null ? null : profileCompleted !== true ? (
               // Profile incomplete gate
               <>
                 <div className="flex items-start gap-4 mb-5">
@@ -541,7 +541,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
         {/* Mobile Bottom Bar - Fixed position for join/leave button */}
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 z-50">
           {!isUserInQueue ? (
-            profileCompleted === false ? (
+            profileCompleted !== true ? (
               <Link
                 href="/setup-profile?from=queue"
                 className="w-full flex items-center justify-center gap-2 bg-amber-500 text-white py-4 rounded-xl font-semibold hover:bg-amber-600 transition-colors shadow-lg"
