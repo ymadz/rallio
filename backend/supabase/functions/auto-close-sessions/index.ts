@@ -56,7 +56,18 @@ serve(async (req) => {
       }
     )
 
-    // Call the database function that handles the closing logic
+    // 1. Advance statuses based on time (upcoming -> open -> active -> completed)
+    const { data: advanceData, error: advanceError } = await supabaseClient.rpc(
+      'auto_advance_session_statuses'
+    )
+
+    if (advanceError) {
+      console.error('[auto-close-sessions] ❌ Error advancing statuses:', advanceError)
+    } else {
+      console.log('[auto-close-sessions] 🔄 Statuses advanced:', advanceData)
+    }
+
+    // 2. Call the original database function for session detailed summary & closure
     const { data, error } = await supabaseClient.rpc('auto_close_expired_sessions')
 
     if (error) {

@@ -278,30 +278,18 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         metadata: sessionData.metadata
       }
 
-      // AUTO-COMPLETE: If past end_time, complete the session on the spot
-      const now = serverDate || new Date()
-      if (['open', 'active'].includes(formattedSession.status) && formattedSession.endTime < now) {
-        console.log('🕒 [loadSession] Session expired, auto-completing:', sessionData.id)
-        const { error: closeErr } = await supabase
-          .from('queue_sessions')
-          .update({ status: 'completed', updated_at: new Date().toISOString() })
-          .eq('id', sessionData.id)
+      // Call centralized status auto-advancement to handle upcoming->open->active->completed
+      await supabase.rpc('auto_advance_session_statuses')
 
-        if (!closeErr) {
-          formattedSession.status = 'completed'
-        }
-      }
-      // AUTO-ACTIVATE: If 'open' and start_time has passed, flip to 'active'
-      else if (formattedSession.status === 'open' && formattedSession.startTime <= now && formattedSession.endTime > now) {
-        console.log('▶️ [loadSession] Auto-activating session:', sessionData.id)
-        const { error: activateErr } = await supabase
-          .from('queue_sessions')
-          .update({ status: 'active', updated_at: new Date().toISOString() })
-          .eq('id', sessionData.id)
+      // Double check status after potential auto-advancement
+      const { data: updatedSession } = await supabase
+        .from('queue_sessions')
+        .select('status')
+        .eq('id', sessionData.id)
+        .single()
 
-        if (!activateErr) {
-          formattedSession.status = 'active'
-        }
+      if (updatedSession) {
+        formattedSession.status = updatedSession.status
       }
 
       console.log('✅ [loadSession] Session formatted successfully:', {

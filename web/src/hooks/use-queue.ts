@@ -16,7 +16,8 @@ export interface QueuePlayer {
   userId: string
   name: string
   avatarUrl?: string
-  skillLevel: 'beginner' | 'intermediate' | 'advanced' | 'expert'
+  skillTier?: 'beginner' | 'intermediate' | 'advanced' | 'expert'
+  skillLevel?: number
   position: number
   joinedAt: Date
   gamesPlayed: number
@@ -38,6 +39,7 @@ export interface QueueSession {
   currentPlayers: number
   startTime: Date  // Added startTime
   endTime: Date // Added endTime
+  mode: 'casual' | 'competitive'
   organizerId?: string // Queue session organizer
   userGamesPlayed?: number // Games played by current user
   userAmountOwed?: number // Amount owed by current user
@@ -125,7 +127,8 @@ export function useQueue(courtId: string) {
           userId: p.userId,
           name: p.playerName,
           avatarUrl: p.avatarUrl,
-          skillLevel: getSkillTier(p.skillLevel),
+          skillLevel: p.skillLevel,
+          skillTier: getSkillTier(p.skillLevel),
           position: p.position,
           joinedAt: p.joinedAt,
           gamesPlayed: p.gamesPlayed,
@@ -138,6 +141,7 @@ export function useQueue(courtId: string) {
         currentPlayers: queueData.currentPlayers,
         startTime: queueData.startTime,
         endTime: queueData.endTime,
+        mode: queueData.mode as 'casual' | 'competitive',
         organizerId: queueData.organizerId,
       }
 
@@ -319,6 +323,7 @@ export function useMyQueues() {
         currentPlayers: q.currentPlayers,
         startTime: q.startTime,
         endTime: q.endTime,
+        mode: (q.mode || 'casual') as 'casual' | 'competitive',
       }))
 
       setQueues(transformedQueues)
@@ -429,6 +434,7 @@ export function useNearbyQueues(latitude?: number, longitude?: number) {
         currentPlayers: q.currentPlayers,
         startTime: q.startTime,
         endTime: q.endTime,
+        mode: (q.mode || 'casual') as 'casual' | 'competitive',
       }))
 
       setQueues(transformedQueues)

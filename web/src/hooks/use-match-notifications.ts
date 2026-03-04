@@ -115,8 +115,20 @@ export function useMatchNotifications(userId?: string) {
             const didWin =
               (isTeamA && winner === 'team_a') || (!isTeamA && winner === 'team_b')
 
+            let eloDiffString = ''
+            if (match.metadata?.ratingChanges && match.metadata.ratingChanges[userId]) {
+              const diff = match.metadata.ratingChanges[userId].diff
+              if (diff > 0) {
+                eloDiffString = ` • ELO +${diff}`
+              } else if (diff < 0) {
+                eloDiffString = ` • ELO ${diff}`
+              } else {
+                eloDiffString = ` • ELO ±0`
+              }
+            }
+
             toast.success(didWin ? 'You won! 🎉' : 'Match completed', {
-              description: `Final Score: ${match.score_a} - ${match.score_b}`,
+              description: `Final Score: ${match.score_a} - ${match.score_b}${eloDiffString}`,
               duration: 8000,
             })
 

@@ -89,23 +89,6 @@ export function QueueMasterDashboard() {
     }
   }
 
-  const getEffectiveStatus = (session: SessionData) => {
-    return session.status
-  }
-
-  const isSessionLive = (session: SessionData) => {
-    const now = serverDate || new Date()
-    return new Date(session.startTime) <= now && new Date(session.endTime) > now
-  }
-
-  const getDisplayStatus = (session: SessionData) => {
-    const effective = getEffectiveStatus(session)
-    if (effective === 'open' || effective === 'active') {
-      return isSessionLive(session) ? 'live' : 'upcoming'
-    }
-    return effective
-  }
-
   // getStatusColor, getStatusIcon, getStatusLabel removed in favor of StatusBadge
 
   return (
@@ -277,7 +260,7 @@ export function QueueMasterDashboard() {
                     </div>
                     <p className="text-sm text-gray-600">{session.venueName}</p>
                   </div>
-                  <StatusBadge status={getDisplayStatus(session)} />
+                  <StatusBadge status={session.status} />
                 </div>
 
                 {/* Session Info Grid */}

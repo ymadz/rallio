@@ -257,7 +257,15 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                 </span>
               </div>
             </div>
-            <QueueStatusBadge status={displayStatus} size="md" />
+            <div className="flex flex-col items-end gap-2">
+              <QueueStatusBadge status={displayStatus} size="md" />
+              <span className={`px-2.5 py-1 text-xs font-bold rounded-full border ${queue.mode === 'competitive'
+                ? 'bg-purple-50 text-purple-700 border-purple-200'
+                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                }`}>
+                {queue.mode === 'competitive' ? '🏆 Competitive' : '🎯 Casual'}
+              </span>
+            </div>
           </div>
 
           {/* Queue Stats */}
@@ -495,39 +503,6 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
           </div>
         )}
 
-        {/* Game Assignment Placeholder */}
-        {queue.currentMatch && (
-          <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
-                <Activity className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h3 className="font-bold text-green-900">Match Assigned!</h3>
-                <p className="text-sm text-green-700">Your turn to play</p>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg p-4 space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Court</span>
-                <span className="font-semibold text-gray-900">{queue.currentMatch.courtName}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Duration</span>
-                <span className="font-semibold text-gray-900">{queue.currentMatch.duration} minutes</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Players</span>
-                <span className="font-semibold text-gray-900">{queue.currentMatch.players.join(', ')}</span>
-              </div>
-            </div>
-
-            <button className="w-full mt-4 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors">
-              Start Game
-            </button>
-          </div>
-        )}
 
         {/* Mobile Bottom Bar - Fixed position for join/leave button */}
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 z-50">

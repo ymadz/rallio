@@ -20,8 +20,8 @@ export function PlayerCard({ player, isCurrentUser }: PlayerCardProps) {
     <div
       className={`
         relative bg-white border rounded-xl p-4 transition-all duration-300
-        ${isCurrentUser 
-          ? 'border-primary shadow-lg scale-105 ring-2 ring-primary/20' 
+        ${isCurrentUser
+          ? 'border-primary shadow-lg scale-105 ring-2 ring-primary/20'
           : 'border-gray-200 hover:shadow-md'
         }
       `}
@@ -38,8 +38,8 @@ export function PlayerCard({ player, isCurrentUser }: PlayerCardProps) {
           ${isCurrentUser ? 'bg-primary' : 'bg-gray-200'}
         `}>
           {player.avatarUrl ? (
-            <img 
-              src={player.avatarUrl} 
+            <img
+              src={player.avatarUrl}
               alt={player.name}
               className="w-12 h-12 rounded-full object-cover"
             />
@@ -60,10 +60,10 @@ export function PlayerCard({ player, isCurrentUser }: PlayerCardProps) {
               </span>
             )}
           </div>
-          
+
           <div className="flex items-center gap-2 mt-1">
-            <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${skillColors[player.skillLevel]}`}>
-              {player.skillLevel}
+            <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${skillColors[player.skillTier || 'beginner']}`}>
+              {player.skillLevel ? `Lvl ${player.skillLevel} · ` : ''}{player.skillTier || player.skillLevel}
             </span>
             <span className="text-xs text-gray-500">
               {getTimeAgo(player.joinedAt)}
@@ -71,20 +71,13 @@ export function PlayerCard({ player, isCurrentUser }: PlayerCardProps) {
           </div>
         </div>
       </div>
-
-      {/* Waiting indicator animation */}
-      {!isCurrentUser && (
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent animate-shimmer" 
-          style={{ animationDuration: '2s' }} 
-        />
-      )}
     </div>
   )
 }
 
 function getTimeAgo(date: Date): string {
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
-  
+
   if (seconds < 60) return 'Just now'
   const minutes = Math.floor(seconds / 60)
   if (minutes < 60) return `${minutes}m ago`

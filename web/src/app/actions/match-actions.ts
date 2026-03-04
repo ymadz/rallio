@@ -445,7 +445,6 @@ export async function recordMatchScore(
       return { success: false, error: 'Cannot record result for cancelled match' }
     }
 
-    // Use the RPC to update match, participant stats, and ELO atomically
     const { data: rpcResult, error: rpcError } = await supabase.rpc('update_match_results', {
       p_match_id: matchId,
       p_winner: scores.winner,
@@ -455,6 +454,15 @@ export async function recordMatchScore(
     if (rpcError || (rpcResult && !rpcResult.success)) {
       console.error('[recordMatchScore] ❌ Failed to record match via RPC:', rpcError || rpcResult?.error)
       return { success: false, error: 'Failed to record match result and update stats' }
+    }
+
+    // The RPC might return rating changes. If it did, update the metadata one last time so clients receive it
+    if (rpcResult?.ratingChanges && Object.keys(rpcResult.ratingChanges).length > 0) {
+      console.log('[recordMatchScore] 📈 Save rating changes to metadata:', rpcResult.ratingChanges)
+      const currentMetadata = scores.metadata || {}
+      await supabase.from('matches').update({
+        metadata: { ...currentMetadata, ratingChanges: rpcResult.ratingChanges }
+      }).eq('id', matchId)
     }
 
     console.log('[recordMatchScore] ✅ Match winner recorded successfully:', scores.winner)

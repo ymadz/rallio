@@ -84,6 +84,15 @@ export function calculateNewEloRating(
   return Math.round(currentRating + kFactor * (actualScore - expectedScore));
 }
 
+export function calculateDrawEloRating(
+  currentRating: number,
+  opponentRating: number,
+  kFactor: number = 32
+): number {
+  const expectedScore = 1 / (1 + Math.pow(10, (opponentRating - currentRating) / 400));
+  return Math.round(currentRating + kFactor * (0.5 - expectedScore));
+}
+
 // String Utilities
 export function truncate(str: string, length: number): string {
   if (str.length <= length) return str;
