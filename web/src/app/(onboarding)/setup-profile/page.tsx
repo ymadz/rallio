@@ -53,10 +53,11 @@ export default function SetupProfilePage() {
   const searchParams = useSearchParams()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Check if coming from reminder card
-  const fromReminder = searchParams.get('from') === 'reminder'
+  // Check if coming from reminder card or queue
+  const fromParam = searchParams.get('from')
+  const isReturningUser = !!fromParam // e.g. 'reminder', 'queue'
 
-  const [step, setStep] = useState<SetupStep>(fromReminder ? 'details' : 'welcome')
+  const [step, setStep] = useState<SetupStep>(isReturningUser ? 'details' : 'welcome')
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isFetching, setIsFetching] = useState(true)
@@ -92,7 +93,7 @@ export default function SetupProfilePage() {
 
         // If profile is already completed and NOT coming from reminder, redirect to home
         // When coming from reminder, allow user to edit their profile
-        if (profile?.profile_completed && !fromReminder) {
+        if (profile?.profile_completed && !isReturningUser) {
           router.push('/home')
           return
         }
