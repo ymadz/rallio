@@ -73,6 +73,7 @@ interface CheckoutState {
   bookingReference?: string
   reservationId?: string
   downPaymentPercentage?: number
+  isReserved: boolean
 
   // Actions
   setBookingData: (data: BookingData) => void
@@ -87,6 +88,7 @@ interface CheckoutState {
   setPlatformFee: (percentage: number, enabled: boolean) => void
   setBookingReference: (reference: string, reservationId: string) => void
   setDownPaymentPercentage: (percentage: number) => void
+  setIsReserved: (val: boolean) => void
   resetCheckout: () => void
 
   // Computed values
@@ -113,6 +115,7 @@ const initialState = {
   platformFeeEnabled: true,
   bookingReference: undefined,
   reservationId: undefined,
+  isReserved: false,
 }
 
 export const useCheckoutStore = create<CheckoutState>()(
@@ -211,6 +214,8 @@ export const useCheckoutStore = create<CheckoutState>()(
         set({ bookingReference: reference, reservationId }),
 
       setDownPaymentPercentage: (percentage) => set({ downPaymentPercentage: percentage }),
+      
+      setIsReserved: (val) => set({ isReserved: val }),
 
       resetCheckout: () => set(initialState),
 

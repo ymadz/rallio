@@ -15,6 +15,9 @@ type ReservationWithRelations = {
   total_amount: number
   amount_paid: number
   status: string
+  court_id: string
+  start_time: string
+  end_time: string
   payment_type?: string
   num_players?: number
   recurrence_group_id?: string | null
@@ -102,6 +105,27 @@ export async function initiatePaymentAction(
       }
     }
 
+    // Ensure the slot wasn't already taken (especially important for 'reserved' bookings)
+    const adminDb = createServiceClient()
+    const { data: conflicts, error: conflictError } = await adminDb
+      .from('reservations')
+      .select('id')
+      .eq('court_id', reservation.court_id)
+      .neq('id', reservation.id)
+      .in('status', ['pending_payment', 'partially_paid', 'confirmed', 'ongoing'])
+      .lt('start_time', reservation.end_time)
+      .gt('end_time', reservation.start_time)
+
+    if (conflictError) {
+      console.error('[initiatePaymentAction] Error checking conflicts:', conflictError)
+      return { success: false, error: 'Failed to verify slot availability' }
+    }
+
+    if (conflicts && conflicts.length > 0) {
+      // Slot is no longer available!
+      return { success: false, error: 'This time slot is no longer available. Another user may have already booked it.' }
+    }
+
     // Generate unique payment reference
     const paymentReference = `RES-${reservationId.slice(0, 8)}-${Date.now()}`
 
@@ -139,7 +163,7 @@ export async function initiatePaymentAction(
         paymentMethod === 'cash'
 
       // If it's a cash booking but requires a down payment, charge the down payment amount online.
-      if (isIntendedCash && reservation.metadata?.down_payment_amount && reservation.status === 'pending_payment') {
+      if (isIntendedCash && reservation.metadata?.down_payment_amount && (reservation.status === 'pending_payment' || reservation.status === 'reserved')) {
         amountToCharge = Number(reservation.metadata.down_payment_amount)
         isDownPayment = true
         description += ' (Down Payment)'
@@ -152,7 +176,7 @@ export async function initiatePaymentAction(
         .from('reservations')
         .select('total_amount, status, metadata')
         .eq('recurrence_group_id', recurrenceGroupId)
-        .in('status', ['pending_payment'])
+        .in('status', ['pending_payment', 'reserved'])
 
       if (groupReservations && groupReservations.length > 0) {
         if (isDownPayment) {
@@ -485,6 +509,37 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
         console.log('✅ Reservation already confirmed, no action needed')
       }
 
+      // APPLICATION-LEVEL FALLBACK: Cancel overlapping 'reserved' bookings
+      try {
+        const { data: paidRes } = await supabase
+          .from('reservations')
+          .select('court_id, start_time, end_time')
+          .eq('id', payment.reservation_id)
+          .single()
+
+        if (paidRes) {
+          const { data: cancelledReserved } = await supabase
+            .from('reservations')
+            .update({
+              status: 'cancelled',
+              cancelled_at: new Date().toISOString(),
+              cancellation_reason: 'Slot was booked and paid for by another user',
+            })
+            .eq('court_id', paidRes.court_id)
+            .neq('id', payment.reservation_id)
+            .eq('status', 'reserved')
+            .lt('start_time', paidRes.end_time)
+            .gt('end_time', paidRes.start_time)
+            .select('id')
+
+          if (cancelledReserved && cancelledReserved.length > 0) {
+            console.log(`🗑️ Auto-cancelled ${cancelledReserved.length} overlapping reserved booking(s)`)
+          }
+        }
+      } catch (err) {
+        console.error('⚠️ Error in reserved booking cleanup:', err)
+      }
+
       // Check if linked to Queue Session and update
       await updateQueueSessionStatus(payment.reservation_id, supabase)
 
@@ -661,7 +716,7 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
         .select('id, total_amount, metadata')
         .eq('recurrence_group_id', recurrenceGroupId)
         .neq('id', payment.reservation_id) // Exclude the one we just updated
-        .in('status', ['pending_payment'])
+        .in('status', ['pending_payment', 'reserved'])
 
       if (groupFetchError) {
         console.error('❌ Failed to fetch recurrence group for bulk update:', groupFetchError)
@@ -701,6 +756,40 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
     console.log('Payment ID:', payment.id)
     console.log('Reservation ID:', payment.reservation_id)
     console.log('Reservation status:', updatedReservation?.[0]?.status || 'unknown')
+
+    // APPLICATION-LEVEL FALLBACK: Cancel any overlapping 'reserved' bookings
+    // The DB trigger should handle this, but this is a safety net
+    try {
+      const { data: paidRes } = await supabase
+        .from('reservations')
+        .select('court_id, start_time, end_time')
+        .eq('id', payment.reservation_id)
+        .single()
+
+      if (paidRes) {
+        const { data: cancelledReserved, error: cancelError } = await supabase
+          .from('reservations')
+          .update({
+            status: 'cancelled',
+            cancelled_at: new Date().toISOString(),
+            cancellation_reason: 'Slot was booked and paid for by another user',
+          })
+          .eq('court_id', paidRes.court_id)
+          .neq('id', payment.reservation_id)
+          .eq('status', 'reserved')
+          .lt('start_time', paidRes.end_time)
+          .gt('end_time', paidRes.start_time)
+          .select('id')
+
+        if (cancelError) {
+          console.error('⚠️ Failed to cancel overlapping reserved bookings:', cancelError)
+        } else if (cancelledReserved && cancelledReserved.length > 0) {
+          console.log(`🗑️ Auto-cancelled ${cancelledReserved.length} overlapping reserved booking(s):`, cancelledReserved.map(r => r.id))
+        }
+      }
+    } catch (err) {
+      console.error('⚠️ Error in reserved booking cleanup:', err)
+    }
 
     revalidatePath('/reservations')
     revalidatePath('/bookings')

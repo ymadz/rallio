@@ -1,50 +1,49 @@
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config({ path: '.env.local' });
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl || !supabaseServiceRoleKey) {
-    console.error('Missing Supabase credentials');
-    process.exit(1);
-}
-
-const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 async function main() {
-    const { data: reservations, error } = await supabase
+    // Get ALL recent reservations with full details
+    const { data, error } = await supabase
         .from('reservations')
-        .select('*')
+        .select('id, user_id, court_id, status, start_time, end_time, cancellation_reason, created_at')
         .order('created_at', { ascending: false })
-        .limit(2);
+        .limit(15);
 
-    if (error) {
-        console.error('Error:', error);
-    } else {
-        for (const r of reservations) {
-            console.log('RES ID:', r.id);
-            console.log('Status:', r.status);
-            console.log('Start Time:', r.start_time);
-            console.log('Metadata:', JSON.stringify(r.metadata));
-            console.log('---');
+    if (error) { console.error(error); return; }
+
+    console.log('\n=== ALL RECENT RESERVATIONS ===');
+    data.forEach(r => {
+        const start = new Date(r.start_time).toLocaleString('en-PH', { timeZone: 'Asia/Manila' });
+        console.log(`[${r.status.padEnd(16)}] Court: ${r.court_id.slice(0,8)} | ${start} | User: ${r.user_id.slice(0,8)} | ID: ${r.id.slice(0,8)}`);
+        if (r.cancellation_reason) console.log(`  ↳ Reason: ${r.cancellation_reason}`);
+    });
+
+    // Find reserved bookings that SHOULD be cancelled
+    console.log('\n=== CHECKING RESERVED vs CONFIRMED OVERLAPS ===');
+    const reserved = data.filter(r => r.status === 'reserved');
+    const confirmed = data.filter(r => ['confirmed', 'partially_paid', 'ongoing'].includes(r.status));
+
+    for (const res of reserved) {
+        const overlapping = confirmed.filter(c =>
+            c.court_id === res.court_id &&
+            c.id !== res.id &&
+            new Date(c.start_time) < new Date(res.end_time) &&
+            new Date(c.end_time) > new Date(res.start_time)
+        );
+        if (overlapping.length > 0) {
+            console.log(`⚠️ STALE: Reserved ${res.id.slice(0,8)} overlaps with ${overlapping.length} confirmed booking(s)!`);
+        } else {
+            console.log(`✅ Reserved ${res.id.slice(0,8)} - no overlapping confirmed bookings (no action needed)`);
         }
     }
 
-    const { data: qs, error: qsError } = await supabase
-        .from('queue_sessions')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(2);
-
-    if (qsError) {
-        console.error('QS Error:', qsError);
-    } else {
-        for (const q of qs) {
-            console.log('QS ID:', q.id);
-            console.log('QS Status:', q.status);
-            console.log('QS Metadata:', JSON.stringify(q.metadata));
-            console.log('---');
-        }
+    if (reserved.length === 0) {
+        console.log('No reserved bookings found - all clean!');
     }
 }
 

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
+import { createClient } from '@/lib/supabase/client'
 import { useCheckoutStore } from '@/stores/checkout-store'
 import { CheckoutStepper } from '@/components/checkout/checkout-stepper'
 import { BookingSummaryCard } from '@/components/checkout/booking-summary-card'
@@ -14,6 +16,7 @@ import { CancelBookingModal } from '@/components/checkout/cancel-booking-modal'
 export default function CheckoutPage() {
     const router = useRouter()
     const [showCancelModal, setShowCancelModal] = useState(false)
+    const [courtImage, setCourtImage] = useState<string | null>(null)
     const {
         bookingData,
         currentStep,
@@ -21,6 +24,7 @@ export default function CheckoutPage() {
         paymentMethod,
         policyAccepted,
         playerCount,
+        isReserved,
         setCurrentStep,
         resetCheckout,
         getSubtotal,
@@ -42,6 +46,35 @@ export default function CheckoutPage() {
             }
         }
     }, []) // Only run on mount
+
+    // Fetch court image
+    useEffect(() => {
+        if (bookingData?.courtId) {
+            const fetchImage = async () => {
+                const supabase = createClient()
+                const { data } = await supabase
+                    .from('court_images')
+                    .select('url')
+                    .eq('court_id', bookingData.courtId)
+                    .order('display_order', { ascending: true })
+                    .limit(1)
+                    .single()
+
+                if (data?.url) {
+                    setCourtImage(data.url)
+                } else if (bookingData.venueId) {
+                    // Fallback to venue image if court doesn't have one
+                    const { data: venueData } = await supabase
+                        .from('venues')
+                        .select('image_url')
+                        .eq('id', bookingData.venueId)
+                        .single()
+                    if (venueData?.image_url) setCourtImage(venueData.image_url)
+                }
+            }
+            fetchImage()
+        }
+    }, [bookingData?.courtId, bookingData?.venueId])
 
     // Redirect if no booking data
     useEffect(() => {
@@ -75,7 +108,11 @@ export default function CheckoutPage() {
 
     const handleContinue = () => {
         if (currentStep === 'details') {
-            setCurrentStep('payment')
+            if (isReserved) {
+                setCurrentStep('processing')
+            } else {
+                setCurrentStep('payment')
+            }
         } else if (currentStep === 'payment') {
             if (!paymentMethod) {
                 alert('Please select a payment method')
@@ -144,10 +181,19 @@ export default function CheckoutPage() {
                                 <div className="bg-white border border-gray-200 rounded-xl p-6">
                                     <h3 className="font-semibold text-gray-900 text-lg mb-4">Court Details</h3>
                                     <div className="flex gap-4">
-                                        <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                            <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                            </svg>
+                                        <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden relative">
+                                            {courtImage ? (
+                                                <Image 
+                                                    src={courtImage} 
+                                                    alt={bookingData.courtName || 'Court'}
+                                                    fill
+                                                    className="object-cover"
+                                                />
+                                            ) : (
+                                                <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                </svg>
+                                            )}
                                         </div>
                                         <div className="flex-1">
                                             <h4 className="font-semibold text-gray-900 text-xl mb-2">{bookingData.courtName}</h4>

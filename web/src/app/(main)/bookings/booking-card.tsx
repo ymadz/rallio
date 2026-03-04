@@ -80,7 +80,7 @@ export function BookingCard({
     onReschedule,
     setBookings
 }: BookingCardProps) {
-    const activeStatuses = ['pending_payment', 'pending', 'confirmed', 'partially_paid']
+    const activeStatuses = ['pending_payment', 'pending', 'confirmed', 'partially_paid', 'reserved']
     const startDate = new Date(booking.start_time)
     const endDate = new Date(booking.end_time)
 
@@ -109,6 +109,9 @@ export function BookingCard({
         }
         if (isCashBooking(b) && b.status === 'pending_payment') {
             return { label: 'Pay at Venue', color: 'blue', needsPayment: false }
+        }
+        if (b.status === 'reserved') {
+            return { label: 'Payment Pending', color: 'yellow', needsPayment: true }
         }
         const payment = b.payments?.[0]
         if (!payment) return { label: 'Payment Pending', color: 'yellow', needsPayment: true }
@@ -161,6 +164,9 @@ export function BookingCard({
             } else {
                 displayLabel = 'Pending Payment'
             }
+        } else if (status === 'reserved') {
+            displayStatus = 'pending_payment'
+            displayLabel = 'Pending Payment'
         } else if (status === 'partially_paid') {
             displayLabel = 'Partially Paid'
         } else if (status === 'ongoing') {
@@ -364,7 +370,7 @@ export function BookingCard({
                         </div>
                     )}
 
-                    {paymentStatus.needsPayment && (!isCashBooking(booking) || booking.status === 'partially_paid') && (
+                    {paymentStatus.needsPayment && (!isCashBooking(booking) || booking.status === 'partially_paid') && !['cancelled', 'completed', 'refunded', 'pending_refund', 'no_show'].includes(booking.status) && (
                         <Button
                             className="w-full bg-primary hover:bg-primary/90"
                             size="sm"
@@ -422,12 +428,14 @@ export function BookingCard({
                                         Manage Queue
                                     </Button>
                                 </Link>
+                                {!(booking.status === 'cancelled' && booking.cancellation_reason) && (
                                 <Link href={`/bookings/${booking.id}/receipt`} className="flex-1">
                                     <Button variant="outline" className="w-full h-10 border-gray-300 hover:bg-gray-50 hover:text-primary hover:border-primary/50 transition-colors" size="sm">
                                         <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                                         View Receipt
                                     </Button>
                                 </Link>
+                                )}
                             </>
                         ) : (
                             /* Regular Booking Actions */
@@ -442,12 +450,14 @@ export function BookingCard({
                                     </Button>
                                 </Link>
 
+                                {!(booking.status === 'cancelled' && booking.cancellation_reason) && (
                                 <Link href={`/bookings/${booking.id}/receipt`} className="flex-1">
                                     <Button variant="outline" className="w-full h-10 border-gray-300 hover:bg-gray-50 hover:text-primary hover:border-primary/50 transition-colors" size="sm">
                                         <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                                         View Receipt
                                     </Button>
                                 </Link>
+                                )}
 
                                 {canCancelBooking(booking) && (
                                     <>

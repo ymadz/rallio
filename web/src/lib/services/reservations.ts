@@ -21,6 +21,7 @@ export async function createReservation(
         discountReason?: string
         recurrenceWeeks?: number
         selectedDays?: number[] // Array of day indices (0-6)
+        isReserved?: boolean
     }) {
     const recurrenceWeeks = data.recurrenceWeeks || 1
     const selectedDays = data.selectedDays || []
@@ -229,9 +230,8 @@ export async function createReservation(
 
         // Determine status
         // All reservations start as pending_payment regardless of payment method.
-        // Cash bookings require court admin to mark as paid before they become confirmed.
-        // E-wallet bookings get confirmed automatically via PayMongo webhook.
-        const status = 'pending_payment'
+        // Unless it is a reserve-only booking, in which case it starts as 'reserved'
+        const status = data.isReserved ? 'reserved' : 'pending_payment'
 
         // Calculate cash payment deadline: 2 hours before start_time
         // This gives players time to go to the venue and pay in person.

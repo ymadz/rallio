@@ -1,7 +1,9 @@
 'use client'
 
-import { format } from 'date-fns'
+import { useState } from 'react'
+import { format, differenceInDays, startOfDay } from 'date-fns'
 import { useCheckoutStore, CheckoutStep } from '@/stores/checkout-store'
+import { Switch } from '@/components/ui/switch'
 
 interface BookingSummaryCardProps {
   onContinue?: () => void
@@ -18,7 +20,11 @@ export function BookingSummaryCard({
   currentStep = 'details',
   showButtons = false,
 }: BookingSummaryCardProps) {
+  const [showReserveModal, setShowReserveModal] = useState(false);
+
   const {
+    isReserved,
+    setIsReserved,
     bookingData,
     isSplitPayment,
     playerCount,
@@ -37,6 +43,11 @@ export function BookingSummaryCard({
   } = useCheckoutStore()
 
   if (!bookingData) return null
+
+  const today = startOfDay(new Date())
+  const bookingDate = startOfDay(new Date(bookingData.date))
+  const daysInAdvance = differenceInDays(bookingDate, today)
+  const canReserve = daysInAdvance >= 7
 
   const subtotal = getSubtotal()
   const platformFee = getPlatformFeeAmount()
@@ -119,13 +130,12 @@ export function BookingSummaryCard({
           {bookedDates.length > 0 && (
             <div className="mt-2 text-xs">
               <p className="font-medium text-gray-700 mb-1">Booked Dates ({bookedDates.length}):</p>
-              <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto p-1.5 bg-gray-50 rounded-md border border-gray-100">
+              
                 {bookedDates.map((date, idx) => (
-                  <span key={idx} className="bg-white border border-gray-200 text-gray-600 px-2 py-0.5 rounded-md shadow-sm">
+                  <span key={idx} className="bg-[#0d9488] border border-gray-200 text-white px-2 py-0.5 rounded-md shadow-sm">
                     {format(date, 'MMM d (E)')}
                   </span>
                 ))}
-              </div>
             </div>
           )}
 
@@ -210,6 +220,29 @@ export function BookingSummaryCard({
         )}
       </div>
 
+      {/* Reserve Toggle */}
+      <div className="pt-4 border-t border-gray-200">
+        <div className="flex justify-between items-center">
+          <div>
+            <span className={`text-base font-semibold ${canReserve ? 'text-gray-900' : 'text-gray-400'}`}>Reserve</span>
+            <p className="text-xs text-gray-500 mb-4">
+              {canReserve ? 'Reserve your booking' : 'Available for bookings 7+ days in advance'}
+            </p>
+          </div>
+          <span className="text-2xl font-bold text-primary">
+            <Switch
+              checked={canReserve ? isReserved : false}
+              onCheckedChange={(checked) => {
+                setIsReserved(checked);
+                if (checked) setShowReserveModal(true);
+              }}
+              disabled={!canReserve}
+              className="data-[state=checked]:bg-primary"
+            />
+          </span>
+        </div>
+      </div>
+
       {/* Total */}
       <div className="pt-4 border-t border-gray-200">
         <div className="flex justify-between items-center">
@@ -247,7 +280,7 @@ export function BookingSummaryCard({
               disabled={!canContinue}
               className="w-full px-6 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Continue
+              {isReserved && currentStep === 'details' ? 'Continue to Reserve' : 'Continue'}
             </button>
             {currentStep !== 'details' && (
               <button
@@ -259,6 +292,38 @@ export function BookingSummaryCard({
             )}
           </div>
         )}
+
+      {/* Reservation Info Modal */}
+      {showReserveModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={(e) => { e.stopPropagation(); setShowReserveModal(false); }}>
+          <div 
+            className="bg-white rounded-xl shadow-2xl max-w-md w-full animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="pt-8 pb-4 flex justify-center">
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
+                <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+            </div>
+            <div className="px-6 pb-6 text-center">
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Reservation Conditions</h3>
+              <p className="text-gray-600 text-sm">
+                The reservation feature only saves this timeslot in your bookings. This does not mean the date cannot be booked by another user—they can still reserve for that day and time.
+              </p>
+            </div>
+            <div className="px-6 pb-6 flex justify-center">
+              <button
+                onClick={() => setShowReserveModal(false)}
+                className="w-full px-4 py-3 bg-primary text-white font-medium rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                Okay
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

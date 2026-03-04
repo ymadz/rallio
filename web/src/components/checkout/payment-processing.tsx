@@ -9,6 +9,7 @@ import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
 import { createClient } from '@/lib/supabase/client'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import { format } from 'date-fns'
 
 export function PaymentProcessing() {
   const router = useRouter()
@@ -18,6 +19,7 @@ export function PaymentProcessing() {
     playerCount,
     playerPayments,
     paymentMethod,
+    isReserved,
     getPerPlayerAmount,
     getTotalAmount,
     getDownPaymentAmount,
@@ -44,35 +46,41 @@ export function PaymentProcessing() {
   const retryAttempts = useRef(0)
   const MAX_RETRIES = 1 // Allow 1 retry for transient errors
 
-  useEffect(() => {
-    // Create reservation and initiate payment
-    const initializePayment = async () => {
-      // Prevent double initialization using ref (doesn't cause re-renders)
-      if (hasInitialized.current) {
-        console.log('Payment initialization already started, skipping...')
-        return
-      }
+  // Create reservation and initiate payment
+  const initializePayment = async (isManualTrigger = false) => {
+    // Prevent double initialization using ref (doesn't cause re-renders)
+    if (hasInitialized.current) {
+      console.log('Payment initialization already started, skipping...')
+      return
+    }
 
-      // Guard clause: Only proceed if we have valid booking data
-      if (!bookingData) {
-        console.warn('Payment initialization skipped: No booking data available')
-        return
-      }
+    // Guard clause: Only proceed if we have valid booking data
+    if (!bookingData) {
+      console.warn('Payment initialization skipped: No booking data available')
+      return
+    }
 
-      // CRITICAL: Only initialize if payment method has been selected
-      if (!paymentMethod) {
-        console.warn('Payment initialization skipped: No payment method selected yet')
-        return
-      }
+    // CRITICAL: Only initialize if payment method has been selected or if this is a reserve-only booking
+    if (!isReserved && !paymentMethod) {
+      console.warn('Payment initialization skipped: No payment method selected yet')
+      return
+    }
 
-      // Validate all required booking data fields
-      if (!bookingData.courtId || !bookingData.venueId || !bookingData.date ||
-        !bookingData.startTime || !bookingData.endTime) {
-        console.error('Payment initialization error: Missing required booking data fields', bookingData)
-        setError('Invalid booking data. Please go back and select a time slot again.')
-        setLoading(false)
-        return
-      }
+    // If it's a reserve-only flow but the user hasn't explicitly clicked confirm, pause here.
+    if (isReserved && !isManualTrigger) {
+      setLoading(false)
+      setPaymentStatus('pending')
+      return
+    }
+
+    // Validate all required booking data fields
+    if (!bookingData.courtId || !bookingData.venueId || !bookingData.date ||
+      !bookingData.startTime || !bookingData.endTime) {
+      console.error('Payment initialization error: Missing required booking data fields', bookingData)
+      setError('Invalid booking data. Please go back and select a time slot again.')
+      setLoading(false)
+      return
+    }
 
       // Mark as initialized immediately to prevent race conditions
       hasInitialized.current = true
@@ -140,7 +148,7 @@ export function PaymentProcessing() {
             isPublic: bookingData.queueSessionData.isPublic,
             recurrenceWeeks: bookingData.recurrenceWeeks,
             selectedDays: bookingData.selectedDays,
-            paymentMethod
+            paymentMethod: paymentMethod || undefined
           })
 
           if (!sessionResult.success) {
@@ -225,13 +233,14 @@ export function PaymentProcessing() {
             totalAmount: getTotalAmount(),
             numPlayers: isSplitPayment ? playerCount : 1,
             paymentType: isSplitPayment ? 'split' : 'full',
-            paymentMethod,
+            paymentMethod: paymentMethod || undefined,
             notes: isSplitPayment ? `Split payment with ${playerCount} players` : undefined,
             discountApplied: verifiedDiscountAmount,
             discountType: verifiedDiscountType,
             discountReason: verifiedDiscountReason,
             recurrenceWeeks: bookingData.recurrenceWeeks,
             selectedDays: bookingData.selectedDays,
+            isReserved: isReserved,
           })
 
           if (!reservationResult.success || !reservationResult.reservationId) {
@@ -259,6 +268,14 @@ export function PaymentProcessing() {
         const confirmedReservationId = newReservationId
         setReservationId(confirmedReservationId)
         console.log('Reservation created successfully:', confirmedReservationId)
+
+        // For reserve-only flow
+        if (isReserved) {
+          setLoading(false)
+          setPaymentStatus('success')
+          setBookingReference(confirmedReservationId.slice(0, 8), confirmedReservationId)
+          return
+        }
 
         // For cash payments, skip payment initiation and redirect to receipt ONLY IF no down payment is required
         if (paymentMethod === 'cash' && !requiresDownPayment) {
@@ -326,13 +343,14 @@ export function PaymentProcessing() {
           setIsRetrying(false)
         }
       }
-    }
+  }
 
+  useEffect(() => {
     initializePayment()
     // Note: getTotalAmount and setBookingReference are stable Zustand store functions
     // They don't need to be in the dependency array
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookingData, paymentMethod])
+  }, [bookingData, paymentMethod, isReserved])
 
   // Manual retry function
   const handleRetry = () => {
@@ -342,8 +360,8 @@ export function PaymentProcessing() {
     setError(null)
     setLoading(true)
     setReservationId(null)
-    // Trigger re-initialization by updating state
-    window.location.reload() // Simple approach: reload the page
+    // Trigger re-initialization manually
+    initializePayment(true)
   }
 
   // Don't render anything if no booking data
@@ -351,7 +369,7 @@ export function PaymentProcessing() {
 
   // Don't render anything if payment method hasn't been selected yet
   // This prevents the component from showing premature UI
-  if (!paymentMethod) {
+  if (!isReserved && !paymentMethod) {
     return (
       <div className="space-y-6">
         <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
@@ -386,8 +404,19 @@ export function PaymentProcessing() {
       ? getPerPlayerAmount()
       : getTotalAmount()
 
-  // Show loading/redirecting state for e-wallet payments AND cash+down payment (both redirect to PayMongo)
-  if (loading && (paymentMethod === 'e-wallet' || isCashWithDownPayment)) {
+  let dueDateStr = ''
+  if (bookingData) {
+    const bookingDateObj = new Date(bookingData.date)
+    if (bookingData.startTime) {
+      const [sh, sm] = bookingData.startTime.split(':').map(Number)
+      bookingDateObj.setHours(sh, sm || 0, 0, 0)
+    }
+    const dueDate = new Date(bookingDateObj.getTime() - 24 * 60 * 60 * 1000)
+    dueDateStr = format(dueDate, "MMM d, yyyy 'at' h:mm a")
+  }
+
+  // Show loading/redirecting state for e-wallet payments AND cash+down payment AND reserve-only flows
+  if (loading && (paymentMethod === 'e-wallet' || isCashWithDownPayment || isReserved)) {
     return (
       <div className="space-y-6">
         <div className="bg-white border border-primary/20 rounded-xl p-6">
@@ -397,11 +426,13 @@ export function PaymentProcessing() {
               {paymentStatus === 'processing' ? 'Redirecting to Payment...' : 'Processing Booking...'}
             </h3>
             <p className="text-sm text-gray-600 text-center max-w-md">
-              {paymentStatus === 'processing'
-                ? isCashWithDownPayment
-                  ? 'Redirecting you to pay your down payment...'
-                  : 'Redirecting you to secure payment...'
-                : 'Creating your reservation and preparing payment checkout...'
+              {isReserved
+                ? 'Securing your reservation...'
+                : paymentStatus === 'processing'
+                  ? isCashWithDownPayment
+                    ? 'Redirecting you to pay your down payment...'
+                    : 'Redirecting you to secure payment...'
+                  : 'Creating your reservation and preparing payment checkout...'
               }
             </p>
             {reservationId && (
@@ -519,6 +550,126 @@ export function PaymentProcessing() {
             </div>
           </details>
         )}
+      </div>
+    )
+  }
+
+  // Reservation Summary Layout (before creation)
+  if (isReserved && !loading && paymentStatus === 'pending') {
+    return (
+      <div className="space-y-6">
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-semibold text-gray-900 text-lg">Confirm Your Reservation</h3>
+              <p className="text-sm text-gray-600">Please review the details to secure your slot.</p>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-blue-900 mb-1">Action Required: Make Payment</p>
+                <p className="text-xs text-blue-800">
+                  Please complete the payment for this booking inside <strong>My Bookings</strong>. It must be paid at least 24 hours before your scheduled time. If no payment is received, this reservation will be automatically cancelled.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 border border-gray-100 rounded-lg p-5 space-y-3 mb-6">
+            <h4 className="font-medium text-gray-900 text-sm mb-4">Reservation Summary</h4>
+            <div className="flex justify-between text-sm">
+              <span className="text-red-500 font-medium">Payment Due</span>
+              <span className="font-semibold text-red-600">{dueDateStr || 'Within 24 hours'}</span>
+            </div>
+            <div className="flex justify-between text-sm pt-3 border-t border-gray-100">
+              <span className="text-gray-500">Total Amount Due</span>
+              <span className="font-bold text-primary text-base">₱{amountToPay.toFixed(2)}</span>
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-4 border-t border-gray-100">
+            <button
+              onClick={() => {
+                hasInitialized.current = false;
+                setLoading(true);
+                initializePayment(true);
+              }}
+              className="px-8 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors"
+            >
+              Confirm & Go to My Bookings
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Reservation Invoice (when they successfully bypassed payment)
+  if (isReserved && !loading && paymentStatus === 'success') {
+    return (
+      <div className="space-y-6">
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-semibold text-gray-900 text-lg">Reservation Confirmed</h3>
+              <p className="text-sm text-gray-600">Your timeslot has been successfully reserved.</p>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-blue-900 mb-1">Action Required: Make Payment</p>
+                <p className="text-xs text-blue-800">
+                  Please complete the payment for this booking inside <strong>My Bookings</strong>. It must be paid at least 24 hours before your scheduled time. If no payment is received, this reservation will be automatically cancelled.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 border border-gray-100 rounded-lg p-5 space-y-3 mb-6">
+            <h4 className="font-medium text-gray-900 text-sm mb-4">Reservation Summary</h4>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Booking Reference</span>
+              <span className="font-medium text-gray-900">{reservationId?.slice(0, 8).toUpperCase()}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-red-500 font-medium">Payment Due</span>
+              <span className="font-semibold text-red-600">{dueDateStr || 'Within 24 hours'}</span>
+            </div>
+            <div className="flex justify-between text-sm pt-3 border-t border-gray-100">
+              <span className="text-gray-500">Total Amount Due</span>
+              <span className="font-bold text-primary text-base">₱{amountToPay.toFixed(2)}</span>
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-4 border-t border-gray-100">
+            <button
+              onClick={() => router.push(`/bookings`)}
+              className="px-8 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors"
+            >
+              Confirm & Go to My Bookings
+            </button>
+          </div>
+        </div>
       </div>
     )
   }

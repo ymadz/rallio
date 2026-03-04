@@ -49,7 +49,7 @@ export function CheckoutStepper({ currentStep }: CheckoutStepperProps) {
                   {/* Step circle */}
                   <div
                     className={`
-                      relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-2
+                      relative flex h-10 w-10 items-center justify-center rounded-full border-2
                       transition-all duration-300
                       ${
                         isCompleted
