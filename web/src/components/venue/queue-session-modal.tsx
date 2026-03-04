@@ -61,7 +61,7 @@ export function QueueSessionModal({
 
     // Queue session settings
     const [mode, setMode] = useState<'casual' | 'competitive'>('casual')
-    const [gameFormat, setGameFormat] = useState<'singles' | 'doubles' | 'mixed'>('doubles')
+    const [gameFormat, setGameFormat] = useState<'singles' | 'doubles' | 'any'>('doubles')
     const [maxPlayers, setMaxPlayers] = useState(8)
     const [costPerGame, setCostPerGame] = useState(50)
     const [isPublic, setIsPublic] = useState(true)
@@ -735,7 +735,7 @@ export function QueueSessionModal({
                                         Game Format <span className="text-red-500">*</span>
                                     </label>
                                     <div className="grid grid-cols-3 gap-3">
-                                        {(['singles', 'doubles', 'mixed'] as const).map((fmt) => (
+                                        {(['singles', 'doubles', 'any'] as const).map((fmt) => (
                                             <button
                                                 key={fmt}
                                                 type="button"
@@ -747,7 +747,7 @@ export function QueueSessionModal({
                                             >
                                                 <div className="font-semibold text-gray-900 mb-1 capitalize">{fmt}</div>
                                                 <div className="text-xs text-gray-600">
-                                                    {fmt === 'singles' ? '2 players' : '4 players'}
+                                                    {fmt === 'singles' ? '2 players' : fmt === 'any' ? '4 players (any)' : '4 players'}
                                                 </div>
                                             </button>
                                         ))}

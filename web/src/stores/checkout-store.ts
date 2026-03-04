@@ -19,7 +19,7 @@ export interface BookingData {
   isQueueSession?: boolean
   queueSessionData?: {
     mode: 'casual' | 'competitive'
-    gameFormat: 'singles' | 'doubles' | 'mixed'
+    gameFormat: 'singles' | 'doubles' | 'any'
     maxPlayers: number
     costPerGame: number
     isPublic: boolean

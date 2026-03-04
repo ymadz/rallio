@@ -1053,7 +1053,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
               gamesPlayed: p.gamesPlayed,
               position: p.position,
             }))}
-            gameFormat={session.gameFormat as 'singles' | 'doubles' | 'mixed'}
+            gameFormat={session.gameFormat as 'singles' | 'doubles' | 'any'}
             onSuccess={handleModalSuccess}
           />
 

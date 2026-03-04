@@ -17,7 +17,7 @@ interface MatchAssignmentModalProps {
     gamesPlayed: number
     position?: number
   }>
-  gameFormat: 'singles' | 'doubles' | 'mixed'
+  gameFormat: 'singles' | 'doubles' | 'any'
   onSuccess?: () => void
 }
 

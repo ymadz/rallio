@@ -26,7 +26,7 @@ interface SessionSummary {
     id: string
     status: string
     mode: 'casual' | 'competitive'
-    gameFormat: 'singles' | 'doubles' | 'mixed'
+    gameFormat: 'singles' | 'doubles' | 'any'
     costPerGame: number
     startTime: string
     endTime: string
