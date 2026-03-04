@@ -465,21 +465,51 @@ export async function recordMatchScore(
       }).eq('id', matchId)
     }
 
-    // Fallback: Directly reset participants to 'waiting' in case the RPC didn't
-    // This handles edge cases where the RPC's FOREACH loop silently skips updates
+    // Fallback: Directly update participants in case the RPC's FOREACH loop silently skipped it
     const allPlayerIds = [...(match.team_a_players || []), ...(match.team_b_players || [])]
-    console.log('[recordMatchScore] 🔄 Fallback: resetting participants to waiting:', allPlayerIds)
+    const costPerGame = parseFloat(match.queue_sessions?.cost_per_game || '0')
+    console.log('[recordMatchScore] 🔄 Fallback: updating participants, cost_per_game:', costPerGame)
 
     for (const playerId of allPlayerIds) {
-      const { error: partError } = await supabase
+      const isWinner = scores.winner === 'team_a'
+        ? (match.team_a_players || []).includes(playerId)
+        : scores.winner === 'team_b'
+          ? (match.team_b_players || []).includes(playerId)
+          : false
+
+      // Fetch current values so we can increment properly
+      const { data: current } = await supabase
         .from('queue_participants')
-        .update({ status: 'waiting' })
+        .select('games_played, games_won, amount_owed, status')
         .eq('queue_session_id', match.queue_session_id)
         .eq('user_id', playerId)
-        .eq('status', 'playing') // Only update if still playing (idempotent)
+        .single()
+
+      if (!current) {
+        console.warn('[recordMatchScore] ⚠️ Participant not found for fallback:', playerId)
+        continue
+      }
+
+      const { error: partError } = await supabase
+        .from('queue_participants')
+        .update({
+          status: 'waiting',
+          games_played: (current.games_played || 0) + 1,
+          games_won: isWinner ? (current.games_won || 0) + 1 : (current.games_won || 0),
+          amount_owed: (parseFloat(current.amount_owed || '0')) + costPerGame,
+          joined_at: new Date().toISOString(), // Move to back of queue
+        })
+        .eq('queue_session_id', match.queue_session_id)
+        .eq('user_id', playerId)
 
       if (partError) {
-        console.error('[recordMatchScore] ⚠️ Fallback failed for player', playerId, partError)
+        console.error('[recordMatchScore] ⚠️ Fallback update failed for player', playerId, partError)
+      } else {
+        console.log('[recordMatchScore] ✅ Fallback updated participant', playerId, {
+          gamesPlayed: (current.games_played || 0) + 1,
+          amountOwed: (parseFloat(current.amount_owed || '0')) + costPerGame,
+          isWinner,
+        })
       }
     }
 
