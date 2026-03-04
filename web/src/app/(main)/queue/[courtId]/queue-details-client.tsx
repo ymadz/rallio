@@ -82,12 +82,21 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
       if (!user) return
       setCurrentUserId(user.id)
 
+      // Check real profile fields (same logic as home page banner)
       const { data: profile } = await supabase
         .from('profiles')
-        .select('profile_completed')
+        .select('display_name')
         .eq('id', user.id)
         .single()
-      setProfileCompleted(profile?.profile_completed ?? false)
+
+      const { data: player } = await supabase
+        .from('players')
+        .select('skill_level')
+        .eq('user_id', user.id)
+        .single()
+
+      const isComplete = !!profile?.display_name && !!player?.skill_level
+      setProfileCompleted(isComplete)
     }
     getCurrentUser()
   }, [])
