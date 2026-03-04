@@ -27,7 +27,6 @@ interface NearbyQueue {
   status: 'open' | 'active';
   currentPlayers: number;
   maxPlayers: number;
-  estimatedWaitTime: number;
 }
 
 export default function HomeScreen() {
@@ -98,7 +97,6 @@ export default function HomeScreen() {
             status: s.status,
             currentPlayers: current,
             maxPlayers: s.max_players,
-            estimatedWaitTime: current * 15,
           };
         }));
       } catch (e) {
@@ -250,10 +248,6 @@ export default function HomeScreen() {
                         <View style={styles.queueMetaItem}>
                           <Ionicons name="people-outline" size={14} color={Colors.dark.textSecondary} />
                           <Text style={styles.queueMetaText}>{q.currentPlayers} waiting</Text>
-                        </View>
-                        <View style={styles.queueMetaItem}>
-                          <Ionicons name="time-outline" size={14} color={Colors.dark.textSecondary} />
-                          <Text style={styles.queueMetaText}>~{q.estimatedWaitTime} min</Text>
                         </View>
                       </View>
                     </Card>

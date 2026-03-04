@@ -136,7 +136,6 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
             </span>
             <span className="text-xs text-gray-400">
               {queue.currentPlayers || 0}/{queue.maxPlayers} in queue
-              {queue.estimatedWaitTime != null && ` · ~${queue.estimatedWaitTime}m wait`}
             </span>
           </div>
 
@@ -220,7 +219,6 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
           </span>
           <span className="text-xs text-gray-400">
             {queue.currentPlayers || 0}/{queue.maxPlayers} in queue
-            {queue.estimatedWaitTime != null && ` · ~${queue.estimatedWaitTime}m wait`}
           </span>
         </div>
 

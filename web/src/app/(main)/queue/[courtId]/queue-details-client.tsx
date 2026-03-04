@@ -263,7 +263,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                 ? 'bg-purple-50 text-purple-700 border-purple-200'
                 : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                 }`}>
-                {queue.mode === 'competitive' ? '🏆 Competitive' : '🎯 Casual'}
+                {queue.mode === 'competitive' ? 'Competitive' : 'Casual'}
               </span>
             </div>
           </div>
@@ -282,11 +282,11 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
 
             <div className="bg-gray-50 rounded-lg p-3">
               <div className="flex items-center gap-2 mb-1">
-                <Clock className="w-4 h-4 text-gray-500" />
-                <span className="text-xs text-gray-600">Est. Wait</span>
+                <Users className="w-4 h-4 text-gray-500" />
+                <span className="text-xs text-gray-600">Max Players</span>
               </div>
               <p className="text-lg font-bold text-gray-900">
-                ~{queue.estimatedWaitTime}m
+                {queue.maxPlayers}
               </p>
             </div>
 
@@ -307,7 +307,6 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
           <QueuePositionTracker
             position={queue.userPosition!}
             totalPlayers={queue.currentPlayers}
-            estimatedWaitTime={queue.estimatedWaitTime}
             gamesPlayed={participant.games_played || 0}
             status={participant.status || 'waiting'}
           />
@@ -431,12 +430,6 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <span>Cancel anytime without penalty</span>
-                  </div>
-                  <div className="flex items-start gap-2 text-sm text-gray-600">
-                    <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span>Estimated wait: ~{queue.estimatedWaitTime} minutes</span>
                   </div>
                 </div>
                 <button

@@ -190,13 +190,9 @@ export async function getQueueDetails(courtId: string) {
     const userParticipant = formattedParticipants.find(p => p.userId === user.id)
     const userPosition = userParticipant ? userParticipant.position : null
 
-    // Calculate estimated wait time (15 min per game × position)
-    const estimatedWaitTime = userPosition ? userPosition * 15 : formattedParticipants.length * 15
-
     const queueData: QueueSessionData & {
       players: QueueParticipantData[]
       userPosition: number | null
-      estimatedWaitTime: number
       organizerId: string
     } = {
       id: session.id,
@@ -215,7 +211,6 @@ export async function getQueueDetails(courtId: string) {
       gameFormat: session.game_format,
       players: formattedParticipants,
       userPosition,
-      estimatedWaitTime,
       organizerId: session.organizer_id,
     }
 
@@ -471,7 +466,6 @@ export async function getMyQueues() {
           .lt('joined_at', p.joined_at)
 
         const position = (earlierParticipants?.length || 0) + 1
-        const estimatedWaitTime = position * 15 // 15 min per position
 
         return {
           id: p.queue_session_id,
@@ -482,7 +476,6 @@ export async function getMyQueues() {
           status: p.queue_sessions.status,
           players: [],
           userPosition: position,
-          estimatedWaitTime,
           maxPlayers: p.queue_sessions.max_players,
           currentPlayers: count || 0,
           userGamesPlayed: p.games_played || 0,
@@ -646,7 +639,6 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
     const queues = (sessions || []).map((session: any) => {
       // Use actual participant count, falling back to current_players column
       const currentPlayers = participantCounts[session.id] || session.current_players || 0
-      const estimatedWaitTime = currentPlayers * 15
 
       console.log(`[getNearbyQueues] 📊 Session ${session.id.slice(0, 8)}: actual_participants=${participantCounts[session.id] || 0}, current_players_col=${session.current_players || 0}`)
 
@@ -659,7 +651,6 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
         status: session.status,
         players: [],
         userPosition: null,
-        estimatedWaitTime,
         maxPlayers: session.max_players,
         currentPlayers,
         startTime: new Date(session.start_time),

@@ -34,7 +34,6 @@ export interface QueueSession {
   status: 'waiting' | 'active' | 'completed'
   players: QueuePlayer[]
   userPosition: number | null
-  estimatedWaitTime: number // in minutes
   maxPlayers: number
   currentPlayers: number
   startTime: Date  // Added startTime
@@ -136,7 +135,6 @@ export function useQueue(courtId: string) {
           status: (p as any).status as 'waiting' | 'playing' | 'completed' | 'left' | undefined,
         })),
         userPosition: queueData.userPosition,
-        estimatedWaitTime: queueData.estimatedWaitTime,
         maxPlayers: queueData.maxPlayers,
         currentPlayers: queueData.currentPlayers,
         startTime: queueData.startTime,
@@ -318,7 +316,6 @@ export function useMyQueues() {
         status: mapQueueStatusForPlayer(q.status),
         players: q.players || [],
         userPosition: q.userPosition,
-        estimatedWaitTime: q.estimatedWaitTime,
         maxPlayers: q.maxPlayers,
         currentPlayers: q.currentPlayers,
         startTime: q.startTime,
@@ -429,7 +426,6 @@ export function useNearbyQueues(latitude?: number, longitude?: number) {
         status: mapQueueStatusForPlayer(q.status),
         players: q.players || [],
         userPosition: q.userPosition,
-        estimatedWaitTime: q.estimatedWaitTime,
         maxPlayers: q.maxPlayers,
         currentPlayers: q.currentPlayers,
         startTime: q.startTime,

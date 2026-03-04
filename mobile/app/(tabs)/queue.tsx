@@ -85,7 +85,7 @@ const QueueCard = React.memo(({ session, onPress }: QueueCardProps) => {
                         </View>
                         <View style={[styles.modeBadge, { backgroundColor: session.mode === 'competitive' ? Colors.dark.warning + '20' : Colors.dark.info + '20' }]}>
                             <Text style={[styles.modeText, { color: session.mode === 'competitive' ? Colors.dark.warning : Colors.dark.info }]}>
-                                {session.mode === 'competitive' ? '🏆 Competitive' : '🎾 Casual'}
+                                {session.mode === 'competitive' ? 'Competitive' : 'Casual'}
                             </Text>
                         </View>
                     </View>
