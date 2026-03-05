@@ -179,7 +179,10 @@ export function PaymentMethodSelector() {
 
       {/* Custom Down Payment Amount Input */}
       {paymentMethod === 'cash' && isDownPaymentRequired && (
-        <div className="mt-2 p-4 bg-gray-50 border border-gray-200 rounded-xl">
+        <div className={`mt-2 p-4 bg-gray-50 border rounded-xl transition-colors ${customDownPaymentAmount !== undefined && customDownPaymentAmount > 0 && customDownPaymentAmount < minimumDownPayment
+          ? 'border-red-300 bg-red-50/50'
+          : 'border-gray-200'
+          }`}>
           <label className="block text-sm font-semibold text-gray-900 mb-2">
             Down Payment Amount
           </label>
@@ -189,24 +192,59 @@ export function PaymentMethodSelector() {
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium">₱</span>
             <input
-              type="number"
-              min={minimumDownPayment}
-              max={total}
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={inputValue}
-              onChange={(e) => handleCustomAmountChange(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                // Allow empty, numbers, and a single decimal point
+                if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                  handleCustomAmountChange(val)
+                }
+              }}
+              onBlur={() => {
+                // Formatting on blur keeps it clean after they finish typing, but only if it has decimals or they want it
+                const parsed = parseFloat(inputValue);
+                if (!isNaN(parsed) && parsed > 0) {
+                  // Only add decimals if it actually has fractional value
+                  if (parsed % 1 !== 0) {
+                    setInputValue(parsed.toFixed(2))
+                  } else {
+                    setInputValue(parsed.toString())
+                  }
+                }
+              }}
               onClick={(e) => e.stopPropagation()}
               placeholder={minimumDownPayment.toFixed(2)}
-              className="w-full pl-8 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary text-gray-900 font-medium"
+              className={`w-full pl-8 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 text-gray-900 font-medium transition-colors ${customDownPaymentAmount !== undefined && customDownPaymentAmount > 0 && customDownPaymentAmount < minimumDownPayment
+                ? 'border-red-400 focus:border-red-500 focus:ring-red-500/50 bg-red-50'
+                : 'border-gray-300 focus:border-primary focus:ring-primary/50'
+                }`}
             />
           </div>
+
+          {/* Warning Message */}
+          {customDownPaymentAmount !== undefined && customDownPaymentAmount > 0 && customDownPaymentAmount < minimumDownPayment && (
+            <div className="mt-2 text-xs font-medium text-red-600 flex items-center gap-1.5 animate-in slide-in-from-top-1 fade-in duration-200">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              Amount must be at least ₱{minimumDownPayment.toFixed(2)}
+            </div>
+          )}
+
           <div className="mt-3 flex items-center justify-between text-sm">
             <span className="text-gray-600">You will pay now:</span>
-            <span className="font-bold text-primary">₱{downPaymentAmount.toFixed(2)}</span>
+            <span className={`font-bold ${customDownPaymentAmount !== undefined && customDownPaymentAmount > 0 && customDownPaymentAmount < minimumDownPayment
+              ? 'text-red-500'
+              : 'text-primary'
+              }`}>
+              ₱{Math.min(Math.max((customDownPaymentAmount || minimumDownPayment), 0), total).toFixed(2)}
+            </span>
           </div>
           <div className="flex items-center justify-between text-sm mt-1">
             <span className="text-gray-600">Remaining (pay at venue):</span>
-            <span className="font-medium text-gray-900">₱{(total - downPaymentAmount).toFixed(2)}</span>
+            <span className="font-medium text-gray-900">₱{(total - Math.min(Math.max((customDownPaymentAmount || minimumDownPayment), 0), total)).toFixed(2)}</span>
           </div>
 
           {/* Quick select buttons */}
@@ -222,11 +260,12 @@ export function PaymentMethodSelector() {
                 onClick={(e) => {
                   e.stopPropagation()
                   setCustomDownPaymentAmount(option.value)
-                  setInputValue(option.value.toFixed(2))
+                  const displayStr = option.value % 1 === 0 ? option.value.toString() : option.value.toFixed(2)
+                  setInputValue(displayStr)
                 }}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${Math.abs(downPaymentAmount - option.value) < 0.01
-                    ? 'bg-primary text-white border-primary'
-                    : 'bg-white text-gray-700 border-gray-300 hover:border-primary hover:text-primary'
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${customDownPaymentAmount === option.value
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-white text-gray-700 border-gray-300 hover:border-primary hover:text-primary hover:bg-primary/5'
                   }`}
               >
                 {option.label}

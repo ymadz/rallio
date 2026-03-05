@@ -227,10 +227,14 @@ export async function createReservation(
     const defaultDownPaymentAmount = data.paymentMethod === 'cash' ? Math.round((perInstanceAmount * downPaymentPercentage / 100) * 100) / 100 : undefined;
 
     // Allow user to override with a custom amount (must be >= venue minimum, <= total per slot)
+    // NOTE: The user enters a TOTAL custom amount across all sessions.
+    // We must divide by number of slots to get the per-slot amount before clamping.
     let downPaymentAmount = defaultDownPaymentAmount;
     if (data.paymentMethod === 'cash' && data.customDownPaymentAmount !== undefined && data.customDownPaymentAmount > 0 && defaultDownPaymentAmount !== undefined) {
-        // Clamp between minimum and total per instance
-        const clampedAmount = Math.min(Math.max(data.customDownPaymentAmount, defaultDownPaymentAmount), perInstanceAmount)
+        // Convert total custom amount → per slot
+        const customPerSlot = data.customDownPaymentAmount / targetSlots.length
+        // Clamp between minimum (20% of per-slot) and total per instance
+        const clampedAmount = Math.min(Math.max(customPerSlot, defaultDownPaymentAmount), perInstanceAmount)
         downPaymentAmount = Math.round(clampedAmount * 100) / 100
     }
 

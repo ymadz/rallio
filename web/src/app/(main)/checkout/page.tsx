@@ -29,6 +29,10 @@ export default function CheckoutPage() {
         promoDiscountAmount,
         promoCode,
         reservationId: storeReservationId,
+        customDownPaymentAmount,
+        downPaymentPercentage,
+        platformFeeEnabled,
+        platformFeePercentage,
     } = useCheckoutStore()
 
     // Guard: detect stale checkout state (e.g. page revisited after completed booking)
@@ -106,7 +110,24 @@ export default function CheckoutPage() {
 
     const canContinue = () => {
         if (currentStep === 'details') return true
-        if (currentStep === 'payment') return paymentMethod !== null
+        if (currentStep === 'payment') {
+            if (!paymentMethod) return false
+            if (paymentMethod === 'cash') {
+                const total = getSubtotal() // Total is subtotal + platform fee or just what getTotalAmount returns
+                const { platformFeeEnabled, platformFeePercentage, downPaymentPercentage, customDownPaymentAmount } = useCheckoutStore.getState()
+                const platformFee = platformFeeEnabled ? Math.round((total * (platformFeePercentage / 100)) * 100) / 100 : 0
+                const finalTotal = Math.round((total + platformFee) * 100) / 100
+                const isDownPaymentRequired = downPaymentPercentage ? downPaymentPercentage > 0 : false
+
+                if (isDownPaymentRequired) {
+                    const minimumDownPayment = Math.round((finalTotal * ((downPaymentPercentage ?? 20) / 100)) * 100) / 100
+                    if (customDownPaymentAmount !== undefined && customDownPaymentAmount > 0 && customDownPaymentAmount < minimumDownPayment) {
+                        return false
+                    }
+                }
+            }
+            return true
+        }
         if (currentStep === 'policy') return policyAccepted
         return false
     }
