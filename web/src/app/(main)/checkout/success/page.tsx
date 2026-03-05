@@ -119,20 +119,10 @@ export default function PaymentSuccessPage() {
     checkQueueSession()
   }, [reservationId])
 
-  // Auto-redirect for Queue Sessions
-  useEffect(() => {
-    if (isQueueSession && queueCourtId && !processing && !error) {
-      const timer = setTimeout(() => {
-        router.push(`/queue/${queueCourtId}`)
-      }, 2000) // 2 second delay to show success message
-      return () => clearTimeout(timer)
-    }
-  }, [isQueueSession, queueCourtId, processing, error, router])
-
   if (processing) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
+        <div className="flex flex-col items-center text-center">
           <Spinner size="lg" />
           <p className="text-gray-600 mt-4">Processing your payment...</p>
         </div>
@@ -170,7 +160,7 @@ export default function PaymentSuccessPage() {
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Payment Successful!</h1>
         <p className="text-gray-600 mb-6">
           {isQueueSession
-            ? 'Your queue session is now active. Redirecting you to session management...'
+            ? 'Your queue session is now active.'
             : 'Your payment has been received and your court reservation is confirmed.'}
         </p>
 
@@ -185,13 +175,11 @@ export default function PaymentSuccessPage() {
             </Link>
           )}
 
-          {!isQueueSession && (
-            <Link href="/bookings" className="block">
-              <Button variant="outline" className="w-full">
-                Back to Bookings
-              </Button>
-            </Link>
-          )}
+          <Link href="/bookings" className="block">
+            <Button variant="outline" className="w-full">
+              Back to Bookings
+            </Button>
+          </Link>
         </div>
 
         {reservationId && (

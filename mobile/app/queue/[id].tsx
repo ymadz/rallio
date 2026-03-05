@@ -87,7 +87,6 @@ export default function QueueDetailScreen() {
     const userPosition = userParticipant
         ? sortedParticipants.findIndex(p => p.user_id === user?.id) + 1
         : null;
-    const estimatedWaitTime = userPosition ? userPosition * 15 : null;
 
     // Queue state
     const spotsLeft = session ? session.max_players - session.current_players : 0;
@@ -434,9 +433,6 @@ export default function QueueDetailScreen() {
                             <Text style={styles.positionNumber}>
                                 {userParticipant.status === 'playing' ? '🎮' : `#${userPosition}`}
                             </Text>
-                            {userParticipant.status === 'waiting' && estimatedWaitTime && (
-                                <Text style={styles.waitTime}>~{estimatedWaitTime} min wait</Text>
-                            )}
                         </View>
 
                         <View style={styles.statsRow}>

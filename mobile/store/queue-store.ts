@@ -36,7 +36,6 @@ export interface QueueSession {
     gameFormat: 'singles' | 'doubles' | 'mixed';
     players?: QueueParticipant[];
     userPosition?: number | null;
-    estimatedWaitTime?: number;
 }
 
 export interface ActiveMatch {
@@ -157,7 +156,6 @@ export const useQueueStore = create<QueueState>()(
                         currentQueue: {
                             ...currentQueue,
                             userPosition: position,
-                            estimatedWaitTime: position * 15,
                         },
                     });
                 }
@@ -165,7 +163,7 @@ export const useQueueStore = create<QueueState>()(
                 // Update in myQueues array
                 const updatedMyQueues = myQueues.map((q) =>
                     q.id === sessionId
-                        ? { ...q, userPosition: position, estimatedWaitTime: position * 15 }
+                        ? { ...q, userPosition: position }
                         : q
                 );
                 set({ myQueues: updatedMyQueues });

@@ -278,30 +278,18 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         metadata: sessionData.metadata
       }
 
-      // AUTO-COMPLETE: If past end_time, complete the session on the spot
-      const now = serverDate || new Date()
-      if (['open', 'active'].includes(formattedSession.status) && formattedSession.endTime < now) {
-        console.log('🕒 [loadSession] Session expired, auto-completing:', sessionData.id)
-        const { error: closeErr } = await supabase
-          .from('queue_sessions')
-          .update({ status: 'completed', updated_at: new Date().toISOString() })
-          .eq('id', sessionData.id)
+      // Call centralized status auto-advancement to handle upcoming->open->active->completed
+      await supabase.rpc('auto_advance_session_statuses')
 
-        if (!closeErr) {
-          formattedSession.status = 'completed'
-        }
-      }
-      // AUTO-ACTIVATE: If 'open' and start_time has passed, flip to 'active'
-      else if (formattedSession.status === 'open' && formattedSession.startTime <= now && formattedSession.endTime > now) {
-        console.log('▶️ [loadSession] Auto-activating session:', sessionData.id)
-        const { error: activateErr } = await supabase
-          .from('queue_sessions')
-          .update({ status: 'active', updated_at: new Date().toISOString() })
-          .eq('id', sessionData.id)
+      // Double check status after potential auto-advancement
+      const { data: updatedSession } = await supabase
+        .from('queue_sessions')
+        .select('status')
+        .eq('id', sessionData.id)
+        .single()
 
-        if (!activateErr) {
-          formattedSession.status = 'active'
-        }
+      if (updatedSession) {
+        formattedSession.status = updatedSession.status
       }
 
       console.log('✅ [loadSession] Session formatted successfully:', {
@@ -446,6 +434,8 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
   }
 
   const handleModalSuccess = async () => {
+    // Brief delay to ensure DB transaction from RPC is fully committed
+    await new Promise(resolve => setTimeout(resolve, 500))
     await loadSession()
   }
 
@@ -587,57 +577,75 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
             </div>
             <p className="text-gray-600">{session.venueName}</p>
           </div>
-          <StatusBadge status={getDisplayStatusKey()} label={getDisplayStatus()} />
-        </div>
-      </div>
-
-      {/* Session Info Card */}
-      <div className="bg-gradient-to-br from-primary to-primary/80 text-white rounded-xl p-6 mb-6 shadow-lg">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div>
-            <div className="text-white/80 text-sm mb-1">Total Players</div>
-            <div className="text-2xl font-bold">{session.currentPlayers}/{session.maxPlayers}</div>
-          </div>
-          <div>
-            <div className="text-white/80 text-sm mb-1">Waiting</div>
-            <div className="text-2xl font-bold text-yellow-300">{session.players.filter(p => p.status === 'waiting').length}</div>
-          </div>
-          <div>
-            <div className="text-white/80 text-sm mb-1">Playing</div>
-            <div className="text-2xl font-bold text-green-300">{session.players.filter(p => p.status === 'playing').length}</div>
-          </div>
-          <div>
-            <div className="text-white/80 text-sm mb-1">Total Games</div>
-            <div className="text-2xl font-bold">{totalGamesPlayed}</div>
-          </div>
-          <div>
-            <div className="text-white/80 text-sm mb-1">Revenue</div>
-            <div className="text-2xl font-bold">₱{totalRevenue.toFixed(0)}</div>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex items-center gap-3 mt-6 pt-6 border-t border-white/20">
-          {(session.status === 'completed' || session.status === 'cancelled') ? (
-            <Link
-              href={`/bookings`}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-primary rounded-lg hover:bg-white/90 transition-colors font-medium"
-            >
-              <Trophy className="w-4 h-4" />
-              <span>View Session Summary</span>
-            </Link>
-          ) : (
-            <>
+          <div className="flex items-center gap-3">
+            <StatusBadge status={getDisplayStatusKey()} label={getDisplayStatus()} />
+            <span className={`px-2.5 py-1 text-xs font-bold rounded-full border ${session.mode === 'competitive'
+              ? 'bg-purple-50 text-purple-700 border-purple-200'
+              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              }`}>
+              {session.mode === 'competitive' ? 'Competitive' : 'Casual'}
+            </span>
+            {session.status !== 'completed' && session.status !== 'cancelled' && (
               <button
                 onClick={handleClose}
                 disabled={actionLoading === 'close'}
-                className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-all text-sm font-medium disabled:opacity-50"
               >
-                <StopCircle className="w-4 h-4" />
-                <span>Close Session</span>
+                {actionLoading === 'close' ? <Loader2 className="w-4 h-4 animate-spin" /> : <StopCircle className="w-4 h-4" />}
+                Close Session
               </button>
-            </>
-          )}
+            )}
+            {(session.status === 'completed' || session.status === 'cancelled') && (
+              <Link
+                href="/bookings"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium"
+              >
+                <Trophy className="w-4 h-4" />
+                View Summary
+              </Link>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Stats Grid — white card tiles matching user view */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="bg-gray-50 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <Users className="w-4 h-4 text-gray-500" />
+              <span className="text-xs text-gray-600">Total Players</span>
+            </div>
+            <p className="text-lg font-bold text-gray-900">{session.currentPlayers}/{session.maxPlayers}</p>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <Clock className="w-4 h-4 text-amber-500" />
+              <span className="text-xs text-gray-600">Waiting</span>
+            </div>
+            <p className="text-lg font-bold text-amber-600">{session.players.filter(p => p.status === 'waiting').length}</p>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <PlayCircle className="w-4 h-4 text-green-500" />
+              <span className="text-xs text-gray-600">Playing</span>
+            </div>
+            <p className="text-lg font-bold text-green-600">{session.players.filter(p => p.status === 'playing').length}</p>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <Trophy className="w-4 h-4 text-gray-500" />
+              <span className="text-xs text-gray-600">Total Games</span>
+            </div>
+            <p className="text-lg font-bold text-gray-900">{totalGamesPlayed}</p>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <DollarSign className="w-4 h-4 text-emerald-500" />
+              <span className="text-xs text-gray-600">Revenue</span>
+            </div>
+            <p className="text-lg font-bold text-emerald-700">₱{totalRevenue.toFixed(0)}</p>
+          </div>
         </div>
       </div>
 
@@ -744,7 +752,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                 return (
                   <button
                     onClick={handleAssignMatch}
-                    disabled={!isStarted || waitingPlayers.length < (session.gameFormat === 'singles' ? 2 : 4)}
+                    disabled={!isStarted || waitingPlayers.length < (session.gameFormat === 'doubles' ? 4 : 2)}
                     title={!isStarted ? 'Session has not started yet' : undefined}
                     className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -910,40 +918,49 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
 
         {/* Right: Session Details */}
         <div className="space-y-4">
-          <div className="bg-white border border-gray-200 rounded-xl p-6">
-            <h3 className="font-semibold text-gray-900 mb-4">Session Details</h3>
+          {/* Session Details Card */}
+          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+            <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <PlayCircle className="w-4 h-4 text-primary" />
+              Session Details
+            </h3>
             <div className="space-y-3">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Mode</span>
-                <span className="font-medium text-gray-900 capitalize">{session.mode}</span>
+                <span className="text-gray-500">Mode</span>
+                <span className={`px-2.5 py-1 text-xs font-bold rounded-full border ${session.mode === 'competitive'
+                  ? 'bg-purple-50 text-purple-700 border-purple-200'
+                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  }`}>
+                  {session.mode === 'competitive' ? 'Competitive' : 'Casual'}
+                </span>
               </div>
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Format</span>
+                <span className="text-gray-500">Format</span>
                 <span className="font-medium text-gray-900 capitalize">{session.gameFormat}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Cost/Game</span>
-                <span className="font-medium text-gray-900">₱{session.costPerGame}</span>
+                <span className="text-gray-500">Cost/Game</span>
+                <span className="font-semibold text-gray-900">₱{session.costPerGame}</span>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Start Time</span>
-                <span className="font-medium text-gray-900">
-                  {new Date(session.startTime).toLocaleTimeString('en-US', {
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    hour12: true
-                  })}
-                </span>
+              <div className="border-t border-gray-100 pt-3">
+                <div className="flex items-center gap-2 mb-2 text-gray-500 text-xs uppercase tracking-wider">
+                  <Clock className="w-3.5 h-3.5" />
+                  Session Time
+                </div>
+                <div className="text-sm text-gray-900 font-medium">
+                  {new Date(session.startTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                  {' – '}
+                  {new Date(session.endTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                </div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  {new Date(session.startTime).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                </div>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">End Time</span>
-                <span className="font-medium text-gray-900">
-                  {new Date(session.endTime).toLocaleTimeString('en-US', {
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    hour12: true
-                  })}
-                </span>
+              <div className="border-t border-gray-100 pt-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500 uppercase tracking-wider">Revenue</span>
+                  <span className="text-base font-bold text-emerald-700">₱{totalRevenue.toFixed(0)}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1053,7 +1070,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
               gamesPlayed: p.gamesPlayed,
               position: p.position,
             }))}
-            gameFormat={session.gameFormat as 'singles' | 'doubles' | 'mixed'}
+            gameFormat={session.gameFormat as 'singles' | 'doubles' | 'any'}
             onSuccess={handleModalSuccess}
           />
 

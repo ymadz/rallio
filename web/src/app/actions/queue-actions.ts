@@ -121,22 +121,26 @@ export async function getQueueDetails(courtId: string) {
       return { success: true, queue: null }
     }
 
-    // AUTO-ACTIVATE: If session is 'open' and start_time has passed, flip to 'active'
-    if (session.status === 'open' && new Date(session.start_time) <= now) {
-      console.log('[getQueueDetails] ▶️ Auto-activating session (start_time reached):', session.id)
-      const { error: activateError } = await supabase
-        .from('queue_sessions')
-        .update({ status: 'active' })
-        .eq('id', session.id)
+    // Call centralized status auto-advancement to handle upcoming->open->active->completed
+    await supabase.rpc('auto_advance_session_statuses')
 
-      if (!activateError) {
-        session.status = 'active'
-        revalidatePath(`/queue/${courtId}`)
-        revalidatePath('/queue')
-      }
+    // Since we potentially advanced the status, double check if it's still active/open
+    // (If it was auto-completed, it will be refetched correctly or missed by the query)
+    const { data: updatedSession } = await supabase
+      .from('queue_sessions')
+      .select('status')
+      .eq('id', session.id)
+      .single()
+
+    if (updatedSession?.status === 'completed' || updatedSession?.status === 'cancelled') {
+      console.log('[getQueueDetails] 🕒 Session was auto-completed by RPC')
+      return { success: true, queue: null }
     }
 
-    // Get all participants in this session
+    // Update local object to match potential new status (e.g. open -> active)
+    if (updatedSession) {
+      session.status = updatedSession.status
+    }
     const { data: participants, error: participantsError } = await supabase
       .from('queue_participants')
       .select(`
@@ -186,13 +190,9 @@ export async function getQueueDetails(courtId: string) {
     const userParticipant = formattedParticipants.find(p => p.userId === user.id)
     const userPosition = userParticipant ? userParticipant.position : null
 
-    // Calculate estimated wait time (15 min per game × position)
-    const estimatedWaitTime = userPosition ? userPosition * 15 : formattedParticipants.length * 15
-
     const queueData: QueueSessionData & {
       players: QueueParticipantData[]
       userPosition: number | null
-      estimatedWaitTime: number
       organizerId: string
     } = {
       id: session.id,
@@ -211,7 +211,6 @@ export async function getQueueDetails(courtId: string) {
       gameFormat: session.game_format,
       players: formattedParticipants,
       userPosition,
-      estimatedWaitTime,
       organizerId: session.organizer_id,
     }
 
@@ -467,7 +466,6 @@ export async function getMyQueues() {
           .lt('joined_at', p.joined_at)
 
         const position = (earlierParticipants?.length || 0) + 1
-        const estimatedWaitTime = position * 15 // 15 min per position
 
         return {
           id: p.queue_session_id,
@@ -478,7 +476,6 @@ export async function getMyQueues() {
           status: p.queue_sessions.status,
           players: [],
           userPosition: position,
-          estimatedWaitTime,
           maxPlayers: p.queue_sessions.max_players,
           currentPlayers: count || 0,
           userGamesPlayed: p.games_played || 0,
@@ -642,7 +639,6 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
     const queues = (sessions || []).map((session: any) => {
       // Use actual participant count, falling back to current_players column
       const currentPlayers = participantCounts[session.id] || session.current_players || 0
-      const estimatedWaitTime = currentPlayers * 15
 
       console.log(`[getNearbyQueues] 📊 Session ${session.id.slice(0, 8)}: actual_participants=${participantCounts[session.id] || 0}, current_players_col=${session.current_players || 0}`)
 
@@ -655,7 +651,6 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
         status: session.status,
         players: [],
         userPosition: null,
-        estimatedWaitTime,
         maxPlayers: session.max_players,
         currentPlayers,
         startTime: new Date(session.start_time),
@@ -800,23 +795,25 @@ export async function getQueueMasterHistory() {
  * These actions are for Queue Masters to create and manage queue sessions
  */
 
+export interface CreateQueueSessionParams {
+  courtId: string
+  startTime: Date
+  endTime: Date
+  mode: 'casual' | 'competitive'
+  gameFormat: 'singles' | 'doubles' | 'any'
+  maxPlayers: number
+  costPerGame: number
+  isPublic?: boolean
+  recurrenceWeeks?: number
+  selectedDays?: number[]
+  paymentMethod?: 'cash' | 'e-wallet'
+}
+
 /**
  * Create a new queue session
  * Queue Master action
  */
-export async function createQueueSession(data: {
-  courtId: string
-  startTime: string | Date
-  endTime: string | Date
-  mode: 'casual' | 'competitive'
-  gameFormat: 'singles' | 'doubles' | 'mixed'
-  maxPlayers: number
-  costPerGame: number
-  isPublic: boolean
-  recurrenceWeeks?: number
-  selectedDays?: number[]
-  paymentMethod?: 'cash' | 'e-wallet'
-}): Promise<{
+export async function createQueueSession(data: CreateQueueSessionParams): Promise<{
   success: boolean
   session?: QueueSessionData
   sessions?: QueueSessionData[]
@@ -1278,7 +1275,7 @@ export async function updateQueueSession(
     startTime: Date
     endTime: Date
     mode: 'casual' | 'competitive'
-    gameFormat: 'singles' | 'doubles' | 'mixed'
+    gameFormat: 'singles' | 'doubles' | 'any'
     maxPlayers: number
     costPerGame: number
     isPublic: boolean
@@ -2471,7 +2468,7 @@ export async function getQueueSessionSummary(sessionId: string): Promise<{
       id: string
       status: string
       mode: 'casual' | 'competitive'
-      gameFormat: 'singles' | 'doubles' | 'mixed'
+      gameFormat: 'singles' | 'doubles' | 'any'
       costPerGame: number
       startTime: string
       endTime: string

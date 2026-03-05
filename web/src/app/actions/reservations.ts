@@ -459,6 +459,8 @@ export async function createReservationAction(data: {
   discountReason?: string
   recurrenceWeeks?: number
   selectedDays?: number[] // Array of day indices (0-6)
+  customDownPaymentAmount?: number
+  promoCode?: string
 }): Promise<{ success: boolean; reservationId?: string; error?: string; count?: number; downPaymentRequired?: boolean; downPaymentAmount?: number }> {
   const supabase = await createClient()
 

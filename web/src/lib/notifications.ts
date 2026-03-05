@@ -6,7 +6,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/server'
 
-export type NotificationType = 
+export type NotificationType =
   | 'booking_confirmed'
   | 'booking_cancelled'
   | 'payment_received'
@@ -20,6 +20,9 @@ export type NotificationType =
   | 'queue_approval_approved'
   | 'queue_approval_rejected'
   | 'refund_processed'
+  | 'reschedule_pending'
+  | 'reschedule_approved'
+  | 'reschedule_rejected'
   | 'system_announcement'
 
 interface NotificationData {
@@ -228,5 +231,38 @@ export const NotificationTemplates = {
     message: `Your refund of ₱${amount.toFixed(2)} has been processed and will be credited to your account within 5-7 business days.`,
     actionUrl: `/bookings/${bookingId}`,
     metadata: { amount, booking_id: bookingId },
+  }),
+
+  /**
+   * Reschedule request pending (for Court Admin)
+   */
+  reschedulePending: (customerName: string, courtName: string, proposedDate: string, bookingId: string): Omit<NotificationData, 'userId'> => ({
+    type: 'reschedule_pending',
+    title: '📅 Reschedule Request',
+    message: `${customerName} has requested to reschedule their booking on ${courtName} to ${proposedDate}. Please review.`,
+    actionUrl: `/court-admin/reservations`,
+    metadata: { customer_name: customerName, court_name: courtName, proposed_date: proposedDate, booking_id: bookingId },
+  }),
+
+  /**
+   * Reschedule approved (for User)
+   */
+  rescheduleApproved: (courtName: string, newDate: string, bookingId: string): Omit<NotificationData, 'userId'> => ({
+    type: 'reschedule_approved',
+    title: '✅ Reschedule Approved!',
+    message: `Your reschedule request for ${courtName} has been approved. New schedule: ${newDate}.`,
+    actionUrl: `/bookings/${bookingId}`,
+    metadata: { court_name: courtName, new_date: newDate, booking_id: bookingId },
+  }),
+
+  /**
+   * Reschedule rejected (for User)
+   */
+  rescheduleRejected: (courtName: string, reason: string, bookingId: string): Omit<NotificationData, 'userId'> => ({
+    type: 'reschedule_rejected',
+    title: '❌ Reschedule Rejected',
+    message: `Your reschedule request for ${courtName} was not approved. Reason: ${reason}`,
+    actionUrl: `/bookings/${bookingId}`,
+    metadata: { court_name: courtName, reason, booking_id: bookingId },
   }),
 }

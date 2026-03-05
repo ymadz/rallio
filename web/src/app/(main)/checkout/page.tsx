@@ -6,6 +6,7 @@ import { useCheckoutStore } from '@/stores/checkout-store'
 import { CheckoutStepper } from '@/components/checkout/checkout-stepper'
 import { BookingSummaryCard } from '@/components/checkout/booking-summary-card'
 import { SplitPaymentControls } from '@/components/checkout/split-payment-controls'
+import { PromoCodeInput } from '@/components/checkout/promo-code-input'
 import { PaymentMethodSelector } from '@/components/checkout/payment-method-selector'
 import { CancellationPolicy } from '@/components/checkout/cancellation-policy'
 import { PaymentProcessing } from '@/components/checkout/payment-processing'
@@ -25,7 +26,13 @@ export default function CheckoutPage() {
         resetCheckout,
         getSubtotal,
         discountAmount,
+        promoDiscountAmount,
+        promoCode,
         reservationId: storeReservationId,
+        customDownPaymentAmount,
+        downPaymentPercentage,
+        platformFeeEnabled,
+        platformFeePercentage,
     } = useCheckoutStore()
 
     // Guard: detect stale checkout state (e.g. page revisited after completed booking)
@@ -103,7 +110,24 @@ export default function CheckoutPage() {
 
     const canContinue = () => {
         if (currentStep === 'details') return true
-        if (currentStep === 'payment') return paymentMethod !== null
+        if (currentStep === 'payment') {
+            if (!paymentMethod) return false
+            if (paymentMethod === 'cash') {
+                const total = getSubtotal() // Total is subtotal + platform fee or just what getTotalAmount returns
+                const { platformFeeEnabled, platformFeePercentage, downPaymentPercentage, customDownPaymentAmount } = useCheckoutStore.getState()
+                const platformFee = platformFeeEnabled ? Math.round((total * (platformFeePercentage / 100)) * 100) / 100 : 0
+                const finalTotal = Math.round((total + platformFee) * 100) / 100
+                const isDownPaymentRequired = downPaymentPercentage ? downPaymentPercentage > 0 : false
+
+                if (isDownPaymentRequired) {
+                    const minimumDownPayment = Math.round((finalTotal * ((downPaymentPercentage ?? 20) / 100)) * 100) / 100
+                    if (customDownPaymentAmount !== undefined && customDownPaymentAmount > 0 && customDownPaymentAmount < minimumDownPayment) {
+                        return false
+                    }
+                }
+            }
+            return true
+        }
         if (currentStep === 'policy') return policyAccepted
         return false
     }
@@ -204,11 +228,24 @@ export default function CheckoutPage() {
                                         )}
                                         {discountAmount !== 0 && (
                                             <div className="flex justify-between py-3 border-b border-gray-100">
-                                                <span className={discountAmount < 0 ? 'text-orange-600' : 'text-green-600'}>
-                                                    {discountAmount < 0 ? 'Surcharge' : 'Discount'}:
+                                                <span className={discountAmount < 0 ? 'text-orange-600' : 'text-primary font-medium uppercase'}>
+                                                    {discountAmount < 0 ? 'Surcharge' : 'Discount'}
                                                 </span>
-                                                <span className={`font-medium ${discountAmount < 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                                                <span className={`font-bold ${discountAmount < 0 ? 'text-orange-600' : 'text-primary'}`}>
                                                     {discountAmount < 0 ? '+' : '-'}₱{Math.abs(discountAmount).toFixed(2)}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {promoDiscountAmount > 0 && (
+                                            <div className="flex justify-between py-3 border-b border-gray-100">
+                                                <span className="text-primary font-medium flex items-center gap-1.5">
+                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                                                    </svg>
+                                                    Promo '{promoCode}'
+                                                </span>
+                                                <span className="font-bold text-primary">
+                                                    -₱{promoDiscountAmount.toFixed(2)}
                                                 </span>
                                             </div>
                                         )}
@@ -218,6 +255,9 @@ export default function CheckoutPage() {
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* Promo Code Input */}
+                                {!bookingData.isQueueSession && <PromoCodeInput />}
 
                                 {/* Split Payment Controls (hidden for queue sessions) */}
                                 {!bookingData.isQueueSession && <SplitPaymentControls />}
@@ -328,11 +368,24 @@ export default function CheckoutPage() {
                                         )}
                                         {discountAmount !== 0 && (
                                             <div className="flex justify-between py-3 border-b border-gray-100">
-                                                <span className={discountAmount < 0 ? 'text-orange-600' : 'text-green-600'}>
-                                                    {discountAmount < 0 ? 'Surcharge' : 'Discount'}:
+                                                <span className={discountAmount < 0 ? 'text-orange-600' : 'text-primary font-medium uppercase'}>
+                                                    {discountAmount < 0 ? 'Surcharge' : 'Discount'}
                                                 </span>
-                                                <span className={`font-medium ${discountAmount < 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                                                <span className={`font-bold ${discountAmount < 0 ? 'text-orange-600' : 'text-primary'}`}>
                                                     {discountAmount < 0 ? '+' : '-'}₱{Math.abs(discountAmount).toFixed(2)}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {promoDiscountAmount > 0 && (
+                                            <div className="flex justify-between py-3 border-b border-gray-100">
+                                                <span className="text-primary font-medium flex items-center gap-1.5">
+                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                                                    </svg>
+                                                    Promo '{promoCode}'
+                                                </span>
+                                                <span className="font-bold text-primary">
+                                                    -₱{promoDiscountAmount.toFixed(2)}
                                                 </span>
                                             </div>
                                         )}

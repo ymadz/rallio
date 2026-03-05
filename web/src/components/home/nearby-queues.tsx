@@ -257,134 +257,124 @@ export function NearbyQueues() {
           </Link>
         </div>
       ) : (
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {queues.map((queue, idx) => {
-          // ── Per-card radial gradient presets ──────────────────────────
-          const NQ_GRADIENTS: string[][] = [
-            // 0 · Spotlight: top-left → shadow: bottom-right
-            [
-              'radial-gradient(ellipse 115% 95% at 5% 8%,   rgba(153,246,228,0.44) 0%, transparent 50%)',
-              'radial-gradient(ellipse 80%  70% at 88% 92%, rgba(5,80,60,0.58)     0%, transparent 52%)',
-              'radial-gradient(ellipse 55%  50% at 48% 52%, rgba(20,184,166,0.10)  0%, transparent 62%)',
-              'linear-gradient(135deg, #0f766e 0%, #09564e 42%, #073d37 100%)',
-            ],
-            // 1 · Spotlight: top-right → shadow: bottom-left
-            [
-              'radial-gradient(ellipse 110% 90% at 95% 6%,  rgba(153,246,228,0.40) 0%, transparent 50%)',
-              'radial-gradient(ellipse 85%  72% at 6%  90%, rgba(5,80,60,0.52)     0%, transparent 54%)',
-              'radial-gradient(ellipse 50%  55% at 52% 50%, rgba(20,184,166,0.09)  0%, transparent 65%)',
-              'linear-gradient(225deg, #0f766e 0%, #0a5a52 40%, #073d37 100%)',
-            ],
-            // 2 · Spotlight: bottom-left → shadow: top-right
-            [
-              'radial-gradient(ellipse 100% 105% at 4% 94%, rgba(153,246,228,0.38) 0%, transparent 52%)',
-              'radial-gradient(ellipse 78%  65%  at 92% 8%, rgba(4,70,52,0.60)     0%, transparent 50%)',
-              'radial-gradient(ellipse 60%  50%  at 50% 55%,rgba(20,184,166,0.11)  0%, transparent 60%)',
-              'linear-gradient(315deg, #0d9488 0%, #0a5c55 45%, #052e29 100%)',
-            ],
-            // 3 · Spotlight: bottom-right → shadow: top-left
-            [
-              'radial-gradient(ellipse 105% 95% at 96% 95%, rgba(153,246,228,0.40) 0%, transparent 50%)',
-              'radial-gradient(ellipse 80%  68% at 8%  5%,  rgba(4,70,52,0.58)     0%, transparent 52%)',
-              'radial-gradient(ellipse 52%  52% at 50% 48%, rgba(20,184,166,0.10)  0%, transparent 64%)',
-              'linear-gradient(315deg, #0f766e 0%, #084640 50%, #052e29 100%)',
-            ],
-            // 4 · Spotlight: top-center crown → dark sides
-            [
-              'radial-gradient(ellipse 90%  80% at 50% 4%,  rgba(153,246,228,0.42) 0%, transparent 50%)',
-              'radial-gradient(ellipse 68%  80% at 5%  80%, rgba(5,80,60,0.40)     0%, transparent 54%)',
-              'radial-gradient(ellipse 68%  80% at 95% 78%, rgba(4,70,52,0.36)     0%, transparent 54%)',
-              'linear-gradient(180deg, #0d9488 0%, #085e55 40%, #052e29 100%)',
-            ],
-            // 5 · Spotlight: left-edge glancing → right shadow
-            [
-              'radial-gradient(ellipse 72%  125% at 2% 50%,  rgba(153,246,228,0.40) 0%, transparent 52%)',
-              'radial-gradient(ellipse 62%  90%  at 98% 48%, rgba(4,70,52,0.58)     0%, transparent 50%)',
-              'radial-gradient(ellipse 50%  55%  at 50% 50%, rgba(20,184,166,0.10)  0%, transparent 65%)',
-              'linear-gradient(90deg, #0f766e 0%, #0a5a52 42%, #073d37 100%)',
-            ],
-          ]
-          const queueBg = NQ_GRADIENTS[idx % NQ_GRADIENTS.length].join(', ')
-          const isLive = queue.status === 'active'
-          return (
-            <Link
-              key={queue.id}
-              href={`/queue/${queue.courtId}`}
-              className="nq-card"
-              style={{ background: queueBg }}
-            >
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {queues.map((queue, idx) => {
+            // ── Per-card radial gradient presets ──────────────────────────
+            const NQ_GRADIENTS: string[][] = [
+              // 0 · Spotlight: top-left → shadow: bottom-right
+              [
+                'radial-gradient(ellipse 115% 95% at 5% 8%,   rgba(153,246,228,0.44) 0%, transparent 50%)',
+                'radial-gradient(ellipse 80%  70% at 88% 92%, rgba(5,80,60,0.58)     0%, transparent 52%)',
+                'radial-gradient(ellipse 55%  50% at 48% 52%, rgba(20,184,166,0.10)  0%, transparent 62%)',
+                'linear-gradient(135deg, #0f766e 0%, #09564e 42%, #073d37 100%)',
+              ],
+              // 1 · Spotlight: top-right → shadow: bottom-left
+              [
+                'radial-gradient(ellipse 110% 90% at 95% 6%,  rgba(153,246,228,0.40) 0%, transparent 50%)',
+                'radial-gradient(ellipse 85%  72% at 6%  90%, rgba(5,80,60,0.52)     0%, transparent 54%)',
+                'radial-gradient(ellipse 50%  55% at 52% 50%, rgba(20,184,166,0.09)  0%, transparent 65%)',
+                'linear-gradient(225deg, #0f766e 0%, #0a5a52 40%, #073d37 100%)',
+              ],
+              // 2 · Spotlight: bottom-left → shadow: top-right
+              [
+                'radial-gradient(ellipse 100% 105% at 4% 94%, rgba(153,246,228,0.38) 0%, transparent 52%)',
+                'radial-gradient(ellipse 78%  65%  at 92% 8%, rgba(4,70,52,0.60)     0%, transparent 50%)',
+                'radial-gradient(ellipse 60%  50%  at 50% 55%,rgba(20,184,166,0.11)  0%, transparent 60%)',
+                'linear-gradient(315deg, #0d9488 0%, #0a5c55 45%, #052e29 100%)',
+              ],
+              // 3 · Spotlight: bottom-right → shadow: top-left
+              [
+                'radial-gradient(ellipse 105% 95% at 96% 95%, rgba(153,246,228,0.40) 0%, transparent 50%)',
+                'radial-gradient(ellipse 80%  68% at 8%  5%,  rgba(4,70,52,0.58)     0%, transparent 52%)',
+                'radial-gradient(ellipse 52%  52% at 50% 48%, rgba(20,184,166,0.10)  0%, transparent 64%)',
+                'linear-gradient(315deg, #0f766e 0%, #084640 50%, #052e29 100%)',
+              ],
+              // 4 · Spotlight: top-center crown → dark sides
+              [
+                'radial-gradient(ellipse 90%  80% at 50% 4%,  rgba(153,246,228,0.42) 0%, transparent 50%)',
+                'radial-gradient(ellipse 68%  80% at 5%  80%, rgba(5,80,60,0.40)     0%, transparent 54%)',
+                'radial-gradient(ellipse 68%  80% at 95% 78%, rgba(4,70,52,0.36)     0%, transparent 54%)',
+                'linear-gradient(180deg, #0d9488 0%, #085e55 40%, #052e29 100%)',
+              ],
+              // 5 · Spotlight: left-edge glancing → right shadow
+              [
+                'radial-gradient(ellipse 72%  125% at 2% 50%,  rgba(153,246,228,0.40) 0%, transparent 52%)',
+                'radial-gradient(ellipse 62%  90%  at 98% 48%, rgba(4,70,52,0.58)     0%, transparent 50%)',
+                'radial-gradient(ellipse 50%  55%  at 50% 50%, rgba(20,184,166,0.10)  0%, transparent 65%)',
+                'linear-gradient(90deg, #0f766e 0%, #0a5a52 42%, #073d37 100%)',
+              ],
+            ]
+            const queueBg = NQ_GRADIENTS[idx % NQ_GRADIENTS.length].join(', ')
+            const isLive = queue.status === 'active'
+            return (
+              <Link
+                key={queue.id}
+                href={`/queue/${queue.courtId}`}
+                className="nq-card"
+                style={{ background: queueBg }}
+              >
 
-              {/* Texture layers */}
-              <div className="nq-noise" />
-              <div className="nq-highlight" />
-              <div className="nq-shimmer" />
+                {/* Texture layers */}
+                <div className="nq-noise" />
+                <div className="nq-highlight" />
+                <div className="nq-shimmer" />
 
-              <div className="nq-body">
-                {/* Queue icon */}
-                <div className="nq-icon">
-                  <svg style={{ width: 20, height: 20, color: 'rgba(153,246,228,0.85)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </div>
+                <div className="nq-body">
+                  {/* Queue icon */}
+                  <div className="nq-icon">
+                    <svg style={{ width: 20, height: 20, color: 'rgba(153,246,228,0.85)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </div>
 
-                {/* Info block */}
-                <div className="nq-info">
-                  <div className="nq-court">{queue.courtName}</div>
-                  <div className="nq-venue">{queue.venueName}</div>
+                  {/* Info block */}
+                  <div className="nq-info">
+                    <div className="nq-court">{queue.courtName}</div>
+                    <div className="nq-venue">{queue.venueName}</div>
 
-                  <div className="nq-meta">
-                    {/* Status pill */}
-                    <span className={`nq-pill ${isLive ? 'nq-status-live' : 'nq-status-open'}`}>
-                      {isLive ? (
-                        <svg style={{ width: 10, height: 10 }} fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                      ) : (
-                        <svg style={{ width: 10, height: 10 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      )}
-                      {isLive ? 'Live' : queue.status === 'waiting' ? 'Open' : 'Completed'}
-                    </span>
+                    <div className="nq-meta">
+                      {/* Status pill */}
+                      <span className={`nq-pill ${isLive ? 'nq-status-live' : 'nq-status-open'}`}>
+                        {isLive ? (
+                          <svg style={{ width: 10, height: 10 }} fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                        ) : (
+                          <svg style={{ width: 10, height: 10 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        )}
+                        {isLive ? 'Live' : queue.status === 'waiting' ? 'Open' : 'Completed'}
+                      </span>
 
-                    {/* Players pill */}
-                    <span className="nq-pill">
-                      <svg style={{ width: 10, height: 10 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                      </svg>
-                      {queue.currentPlayers || 0} waiting
-                    </span>
-
-                    {/* Wait time pill */}
-                    {queue.estimatedWaitTime != null && (
+                      {/* Players pill */}
                       <span className="nq-pill">
                         <svg style={{ width: 10, height: 10 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                         </svg>
-                        ~{queue.estimatedWaitTime}m
+                        {queue.currentPlayers || 0} waiting
                       </span>
+                    </div>
+
+                    {/* Current match */}
+                    {queue.currentMatch && (
+                      <div className="nq-match">
+                        Now playing: {queue.currentMatch.players.join(' vs ')}
+                      </div>
                     )}
                   </div>
 
-                  {/* Current match */}
-                  {queue.currentMatch && (
-                    <div className="nq-match">
-                      Now playing: {queue.currentMatch.players.join(' vs ')}
-                    </div>
-                  )}
+                  {/* Arrow */}
+                  <div className="nq-arrow">
+                    <svg style={{ width: 16, height: 16, color: 'rgba(204,251,241,0.8)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
                 </div>
-
-                {/* Arrow */}
-                <div className="nq-arrow">
-                  <svg style={{ width: 16, height: 16, color: 'rgba(204,251,241,0.8)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </div>
-            </Link>
-          )
-        })}
-      </div>
+              </Link>
+            )
+          })}
+        </div>
       )}
     </section>
   )

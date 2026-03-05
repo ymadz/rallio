@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
 import { createNotification, NotificationTemplates } from '@/lib/notifications'
 import { getServerNow } from '@/lib/time-server'
@@ -1342,6 +1343,228 @@ export async function getVenueQueueHistory(filters?: {
     return { success: true, sessions: formattedSessions }
   } catch (error: any) {
     console.error('Error fetching queue history:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
+ * Approve a reschedule request
+ * Validates the proposed time is still available, updates the reservation times,
+ * and notifies the user.
+ */
+export async function approveReschedule(reservationId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { success: false, error: 'Not authenticated' }
+  }
+
+  try {
+    // Fetch reservation with court/venue info
+    const { data: reservation } = await supabase
+      .from('reservations')
+      .select(`
+        id,
+        user_id,
+        court_id,
+        start_time,
+        end_time,
+        metadata,
+        court:courts!inner(
+          id,
+          name,
+          venue:venues!inner(
+            id,
+            name,
+            owner_id
+          )
+        )
+      `)
+      .eq('id', reservationId)
+      .single()
+
+    if (!reservation || (reservation.court as any)?.venue?.owner_id !== user.id) {
+      return { success: false, error: 'Unauthorized' }
+    }
+
+    const rescheduleRequest = reservation.metadata?.reschedule_request
+    if (!rescheduleRequest || rescheduleRequest.status !== 'pending') {
+      return { success: false, error: 'No pending reschedule request found' }
+    }
+
+    const { proposed_start_time, proposed_end_time } = rescheduleRequest
+
+    // Re-validate availability at approval time
+    const adminDb = createServiceClient()
+    const conflictStatuses = ['pending_payment', 'partially_paid', 'confirmed', 'ongoing', 'pending_refund', 'completed', 'no_show']
+
+    const { data: conflicts } = await adminDb
+      .from('reservations')
+      .select('id')
+      .eq('court_id', reservation.court_id)
+      .neq('id', reservationId)
+      .in('status', conflictStatuses)
+      .lt('start_time', proposed_end_time)
+      .gt('end_time', proposed_start_time)
+
+    if (conflicts && conflicts.length > 0) {
+      return { success: false, error: 'The proposed time slot is no longer available. Please ask the user to reschedule again.' }
+    }
+
+    // Also check queue session conflicts
+    const { data: queueConflicts } = await adminDb
+      .from('queue_sessions')
+      .select('id')
+      .eq('court_id', reservation.court_id)
+      .in('status', ['pending_payment', 'open', 'active'])
+      .lt('start_time', proposed_end_time)
+      .gt('end_time', proposed_start_time)
+
+    if (queueConflicts && queueConflicts.length > 0) {
+      return { success: false, error: 'The proposed time slot conflicts with a queue session.' }
+    }
+
+    // Apply the reschedule — update actual times
+    const updatedMetadata = { ...reservation.metadata }
+    delete updatedMetadata.reschedule_request
+    updatedMetadata.rescheduled = true
+    updatedMetadata.rescheduled_from = {
+      start_time: reservation.start_time,
+      end_time: reservation.end_time,
+      rescheduled_at: new Date().toISOString(),
+      approved_by: user.id,
+    }
+
+    const { error: updateError } = await adminDb
+      .from('reservations')
+      .update({
+        start_time: proposed_start_time,
+        end_time: proposed_end_time,
+        updated_at: new Date().toISOString(),
+        metadata: updatedMetadata,
+      })
+      .eq('id', reservationId)
+
+    if (updateError) {
+      console.error('Error approving reschedule:', updateError)
+      return { success: false, error: 'Failed to apply reschedule' }
+    }
+
+    // Notify the user
+    const courtName = (reservation.court as any)?.name || 'Court'
+    const newDateStr = new Date(proposed_start_time).toLocaleDateString('en-US', {
+      timeZone: 'Asia/Manila',
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+
+    await createNotification({
+      userId: reservation.user_id,
+      ...NotificationTemplates.rescheduleApproved(courtName, newDateStr, reservationId)
+    })
+
+    revalidatePath('/court-admin/reservations')
+    revalidatePath('/court-admin')
+    revalidatePath('/bookings')
+    revalidatePath(`/bookings/${reservationId}`)
+
+    return { success: true }
+  } catch (error: any) {
+    console.error('Error approving reschedule:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
+ * Reject a reschedule request
+ * Clears the reschedule request from metadata and notifies the user.
+ * The booking stays at its original time.
+ */
+export async function rejectReschedule(reservationId: string, reason: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { success: false, error: 'Not authenticated' }
+  }
+
+  if (!reason?.trim()) {
+    return { success: false, error: 'Please provide a reason for rejection' }
+  }
+
+  try {
+    // Fetch reservation with court/venue info
+    const { data: reservation } = await supabase
+      .from('reservations')
+      .select(`
+        id,
+        user_id,
+        metadata,
+        court:courts!inner(
+          id,
+          name,
+          venue:venues!inner(
+            id,
+            name,
+            owner_id
+          )
+        )
+      `)
+      .eq('id', reservationId)
+      .single()
+
+    if (!reservation || (reservation.court as any)?.venue?.owner_id !== user.id) {
+      return { success: false, error: 'Unauthorized' }
+    }
+
+    const rescheduleRequest = reservation.metadata?.reschedule_request
+    if (!rescheduleRequest || rescheduleRequest.status !== 'pending') {
+      return { success: false, error: 'No pending reschedule request found' }
+    }
+
+    // Clear the reschedule request and store rejection info
+    const updatedMetadata = { ...reservation.metadata }
+    delete updatedMetadata.reschedule_request
+    updatedMetadata.last_reschedule_rejection = {
+      reason,
+      rejected_at: new Date().toISOString(),
+      rejected_by: user.id,
+    }
+
+    const adminDb = createServiceClient()
+    const { error: updateError } = await adminDb
+      .from('reservations')
+      .update({
+        updated_at: new Date().toISOString(),
+        metadata: updatedMetadata,
+      })
+      .eq('id', reservationId)
+
+    if (updateError) {
+      console.error('Error rejecting reschedule:', updateError)
+      return { success: false, error: 'Failed to reject reschedule' }
+    }
+
+    // Notify the user
+    const courtName = (reservation.court as any)?.name || 'Court'
+
+    await createNotification({
+      userId: reservation.user_id,
+      ...NotificationTemplates.rescheduleRejected(courtName, reason, reservationId)
+    })
+
+    revalidatePath('/court-admin/reservations')
+    revalidatePath('/court-admin')
+    revalidatePath('/bookings')
+    revalidatePath(`/bookings/${reservationId}`)
+
+    return { success: true }
+  } catch (error: any) {
+    console.error('Error rejecting reschedule:', error)
     return { success: false, error: error.message }
   }
 }

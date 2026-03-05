@@ -6,6 +6,7 @@ import { createReservationAction } from '@/app/actions/reservations'
 import { createQueueSession } from '@/app/actions/queue-actions'
 import { initiatePaymentAction } from '@/app/actions/payments'
 import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
+import { validatePromoCode } from '@/app/actions/promo-code-actions'
 import { createClient } from '@/lib/supabase/client'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -28,6 +29,7 @@ export function PaymentProcessing() {
     resetCheckout,
     reservationId: storeReservationId,
     discountAmount,
+    discountCode,
     discountType,
     discountReason,
   } = useCheckoutStore()
@@ -195,7 +197,28 @@ export function PaymentProcessing() {
               })
 
               if (discountResult.success) {
-                const serverTotalDiscount = discountResult.totalDiscount
+                let serverTotalDiscount = discountResult.totalDiscount
+
+                // Add promo code discount if applicable
+                if (discountCode) {
+                  const promoResult = await validatePromoCode(discountCode, bookingData.venueId, totalBasePrice)
+                  if (promoResult.valid && promoResult.discountAmount !== undefined) {
+                    serverTotalDiscount += promoResult.discountAmount
+
+                    const ruleTypes = discountResult.discounts.map(d => d.type).join(', ')
+                    const ruleNames = discountResult.discounts.map(d => d.name).join(', ')
+
+                    verifiedDiscountType = ruleTypes ? `${ruleTypes}, promo` : 'promo'
+                    verifiedDiscountReason = ruleNames ? `${ruleNames}, ${discountCode}` : discountCode
+                  } else {
+                    console.warn('[Discount Verification] Promo code invalid during checkout verification:', promoResult.error)
+                  }
+                } else if (discountResult.discounts.length > 0) {
+                  // Use server-side discount details when no promo code
+                  verifiedDiscountType = discountResult.discounts.map(d => d.type).join(', ')
+                  verifiedDiscountReason = discountResult.discounts.map(d => d.name).join(', ')
+                }
+
                 const clientTotalDiscount = Math.abs(discountAmount)
 
                 if (Math.abs(serverTotalDiscount - clientTotalDiscount) > 0.01) {
@@ -204,12 +227,10 @@ export function PaymentProcessing() {
                     server: serverTotalDiscount,
                   })
                   verifiedDiscountAmount = serverTotalDiscount
-                }
-
-                // Use server-side discount details
-                if (discountResult.discounts.length > 0) {
-                  verifiedDiscountType = discountResult.discounts.map(d => d.type).join(', ')
-                  verifiedDiscountReason = discountResult.discounts.map(d => d.name).join(', ')
+                } else {
+                  // If client sent exact matching amount, keep client value 
+                  // but use verified types above
+                  verifiedDiscountAmount = clientTotalDiscount
                 }
               }
             } catch (verifyErr) {
@@ -230,8 +251,10 @@ export function PaymentProcessing() {
             discountApplied: verifiedDiscountAmount,
             discountType: verifiedDiscountType,
             discountReason: verifiedDiscountReason,
+            promoCode: discountCode || undefined,
             recurrenceWeeks: bookingData.recurrenceWeeks,
             selectedDays: bookingData.selectedDays,
+            customDownPaymentAmount: paymentMethod === 'cash' ? getDownPaymentAmount() || undefined : undefined,
           })
 
           if (!reservationResult.success || !reservationResult.reservationId) {

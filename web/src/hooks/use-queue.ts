@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   getQueueDetails,
@@ -16,7 +16,8 @@ export interface QueuePlayer {
   userId: string
   name: string
   avatarUrl?: string
-  skillLevel: 'beginner' | 'intermediate' | 'advanced' | 'expert'
+  skillTier?: 'beginner' | 'intermediate' | 'advanced' | 'expert'
+  skillLevel?: number
   position: number
   joinedAt: Date
   gamesPlayed: number
@@ -33,11 +34,11 @@ export interface QueueSession {
   status: 'waiting' | 'active' | 'completed'
   players: QueuePlayer[]
   userPosition: number | null
-  estimatedWaitTime: number // in minutes
   maxPlayers: number
   currentPlayers: number
   startTime: Date  // Added startTime
   endTime: Date // Added endTime
+  mode: 'casual' | 'competitive'
   organizerId?: string // Queue session organizer
   userGamesPlayed?: number // Games played by current user
   userAmountOwed?: number // Amount owed by current user
@@ -88,6 +89,8 @@ export function useQueue(courtId: string) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const supabase = createClient()
+  const fetchRef = useRef<() => Promise<void>>(() => Promise.resolve())
+  const debounceRef = useRef<NodeJS.Timeout | null>(null)
 
   // Fetch queue data
   const fetchQueue = async () => {
@@ -125,7 +128,8 @@ export function useQueue(courtId: string) {
           userId: p.userId,
           name: p.playerName,
           avatarUrl: p.avatarUrl,
-          skillLevel: getSkillTier(p.skillLevel),
+          skillLevel: p.skillLevel,
+          skillTier: getSkillTier(p.skillLevel),
           position: p.position,
           joinedAt: p.joinedAt,
           gamesPlayed: p.gamesPlayed,
@@ -133,11 +137,11 @@ export function useQueue(courtId: string) {
           status: (p as any).status as 'waiting' | 'playing' | 'completed' | 'left' | undefined,
         })),
         userPosition: queueData.userPosition,
-        estimatedWaitTime: queueData.estimatedWaitTime,
         maxPlayers: queueData.maxPlayers,
         currentPlayers: queueData.currentPlayers,
         startTime: queueData.startTime,
         endTime: queueData.endTime,
+        mode: queueData.mode as 'casual' | 'competitive',
         organizerId: queueData.organizerId,
       }
 
@@ -157,6 +161,17 @@ export function useQueue(courtId: string) {
     }
   }
 
+  // Keep fetchQueue ref up to date so real-time callbacks always call the latest version
+  fetchRef.current = fetchQueue
+
+  // Debounced fetch for real-time events (avoids flooding on batch updates)
+  const debouncedFetch = () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      fetchRef.current()
+    }, 300)
+  }
+
   // Initial fetch
   useEffect(() => {
     fetchQueue()
@@ -166,22 +181,35 @@ export function useQueue(courtId: string) {
   useEffect(() => {
     if (!queue?.id) return
 
-    console.log('[useQueue] 🔔 Setting up real-time subscription for queue:', queue.id)
+    const sessionId = queue.id
+    console.log('[useQueue] 🔔 Setting up real-time subscription for queue:', sessionId)
 
     const channel = supabase
-      .channel(`queue-${queue.id}`)
+      .channel(`queue-${sessionId}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'queue_participants',
-          filter: `queue_session_id=eq.${queue.id}`,
+          filter: `queue_session_id=eq.${sessionId}`,
         },
         (payload) => {
           console.log('[useQueue] 🔔 Queue participants changed:', payload)
-          // Refresh queue data when participants change
-          fetchQueue()
+          debouncedFetch()
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'matches',
+          filter: `queue_session_id=eq.${sessionId}`,
+        },
+        (payload) => {
+          console.log('[useQueue] 🔔 Match changed:', payload)
+          debouncedFetch()
         }
       )
       .on(
@@ -190,21 +218,24 @@ export function useQueue(courtId: string) {
           event: 'UPDATE',
           schema: 'public',
           table: 'queue_sessions',
-          filter: `id=eq.${queue.id}`,
+          filter: `id=eq.${sessionId}`,
         },
         (payload) => {
           console.log('[useQueue] 🔔 Queue session updated:', payload)
-          // Refresh queue data when session changes
-          fetchQueue()
+          debouncedFetch()
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log('[useQueue] 🔔 Subscription status:', status)
+      })
 
     return () => {
       console.log('[useQueue] 🔕 Cleaning up real-time subscription')
+      if (debounceRef.current) clearTimeout(debounceRef.current)
       supabase.removeChannel(channel)
     }
   }, [queue?.id])
+
 
   const joinQueue = async () => {
     console.log('[useQueue] ➕ Joining queue')
@@ -314,11 +345,11 @@ export function useMyQueues() {
         status: mapQueueStatusForPlayer(q.status),
         players: q.players || [],
         userPosition: q.userPosition,
-        estimatedWaitTime: q.estimatedWaitTime,
         maxPlayers: q.maxPlayers,
         currentPlayers: q.currentPlayers,
         startTime: q.startTime,
         endTime: q.endTime,
+        mode: (q.mode || 'casual') as 'casual' | 'competitive',
       }))
 
       setQueues(transformedQueues)
@@ -424,11 +455,11 @@ export function useNearbyQueues(latitude?: number, longitude?: number) {
         status: mapQueueStatusForPlayer(q.status),
         players: q.players || [],
         userPosition: q.userPosition,
-        estimatedWaitTime: q.estimatedWaitTime,
         maxPlayers: q.maxPlayers,
         currentPlayers: q.currentPlayers,
         startTime: q.startTime,
         endTime: q.endTime,
+        mode: (q.mode || 'casual') as 'casual' | 'competitive',
       }))
 
       setQueues(transformedQueues)

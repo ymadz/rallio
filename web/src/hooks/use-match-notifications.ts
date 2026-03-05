@@ -62,20 +62,6 @@ export function useMatchNotifications(userId?: string) {
             if (matchDetails) {
               setActiveMatch(matchDetails)
 
-              // Show notification toast
-              toast.success("You're assigned to a match!", {
-                description: `Match #${match.match_number} • ${matchDetails.queue_sessions?.courts?.name || 'Court'}`,
-                duration: 10000,
-                action: {
-                  label: 'View Match',
-                  onClick: () => {
-                    router.push(
-                      `/queue/${matchDetails.queue_sessions?.court_id}/match/${match.id}`
-                    )
-                  },
-                },
-              })
-
               // Play notification sound
               playNotificationSound()
             }
@@ -115,8 +101,20 @@ export function useMatchNotifications(userId?: string) {
             const didWin =
               (isTeamA && winner === 'team_a') || (!isTeamA && winner === 'team_b')
 
+            let eloDiffString = ''
+            if (match.metadata?.ratingChanges && match.metadata.ratingChanges[userId]) {
+              const diff = match.metadata.ratingChanges[userId].diff
+              if (diff > 0) {
+                eloDiffString = ` • ELO +${diff}`
+              } else if (diff < 0) {
+                eloDiffString = ` • ELO ${diff}`
+              } else {
+                eloDiffString = ` • ELO ±0`
+              }
+            }
+
             toast.success(didWin ? 'You won! 🎉' : 'Match completed', {
-              description: `Final Score: ${match.score_a} - ${match.score_b}`,
+              description: `Final Score: ${match.score_a} - ${match.score_b}${eloDiffString}`,
               duration: 8000,
             })
 

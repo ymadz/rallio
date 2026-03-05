@@ -17,7 +17,7 @@ interface MatchAssignmentModalProps {
     gamesPlayed: number
     position?: number
   }>
-  gameFormat: 'singles' | 'doubles' | 'mixed'
+  gameFormat: 'singles' | 'doubles' | 'any'
   onSuccess?: () => void
 }
 
@@ -35,7 +35,15 @@ export function MatchAssignmentModal({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const playersNeeded = gameFormat === 'singles' ? 2 : 4
+  // For 'any' format: queue master picks the match type first
+  const [chosenFormat, setChosenFormat] = useState<'singles' | 'doubles' | null>(
+    gameFormat === 'any' ? null : gameFormat
+  )
+
+  // Derived from the chosen/session format
+  const resolvedFormat = gameFormat === 'any' ? chosenFormat : gameFormat
+  const playersNeeded = resolvedFormat === 'singles' ? 2 : resolvedFormat === 'doubles' ? 4 : null
+  const playersPerTeam = resolvedFormat === 'singles' ? 1 : 2
 
   useEffect(() => {
     if (!isOpen) {
@@ -43,12 +51,15 @@ export function MatchAssignmentModal({
       setTeamA([])
       setTeamB([])
       setError(null)
+      // Reset format choice when modal closes (for 'any' sessions)
+      if (gameFormat === 'any') setChosenFormat(null)
     }
-  }, [isOpen])
+  }, [isOpen, gameFormat])
 
   if (!isOpen) return null
 
   const togglePlayerSelection = (userId: string) => {
+    if (!playersNeeded) return
     if (selectedPlayers.includes(userId)) {
       setSelectedPlayers(selectedPlayers.filter(id => id !== userId))
       setTeamA(teamA.filter(id => id !== userId))
@@ -59,7 +70,6 @@ export function MatchAssignmentModal({
   }
 
   const moveToTeamA = (userId: string) => {
-    const playersPerTeam = gameFormat === 'singles' ? 1 : 2
     if (teamA.length < playersPerTeam && !teamA.includes(userId)) {
       setTeamA([...teamA, userId])
       setTeamB(teamB.filter(id => id !== userId))
@@ -67,7 +77,6 @@ export function MatchAssignmentModal({
   }
 
   const moveToTeamB = (userId: string) => {
-    const playersPerTeam = gameFormat === 'singles' ? 1 : 2
     if (teamB.length < playersPerTeam && !teamB.includes(userId)) {
       setTeamB([...teamB, userId])
       setTeamA(teamA.filter(id => id !== userId))
@@ -75,27 +84,25 @@ export function MatchAssignmentModal({
   }
 
   const autoBalance = (playersToBalance: string[] = selectedPlayers) => {
-    if (playersToBalance.length !== playersNeeded) return
+    if (!playersNeeded || playersToBalance.length !== playersNeeded) return
 
-    // Sort by skill level for balanced teams
     const sorted = [...playersToBalance].sort((a, b) => {
       const playerA = waitingPlayers.find(p => p.userId === a)
       const playerB = waitingPlayers.find(p => p.userId === b)
       return (playerB?.skillLevel || 0) - (playerA?.skillLevel || 0)
     })
 
-    if (gameFormat === 'singles') {
+    if (resolvedFormat === 'singles') {
       setTeamA([sorted[0]])
       setTeamB([sorted[1]])
     } else {
-      // For doubles, alternate high/low skill players
       setTeamA([sorted[0], sorted[3]])
       setTeamB([sorted[1], sorted[2]])
     }
   }
 
   const pickRandom = () => {
-    if (waitingPlayers.length < playersNeeded) return
+    if (!playersNeeded || waitingPlayers.length < playersNeeded) return
 
     const selectedIndices = new Set<number>()
     while (selectedIndices.size < playersNeeded) {
@@ -109,8 +116,7 @@ export function MatchAssignmentModal({
 
   const handleSubmit = async () => {
     setError(null)
-
-    const playersPerTeam = gameFormat === 'singles' ? 1 : 2
+    if (!playersNeeded) return
 
     if (teamA.length !== playersPerTeam || teamB.length !== playersPerTeam) {
       setError(`Each team needs ${playersPerTeam} player${playersPerTeam > 1 ? 's' : ''}`)
@@ -118,9 +124,7 @@ export function MatchAssignmentModal({
     }
 
     setIsSubmitting(true)
-
     try {
-      // Pass selected players and team assignments to the server action
       const result = await assignMatchFromQueue(
         sessionId,
         playersNeeded,
@@ -144,10 +148,8 @@ export function MatchAssignmentModal({
   const getPlayerById = (userId: string) =>
     waitingPlayers.find(p => p.userId === userId)
 
-  const playersPerTeam = gameFormat === 'singles' ? 1 : 2
-  const teamsReady = teamA.length === playersPerTeam && teamB.length === playersPerTeam
+  const teamsReady = playersNeeded !== null && teamA.length === playersPerTeam && teamB.length === playersPerTeam
 
-  // Calculate team balance
   const teamAAvgSkill = teamA.length > 0
     ? teamA.reduce((sum, id) => sum + (getPlayerById(id)?.skillLevel || 0), 0) / teamA.length
     : 0
@@ -155,6 +157,10 @@ export function MatchAssignmentModal({
     ? teamB.reduce((sum, id) => sum + (getPlayerById(id)?.skillLevel || 0), 0) / teamB.length
     : 0
   const skillDifference = Math.abs(teamAAvgSkill - teamBAvgSkill)
+
+  const headerSubtitle = resolvedFormat
+    ? `${resolvedFormat} — Select ${playersNeeded} players`
+    : 'Choose match type first'
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -168,7 +174,7 @@ export function MatchAssignmentModal({
               </div>
               <div>
                 <h2 className="text-xl font-bold">Create Match</h2>
-                <p className="text-white/80 text-sm capitalize">{gameFormat} - Select {playersNeeded} players</p>
+                <p className="text-white/80 text-sm capitalize">{headerSubtitle}</p>
               </div>
             </div>
             <button
@@ -188,6 +194,58 @@ export function MatchAssignmentModal({
             </div>
           )}
 
+          {/* "Any" format: match type picker */}
+          {gameFormat === 'any' && !chosenFormat && (
+            <div>
+              <h3 className="font-semibold text-gray-900 mb-3">Choose Match Type</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  onClick={() => setChosenFormat('singles')}
+                  disabled={waitingPlayers.length < 2}
+                  className="p-4 border-2 border-gray-200 rounded-xl hover:border-primary hover:bg-primary/5 transition-all disabled:opacity-40 disabled:cursor-not-allowed text-left"
+                >
+                  <div className="text-2xl mb-2">🏸</div>
+                  <div className="font-semibold text-gray-900">1v1 Singles</div>
+                  <div className="text-sm text-gray-500 mt-0.5">Needs 2 players</div>
+                </button>
+                <button
+                  onClick={() => setChosenFormat('doubles')}
+                  disabled={waitingPlayers.length < 4}
+                  className="p-4 border-2 border-gray-200 rounded-xl hover:border-primary hover:bg-primary/5 transition-all disabled:opacity-40 disabled:cursor-not-allowed text-left"
+                >
+                  <div className="text-2xl mb-2">🏆</div>
+                  <div className="font-semibold text-gray-900">2v2 Doubles</div>
+                  <div className="text-sm text-gray-500 mt-0.5">Needs 4 players</div>
+                </button>
+              </div>
+              {waitingPlayers.length < 4 && (
+                <p className="text-xs text-gray-400 mt-2 text-center">
+                  Doubles requires 4+ players in the queue ({waitingPlayers.length} currently waiting)
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Change format link (only when in 'any' mode and a format was chosen) */}
+          {gameFormat === 'any' && chosenFormat && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">
+                Match type: <span className="font-semibold capitalize">{chosenFormat}</span>
+              </span>
+              <button
+                onClick={() => {
+                  setChosenFormat(null)
+                  setSelectedPlayers([])
+                  setTeamA([])
+                  setTeamB([])
+                }}
+                className="text-xs text-primary hover:underline"
+              >
+                Change
+              </button>
+            </div>
+          )}
+
           {/* No Players Warning */}
           {waitingPlayers.length === 0 && (
             <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded-lg text-center">
@@ -195,8 +253,8 @@ export function MatchAssignmentModal({
             </div>
           )}
 
-          {/* Waiting Players Selection */}
-          {waitingPlayers.length > 0 && (
+          {/* Waiting Players Selection — only shown once format is resolved */}
+          {resolvedFormat && waitingPlayers.length > 0 && (
             <>
               <div>
                 <div className="flex items-center justify-between mb-3">
@@ -204,7 +262,7 @@ export function MatchAssignmentModal({
                     Select Players ({selectedPlayers.length}/{playersNeeded})
                   </h3>
                   <div className="flex items-center gap-2">
-                    {waitingPlayers.length >= playersNeeded && (
+                    {playersNeeded && waitingPlayers.length >= playersNeeded && (
                       <button
                         onClick={pickRandom}
                         className="flex items-center gap-2 px-3 py-1.5 text-sm bg-primary-subtle text-primary-dark border border-primary-lighter rounded-lg hover:bg-primary hover:text-white transition-colors"
@@ -213,7 +271,7 @@ export function MatchAssignmentModal({
                         Pick Random
                       </button>
                     )}
-                    {selectedPlayers.length === playersNeeded && (
+                    {playersNeeded && selectedPlayers.length === playersNeeded && (
                       <button
                         onClick={() => autoBalance()}
                         className="flex items-center gap-2 px-3 py-1.5 text-sm bg-primary-subtle text-primary-dark border border-primary-lighter rounded-lg hover:bg-primary hover:text-white transition-colors"
@@ -235,7 +293,7 @@ export function MatchAssignmentModal({
                       <button
                         key={player.userId}
                         onClick={() => togglePlayerSelection(player.userId)}
-                        disabled={!isSelected && selectedPlayers.length >= playersNeeded}
+                        disabled={!isSelected && (playersNeeded === null || selectedPlayers.length >= playersNeeded)}
                         className={`p-3 border-2 rounded-lg text-left transition-all disabled:opacity-50 disabled:cursor-not-allowed ${inTeamA
                           ? 'border-blue-500 bg-blue-50'
                           : inTeamB
@@ -281,7 +339,7 @@ export function MatchAssignmentModal({
               </div>
 
               {/* Team Assignment */}
-              {selectedPlayers.length === playersNeeded && (
+              {playersNeeded && selectedPlayers.length === playersNeeded && (
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-semibold text-gray-900">Assign Teams</h3>
@@ -293,8 +351,10 @@ export function MatchAssignmentModal({
                             <span className="text-green-600 font-medium">Excellent</span>
                           ) : skillDifference < 2 ? (
                             <span className="text-blue-600 font-medium">Good</span>
+                          ) : skillDifference < 4 ? (
+                            <span className="text-orange-500 font-medium">Fair</span>
                           ) : (
-                            <span className="text-orange-600 font-medium">Fair</span>
+                            <span className="text-red-600 font-medium">Unfair</span>
                           )}
                         </span>
                       </div>

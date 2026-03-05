@@ -398,17 +398,20 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
 
         {/* DISCOUNT RULES TAB */}
         <TabsContent value="rules" className="space-y-4">
-          <div className="flex justify-between items-center">
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-lg font-semibold">Discount Rules</h3>
-              <p className="text-sm text-muted-foreground">
+              <h2 className="text-2xl font-bold text-gray-900">Discount Rules</h2>
+              <p className="text-sm text-gray-500 mt-1">
                 Create discount rules for recurring bookings and early birds
               </p>
             </div>
-            <Button onClick={() => handleOpenRuleModal()}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Discount Rule
-            </Button>
+            <button
+              onClick={() => handleOpenRuleModal()}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Discount</span>
+            </button>
           </div>
 
           {discountRules.length === 0 ? (
@@ -421,94 +424,112 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-4">
-              {discountRules.map((rule) => (
-                <Card key={rule.id}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2">
-                          {getRuleDiscountTypeIcon(rule.discount_type)}
-                          <CardTitle className="text-base">{rule.name}</CardTitle>
-                        </div>
-                        <Badge variant={rule.is_active ? 'default' : 'secondary'}>
-                          {rule.is_active ? 'Active' : 'Inactive'}
-                        </Badge>
-                        <Badge variant="outline">
-                          {getRuleDiscountTypeLabel(rule.discount_type)}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={rule.is_active}
-                          onCheckedChange={(checked: boolean) => handleToggleRule(rule.id, checked)}
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleOpenRuleModal(rule)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteRule(rule.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </div>
-                    {rule.description && (
-                      <CardDescription>{rule.description}</CardDescription>
-                    )}
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Discount:</span>
-                        <p className="font-medium">
-                          {rule.discount_value}
-                          {rule.discount_unit === 'percent' ? '%' : ' PHP'}
-                        </p>
-                      </div>
-                      {rule.min_weeks && (
-                        <div>
-                          <span className="text-muted-foreground">Min Weeks:</span>
-                          <p className="font-medium">{rule.min_weeks}</p>
-                        </div>
-                      )}
-                      {rule.advance_days && (
-                        <div>
-                          <span className="text-muted-foreground">Book Ahead:</span>
-                          <p className="font-medium">{rule.advance_days} days</p>
-                        </div>
-                      )}
-                      <div>
-                        <span className="text-muted-foreground">Priority:</span>
-                        <p className="font-medium">{rule.priority}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+            <div className="bg-white border text-sm border-gray-200 rounded-xl overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-4">Rule Name</th>
+                      <th className="px-6 py-4">Type</th>
+                      <th className="px-6 py-4">Value</th>
+                      <th className="px-6 py-4">Conditions</th>
+                      <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {discountRules.map((rule) => (
+                      <tr key={rule.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            {getRuleDiscountTypeIcon(rule.discount_type)}
+                            <div className="font-bold text-gray-900">{rule.name}</div>
+                          </div>
+                          {rule.description && (
+                            <div className="text-xs text-gray-500 mt-1 truncate max-w-[200px]" title={rule.description}>
+                              {rule.description}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <Badge variant="outline" className="font-normal">
+                            {getRuleDiscountTypeLabel(rule.discount_type)}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4 font-medium text-gray-900">
+                          {rule.discount_value}{rule.discount_unit === 'percent' ? '%' : ' PHP'}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-xs space-y-1">
+                            {rule.min_weeks && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-muted-foreground">Min Weeks:</span>
+                                <span className="font-medium">{rule.min_weeks}</span>
+                              </div>
+                            )}
+                            {rule.advance_days && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-muted-foreground">Book Ahead:</span>
+                                <span className="font-medium">{rule.advance_days} days</span>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <button
+                            onClick={() => handleToggleRule(rule.id, !rule.is_active)}
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors ${rule.is_active
+                              ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                              : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
+                              }`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${rule.is_active ? 'bg-green-500' : 'bg-gray-400'}`} />
+                            {rule.is_active ? 'Active' : 'Inactive'}
+                          </button>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => handleOpenRuleModal(rule)}
+                              className="p-1.5 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
+                              title="Edit"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteRule(rule.id)}
+                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </TabsContent>
 
         {/* HOLIDAY PRICING TAB */}
         <TabsContent value="holidays" className="space-y-4">
-          <div className="flex justify-between items-center">
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-lg font-semibold">Holiday & Seasonal Pricing</h3>
-              <p className="text-sm text-muted-foreground">
+              <h2 className="text-2xl font-bold text-gray-900">Seasonal Pricing</h2>
+              <p className="text-sm text-gray-500 mt-1">
                 Set special pricing for holidays, peak seasons, or off-season periods
               </p>
             </div>
-            <Button onClick={() => handleOpenHolidayModal()}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Holiday Pricing
-            </Button>
+            <button
+              onClick={() => handleOpenHolidayModal()}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Holiday Pricing</span>
+            </button>
           </div>
 
           {holidayPricing.length === 0 ? (
@@ -521,79 +542,87 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-4">
-              {holidayPricing.map((holiday) => {
-                const isIncrease = holiday.price_multiplier > 1.0;
-                const percentChange = Math.abs((holiday.price_multiplier - 1.0) * 100);
+            <div className="bg-white border text-sm border-gray-200 rounded-xl overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-4">Holiday Name</th>
+                      <th className="px-6 py-4">Adjustment</th>
+                      <th className="px-6 py-4">Valid Period</th>
+                      <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {holidayPricing.map((holiday) => {
+                      const isIncrease = holiday.price_multiplier > 1.0;
+                      const percentChange = Math.abs((holiday.price_multiplier - 1.0) * 100);
 
-                return (
-                  <Card key={holiday.id}>
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4" />
-                            <CardTitle className="text-base">{holiday.name}</CardTitle>
-                          </div>
-                          <Badge variant={holiday.is_active ? 'default' : 'secondary'}>
-                            {holiday.is_active ? 'Active' : 'Inactive'}
-                          </Badge>
-                          <Badge
-                            variant={isIncrease ? 'destructive' : 'default'}
-                          >
-                            {isIncrease ? `+${percentChange.toFixed(0)}%` : `-${percentChange.toFixed(0)}%`}
-                          </Badge>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={holiday.is_active}
-                            onCheckedChange={(checked: boolean) => handleToggleHoliday(holiday.id, checked)}
-                          />
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleOpenHolidayModal(holiday)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteHoliday(holiday.id)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </div>
-                      {holiday.description && (
-                        <CardDescription>{holiday.description}</CardDescription>
-                      )}
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Start Date:</span>
-                          <p className="font-medium">
-                            {new Date(holiday.start_date).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">End Date:</span>
-                          <p className="font-medium">
-                            {new Date(holiday.end_date).toLocaleDateString()}
-                          </p>
-                        </div>
-                        {holiday.fixed_surcharge && (
-                          <div>
-                            <span className="text-muted-foreground">Fixed Surcharge:</span>
-                            <p className="font-medium">₱{holiday.fixed_surcharge}</p>
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                      return (
+                        <tr key={holiday.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4" />
+                              <div className="font-bold text-gray-900">{holiday.name}</div>
+                            </div>
+                            {holiday.description && (
+                              <div className="text-xs text-gray-500 mt-1 truncate max-w-[200px]" title={holiday.description}>
+                                {holiday.description}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4">
+                            <Badge variant={isIncrease ? 'destructive' : 'default'} className="font-normal">
+                              {isIncrease ? `+${percentChange.toFixed(0)}%` : `-${percentChange.toFixed(0)}%`}
+                            </Badge>
+                            {holiday.fixed_surcharge && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                + ₱{holiday.fixed_surcharge} fixed
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-xs font-medium text-gray-900">
+                              {new Date(holiday.start_date).toLocaleDateString()} - {new Date(holiday.end_date).toLocaleDateString()}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-sm">
+                            <button
+                              onClick={() => handleToggleHoliday(holiday.id, !holiday.is_active)}
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors ${holiday.is_active
+                                ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                                : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
+                                }`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${holiday.is_active ? 'bg-green-500' : 'bg-gray-400'}`} />
+                              {holiday.is_active ? 'Active' : 'Inactive'}
+                            </button>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => handleOpenHolidayModal(holiday)}
+                                className="p-1.5 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
+                                title="Edit"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteHoliday(holiday.id)}
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Delete"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </TabsContent>

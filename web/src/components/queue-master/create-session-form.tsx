@@ -64,7 +64,7 @@ export function CreateSessionForm() {
   const [recurrenceWeeks, setRecurrenceWeeks] = useState(1)
   const [selectedDays, setSelectedDays] = useState<number[]>([]) // [0-6] for Sun-Sat
   const [mode, setMode] = useState<'casual' | 'competitive'>('casual')
-  const [gameFormat, setGameFormat] = useState<'singles' | 'doubles' | 'mixed'>('doubles')
+  const [gameFormat, setGameFormat] = useState<'singles' | 'doubles' | 'any'>('doubles')
   const [maxPlayers, setMaxPlayers] = useState(12)
   const [costPerGame, setCostPerGame] = useState(50)
   const [isPublic, setIsPublic] = useState(true)
@@ -892,7 +892,7 @@ export function CreateSessionForm() {
                     Game Format <span className="text-red-500">*</span>
                   </label>
                   <div className="grid grid-cols-3 gap-3">
-                    {['singles', 'doubles', 'mixed'].map((format) => (
+                    {['singles', 'doubles', 'any'].map((format) => (
                       <button
                         key={format}
                         type="button"
@@ -904,7 +904,7 @@ export function CreateSessionForm() {
                       >
                         <div className="font-semibold text-gray-900 mb-1 capitalize">{format}</div>
                         <div className="text-xs text-gray-600">
-                          {format === 'singles' ? '2 players' : '4 players'}
+                          {format === 'singles' ? '2 players' : format === 'any' ? '4 players (any)' : '4 players'}
                         </div>
                       </button>
                     ))}
