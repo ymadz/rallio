@@ -65,6 +65,12 @@ interface CheckoutState {
     isIncrease: boolean
   }>
 
+  // Promo Code Discount
+  promoDiscountAmount: number
+  promoCode?: string
+  promoDiscountType?: string
+  promoDiscountReason?: string
+
   // Platform fee
   platformFeePercentage: number
   platformFeeEnabled: boolean
@@ -73,6 +79,7 @@ interface CheckoutState {
   bookingReference?: string
   reservationId?: string
   downPaymentPercentage?: number
+  customDownPaymentAmount?: number
 
   // Actions
   setBookingData: (data: BookingData) => void
@@ -84,9 +91,12 @@ interface CheckoutState {
   updatePlayerPayment: (playerNumber: number, updates: Partial<PlayerPaymentStatus>) => void
   setDiscount: (amount: number, code?: string) => void
   setDiscountDetails: (details: { amount: number; type?: string; reason?: string; discounts?: any[] }) => void
+  setPromoDiscount: (details: { amount: number; code?: string; type?: string; reason?: string }) => void
+  removePromoDiscount: () => void
   setPlatformFee: (percentage: number, enabled: boolean) => void
   setBookingReference: (reference: string, reservationId: string) => void
   setDownPaymentPercentage: (percentage: number) => void
+  setCustomDownPaymentAmount: (amount: number | undefined) => void
   resetCheckout: () => void
 
   // Computed values
@@ -109,6 +119,8 @@ const initialState = {
   policyAccepted: false,
   discountAmount: 0,
   discountCode: undefined,
+  promoDiscountAmount: 0,
+  promoCode: undefined,
   platformFeePercentage: 5, // Default 5%
   platformFeeEnabled: true,
   bookingReference: undefined,
@@ -202,6 +214,20 @@ export const useCheckoutStore = create<CheckoutState>()(
         applicableDiscounts: details.discounts
       }),
 
+      setPromoDiscount: (details) => set({
+        promoDiscountAmount: details.amount,
+        promoCode: details.code,
+        promoDiscountType: details.type,
+        promoDiscountReason: details.reason
+      }),
+
+      removePromoDiscount: () => set({
+        promoDiscountAmount: 0,
+        promoCode: undefined,
+        promoDiscountType: undefined,
+        promoDiscountReason: undefined
+      }),
+
       setPlatformFee: (percentage, enabled) => set({
         platformFeePercentage: percentage,
         platformFeeEnabled: enabled
@@ -211,6 +237,8 @@ export const useCheckoutStore = create<CheckoutState>()(
         set({ bookingReference: reference, reservationId }),
 
       setDownPaymentPercentage: (percentage) => set({ downPaymentPercentage: percentage }),
+
+      setCustomDownPaymentAmount: (amount) => set({ customDownPaymentAmount: amount }),
 
       resetCheckout: () => set(initialState),
 
@@ -255,7 +283,7 @@ export const useCheckoutStore = create<CheckoutState>()(
 
         // Calculate total based on ACTUAL slots that will be created
         const totalBase = baseRate * actualSlotCount
-        return Math.max(0, totalBase - state.discountAmount)
+        return Math.max(0, totalBase - state.discountAmount - state.promoDiscountAmount)
       },
 
       getPlatformFeeAmount: () => {
@@ -276,7 +304,13 @@ export const useCheckoutStore = create<CheckoutState>()(
         const state = get()
         if (state.paymentMethod !== 'cash' || !state.downPaymentPercentage) return 0
         const total = state.getTotalAmount()
-        return Math.round((total * (state.downPaymentPercentage / 100)) * 100) / 100
+        const minimumDownPayment = Math.round((total * (state.downPaymentPercentage / 100)) * 100) / 100
+        // If user set a custom amount, use it (clamped between minimum and total)
+        if (state.customDownPaymentAmount !== undefined && state.customDownPaymentAmount > 0) {
+          const clamped = Math.min(Math.max(state.customDownPaymentAmount, minimumDownPayment), total)
+          return Math.round(clamped * 100) / 100
+        }
+        return minimumDownPayment
       },
 
       getRemainingBalance: () => {
@@ -304,6 +338,7 @@ export const useCheckoutStore = create<CheckoutState>()(
         bookingData: state.bookingData,
         isSplitPayment: state.isSplitPayment,
         playerCount: state.playerCount,
+        customDownPaymentAmount: state.customDownPaymentAmount,
         // DO NOT persist paymentMethod - user must select it fresh each time
         // paymentMethod: state.paymentMethod,
       }),

@@ -189,9 +189,11 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Availability Management</h1>
-        <p className="text-gray-600">Manage court schedules and blocked dates</p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Availability</h2>
+          <p className="text-sm text-gray-500 mt-1">Manage court schedules and blocked dates</p>
+        </div>
       </div>
 
       {/* Loading State */}

@@ -414,9 +414,9 @@ export function QueueSessionModal({
 
             {/* Modal */}
             <div className="flex min-h-full items-center justify-center p-4">
-                <div className="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+                <div className="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[calc(100vh-2rem)] md:max-h-[90vh] flex flex-col overflow-hidden">
                     {/* Header */}
-                    <div className="bg-gradient-to-r from-primary to-primary/80 text-white px-6 py-4 flex items-center justify-between">
+                    <div className="bg-gradient-to-r from-primary to-primary/80 text-white px-6 py-4 flex items-center justify-between shrink-0">
                         <div>
                             <div className="flex items-center gap-2">
                                 <h3 className="text-xl font-bold">{courtName}</h3>
@@ -439,7 +439,7 @@ export function QueueSessionModal({
                     </div>
 
                     {/* Content */}
-                    <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+                    <div className="p-6 overflow-y-auto flex-1">
                         {step === 'schedule' ? (
                             /* Step 1: Schedule Selection */
                             <div className="grid md:grid-cols-2 gap-6">
@@ -811,7 +811,7 @@ export function QueueSessionModal({
                     </div>
 
                     {/* Footer */}
-                    <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex items-center justify-between">
+                    <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex items-center justify-between shrink-0">
                         <div>
                             {startSlot && (
                                 <div className="text-sm">

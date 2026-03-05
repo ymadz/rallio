@@ -101,7 +101,7 @@ export function RescheduleModal({ booking, isOpen, onClose, onSuccess }: Resched
             if (result.success) {
                 toast({
                     title: 'Success',
-                    description: 'Booking rescheduled successfully',
+                    description: 'Reschedule request submitted — pending admin approval',
                     variant: 'default',
                 })
                 onSuccess()
@@ -160,12 +160,12 @@ export function RescheduleModal({ booking, isOpen, onClose, onSuccess }: Resched
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-4xl p-0 overflow-hidden border-0 bg-white rounded-2xl shadow-2xl [&>button]:hidden">
+            <DialogContent className="max-w-4xl p-0 overflow-hidden border-0 bg-white rounded-2xl shadow-2xl [&>button]:hidden max-h-[calc(100vh-2rem)] md:max-h-[90vh] flex flex-col">
                 <VisuallyHidden>
                     <DialogTitle>Reschedule Booking</DialogTitle>
                 </VisuallyHidden>
                 {/* Header matching availability modal */}
-                <div className="bg-gradient-to-r from-primary to-primary/80 text-white px-6 py-4 flex items-center justify-between">
+                <div className="bg-gradient-to-r from-primary to-primary/80 text-white px-6 py-4 flex items-center justify-between shrink-0">
                     <div>
                         <h3 className="text-xl font-bold">{booking.courts.name}</h3>
                         <p className="text-sm text-white/80 mt-1">Select time range</p>
@@ -180,7 +180,7 @@ export function RescheduleModal({ booking, isOpen, onClose, onSuccess }: Resched
                     </button>
                 </div>
 
-                <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+                <div className="p-6 overflow-y-auto flex-1">
                     <div className="grid md:grid-cols-2 gap-6">
                         {/* Left Column: Calendar */}
                         <div>
@@ -344,7 +344,7 @@ export function RescheduleModal({ booking, isOpen, onClose, onSuccess }: Resched
                 </div>
 
                 {/* Footer matching availability modal */}
-                <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex items-center justify-between rounded-b-2xl">
+                <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex items-center justify-between shrink-0 rounded-b-2xl">
                     <div className="text-sm">
                         {selectedDate && selectedTime ? (
                             <>

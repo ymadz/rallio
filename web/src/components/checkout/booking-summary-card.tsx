@@ -28,6 +28,8 @@ export function BookingSummaryCard({
     getPerPlayerAmount,
     discountAmount,
     applicableDiscounts,
+    promoDiscountAmount,
+    promoCode,
     platformFeePercentage,
     platformFeeEnabled,
     paymentMethod,
@@ -159,7 +161,7 @@ export function BookingSummaryCard({
             {bookedDates.length > 1 ? ` × ${bookedDates.length} sessions` : ''}
           </span>
           <span className="font-medium text-gray-900">
-            ₱{(subtotal + discountAmount).toFixed(2)}
+            ₱{(subtotal + discountAmount + promoDiscountAmount).toFixed(2)}
           </span>
         </div>
 
@@ -168,25 +170,58 @@ export function BookingSummaryCard({
             {applicableDiscounts && applicableDiscounts.length > 0 ? (
               applicableDiscounts.map((discount, index) => (
                 <div key={index} className="flex justify-between text-sm">
-                  <span className={discount.isIncrease ? 'text-orange-600' : 'text-green-600'}>
+                  <span className={discount.isIncrease ? 'text-orange-600' : 'text-primary font-medium uppercase'}>
                     {discount.name}
                   </span>
-                  <span className={`font-medium ${discount.isIncrease ? 'text-orange-600' : 'text-green-600'}`}>
+                  <span className={`font-bold ${discount.isIncrease ? 'text-orange-600' : 'text-primary'}`}>
                     {discount.isIncrease ? '+' : '-'}₱{discount.amount.toFixed(2)}
                   </span>
                 </div>
               ))
             ) : (
               <div className="flex justify-between text-sm">
-                <span className={discountAmount < 0 ? 'text-orange-600' : 'text-green-600'}>
+                <span className={discountAmount < 0 ? 'text-orange-600' : 'text-primary font-medium uppercase'}>
                   {discountAmount < 0 ? 'Surcharge' : 'Discount'}
                 </span>
-                <span className={`font-medium ${discountAmount < 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                <span className={`font-bold ${discountAmount < 0 ? 'text-orange-600' : 'text-primary'}`}>
                   {discountAmount < 0 ? '+' : '-'}₱{Math.abs(discountAmount).toFixed(2)}
                 </span>
               </div>
             )}
-            <div className="flex justify-between text-sm pt-2">
+            {promoDiscountAmount > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-primary font-medium flex items-center gap-1.5">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                  </svg>
+                  Promo Code ({promoCode})
+                </span>
+                <span className="font-bold text-primary">
+                  -₱{promoDiscountAmount.toFixed(2)}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between text-sm pt-2 border-t border-gray-100">
+              <span className="text-gray-600 font-medium">Subtotal</span>
+              <span className="font-medium text-gray-900">₱{subtotal.toFixed(2)}</span>
+            </div>
+          </div>
+        )}
+
+        {(discountAmount === 0 && promoDiscountAmount > 0) && (
+          <div className="space-y-2 pt-2 border-t border-gray-100">
+            <div className="flex justify-between text-sm">
+              <span className="text-primary font-medium flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                </svg>
+                Promo Code ({promoCode})
+              </span>
+              <span className="font-bold text-primary">
+                -₱{promoDiscountAmount.toFixed(2)}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm pt-2 border-t border-gray-100">
               <span className="text-gray-600 font-medium">Subtotal</span>
               <span className="font-medium text-gray-900">₱{subtotal.toFixed(2)}</span>
             </div>

@@ -427,9 +427,9 @@ export function AvailabilityModal({
 
       {/* Modal */}
       <div className="flex min-h-full items-center justify-center p-4">
-        <div className="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+        <div className="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[calc(100vh-2rem)] md:max-h-[90vh] flex flex-col overflow-hidden">
           {/* Header */}
-          <div className="bg-gradient-to-r from-primary to-primary/80 text-white px-6 py-4 flex items-center justify-between">
+          <div className="bg-gradient-to-r from-primary to-primary/80 text-white px-6 py-4 flex items-center justify-between shrink-0">
             <div>
               <h3 className="text-xl font-bold">{courtName}</h3>
               <p className="text-sm text-white/80 mt-1">Select time range</p>
@@ -445,7 +445,7 @@ export function AvailabilityModal({
           </div>
 
           {/* Content */}
-          <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+          <div className="p-6 overflow-y-auto flex-1">
 
             <div className="grid md:grid-cols-2 gap-6">
               {/* Calendar */}

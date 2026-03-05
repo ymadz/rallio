@@ -42,7 +42,6 @@ interface PricingManagementProps {
 }
 
 export function PricingManagement({ venueId }: PricingManagementProps) {
-  const [activeTab, setActiveTab] = useState<'courts' | 'rules'>('courts')
   const [courts, setCourts] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -116,11 +115,6 @@ export function PricingManagement({ venueId }: PricingManagementProps) {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Pricing Management</h1>
-        <p className="text-gray-600">Configure court rates and dynamic pricing rules</p>
-      </div>
 
       {/* Loading State */}
       {isLoading && (
@@ -157,105 +151,22 @@ export function PricingManagement({ venueId }: PricingManagementProps) {
         </div>
       )}
 
-      {/* Summary Cards */}
+      {/* Court Rates */}
       {!isLoading && !error && courts.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                <DollarSign className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Avg. Base Rate</p>
-                <p className="text-xl font-bold text-gray-900">₱{avgBaseRate}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                <Calendar className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Total Courts</p>
-                <p className="text-xl font-bold text-gray-900">{courts.length}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Min Rate</p>
-                <p className="text-xl font-bold text-gray-900">
-                  ₱{courts.length > 0 ? Math.min(...courts.map(c => c.hourly_rate || 0)) : 0}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-red-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Max Rate</p>
-                <p className="text-xl font-bold text-gray-900">
-                  ₱{courts.length > 0 ? Math.max(...courts.map(c => c.hourly_rate || 0)) : 0}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tabs */}
-      {!isLoading && !error && courts.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl p-2 mb-6 inline-flex gap-2">
-          <button
-            onClick={() => setActiveTab('courts')}
-            className={`px-6 py-2 rounded-lg font-medium transition-colors ${activeTab === 'courts'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-gray-600 hover:bg-gray-100'
-              }`}
-          >
-            <div className="flex items-center gap-2">
-              <DollarSign className="w-4 h-4" />
-              <span>Court Rates</span>
-            </div>
-          </button>
-          <button
-            onClick={() => setActiveTab('rules')}
-            className={`px-6 py-2 rounded-lg font-medium transition-colors ${activeTab === 'rules'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-gray-600 hover:bg-gray-100'
-              }`}
-          >
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              <span>Pricing Rules</span>
-            </div>
-          </button>
-        </div>
-      )}
-
-      {/* Court Rates Tab */}
-      {activeTab === 'courts' && !isLoading && !error && courts.length > 0 && (
         <div className="space-y-6">
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-gray-900">Court Pricing</h2>
-              <button className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                <Edit className="w-4 h-4" />
-                <span>Bulk Edit</span>
-              </button>
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Pricing</h2>
+              <p className="text-sm text-gray-500 mt-1">Configure your court rates</p>
             </div>
+            <button className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
+              <Edit className="w-4 h-4" />
+              <span>Bulk Edit</span>
+            </button>
+          </div>
 
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
@@ -293,8 +204,8 @@ export function PricingManagement({ venueId }: PricingManagementProps) {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${court.is_active
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-gray-100 text-gray-700'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-gray-100 text-gray-700'
                           }`}>
                           {court.is_active ? 'Active' : 'Inactive'}
                         </span>
@@ -327,50 +238,10 @@ export function PricingManagement({ venueId }: PricingManagementProps) {
         </div>
       )}
 
-      {/* Pricing Rules Tab */}
-      {activeTab === 'rules' && !isLoading && !error && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">Dynamic Pricing Rules</h2>
-              <p className="text-sm text-gray-500 mt-1">Automatic pricing based on time and day (Coming Soon)</p>
-            </div>
-            <button className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors opacity-50 cursor-not-allowed" disabled>
-              <Plus className="w-4 h-4" />
-              <span>Add Rule</span>
-            </button>
-          </div>
-
-          <div className="bg-primary/5 border border-primary/20 rounded-xl p-8 text-center">
-            <Clock className="w-12 h-12 text-primary mx-auto mb-3" />
-            <h3 className="text-lg font-semibold text-primary/80 mb-2">Dynamic Pricing Coming Soon</h3>
-            <p className="text-sm text-primary/70">
-              Set up advanced pricing rules based on time, day, and demand. This feature will be available in a future update.
-            </p>
-          </div>
-
-          {/* Priority Notice */}
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-            <div className="flex items-start gap-3">
-              <Zap className="w-5 h-5 text-yellow-600 mt-0.5" />
-              <div>
-                <h3 className="font-semibold text-yellow-900 mb-1">Planned Features</h3>
-                <ul className="text-sm text-yellow-700 space-y-1">
-                  <li>• Peak hour pricing (evenings, weekends)</li>
-                  <li>• Off-peak discounts for better utilization</li>
-                  <li>• Special event pricing</li>
-                  <li>• Seasonal rate adjustments</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Edit Price Modal */}
       {showEditModal && editingCourt && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
+          <div className="bg-white rounded-xl max-w-md w-full max-h-[calc(100vh-2rem)] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold text-gray-900">Edit Pricing</h3>
               <button
