@@ -2,8 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { ProfileCompletionBanner } from '@/components/profile-completion-banner'
 import { ActiveBookingBanner } from '@/components/booking/active-booking-banner'
-import { NearbyVenues } from '@/components/home/nearby-venues'
 import { NearbyQueues } from '@/components/home/nearby-queues'
+import { UpcomingBookings } from '@/components/home/upcoming-bookings'
 import { formatCurrency } from '@rallio/shared'
 import { HomeTutorial } from '@/components/home/home-tutorial'
 
@@ -63,6 +63,53 @@ export default async function HomePage() {
     .select('skill_level, birth_date')
     .eq('user_id', user?.id)
     .single()
+
+  // Get upcoming bookings (future bookings with active statuses)
+  const { data: upcomingBookings } = user ? await supabase
+    .from('reservations')
+    .select(`
+      id,
+      start_time,
+      end_time,
+      status,
+      total_amount,
+      amount_paid,
+      num_players,
+      payment_type,
+      notes,
+      created_at,
+      recurrence_group_id,
+      metadata,
+      cancellation_reason,
+      courts (
+        id,
+        name,
+        hourly_rate,
+        court_images (
+          url,
+          is_primary,
+          display_order
+        ),
+        venues (
+          id,
+          name,
+          address,
+          city,
+          image_url
+        )
+      ),
+      payments (
+        id,
+        status,
+        payment_method,
+        amount
+      )
+    `)
+    .eq('user_id', user.id)
+    .gte('start_time', new Date().toISOString())
+    .in('status', ['pending_payment', 'confirmed', 'partially_paid', 'ongoing'])
+    .order('start_time', { ascending: true })
+    .limit(6) : { data: [] }
 
 
 
@@ -422,16 +469,16 @@ export default async function HomePage() {
         {/* Active Queues Nearby - Only shows if there are active queues */}
         <NearbyQueues />
 
-        {/* Near You */}
+        {/* Your Upcoming Bookings */}
         <section>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Near you</h2>
-            <Link href="/courts?sort=distance" className="text-sm font-medium text-primary hover:text-primary/80">
-              See more
+            <h2 className="text-lg font-semibold text-gray-900">Your Upcoming Bookings</h2>
+            <Link href="/bookings" className="text-sm font-medium text-primary hover:text-primary/80">
+              See all
             </Link>
           </div>
 
-          <NearbyVenues />
+          <UpcomingBookings bookings={(upcomingBookings || []) as any} />
         </section>
       </div>
     </div>
