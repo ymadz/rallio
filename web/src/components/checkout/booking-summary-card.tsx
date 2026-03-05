@@ -1,19 +1,21 @@
-'use client'
+'use client';
 
-import { format } from 'date-fns'
-import { useCheckoutStore, CheckoutStep } from '@/stores/checkout-store'
+import { format } from 'date-fns';
+import { useCheckoutStore, CheckoutStep } from '@/stores/checkout-store';
 
 interface BookingSummaryCardProps {
-  onContinue?: () => void
-  onBack?: () => void
-  canContinue?: boolean
-  currentStep?: CheckoutStep
-  showButtons?: boolean
+  onContinue?: () => void;
+  onBack?: () => void;
+  onCancel?: () => void;
+  canContinue?: boolean;
+  currentStep?: CheckoutStep;
+  showButtons?: boolean;
 }
 
 export function BookingSummaryCard({
   onContinue,
   onBack,
+  onCancel,
   canContinue = true,
   currentStep = 'details',
   showButtons = false,
@@ -36,66 +38,71 @@ export function BookingSummaryCard({
     downPaymentPercentage,
     getDownPaymentAmount,
     getRemainingBalance,
-  } = useCheckoutStore()
+  } = useCheckoutStore();
 
-  if (!bookingData) return null
+  if (!bookingData) return null;
 
-  const subtotal = getSubtotal()
-  const platformFee = getPlatformFeeAmount()
-  const total = getTotalAmount()
-  const perPlayer = getPerPlayerAmount()
-  const downPaymentAmount = getDownPaymentAmount()
-  const remainingBalance = getRemainingBalance()
-  const isCashWithDownpayment = paymentMethod === 'cash' && downPaymentPercentage && downPaymentPercentage > 0 && downPaymentAmount > 0
+  const subtotal = getSubtotal();
+  const platformFee = getPlatformFeeAmount();
+  const total = getTotalAmount();
+  const perPlayer = getPerPlayerAmount();
+  const downPaymentAmount = getDownPaymentAmount();
+  const remainingBalance = getRemainingBalance();
+  const isCashWithDownpayment =
+    paymentMethod === 'cash' &&
+    downPaymentPercentage &&
+    downPaymentPercentage > 0 &&
+    downPaymentAmount > 0;
 
-  let duration = 1
+  let duration = 1;
   try {
-    const startHour = parseInt(bookingData.startTime.split(':')[0])
-    const endHour = parseInt(bookingData.endTime.split(':')[0])
-    duration = Math.max(1, endHour - startHour)
-  } catch (e) { }
+    const startHour = parseInt(bookingData.startTime.split(':')[0]);
+    const endHour = parseInt(bookingData.endTime.split(':')[0]);
+    duration = Math.max(1, endHour - startHour);
+  } catch (e) {}
 
   const formatTime = (timeString: string) => {
     try {
-      return format(new Date(timeString), 'h:mm a')
+      return format(new Date(timeString), 'h:mm a');
     } catch {
-      return timeString
+      return timeString;
     }
-  }
+  };
 
   // Calculate ACTUAL future slots that will be created (matching checkout-store logic)
   const getActualBookedDates = () => {
-    if (!bookingData) return []
+    if (!bookingData) return [];
 
-    const initialStartTime = new Date(bookingData.date)
-    const [startH, startM] = bookingData.startTime.split(':')
-    initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
-    const startDayIndex = initialStartTime.getDay()
+    const initialStartTime = new Date(bookingData.date);
+    const [startH, startM] = bookingData.startTime.split(':');
+    initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0);
+    const startDayIndex = initialStartTime.getDay();
 
-    const recurrenceWeeks = bookingData.recurrenceWeeks || 1
-    const selectedDays = bookingData.selectedDays || []
+    const recurrenceWeeks = bookingData.recurrenceWeeks || 1;
+    const selectedDays = bookingData.selectedDays || [];
 
-    const uniqueSelectedDays = selectedDays.length > 0
-      ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
-      : [startDayIndex]
+    const uniqueSelectedDays =
+      selectedDays.length > 0
+        ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
+        : [startDayIndex];
 
-    const bookedDates: Date[] = []
+    const bookedDates: Date[] = [];
 
     for (let i = 0; i < recurrenceWeeks; i++) {
       for (const dayIndex of uniqueSelectedDays) {
-        const dayOffset = (dayIndex - startDayIndex + 7) % 7
+        const dayOffset = (dayIndex - startDayIndex + 7) % 7;
 
-        const slotStartTime = new Date(initialStartTime.getTime())
-        slotStartTime.setDate(slotStartTime.getDate() + (i * 7) + dayOffset)
+        const slotStartTime = new Date(initialStartTime.getTime());
+        slotStartTime.setDate(slotStartTime.getDate() + i * 7 + dayOffset);
 
-        bookedDates.push(slotStartTime)
+        bookedDates.push(slotStartTime);
       }
     }
 
-    return bookedDates
-  }
+    return bookedDates;
+  };
 
-  const bookedDates = getActualBookedDates()
+  const bookedDates = getActualBookedDates();
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-6 sticky top-6">
@@ -123,7 +130,10 @@ export function BookingSummaryCard({
               <p className="font-medium text-gray-700 mb-1">Booked Dates ({bookedDates.length}):</p>
               <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto p-1.5 bg-gray-50 rounded-md border border-gray-100">
                 {bookedDates.map((date, idx) => (
-                  <span key={idx} className="bg-white border border-gray-200 text-gray-600 px-2 py-0.5 rounded-md shadow-sm">
+                  <span
+                    key={idx}
+                    className="bg-white border border-gray-200 text-gray-600 px-2 py-0.5 rounded-md shadow-sm"
+                  >
                     {format(date, 'MMM d (E)')}
                   </span>
                 ))}
@@ -157,7 +167,8 @@ export function BookingSummaryCard({
       <div className="space-y-2 py-4">
         <div className="flex justify-between text-sm">
           <span className="text-gray-600">
-            Court Fee (₱{bookingData.hourlyRate.toFixed(2)} × {duration} {duration > 1 ? 'hrs' : 'hr'})
+            Court Fee (₱{bookingData.hourlyRate.toFixed(2)} × {duration}{' '}
+            {duration > 1 ? 'hrs' : 'hr'})
             {bookedDates.length > 1 ? ` × ${bookedDates.length} sessions` : ''}
           </span>
           <span className="font-medium text-gray-900">
@@ -170,20 +181,32 @@ export function BookingSummaryCard({
             {applicableDiscounts && applicableDiscounts.length > 0 ? (
               applicableDiscounts.map((discount, index) => (
                 <div key={index} className="flex justify-between text-sm">
-                  <span className={discount.isIncrease ? 'text-orange-600' : 'text-primary font-medium uppercase'}>
+                  <span
+                    className={
+                      discount.isIncrease ? 'text-orange-600' : 'text-primary font-medium uppercase'
+                    }
+                  >
                     {discount.name}
                   </span>
-                  <span className={`font-bold ${discount.isIncrease ? 'text-orange-600' : 'text-primary'}`}>
+                  <span
+                    className={`font-bold ${discount.isIncrease ? 'text-orange-600' : 'text-primary'}`}
+                  >
                     {discount.isIncrease ? '+' : '-'}₱{discount.amount.toFixed(2)}
                   </span>
                 </div>
               ))
             ) : (
               <div className="flex justify-between text-sm">
-                <span className={discountAmount < 0 ? 'text-orange-600' : 'text-primary font-medium uppercase'}>
+                <span
+                  className={
+                    discountAmount < 0 ? 'text-orange-600' : 'text-primary font-medium uppercase'
+                  }
+                >
                   {discountAmount < 0 ? 'Surcharge' : 'Discount'}
                 </span>
-                <span className={`font-bold ${discountAmount < 0 ? 'text-orange-600' : 'text-primary'}`}>
+                <span
+                  className={`font-bold ${discountAmount < 0 ? 'text-orange-600' : 'text-primary'}`}
+                >
                   {discountAmount < 0 ? '+' : '-'}₱{Math.abs(discountAmount).toFixed(2)}
                 </span>
               </div>
@@ -191,14 +214,22 @@ export function BookingSummaryCard({
             {promoDiscountAmount > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-primary font-medium flex items-center gap-1.5">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                  <svg
+                    className="w-3.5 h-3.5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+                    />
                   </svg>
                   Promo Code ({promoCode})
                 </span>
-                <span className="font-bold text-primary">
-                  -₱{promoDiscountAmount.toFixed(2)}
-                </span>
+                <span className="font-bold text-primary">-₱{promoDiscountAmount.toFixed(2)}</span>
               </div>
             )}
             <div className="flex justify-between text-sm pt-2 border-t border-gray-100">
@@ -208,18 +239,21 @@ export function BookingSummaryCard({
           </div>
         )}
 
-        {(discountAmount === 0 && promoDiscountAmount > 0) && (
+        {discountAmount === 0 && promoDiscountAmount > 0 && (
           <div className="space-y-2 pt-2 border-t border-gray-100">
             <div className="flex justify-between text-sm">
               <span className="text-primary font-medium flex items-center gap-1.5">
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+                  />
                 </svg>
                 Promo Code ({promoCode})
               </span>
-              <span className="font-bold text-primary">
-                -₱{promoDiscountAmount.toFixed(2)}
-              </span>
+              <span className="font-bold text-primary">-₱{promoDiscountAmount.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-sm pt-2 border-t border-gray-100">
               <span className="text-gray-600 font-medium">Subtotal</span>
@@ -230,9 +264,7 @@ export function BookingSummaryCard({
 
         {platformFeeEnabled && platformFee > 0 && (
           <div className="flex justify-between text-sm">
-            <span className="text-gray-600">
-              Platform Fee ({platformFeePercentage}%)
-            </span>
+            <span className="text-gray-600">Platform Fee ({platformFeePercentage}%)</span>
             <span className="font-medium text-gray-900">₱{platformFee.toFixed(2)}</span>
           </div>
         )}
@@ -252,14 +284,22 @@ export function BookingSummaryCard({
             {isSplitPayment ? 'Your Share' : 'Total Amount'}
           </span>
           <span className="text-2xl font-bold text-primary">
-            ₱{(isSplitPayment ? perPlayer : (isCashWithDownpayment ? downPaymentAmount : total)).toFixed(2)}
+            ₱
+            {(isSplitPayment
+              ? perPlayer
+              : isCashWithDownpayment
+                ? downPaymentAmount
+                : total
+            ).toFixed(2)}
           </span>
         </div>
 
         {isCashWithDownpayment && (
           <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center bg-primary/5 -mx-6 px-6 py-3">
             <div>
-              <p className="text-xs font-semibold text-primary uppercase tracking-wider">Remaining Balance</p>
+              <p className="text-xs font-semibold text-primary uppercase tracking-wider">
+                Remaining Balance
+              </p>
               <p className="text-xs text-gray-500">To be paid at the venue</p>
             </div>
             <p className="text-xl font-bold text-gray-900">₱{remainingBalance.toFixed(2)}</p>
@@ -274,26 +314,32 @@ export function BookingSummaryCard({
       </div>
 
       {/* Navigation Buttons */}
-      {
-        showButtons && currentStep !== 'processing' && (
-          <div className="pt-4 mt-4 border-t border-gray-200 flex flex-col gap-3">
+      {showButtons && currentStep !== 'processing' && (
+        <div className="pt-4 mt-4 border-t border-gray-200 flex flex-col gap-3">
+          <button
+            onClick={onContinue}
+            disabled={!canContinue}
+            className="w-full px-6 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Continue
+          </button>
+          {currentStep === 'details' ? (
             <button
-              onClick={onContinue}
-              disabled={!canContinue}
-              className="w-full px-6 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={onCancel}
+              className="w-full px-6 py-3 border border-red-300 text-red-600 rounded-lg font-medium hover:bg-red-50 transition-colors"
             >
-              Continue
+              Cancel Booking
             </button>
-            {currentStep !== 'details' && (
-              <button
-                onClick={onBack}
-                className="w-full px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
-              >
-                Back
-              </button>
-            )}
-          </div>
-        )}
+          ) : (
+            <button
+              onClick={onBack}
+              className="w-full px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+            >
+              Back
+            </button>
+          )}
+        </div>
+      )}
     </div>
-  )
+  );
 }
