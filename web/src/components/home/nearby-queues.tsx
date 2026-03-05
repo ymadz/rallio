@@ -129,8 +129,9 @@ export function NearbyQueues() {
             const isOpen = queue.status === 'waiting';
             const startDate = new Date(queue.startTime);
             const endDate = new Date(queue.endTime);
-            const avatarCount = Math.min(queue.currentPlayers || 0, 4);
-            const overflow = (queue.currentPlayers || 0) - avatarCount;
+            const avatarCount = Math.min(queue.players?.length || queue.currentPlayers || 0, 4);
+            const totalPlayers = queue.players?.length || queue.currentPlayers || 0;
+            const overflow = totalPlayers - avatarCount;
 
             return (
               <div
@@ -252,18 +253,26 @@ export function NearbyQueues() {
                     {/* Avatar stack */}
                     <div className="flex items-center flex-shrink-0">
                       <div className="flex -space-x-1.5">
-                        {Array.from({ length: avatarCount }).map((_, i) => (
+                        {queue.players?.slice(0, 4).map((player, i) => (
                           <div
                             key={i}
-                            className={`w-5.5 h-5.5 w-[22px] h-[22px] rounded-full ${AVATAR_COLORS[i % AVATAR_COLORS.length]} border-[1.5px] border-white flex items-center justify-center`}
+                            className={`w-[22px] h-[22px] rounded-full ${!player.avatarUrl ? AVATAR_COLORS[i % AVATAR_COLORS.length] : ''} border-[1.5px] border-white flex items-center justify-center overflow-hidden`}
                           >
-                            <svg
-                              className="w-2.5 h-2.5 text-white/90"
-                              fill="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
-                            </svg>
+                            {player.avatarUrl ? (
+                              <img
+                                src={player.avatarUrl}
+                                alt=""
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <svg
+                                className="w-2.5 h-2.5 text-white/90"
+                                fill="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
+                              </svg>
+                            )}
                           </div>
                         ))}
                       </div>

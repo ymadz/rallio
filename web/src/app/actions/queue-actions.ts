@@ -634,20 +634,27 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
       return { success: false, error: 'Failed to fetch queues' }
     }
 
-    // Fetch actual participant counts since current_players column can be stale
+    // Fetch actual participant counts and avatar URLs since current_players column can be stale
     const sessionIds = (sessions || []).map((s: any) => s.id)
     let participantCounts: Record<string, number> = {}
+    let participantAvatars: Record<string, { avatarUrl: string | null }[]> = {}
 
     if (sessionIds.length > 0) {
       const { data: participants } = await supabase
         .from('queue_participants')
-        .select('queue_session_id')
+        .select('queue_session_id, user_id, profiles(avatar_url)')
         .in('queue_session_id', sessionIds)
         .is('left_at', null)
 
       if (participants) {
         participants.forEach((p: any) => {
           participantCounts[p.queue_session_id] = (participantCounts[p.queue_session_id] || 0) + 1
+          if (!participantAvatars[p.queue_session_id]) {
+            participantAvatars[p.queue_session_id] = []
+          }
+          participantAvatars[p.queue_session_id].push({
+            avatarUrl: p.profiles?.avatar_url || null,
+          })
         })
       }
     }
@@ -678,7 +685,9 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
         venueName: session.courts?.venues?.name || 'Unknown Venue',
         venueId: session.courts?.venues?.id || '',
         status: session.status,
-        players: [],
+        players: (participantAvatars[session.id] || []).map((p: any) => ({
+          avatarUrl: p.avatarUrl,
+        })),
         userPosition: null,
         maxPlayers: session.max_players,
         currentPlayers,
