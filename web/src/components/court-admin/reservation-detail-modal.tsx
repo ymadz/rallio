@@ -10,11 +10,13 @@ import {
   User,
   MapPin,
   Calendar,
+  Banknote,
   DollarSign,
   Users,
   FileText,
   Loader2,
-  CalendarCheck
+  CalendarCheck,
+  History
 } from 'lucide-react'
 
 interface ReservationDetailModalProps {
@@ -223,7 +225,7 @@ export function ReservationDetailModal({
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
           <div>
             <h2 className="text-xl font-bold text-gray-900">Reservation Details</h2>
             <p className="text-sm text-gray-500 mt-1">ID: {reservation.id.slice(0, 8)}</p>
@@ -261,6 +263,97 @@ export function ReservationDetailModal({
               })}
             </span>
           </div>
+
+          {/* Pending Reschedule Request — shown at top for visibility */}
+          {hasPendingReschedule() && (
+            <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <CalendarCheck className="w-5 h-5 text-amber-600" />
+                <h3 className="font-semibold text-amber-900">Reschedule Request</h3>
+                <span className="ml-auto inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 animate-pulse">Action Needed</span>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-amber-700">Proposed Date:</span>
+                  <span className="font-medium text-amber-900">
+                    {new Date(reservation.metadata.reschedule_request.proposed_start_time).toLocaleDateString('en-US', {
+                      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+                    })}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-amber-700">Proposed Time:</span>
+                  <span className="font-medium text-amber-900">
+                    {new Date(reservation.metadata.reschedule_request.proposed_start_time).toLocaleTimeString('en-US', {
+                      hour: 'numeric', minute: '2-digit', hour12: true
+                    })}
+                    {' - '}
+                    {new Date(reservation.metadata.reschedule_request.proposed_end_time).toLocaleTimeString('en-US', {
+                      hour: 'numeric', minute: '2-digit', hour12: true
+                    })}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs pt-2 border-t border-amber-200">
+                  <span className="text-amber-600">Requested:</span>
+                  <span className="text-amber-700">
+                    {new Date(reservation.metadata.reschedule_request.requested_at).toLocaleDateString('en-US', {
+                      month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+                    })}
+                  </span>
+                </div>
+              </div>
+
+              {/* Reschedule Reject Form */}
+              {showRescheduleRejectForm && (
+                <div className="mt-3 pt-3 border-t border-amber-200">
+                  <textarea
+                    value={rescheduleRejectReason}
+                    onChange={(e) => setRescheduleRejectReason(e.target.value)}
+                    placeholder="Reason for rejecting this reschedule..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 resize-none text-sm"
+                    rows={2}
+                  />
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      onClick={handleRejectReschedule}
+                      disabled={isRejectingReschedule || !rescheduleRejectReason.trim()}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                    >
+                      {isRejectingReschedule ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+                      <span>{isRejectingReschedule ? 'Rejecting...' : 'Confirm Reject'}</span>
+                    </button>
+                    <button
+                      onClick={() => { setShowRescheduleRejectForm(false); setRescheduleRejectReason('') }}
+                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Reschedule Action Buttons */}
+              {!showRescheduleRejectForm && (
+                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-amber-200">
+                  <button
+                    onClick={handleApproveReschedule}
+                    disabled={isApprovingReschedule}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                  >
+                    {isApprovingReschedule ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                    <span>{isApprovingReschedule ? 'Approving...' : 'Approve Reschedule'}</span>
+                  </button>
+                  <button
+                    onClick={() => setShowRescheduleRejectForm(true)}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 border-2 border-red-600 text-red-600 text-sm rounded-lg hover:bg-red-50 transition-colors"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    <span>Reject</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Customer Info */}
           <div className="bg-gray-50 rounded-lg p-4">
@@ -343,7 +436,7 @@ export function ReservationDetailModal({
           {/* Booking Details */}
           <div className="bg-gray-50 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-2">
-              <DollarSign className="w-5 h-5 text-gray-400" />
+              <Banknote className="w-5 h-5 text-gray-400" />
               <h3 className="font-semibold text-gray-900">Amount Breakdown</h3>
             </div>
             <div className="flex justify-between items-center mb-2">
@@ -395,94 +488,78 @@ export function ReservationDetailModal({
             </div>
           )}
 
-          {/* Pending Reschedule Request */}
-          {hasPendingReschedule() && (
+          {/* Reschedule History */}
+          {reservation.metadata?.rescheduled === true && reservation.metadata?.rescheduled_from && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-3">
-                <CalendarCheck className="w-5 h-5 text-blue-600" />
-                <h3 className="font-semibold text-blue-900">Reschedule Request</h3>
-                <span className="ml-auto inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Pending</span>
+                <History className="w-5 h-5 text-blue-500" />
+                <h3 className="font-semibold text-blue-900">Reschedule History</h3>
               </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-blue-700">Proposed Date:</span>
-                  <span className="font-medium text-blue-900">
-                    {new Date(reservation.metadata.reschedule_request.proposed_start_time).toLocaleDateString('en-US', {
-                      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
-                    })}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-blue-700">Proposed Time:</span>
-                  <span className="font-medium text-blue-900">
-                    {new Date(reservation.metadata.reschedule_request.proposed_start_time).toLocaleTimeString('en-US', {
-                      hour: 'numeric', minute: '2-digit', hour12: true
-                    })}
-                    {' - '}
-                    {new Date(reservation.metadata.reschedule_request.proposed_end_time).toLocaleTimeString('en-US', {
-                      hour: 'numeric', minute: '2-digit', hour12: true
-                    })}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-xs pt-2 border-t border-blue-200">
-                  <span className="text-blue-600">Requested:</span>
-                  <span className="text-blue-700">
-                    {new Date(reservation.metadata.reschedule_request.requested_at).toLocaleDateString('en-US', {
-                      month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
-                    })}
-                  </span>
-                </div>
-              </div>
-
-              {/* Reschedule Reject Form */}
-              {showRescheduleRejectForm && (
-                <div className="mt-3 pt-3 border-t border-blue-200">
-                  <textarea
-                    value={rescheduleRejectReason}
-                    onChange={(e) => setRescheduleRejectReason(e.target.value)}
-                    placeholder="Reason for rejecting this reschedule..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 resize-none text-sm"
-                    rows={2}
-                  />
-                  <div className="flex items-center gap-2 mt-2">
-                    <button
-                      onClick={handleRejectReschedule}
-                      disabled={isRejectingReschedule || !rescheduleRejectReason.trim()}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-                    >
-                      {isRejectingReschedule ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
-                      <span>{isRejectingReschedule ? 'Rejecting...' : 'Confirm Reject'}</span>
-                    </button>
-                    <button
-                      onClick={() => { setShowRescheduleRejectForm(false); setRescheduleRejectReason('') }}
-                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
-                    >
-                      Cancel
-                    </button>
+              <div className="relative pl-4 border-l-2 border-blue-200 space-y-4">
+                {/* Approved event */}
+                <div className="relative">
+                  <div className="absolute -left-[1.3rem] top-1 w-2.5 h-2.5 rounded-full bg-green-500 ring-2 ring-white" />
+                  <div className="text-sm">
+                    <span className="font-medium text-green-700">Reschedule Approved</span>
+                    <p className="text-gray-500 text-xs mt-0.5">
+                      {new Date(reservation.metadata.rescheduled_from.rescheduled_at).toLocaleDateString('en-US', {
+                        month: 'short', day: 'numeric', year: 'numeric',
+                      })}{' at '}
+                      {new Date(reservation.metadata.rescheduled_from.rescheduled_at).toLocaleTimeString('en-US', {
+                        hour: 'numeric', minute: '2-digit', hour12: true,
+                      })}
+                    </p>
                   </div>
                 </div>
-              )}
-
-              {/* Reschedule Action Buttons */}
-              {!showRescheduleRejectForm && (
-                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-blue-200">
-                  <button
-                    onClick={handleApproveReschedule}
-                    disabled={isApprovingReschedule}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                  >
-                    {isApprovingReschedule ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                    <span>{isApprovingReschedule ? 'Approving...' : 'Approve Reschedule'}</span>
-                  </button>
-                  <button
-                    onClick={() => setShowRescheduleRejectForm(true)}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 border-2 border-red-600 text-red-600 text-sm rounded-lg hover:bg-red-50 transition-colors"
-                  >
-                    <XCircle className="w-4 h-4" />
-                    <span>Reject</span>
-                  </button>
+                {/* Original schedule */}
+                <div className="relative">
+                  <div className="absolute -left-[1.3rem] top-1 w-2.5 h-2.5 rounded-full bg-gray-400 ring-2 ring-white" />
+                  <div className="text-sm">
+                    <span className="font-medium text-gray-700">Original Schedule</span>
+                    <p className="text-gray-500 text-xs mt-0.5">
+                      {new Date(reservation.metadata.rescheduled_from.start_time).toLocaleDateString('en-US', {
+                        weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+                      })}{', '}
+                      {new Date(reservation.metadata.rescheduled_from.start_time).toLocaleTimeString('en-US', {
+                        hour: 'numeric', minute: '2-digit', hour12: true,
+                      })}
+                      {' - '}
+                      {new Date(reservation.metadata.rescheduled_from.end_time).toLocaleTimeString('en-US', {
+                        hour: 'numeric', minute: '2-digit', hour12: true,
+                      })}
+                    </p>
+                  </div>
                 </div>
-              )}
+              </div>
+            </div>
+          )}
+
+          {/* Last Reschedule Rejection */}
+          {reservation.metadata?.last_reschedule_rejection && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <History className="w-5 h-5 text-red-500" />
+                <h3 className="font-semibold text-red-900">Last Reschedule Rejected</h3>
+              </div>
+              <div className="relative pl-4 border-l-2 border-red-200 space-y-2">
+                <div className="relative">
+                  <div className="absolute -left-[1.3rem] top-1 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white" />
+                  <div className="text-sm">
+                    <span className="font-medium text-red-700">Rejected</span>
+                    <p className="text-gray-500 text-xs mt-0.5">
+                      {new Date(reservation.metadata.last_reschedule_rejection.rejected_at).toLocaleDateString('en-US', {
+                        month: 'short', day: 'numeric', year: 'numeric',
+                      })}{' at '}
+                      {new Date(reservation.metadata.last_reschedule_rejection.rejected_at).toLocaleTimeString('en-US', {
+                        hour: 'numeric', minute: '2-digit', hour12: true,
+                      })}
+                    </p>
+                    <p className="text-red-600 text-xs mt-1 italic">
+                      Reason: {reservation.metadata.last_reschedule_rejection.reason}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 

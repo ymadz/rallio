@@ -538,6 +538,11 @@ export function ReservationManagement() {
                                 Week {(reservation.metadata.week_index ?? 0) + 1}/{reservation.metadata.weeks_total}
                               </span>
                             )}
+                            {reservation.metadata?.reschedule_request?.status === 'pending' && (
+                              <span className="px-2 py-1 text-xs font-medium rounded-full bg-amber-50 text-amber-700 border border-amber-200 animate-pulse">
+                                Reschedule Pending
+                              </span>
+                            )}
                             {reservation.metadata?.rescheduled === true && (
                               <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                                 Rescheduled
