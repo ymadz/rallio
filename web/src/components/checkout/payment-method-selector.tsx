@@ -8,42 +8,44 @@ export function PaymentMethodSelector() {
     paymentMethod,
     setPaymentMethod,
     downPaymentPercentage,
-    getDownPaymentAmount,
     getTotalAmount,
     setCustomDownPaymentAmount,
     customDownPaymentAmount,
   } = useCheckoutStore()
 
   const total = getTotalAmount()
-  const downPaymentAmount = getDownPaymentAmount()
   const isDownPaymentRequired = downPaymentPercentage ? downPaymentPercentage > 0 : false
   const minimumDownPayment = isDownPaymentRequired
     ? Math.round((total * ((downPaymentPercentage ?? 20) / 100)) * 100) / 100
     : 0
 
-  // Local input state for the custom amount field
   const [inputValue, setInputValue] = useState('')
 
-  // Sync input display with store when payment method changes
+  // Auto-set down payment to minimum when cash is selected
   useEffect(() => {
     if (paymentMethod === 'cash' && isDownPaymentRequired) {
-      if (customDownPaymentAmount && customDownPaymentAmount > 0) {
-        setInputValue(customDownPaymentAmount.toFixed(2))
+      if (!customDownPaymentAmount || customDownPaymentAmount <= 0) {
+        setCustomDownPaymentAmount(minimumDownPayment)
+        setInputValue(minimumDownPayment.toFixed(2))
       } else {
-        setInputValue('')
+        setInputValue(customDownPaymentAmount.toFixed(2))
       }
     }
-  }, [paymentMethod, isDownPaymentRequired, customDownPaymentAmount])
+  }, [paymentMethod, isDownPaymentRequired])
 
-  const handleCustomAmountChange = (value: string) => {
+  const handleAmountChange = (value: string) => {
     setInputValue(value)
     const parsed = parseFloat(value)
     if (!isNaN(parsed) && parsed > 0) {
       setCustomDownPaymentAmount(parsed)
     } else if (value === '') {
-      setCustomDownPaymentAmount(undefined)
+      setCustomDownPaymentAmount(minimumDownPayment)
     }
   }
+
+  const effectiveAmount = Math.min(Math.max(customDownPaymentAmount || minimumDownPayment, 0), total)
+  const isBelowMinimum = customDownPaymentAmount !== undefined && customDownPaymentAmount > 0 && customDownPaymentAmount < minimumDownPayment
+  const isAboveTotal = customDownPaymentAmount !== undefined && customDownPaymentAmount > total
 
   return (
     <div className="space-y-4">
@@ -177,100 +179,82 @@ export function PaymentMethodSelector() {
         </button>
       </div>
 
-      {/* Custom Down Payment Amount Input */}
+      {/* Down Payment Section */}
       {paymentMethod === 'cash' && isDownPaymentRequired && (
-        <div className={`mt-2 p-4 bg-gray-50 border rounded-xl transition-colors ${customDownPaymentAmount !== undefined && customDownPaymentAmount > 0 && customDownPaymentAmount < minimumDownPayment
-          ? 'border-red-300 bg-red-50/50'
-          : 'border-gray-200'
-          }`}>
-          <label className="block text-sm font-semibold text-gray-900 mb-2">
-            Down Payment Amount
-          </label>
-          <p className="text-xs text-gray-500 mb-3">
-            Minimum: ₱{minimumDownPayment.toFixed(2)} ({downPaymentPercentage}%) — Maximum: ₱{total.toFixed(2)} (100%)
-          </p>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium">₱</span>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={inputValue}
-              onChange={(e) => {
-                const val = e.target.value;
-                // Allow empty, numbers, and a single decimal point
-                if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                  handleCustomAmountChange(val)
-                }
-              }}
-              onBlur={() => {
-                // Formatting on blur keeps it clean after they finish typing, but only if it has decimals or they want it
-                const parsed = parseFloat(inputValue);
-                if (!isNaN(parsed) && parsed > 0) {
-                  // Only add decimals if it actually has fractional value
-                  if (parsed % 1 !== 0) {
+        <div className={`mt-2 rounded-xl overflow-hidden transition-colors bg-gradient-to-br from-primary via-primary/90 to-primary/70 ${isBelowMinimum ? 'ring-2 ring-red-400' : ''}`}>
+          {/* Header */}
+          <div className="px-5 py-3 backdrop-blur-md bg-white/15 border-b border-white/20">
+            <h4 className="text-sm font-semibold text-white">Down Payment</h4>
+            <p className="text-xs text-white/70 mt-0.5">
+              Minimum {downPaymentPercentage}% required to secure your booking
+            </p>
+          </div>
+
+          {/* Input */}
+          <div className="px-5 py-4 backdrop-blur-sm bg-white/10">
+            <label className="block text-xs font-medium text-white/70 mb-1.5">Enter amount</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50 text-sm font-medium">₱</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={inputValue}
+                onChange={(e) => {
+                  const val = e.target.value
+                  if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                    handleAmountChange(val)
+                  }
+                }}
+                onBlur={() => {
+                  const parsed = parseFloat(inputValue)
+                  if (!isNaN(parsed) && parsed > 0) {
                     setInputValue(parsed.toFixed(2))
                   } else {
-                    setInputValue(parsed.toString())
+                    setInputValue(minimumDownPayment.toFixed(2))
+                    setCustomDownPaymentAmount(minimumDownPayment)
                   }
-                }
-              }}
-              onClick={(e) => e.stopPropagation()}
-              placeholder={minimumDownPayment.toFixed(2)}
-              className={`w-full pl-8 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 text-gray-900 font-medium transition-colors ${customDownPaymentAmount !== undefined && customDownPaymentAmount > 0 && customDownPaymentAmount < minimumDownPayment
-                ? 'border-red-400 focus:border-red-500 focus:ring-red-500/50 bg-red-50'
-                : 'border-gray-300 focus:border-primary focus:ring-primary/50'
-                }`}
-            />
-          </div>
-
-          {/* Warning Message */}
-          {customDownPaymentAmount !== undefined && customDownPaymentAmount > 0 && customDownPaymentAmount < minimumDownPayment && (
-            <div className="mt-2 text-xs font-medium text-red-600 flex items-center gap-1.5 animate-in slide-in-from-top-1 fade-in duration-200">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              Amount must be at least ₱{minimumDownPayment.toFixed(2)}
-            </div>
-          )}
-
-          <div className="mt-3 flex items-center justify-between text-sm">
-            <span className="text-gray-600">You will pay now:</span>
-            <span className={`font-bold ${customDownPaymentAmount !== undefined && customDownPaymentAmount > 0 && customDownPaymentAmount < minimumDownPayment
-              ? 'text-red-500'
-              : 'text-primary'
-              }`}>
-              ₱{Math.min(Math.max((customDownPaymentAmount || minimumDownPayment), 0), total).toFixed(2)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between text-sm mt-1">
-            <span className="text-gray-600">Remaining (pay at venue):</span>
-            <span className="font-medium text-gray-900">₱{(total - Math.min(Math.max((customDownPaymentAmount || minimumDownPayment), 0), total)).toFixed(2)}</span>
-          </div>
-
-          {/* Quick select buttons */}
-          <div className="mt-3 flex flex-wrap gap-2">
-            {[
-              { label: `${downPaymentPercentage}% (Min)`, value: minimumDownPayment },
-              ...(downPaymentPercentage && downPaymentPercentage < 50 ? [{ label: '50%', value: Math.round((total * 0.5) * 100) / 100 }] : []),
-              { label: '100% (Full)', value: total },
-            ].map((option) => (
-              <button
-                key={option.label}
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setCustomDownPaymentAmount(option.value)
-                  const displayStr = option.value % 1 === 0 ? option.value.toString() : option.value.toFixed(2)
-                  setInputValue(displayStr)
                 }}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${customDownPaymentAmount === option.value
-                  ? 'bg-primary text-white border-primary'
-                  : 'bg-white text-gray-700 border-gray-300 hover:border-primary hover:text-primary hover:bg-primary/5'
-                  }`}
-              >
-                {option.label}
-              </button>
-            ))}
+                onClick={(e) => e.stopPropagation()}
+                placeholder={minimumDownPayment.toFixed(2)}
+                className={`w-full pl-8 pr-4 py-2.5 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 transition-colors backdrop-blur-md ${
+                  isBelowMinimum
+                    ? 'bg-red-500/20 border border-red-300/50 text-red-100 placeholder-red-200/50 focus:ring-red-400/40'
+                    : 'bg-white/20 border border-white/30 text-white placeholder-white/40 focus:ring-white/40'
+                }`}
+              />
+            </div>
+
+            {/* Validation message */}
+            {isBelowMinimum && (
+              <p className="mt-1.5 text-xs text-red-200 flex items-center gap-1">
+                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                Minimum is ₱{minimumDownPayment.toFixed(2)}
+              </p>
+            )}
+            {isAboveTotal && (
+              <p className="mt-1.5 text-xs text-orange-200 flex items-center gap-1">
+                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Maximum is ₱{total.toFixed(2)} (full amount)
+              </p>
+            )}
+          </div>
+
+          {/* Summary */}
+          <div className="px-5 py-3 backdrop-blur-md bg-white/15 border-t border-white/20 space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-white/70">You pay now</span>
+              <span className={`font-bold text-lg ${isBelowMinimum ? 'text-red-200' : 'text-white'}`}>
+                ₱{effectiveAmount.toFixed(2)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-white/70">Remaining at venue</span>
+              <span className="font-semibold text-white/90">₱{(total - effectiveAmount).toFixed(2)}</span>
+            </div>
           </div>
         </div>
       )}

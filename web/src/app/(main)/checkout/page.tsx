@@ -299,9 +299,6 @@ export default function CheckoutPage() {
                                     </div>
                                 </div>
 
-                                {/* Promo Code Input */}
-                                {!bookingData.isQueueSession && <PromoCodeInput />}
-
                                 {/* Split Payment Controls (hidden for queue sessions) */}
                                 {!bookingData.isQueueSession && <SplitPaymentControls />}
 
@@ -492,7 +489,10 @@ export default function CheckoutPage() {
                     </div>
 
                     {/* Right Column - Summary */}
-                    <div className="lg:col-span-1">
+                    <div className="lg:col-span-1 space-y-4">
+                        {/* Promo Code */}
+                        {currentStep === 'details' && !bookingData.isQueueSession && <PromoCodeInput />}
+
                         <BookingSummaryCard
                             onContinue={handleContinue}
                             onBack={handleBack}
