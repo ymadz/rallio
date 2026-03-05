@@ -6,7 +6,6 @@ import { NearbyVenues } from '@/components/home/nearby-venues'
 import { NearbyQueues } from '@/components/home/nearby-queues'
 import { formatCurrency } from '@rallio/shared'
 import { HomeTutorial } from '@/components/home/home-tutorial'
-import { FeaturedVouchers } from '@/components/home/featured-vouchers'
 
 export const metadata = {
   title: 'Home | Rallio',
@@ -356,17 +355,15 @@ export default async function HomePage() {
 
           {/* Book a Court Card */}
           <Link href="/courts" className="quick-card"
-            style={{
-              background: [
-                'radial-gradient(ellipse 90% 70% at 15% 20%, rgba(20,184,166,0.65) 0%, transparent 55%)',
-                'radial-gradient(ellipse 70% 80% at 90% 95%, rgba(6,182,212,0.50) 0%, transparent 55%)',
-                'radial-gradient(ellipse 50% 50% at 55% 50%, rgba(153,246,228,0.18) 0%, transparent 60%)',
-                'linear-gradient(135deg, #0d9488 0%, #0f766e 100%)'
-              ].join(', ')
-            }}
+            style={{ background: [
+              'radial-gradient(ellipse 90% 70% at 15% 20%, rgba(20,184,166,0.65) 0%, transparent 55%)',
+              'radial-gradient(ellipse 70% 80% at 90% 95%, rgba(6,182,212,0.50) 0%, transparent 55%)',
+              'radial-gradient(ellipse 50% 50% at 55% 50%, rgba(153,246,228,0.18) 0%, transparent 60%)',
+              'linear-gradient(135deg, #0d9488 0%, #0f766e 100%)'
+            ].join(', ') }}
           >
             <div className="card-noise" />
-            <div className="card-content" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', gap: '2rem' }}>
+            <div className="card-content" style={{display:'flex', flexDirection:'column', justifyContent:'space-between', height:'100%', gap:'2rem'}}>
               <div className="card-icon-wrap">
                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -378,17 +375,15 @@ export default async function HomePage() {
 
           {/* Queue Card */}
           <Link href="/queue" className="quick-card"
-            style={{
-              background: [
-                'radial-gradient(ellipse 80% 60% at 85% 15%, rgba(6,182,212,0.60) 0%, transparent 55%)',
-                'radial-gradient(ellipse 75% 75% at 10% 90%, rgba(20,184,166,0.55) 0%, transparent 55%)',
-                'radial-gradient(ellipse 40% 50% at 45% 45%, rgba(204,251,241,0.18) 0%, transparent 65%)',
-                'linear-gradient(145deg, #0f766e 0%, #0d9488 55%, #06b6d4 100%)'
-              ].join(', ')
-            }}
+            style={{ background: [
+              'radial-gradient(ellipse 80% 60% at 85% 15%, rgba(6,182,212,0.60) 0%, transparent 55%)',
+              'radial-gradient(ellipse 75% 75% at 10% 90%, rgba(20,184,166,0.55) 0%, transparent 55%)',
+              'radial-gradient(ellipse 40% 50% at 45% 45%, rgba(204,251,241,0.18) 0%, transparent 65%)',
+              'linear-gradient(145deg, #0f766e 0%, #0d9488 55%, #06b6d4 100%)'
+            ].join(', ') }}
           >
             <div className="card-noise" />
-            <div className="card-content" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', gap: '2rem' }}>
+            <div className="card-content" style={{display:'flex', flexDirection:'column', justifyContent:'space-between', height:'100%', gap:'2rem'}}>
               <div className="card-icon-wrap">
                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 10H9m6 4a7 7 0 11-14 0 7 7 0 0114 0zM9 15h6" />
@@ -400,17 +395,15 @@ export default async function HomePage() {
 
           {/* My Bookings Card */}
           <Link href="/bookings" className="quick-card"
-            style={{
-              background: [
-                'radial-gradient(ellipse 75% 65% at 50% 5%, rgba(103,232,249,0.50) 0%, transparent 55%)',
-                'radial-gradient(ellipse 80% 70% at 95% 95%, rgba(13,148,136,0.65) 0%, transparent 50%)',
-                'radial-gradient(ellipse 45% 55% at 15% 60%, rgba(153,246,228,0.22) 0%, transparent 60%)',
-                'linear-gradient(155deg, #06b6d4 0%, #0d9488 55%, #0f766e 100%)'
-              ].join(', ')
-            }}
+            style={{ background: [
+              'radial-gradient(ellipse 75% 65% at 50% 5%, rgba(103,232,249,0.50) 0%, transparent 55%)',
+              'radial-gradient(ellipse 80% 70% at 95% 95%, rgba(13,148,136,0.65) 0%, transparent 50%)',
+              'radial-gradient(ellipse 45% 55% at 15% 60%, rgba(153,246,228,0.22) 0%, transparent 60%)',
+              'linear-gradient(155deg, #06b6d4 0%, #0d9488 55%, #0f766e 100%)'
+            ].join(', ') }}
           >
             <div className="card-noise" />
-            <div className="card-content" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', gap: '2rem' }}>
+            <div className="card-content" style={{display:'flex', flexDirection:'column', justifyContent:'space-between', height:'100%', gap:'2rem'}}>
               <div className="card-icon-wrap">
                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -421,9 +414,6 @@ export default async function HomePage() {
           </Link>
 
         </div>
-
-        {/* Claimable Vouchers (Shopee Style) */}
-        <FeaturedVouchers />
 
         {/* Suggested Courts */}
         <section className="mb-8">

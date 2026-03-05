@@ -18,7 +18,6 @@ import {
   Loader2,
   AlertCircle,
   Power,
-  Tag,
 } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -29,7 +28,6 @@ import { AvailabilityManagement } from './availability-management'
 import { AnalyticsDashboard } from './analytics-dashboard'
 import { ReviewsManagement } from './reviews-management'
 import DiscountManagement from './discount-management'
-import { PromoManagement } from './promo-management'
 import { VenueEditModal } from './venue-edit-modal'
 
 interface VenueDetailProps {
@@ -123,7 +121,6 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
     { id: 'courts', label: 'Courts', icon: Building2 },
     { id: 'pricing', label: 'Pricing', icon: DollarSign },
     { id: 'discounts', label: 'Discounts', icon: DollarSign },
-    { id: 'promos', label: 'Promo Codes', icon: Tag },
     { id: 'availability', label: 'Availability', icon: Clock },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'reviews', label: 'Reviews', icon: Star },
@@ -194,8 +191,8 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
               onClick={handleToggleActive}
               disabled={isToggling}
               className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 ${venue.is_active
-                ? 'border border-red-200 text-red-600 hover:bg-red-50'
-                : 'border border-green-200 text-green-600 hover:bg-green-50'
+                  ? 'border border-red-200 text-red-600 hover:bg-red-50'
+                  : 'border border-green-200 text-green-600 hover:bg-green-50'
                 }`}
               title={venue.is_active ? 'Deactivate venue - will be hidden from users' : 'Activate venue - will be visible to users'}
             >
@@ -279,7 +276,6 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
         {activeTab === 'courts' && <VenueCourts venueId={venueId} onCourtChange={loadVenue} />}
         {activeTab === 'pricing' && <PricingManagement venueId={venueId} />}
         {activeTab === 'discounts' && <DiscountManagement venueId={venueId} />}
-        {activeTab === 'promos' && <PromoManagement venueId={venueId} />}
         {activeTab === 'availability' && <AvailabilityManagement venueId={venueId} />}
         {activeTab === 'analytics' && <AnalyticsDashboard venueId={venueId} />}
         {activeTab === 'reviews' && <ReviewsManagement venueId={venueId} />}

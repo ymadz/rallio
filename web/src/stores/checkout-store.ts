@@ -57,8 +57,6 @@ interface CheckoutState {
   discountCode?: string
   discountType?: string
   discountReason?: string
-  promoCodeId?: string
-  isExclusivePromo?: boolean
   applicableDiscounts?: Array<{
     type: string
     name: string
@@ -85,7 +83,7 @@ interface CheckoutState {
   setPolicyAccepted: (accepted: boolean) => void
   updatePlayerPayment: (playerNumber: number, updates: Partial<PlayerPaymentStatus>) => void
   setDiscount: (amount: number, code?: string) => void
-  setDiscountDetails: (details: { amount: number; type?: string; reason?: string; promoCodeId?: string; isExclusive?: boolean; discounts?: any[] }) => void
+  setDiscountDetails: (details: { amount: number; type?: string; reason?: string; discounts?: any[] }) => void
   setPlatformFee: (percentage: number, enabled: boolean) => void
   setBookingReference: (reference: string, reservationId: string) => void
   setDownPaymentPercentage: (percentage: number) => void
@@ -201,8 +199,6 @@ export const useCheckoutStore = create<CheckoutState>()(
         discountAmount: details.amount,
         discountType: details.type,
         discountReason: details.reason,
-        promoCodeId: details.promoCodeId,
-        isExclusivePromo: details.isExclusive,
         applicableDiscounts: details.discounts
       }),
 
@@ -259,26 +255,6 @@ export const useCheckoutStore = create<CheckoutState>()(
 
         // Calculate total based on ACTUAL slots that will be created
         const totalBase = baseRate * actualSlotCount
-
-        // CONFLICT RESOLUTION (Shopee/Lazada Style)
-        // If the applied promo is "exclusive", it overrides standard discounts (rules, seasonal holidays)
-        // Otherwise, it stacks with them.
-
-        const standardDiscountsAmount = state.applicableDiscounts
-          ? state.applicableDiscounts.reduce((sum, d) => sum + (d.isIncrease ? -d.amount : d.amount), 0)
-          : 0
-
-        // In our store, discountAmount is currently the cumulative amount if stackable
-        // Reset calculation to be robust:
-        let totalDiscount = 0
-        if (state.isExclusivePromo) {
-          // Exclusive Promo ONLY
-          totalDiscount = state.discountAmount
-        } else {
-          // Standard + Promo
-          totalDiscount = state.discountAmount // The component already sums them up, but let's be explicit if needed
-        }
-
         return Math.max(0, totalBase - state.discountAmount)
       },
 
