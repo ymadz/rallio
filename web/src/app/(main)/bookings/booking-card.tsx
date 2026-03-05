@@ -232,6 +232,24 @@ export function BookingCard({
                             Week {(booking.metadata.week_index ?? 0) + 1}/{booking.metadata.weeks_total}
                         </span>
                     )}
+                    {booking.metadata?.reschedule_request?.status === 'pending' && (
+                        <span className="px-3 py-1.5 rounded-full text-xs font-bold shadow-lg bg-amber-100 text-amber-700 border border-amber-300 flex items-center gap-1 animate-pulse">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            Reschedule Pending
+                        </span>
+                    )}
+                    {booking.metadata?.rescheduled && !booking.metadata?.reschedule_approved_seen && (
+                        <span className="px-3 py-1.5 rounded-full text-xs font-bold shadow-lg bg-green-100 text-green-700 border border-green-300 flex items-center gap-1">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                            Reschedule Approved
+                        </span>
+                    )}
+                    {booking.metadata?.last_reschedule_rejection && !booking.metadata?.reschedule_rejected_seen && (
+                        <span className="px-3 py-1.5 rounded-full text-xs font-bold shadow-lg bg-red-100 text-red-700 border border-red-300 flex items-center gap-1">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            Reschedule Rejected
+                        </span>
+                    )}
                     {booking.metadata?.rescheduled && (
                         <span className="px-3 py-1.5 rounded-full text-xs font-bold shadow-lg bg-blue-100 text-blue-700 border border-blue-200 flex items-center gap-1">
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
@@ -281,6 +299,75 @@ export function BookingCard({
                         </div>
                     </div>
                 </div>
+
+                {/* Reschedule Approved Info */}
+                {booking.metadata?.rescheduled && booking.metadata?.rescheduled_from && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                        <div className="flex items-center gap-1.5 mb-2">
+                            <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                            <span className="text-sm font-semibold text-green-800">Reschedule Approved</span>
+                        </div>
+                        <div className="text-xs text-green-700 space-y-1">
+                            <div className="flex justify-between">
+                                <span>Previous Schedule:</span>
+                                <span className="font-medium">
+                                    {format(new Date(booking.metadata.rescheduled_from.start_time), 'EEE, MMM d')} · {format(new Date(booking.metadata.rescheduled_from.start_time), 'h:mm a')} – {format(new Date(booking.metadata.rescheduled_from.end_time), 'h:mm a')}
+                                </span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span>Approved on:</span>
+                                <span className="font-medium">
+                                    {format(new Date(booking.metadata.rescheduled_from.rescheduled_at), 'MMM d, yyyy · h:mm a')}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Reschedule Rejected Info */}
+                {booking.metadata?.last_reschedule_rejection && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                        <div className="flex items-center gap-1.5 mb-2">
+                            <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            <span className="text-sm font-semibold text-red-800">Reschedule Rejected</span>
+                        </div>
+                        <div className="text-xs text-red-700 space-y-1">
+                            <div className="flex justify-between">
+                                <span>Rejected on:</span>
+                                <span className="font-medium">
+                                    {format(new Date(booking.metadata.last_reschedule_rejection.rejected_at), 'MMM d, yyyy · h:mm a')}
+                                </span>
+                            </div>
+                            <div className="mt-1.5 p-2 bg-red-100/50 rounded text-red-800">
+                                <span className="font-semibold">Reason: </span>{booking.metadata.last_reschedule_rejection.reason}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Reschedule Pending Info */}
+                {booking.metadata?.reschedule_request?.status === 'pending' && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                        <div className="flex items-center gap-1.5 mb-2">
+                            <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <span className="text-sm font-semibold text-amber-800">Reschedule Pending Approval</span>
+                        </div>
+                        <div className="text-xs text-amber-700 space-y-1">
+                            <div className="flex justify-between">
+                                <span>Proposed Date:</span>
+                                <span className="font-medium">
+                                    {format(new Date(booking.metadata.reschedule_request.proposed_start_time), 'EEE, MMM d, yyyy')}
+                                </span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span>Proposed Time:</span>
+                                <span className="font-medium">
+                                    {format(new Date(booking.metadata.reschedule_request.proposed_start_time), 'h:mm a')} – {format(new Date(booking.metadata.reschedule_request.proposed_end_time), 'h:mm a')}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Details Grid */}
                 <div className="grid grid-cols-2 gap-4 mb-4 text-sm">

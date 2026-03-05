@@ -210,3 +210,62 @@ export async function rescheduleReservationAction(
 
     return { success: true }
 }
+
+/**
+ * Mark the reschedule result (approved/rejected) as seen by the user.
+ * This clears the unseen flag so the tag disappears from the preview card.
+ */
+export async function markRescheduleResultSeenAction(
+    bookingId: string
+): Promise<{ success: boolean; error?: string }> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+        return { success: false, error: 'Unauthorized' }
+    }
+
+    const adminDb = createServiceClient()
+    const { data: booking, error: fetchError } = await adminDb
+        .from('reservations')
+        .select('id, user_id, metadata')
+        .eq('id', bookingId)
+        .single()
+
+    if (fetchError || !booking) {
+        return { success: false, error: 'Booking not found' }
+    }
+
+    if (booking.user_id !== user.id) {
+        return { success: false, error: 'Unauthorized' }
+    }
+
+    const metadata = { ...booking.metadata }
+    let changed = false
+
+    if (metadata.rescheduled_from && !metadata.reschedule_approved_seen) {
+        metadata.reschedule_approved_seen = true
+        changed = true
+    }
+
+    if (metadata.last_reschedule_rejection && !metadata.reschedule_rejected_seen) {
+        metadata.reschedule_rejected_seen = true
+        changed = true
+    }
+
+    if (!changed) {
+        return { success: true }
+    }
+
+    const { error: updateError } = await adminDb
+        .from('reservations')
+        .update({ metadata })
+        .eq('id', bookingId)
+
+    if (updateError) {
+        return { success: false, error: 'Failed to update' }
+    }
+
+    revalidatePath('/bookings')
+    return { success: true }
+}
