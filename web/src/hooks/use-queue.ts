@@ -40,6 +40,8 @@ export interface QueueSession {
   endTime: Date // Added endTime
   mode: 'casual' | 'competitive'
   organizerId?: string // Queue session organizer
+  organizerName?: string // Queue session organizer display name
+  costPerGame?: number // Cost per game in the queue
   userGamesPlayed?: number // Games played by current user
   userAmountOwed?: number // Amount owed by current user
   currentMatch?: {
@@ -350,6 +352,8 @@ export function useMyQueues() {
         startTime: q.startTime,
         endTime: q.endTime,
         mode: (q.mode || 'casual') as 'casual' | 'competitive',
+        costPerGame: q.costPerGame,
+        organizerName: q.organizerName,
       }))
 
       setQueues(transformedQueues)
@@ -460,6 +464,8 @@ export function useNearbyQueues(latitude?: number, longitude?: number) {
         startTime: q.startTime,
         endTime: q.endTime,
         mode: (q.mode || 'casual') as 'casual' | 'competitive',
+        costPerGame: q.costPerGame,
+        organizerName: q.organizerName,
       }))
 
       setQueues(transformedQueues)

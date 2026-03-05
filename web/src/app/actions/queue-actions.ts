@@ -467,6 +467,19 @@ export async function getMyQueues() {
 
         const position = (earlierParticipants?.length || 0) + 1
 
+        // Get organizer display name
+        let organizerName = 'Unknown Host'
+        if (p.queue_sessions.organizer_id) {
+          const { data: orgProfile } = await supabase
+            .from('profiles')
+            .select('display_name, first_name, last_name')
+            .eq('id', p.queue_sessions.organizer_id)
+            .single()
+          if (orgProfile) {
+            organizerName = orgProfile.display_name || `${orgProfile.first_name || ''} ${orgProfile.last_name || ''}`.trim() || 'Unknown Host'
+          }
+        }
+
         return {
           id: p.queue_session_id,
           courtId: p.queue_sessions.court_id,
@@ -482,6 +495,9 @@ export async function getMyQueues() {
           userAmountOwed: parseFloat(p.amount_owed || '0'),
           startTime: new Date(p.queue_sessions.start_time),
           endTime: new Date(p.queue_sessions.end_time),
+          mode: p.queue_sessions.mode || 'casual',
+          costPerGame: parseFloat(p.queue_sessions.cost_per_game || '0'),
+          organizerName,
         }
       })
     )
@@ -636,11 +652,24 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
       }
     }
 
+    // Fetch organizer names for all sessions
+    const organizerIds = [...new Set((sessions || []).map((s: any) => s.organizer_id).filter(Boolean))]
+    let organizerNames: Record<string, string> = {}
+    if (organizerIds.length > 0) {
+      const { data: orgProfiles } = await supabase
+        .from('profiles')
+        .select('id, display_name, first_name, last_name')
+        .in('id', organizerIds)
+      if (orgProfiles) {
+        orgProfiles.forEach((p: any) => {
+          organizerNames[p.id] = p.display_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Unknown Host'
+        })
+      }
+    }
+
     const queues = (sessions || []).map((session: any) => {
       // Use actual participant count, falling back to current_players column
       const currentPlayers = participantCounts[session.id] || session.current_players || 0
-
-      console.log(`[getNearbyQueues] 📊 Session ${session.id.slice(0, 8)}: actual_participants=${participantCounts[session.id] || 0}, current_players_col=${session.current_players || 0}`)
 
       return {
         id: session.id,
@@ -655,6 +684,9 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
         currentPlayers,
         startTime: new Date(session.start_time),
         endTime: new Date(session.end_time),
+        mode: session.mode || 'casual',
+        costPerGame: parseFloat(session.cost_per_game || '0'),
+        organizerName: organizerNames[session.organizer_id] || 'Unknown Host',
       }
     })
 
