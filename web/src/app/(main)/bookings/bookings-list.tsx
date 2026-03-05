@@ -6,6 +6,7 @@ import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { cancelReservationAction } from '@/app/actions/reservations'
+import { markRescheduleResultSeenAction } from '@/app/actions/reschedule-actions'
 
 import { RescheduleModal } from '@/components/booking/reschedule-modal'
 import { CancelBookingModal } from '@/components/booking/cancel-booking-modal'
@@ -39,6 +40,31 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
   // We will keep `activeTab` and sync it with Tabs onValueChange to keep logic simple without rewriting everything right away.
   const [activeTab, setActiveTab] = useState('upcoming')
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
+
+  const handleSelectBooking = (booking: Booking) => {
+    setSelectedBooking(booking)
+
+    // Mark reschedule result as seen (fire-and-forget)
+    const hasUnseenApproval = booking.metadata?.rescheduled && !booking.metadata?.reschedule_approved_seen
+    const hasUnseenRejection = booking.metadata?.last_reschedule_rejection && !booking.metadata?.reschedule_rejected_seen
+
+    if (hasUnseenApproval || hasUnseenRejection) {
+      markRescheduleResultSeenAction(booking.id).then(() => {
+        // Update local state so the tag disappears from preview cards
+        setBookings(prev => prev.map(b => {
+          if (b.id !== booking.id) return b
+          return {
+            ...b,
+            metadata: {
+              ...b.metadata,
+              ...(hasUnseenApproval ? { reschedule_approved_seen: true } : {}),
+              ...(hasUnseenRejection ? { reschedule_rejected_seen: true } : {}),
+            }
+          }
+        }))
+      })
+    }
+  }
 
   const activeStatuses = ['pending_payment', 'pending', 'confirmed', 'partially_paid']
 
@@ -362,7 +388,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                   key={booking.id}
                   booking={booking}
                   serverDate={serverDate}
-                  onClick={() => setSelectedBooking(booking)}
+                  onClick={() => handleSelectBooking(booking)}
                 />
               ))}
             </div>
@@ -389,7 +415,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                   key={booking.id}
                   booking={booking}
                   serverDate={serverDate}
-                  onClick={() => setSelectedBooking(booking)}
+                  onClick={() => handleSelectBooking(booking)}
                 />
               ))}
             </div>

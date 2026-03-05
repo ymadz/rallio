@@ -78,8 +78,23 @@ export function BookingPreviewCard({ booking, serverDate, onClick }: BookingPrev
       <div className="bk-fog-blur" />
 
       {/* Status badge - top right */}
-      <div className="absolute top-2.5 right-2.5 z-10 flex gap-1.5">
+      <div className="absolute top-2.5 right-2.5 z-10 flex flex-wrap gap-1.5 justify-end max-w-[70%]">
         <StatusBadge status={displayStatus} label={displayLabel} size="sm" />
+        {booking.metadata?.reschedule_request?.status === 'pending' && (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100/90 text-amber-700 border border-amber-300 backdrop-blur-sm animate-pulse">
+            Reschedule Pending
+          </span>
+        )}
+        {booking.metadata?.rescheduled && !booking.metadata?.reschedule_approved_seen && (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100/90 text-green-700 border border-green-300 backdrop-blur-sm">
+            Reschedule Approved
+          </span>
+        )}
+        {booking.metadata?.last_reschedule_rejection && !booking.metadata?.reschedule_rejected_seen && (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100/90 text-red-700 border border-red-300 backdrop-blur-sm">
+            Reschedule Rejected
+          </span>
+        )}
         {booking.type === 'queue_session' && (
           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/90 text-green-700 border border-green-300 backdrop-blur-sm">
             Queue
