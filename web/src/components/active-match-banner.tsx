@@ -71,7 +71,9 @@ export function ActiveMatchBanner() {
     }, [userId])
 
     // Keep ref up to date
-    fetchRef.current = checkActiveMatch
+    useEffect(() => {
+        fetchRef.current = checkActiveMatch
+    })
 
     // Real-time subscription for match changes
     useEffect(() => {

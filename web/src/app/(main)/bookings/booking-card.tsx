@@ -94,11 +94,15 @@ export function BookingCard({
 
     const getPaymentStatus = (b: Booking) => {
         const isFullyPaid = b.amount_paid >= b.total_amount
+        const remaining = b.total_amount - b.amount_paid
 
         // Check partially_paid status FIRST before other statuses
         if (b.status === 'partially_paid') {
-            const remaining = b.total_amount - b.amount_paid
-            return { label: `Remaining Balance`, color: 'amber', needsPayment: true }
+            // If actually fully paid despite the status, don't prompt for payment
+            if (isFullyPaid) {
+                return { label: 'Paid', color: 'green', needsPayment: false }
+            }
+            return { label: `Remaining Balance`, color: 'amber', needsPayment: remaining > 0 }
         }
 
         if (['confirmed', 'ongoing', 'completed'].includes(b.status) && isFullyPaid) {
@@ -111,15 +115,15 @@ export function BookingCard({
             return { label: 'Pay at Venue', color: 'blue', needsPayment: false }
         }
         const payment = b.payments?.[0]
-        if (!payment) return { label: 'Payment Pending', color: 'yellow', needsPayment: true }
+        if (!payment) return { label: 'Payment Pending', color: 'yellow', needsPayment: !isFullyPaid }
 
         switch (payment.status) {
             case 'completed':
                 return { label: 'Paid', color: 'green', needsPayment: false }
             case 'pending':
-                return { label: 'Payment Pending', color: 'yellow', needsPayment: true }
+                return { label: 'Payment Pending', color: 'yellow', needsPayment: !isFullyPaid }
             case 'failed':
-                return { label: 'Payment Failed', color: 'red', needsPayment: true }
+                return { label: 'Payment Failed', color: 'red', needsPayment: !isFullyPaid }
             default:
                 return { label: payment.status, color: 'gray', needsPayment: false }
         }
@@ -162,7 +166,12 @@ export function BookingCard({
                 displayLabel = 'Pending Payment'
             }
         } else if (status === 'partially_paid') {
-            displayLabel = 'Partially Paid'
+            if (b.amount_paid >= b.total_amount) {
+                displayStatus = 'confirmed'
+                displayLabel = 'Paid'
+            } else {
+                displayLabel = 'Partially Paid'
+            }
         } else if (status === 'ongoing') {
             displayLabel = 'Ongoing'
         } else if (status === 'cancelled' && b.cancellation_reason) {
@@ -209,7 +218,7 @@ export function BookingCard({
                         </div>
                     )
                 })()}
-                <div className="absolute top-3 right-3 flex gap-2">
+                <div className="absolute top-3 left-3 flex flex-wrap gap-2 max-w-[calc(100%-3rem)]">
                     {bookingStatusBadge(booking.status, booking)}
                     {booking.type === 'queue_session' && (
                         <span className="px-3 py-1.5 rounded-full text-xs font-bold shadow-lg bg-white text-green-700 border border-green-300 flex items-center gap-1">
@@ -242,7 +251,7 @@ export function BookingCard({
             <div className="px-6 pt-6 pb-4">
                 {/* Venue & Court */}
                 <div className="mb-4">
-                    <h3 className="text-xl font-bold text-gray-900 mb-1">
+                    <h3 className="text-xl font-bold text-gray-900 mb-1 uppercase">
                         {booking.courts.name}
                     </h3>
                     <p className="text-sm text-gray-600 flex items-center gap-1">
@@ -410,31 +419,31 @@ export function BookingCard({
                         </Button>
                     )}
 
-                    <div className="flex gap-4 pt-2">
+                    <div className="grid grid-cols-2 gap-2 pt-2">
                         {booking.type === 'queue_session' && booking.queue_session_id ? (
                             /* Queue Session Actions */
                             <>
-                                <Link href={`/queue/${booking.courts?.id}`} className="flex-1">
+                                <Link href={`/queue/${booking.courts?.id}`}>
                                     <Button variant="outline" className="w-full h-10 text-green-700 border-green-300 bg-white hover:bg-green-50 hover:text-green-800 hover:border-green-400 transition-colors" size="sm">
-                                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                                         </svg>
                                         Manage Queue
                                     </Button>
                                 </Link>
-                                <Link href={`/bookings/${booking.id}/receipt`} className="flex-1">
+                                <Link href={`/bookings/${booking.id}/receipt`}>
                                     <Button variant="outline" className="w-full h-10 border-gray-300 hover:bg-gray-50 hover:text-primary hover:border-primary/50 transition-colors" size="sm">
-                                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                        <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                                         View Receipt
                                     </Button>
                                 </Link>
                             </>
                         ) : (
-                            /* Regular Booking Actions */
+                            /* Regular Booking Actions - 2x2 grid */
                             <>
-                                <Link href={`/courts/${booking.courts.venues.id}`} className="flex-1">
+                                <Link href={`/courts/${booking.courts.venues.id}`}>
                                     <Button variant="outline" className="w-full h-10 border-gray-300 hover:bg-gray-50 hover:text-primary hover:border-primary/50 transition-colors" size="sm">
-                                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                         </svg>
@@ -442,9 +451,9 @@ export function BookingCard({
                                     </Button>
                                 </Link>
 
-                                <Link href={`/bookings/${booking.id}/receipt`} className="flex-1">
+                                <Link href={`/bookings/${booking.id}/receipt`}>
                                     <Button variant="outline" className="w-full h-10 border-gray-300 hover:bg-gray-50 hover:text-primary hover:border-primary/50 transition-colors" size="sm">
-                                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                        <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                                         View Receipt
                                     </Button>
                                 </Link>
@@ -455,9 +464,9 @@ export function BookingCard({
                                             variant="outline"
                                             size="sm"
                                             onClick={() => onReschedule(booking)}
-                                            className="flex-1 h-10 border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 transition-colors"
+                                            className="w-full h-10 border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 transition-colors"
                                         >
-                                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                             </svg>
                                             Reschedule
@@ -470,16 +479,16 @@ export function BookingCard({
                                                 size="sm"
                                                 onClick={() => onCancelBooking(booking)}
                                                 disabled={cancellingId === booking.id}
-                                                className="flex-1 h-10 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors"
+                                                className="w-full h-10 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors"
                                             >
                                                 {cancellingId === booking.id ? (
                                                     <>
-                                                        <Spinner className="w-4 h-4 mr-2" />
+                                                        <Spinner className="w-4 h-4 mr-1.5" />
                                                         Please wait...
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                                         </svg>
                                                         Cancel

@@ -13,7 +13,10 @@ import { useServerTime } from '@/hooks/use-server-time'
 import Link from 'next/link'
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { BookingCard, Booking } from './booking-card'
+import { BookingPreviewCard } from './booking-preview-card'
 
 // Booking interface moved to booking-card.tsx
 
@@ -35,6 +38,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
   // but looking at `filteredBookings`, it relies on `activeTab` state.
   // We will keep `activeTab` and sync it with Tabs onValueChange to keep logic simple without rewriting everything right away.
   const [activeTab, setActiveTab] = useState('upcoming')
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
 
   const activeStatuses = ['pending_payment', 'pending', 'confirmed', 'partially_paid']
 
@@ -115,6 +119,140 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
 
   return (
     <div>
+      {/* Card styles matching home page sc-card design */}
+      <style>{`
+        .bk-card {
+          position: relative;
+          border-radius: 1.125rem;
+          overflow: hidden;
+          border: 1px solid rgba(13,148,136,0.18);
+          box-shadow: none;
+          transition:
+            transform 0.30s cubic-bezier(0.34,1.56,0.64,1),
+            box-shadow 0.30s ease;
+          display: block;
+          height: 300px;
+          background: linear-gradient(135deg, #ccfbf1 0%, #d1fae5 100%);
+          cursor: pointer;
+        }
+        .bk-card:hover {
+          transform: translateY(-4px) scale(1.015);
+          box-shadow:
+            0 2px 6px rgba(0,0,0,0.08),
+            0 8px 28px rgba(13,148,136,0.16),
+            0 16px 48px rgba(0,0,0,0.10);
+        }
+        .bk-card-img {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+          transition: transform 0.40s cubic-bezier(0.34,1.56,0.64,1);
+        }
+        .bk-card:hover .bk-card-img {
+          transform: scale(1.06);
+        }
+        .bk-card-placeholder {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(135deg, #ccfbf1 0%, #a7f3d0 100%);
+        }
+        .bk-fog-gradient {
+          position: absolute;
+          left: 0; right: 0;
+          bottom: 0;
+          height: 65%;
+          pointer-events: none;
+          z-index: 2;
+          background: linear-gradient(
+            to bottom,
+            transparent              0%,
+            rgba(5,46,40,0.18)      25%,
+            rgba(5,46,40,0.55)      55%,
+            rgba(5,46,40,0.85)     100%
+          );
+        }
+        .bk-fog-blur {
+          position: absolute;
+          left: 0; right: 0;
+          bottom: 0;
+          height: 45%;
+          pointer-events: none;
+          z-index: 3;
+          backdrop-filter: blur(16px) saturate(1.4);
+          -webkit-backdrop-filter: blur(16px) saturate(1.4);
+          mask-image: linear-gradient(to bottom, transparent 0%, black 55%);
+          -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 55%);
+        }
+        .bk-content {
+          position: absolute;
+          left: 0; right: 0;
+          bottom: 0;
+          z-index: 5;
+          padding: 0.875rem 1rem;
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+        }
+        .bk-name {
+          font-size: 1.0625rem;
+          font-weight: 700;
+          color: #ffffff;
+          line-height: 1.25;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          letter-spacing: -0.01em;
+          text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+        }
+        .bk-venue {
+          font-size: 0.8125rem;
+          color: rgba(204,251,241,0.85);
+          line-height: 1.35;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .bk-date {
+          font-size: 0.8125rem;
+          font-weight: 500;
+          color: rgba(255,255,255,0.9);
+          line-height: 1.3;
+        }
+        .bk-price {
+          font-size: 0.8125rem;
+          font-weight: 600;
+          color: #99f6e4;
+          line-height: 1.3;
+        }
+        .bk-cta {
+          display: block;
+          width: 100%;
+          margin-top: 5px;
+          padding: 5px 0;
+          background: rgba(255,255,255,0.15);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          color: #ffffff;
+          font-size: 0.8125rem;
+          font-weight: 700;
+          letter-spacing: 0.03em;
+          text-align: center;
+          border-radius: 0.625rem;
+          border: 1px solid rgba(255,255,255,0.28);
+          transition: background 0.22s ease, transform 0.22s cubic-bezier(0.34,1.56,0.64,1);
+        }
+        .bk-card:hover .bk-cta {
+          background: rgba(13,148,136,0.72);
+          transform: scale(1.02);
+        }
+      `}</style>
+
       {/* Main Tabs */}
       <Tabs defaultValue="upcoming" className="w-full" onValueChange={setActiveTab}>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
@@ -192,31 +330,23 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
 
           {/* Bookings List for Upcoming */}
           {filteredBookings.length === 0 ? (
-            <Card className="p-12 text-center">
-              <div className="max-w-md mx-auto">
-                <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg
-                    className="w-10 h-10 text-gray-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                    />
+            <div className="rounded-2xl border border-primary/15 bg-gradient-to-br from-primary/5 via-white to-teal-50 p-10 text-center">
+              <div className="max-w-sm mx-auto">
+                <div className="w-16 h-16 bg-gradient-to-br from-primary/15 to-teal-100 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-sm">
+                  <svg className="w-7 h-7 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">No upcoming bookings</h3>
-                <p className="text-gray-600 mb-6">
+                <h3 className="text-xl font-bold text-gray-900 mb-2">
+                  {filter === 'all' ? 'No upcoming bookings' : filter === 'today' ? 'Nothing scheduled today' : 'Nothing this week'}
+                </h3>
+                <p className="text-sm text-gray-500 mb-6 leading-relaxed">
                   {filter === 'all'
-                    ? "You don't have any upcoming bookings. Find a court and make your first reservation!"
-                    : `No bookings ${filter === 'today' ? 'today' : 'this week'}.`}
+                    ? 'Your schedule is wide open! Browse available courts and book your next game.'
+                    : `No bookings ${filter === 'today' ? 'for today' : 'this week'}. Try checking all upcoming bookings.`}
                 </p>
                 <Link href="/courts">
-                  <Button size="lg" className="bg-primary hover:bg-primary/90">
+                  <Button size="lg" className="bg-primary hover:bg-primary/90 rounded-xl shadow-md shadow-primary/20 px-8">
                     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
@@ -224,21 +354,15 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                   </Button>
                 </Link>
               </div>
-            </Card>
+            </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {filteredBookings.map((booking) => (
-                <BookingCard
+                <BookingPreviewCard
                   key={booking.id}
                   booking={booking}
                   serverDate={serverDate}
-                  resumingPaymentId={resumingPaymentId}
-                  cancellingId={cancellingId}
-                  onResumePayment={handleResumePayment}
-                  onCancelBooking={handleCancelBooking}
-                  onRefundBooking={handleRefundBooking}
-                  onReschedule={setReschedulingBooking}
-                  setBookings={setBookings}
+                  onClick={() => setSelectedBooking(booking)}
                 />
               ))}
             </div>
@@ -247,37 +371,53 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
 
         <TabsContent value="history">
           {filteredBookings.length === 0 ? (
-            <Card className="p-12 text-center">
-              <div className="max-w-md mx-auto">
-                <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-gray-50 via-white to-gray-50 p-10 text-center">
+              <div className="max-w-sm mx-auto">
+                <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-sm">
+                  <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">No booking history</h3>
-                <p className="text-gray-600">You don't have any past bookings yet.</p>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">No booking history</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">Your past bookings and completed sessions will appear here.</p>
               </div>
-            </Card>
+            </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {filteredBookings.map((booking) => (
-                <BookingCard
+                <BookingPreviewCard
                   key={booking.id}
                   booking={booking}
                   serverDate={serverDate}
-                  resumingPaymentId={resumingPaymentId}
-                  cancellingId={cancellingId}
-                  onResumePayment={handleResumePayment}
-                  onCancelBooking={handleCancelBooking}
-                  onRefundBooking={handleRefundBooking}
-                  onReschedule={setReschedulingBooking}
-                  setBookings={setBookings}
+                  onClick={() => setSelectedBooking(booking)}
                 />
               ))}
             </div>
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Booking Detail Modal */}
+      <Dialog open={!!selectedBooking} onOpenChange={(open) => !open && setSelectedBooking(null)}>
+        <DialogContent className="max-w-lg p-0 overflow-hidden max-h-[90vh] overflow-y-auto">
+          <VisuallyHidden>
+            <DialogTitle>Booking Details</DialogTitle>
+          </VisuallyHidden>
+          {selectedBooking && (
+            <BookingCard
+              booking={selectedBooking}
+              serverDate={serverDate}
+              resumingPaymentId={resumingPaymentId}
+              cancellingId={cancellingId}
+              onResumePayment={handleResumePayment}
+              onCancelBooking={(b) => { setSelectedBooking(null); handleCancelBooking(b) }}
+              onRefundBooking={(b) => { setSelectedBooking(null); handleRefundBooking(b) }}
+              onReschedule={(b) => { setSelectedBooking(null); setReschedulingBooking(b) }}
+              setBookings={setBookings}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       {reschedulingBooking && (
         <RescheduleModal

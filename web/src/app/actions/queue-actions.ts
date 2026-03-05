@@ -467,6 +467,19 @@ export async function getMyQueues() {
 
         const position = (earlierParticipants?.length || 0) + 1
 
+        // Get organizer display name
+        let organizerName = 'Unknown Host'
+        if (p.queue_sessions.organizer_id) {
+          const { data: orgProfile } = await supabase
+            .from('profiles')
+            .select('display_name, first_name, last_name')
+            .eq('id', p.queue_sessions.organizer_id)
+            .single()
+          if (orgProfile) {
+            organizerName = orgProfile.display_name || `${orgProfile.first_name || ''} ${orgProfile.last_name || ''}`.trim() || 'Unknown Host'
+          }
+        }
+
         return {
           id: p.queue_session_id,
           courtId: p.queue_sessions.court_id,
@@ -482,6 +495,9 @@ export async function getMyQueues() {
           userAmountOwed: parseFloat(p.amount_owed || '0'),
           startTime: new Date(p.queue_sessions.start_time),
           endTime: new Date(p.queue_sessions.end_time),
+          mode: p.queue_sessions.mode || 'casual',
+          costPerGame: parseFloat(p.queue_sessions.cost_per_game || '0'),
+          organizerName,
         }
       })
     )
@@ -618,20 +634,42 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
       return { success: false, error: 'Failed to fetch queues' }
     }
 
-    // Fetch actual participant counts since current_players column can be stale
+    // Fetch actual participant counts and avatar URLs since current_players column can be stale
     const sessionIds = (sessions || []).map((s: any) => s.id)
     let participantCounts: Record<string, number> = {}
+    let participantAvatars: Record<string, { avatarUrl: string | null }[]> = {}
 
     if (sessionIds.length > 0) {
       const { data: participants } = await supabase
         .from('queue_participants')
-        .select('queue_session_id')
+        .select('queue_session_id, user_id, profiles(avatar_url)')
         .in('queue_session_id', sessionIds)
         .is('left_at', null)
 
       if (participants) {
         participants.forEach((p: any) => {
           participantCounts[p.queue_session_id] = (participantCounts[p.queue_session_id] || 0) + 1
+          if (!participantAvatars[p.queue_session_id]) {
+            participantAvatars[p.queue_session_id] = []
+          }
+          participantAvatars[p.queue_session_id].push({
+            avatarUrl: p.profiles?.avatar_url || null,
+          })
+        })
+      }
+    }
+
+    // Fetch organizer names for all sessions
+    const organizerIds = [...new Set((sessions || []).map((s: any) => s.organizer_id).filter(Boolean))]
+    let organizerNames: Record<string, string> = {}
+    if (organizerIds.length > 0) {
+      const { data: orgProfiles } = await supabase
+        .from('profiles')
+        .select('id, display_name, first_name, last_name')
+        .in('id', organizerIds)
+      if (orgProfiles) {
+        orgProfiles.forEach((p: any) => {
+          organizerNames[p.id] = p.display_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Unknown Host'
         })
       }
     }
@@ -640,8 +678,6 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
       // Use actual participant count, falling back to current_players column
       const currentPlayers = participantCounts[session.id] || session.current_players || 0
 
-      console.log(`[getNearbyQueues] 📊 Session ${session.id.slice(0, 8)}: actual_participants=${participantCounts[session.id] || 0}, current_players_col=${session.current_players || 0}`)
-
       return {
         id: session.id,
         courtId: session.court_id,
@@ -649,12 +685,17 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
         venueName: session.courts?.venues?.name || 'Unknown Venue',
         venueId: session.courts?.venues?.id || '',
         status: session.status,
-        players: [],
+        players: (participantAvatars[session.id] || []).map((p: any) => ({
+          avatarUrl: p.avatarUrl,
+        })),
         userPosition: null,
         maxPlayers: session.max_players,
         currentPlayers,
         startTime: new Date(session.start_time),
         endTime: new Date(session.end_time),
+        mode: session.mode || 'casual',
+        costPerGame: parseFloat(session.cost_per_game || '0'),
+        organizerName: organizerNames[session.organizer_id] || 'Unknown Host',
       }
     })
 
