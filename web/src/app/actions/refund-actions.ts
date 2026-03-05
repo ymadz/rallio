@@ -437,7 +437,7 @@ export async function adminProcessRefundAction(
 
     if (action === 'reject') {
       // Reject the refund
-      await supabase
+      const { error: rejectError } = await serviceClient
         .from('refunds')
         .update({
           status: 'failed',
@@ -447,11 +447,20 @@ export async function adminProcessRefundAction(
         })
         .eq('id', refundId)
 
+      if (rejectError) {
+        console.error('❌ [adminProcessRefundAction] Failed to reject refund:', rejectError)
+        return { success: false, error: 'Failed to process refund rejection' }
+      }
+
       // Revert reservation status
-      await supabase
+      const { error: resError } = await serviceClient
         .from('reservations')
         .update({ status: 'confirmed' }) // Revert to confirmed
         .eq('id', refund.reservation_id)
+
+      if (resError) {
+        console.error('❌ [adminProcessRefundAction] Failed to revert reservation status:', resError)
+      }
 
       // Notify user
       await createNotification({
@@ -490,7 +499,7 @@ export async function adminProcessRefundAction(
       })
 
       // Update refund record
-      await supabase
+      const { error: updateError } = await serviceClient
         .from('refunds')
         .update({
           external_id: paymongoRefund.id,
@@ -500,6 +509,11 @@ export async function adminProcessRefundAction(
           notes: adminNotes,
         })
         .eq('id', refundId)
+
+      if (updateError) {
+        console.error('❌ [adminProcessRefundAction] Failed to update refund:', updateError)
+        return { success: false, error: 'Failed to update refund status DB' }
+      }
 
       // If succeeded, update reservation
       if (paymongoRefund.attributes.status === 'succeeded') {
@@ -512,7 +526,7 @@ export async function adminProcessRefundAction(
     } catch (paymongoError: any) {
       console.error('❌ [adminProcessRefundAction] PayMongo error:', paymongoError)
 
-      await supabase
+      await serviceClient
         .from('refunds')
         .update({
           status: 'failed',

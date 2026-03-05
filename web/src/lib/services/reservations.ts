@@ -169,7 +169,8 @@ export async function createReservation(
         startDate: targetSlots[0].start.toISOString(),
         endDate: targetSlots[targetSlots.length - 1].end.toISOString(),
         recurrenceWeeks: recurrenceWeeks,
-        basePrice: totalBasePrice
+        basePrice: totalBasePrice,
+        promoCode: data.promoCode
     })
 
     const finalTotalAmount = discountResult.finalPrice

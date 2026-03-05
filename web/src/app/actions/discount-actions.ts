@@ -8,7 +8,7 @@ import { revalidatePath } from 'next/cache';
 // ==========================================
 
 export type RuleDiscountType = 'recurring' | 'early_bird';
-export type CalculatedDiscountType = RuleDiscountType | 'seasonal' | 'holiday_surcharge';
+export type CalculatedDiscountType = RuleDiscountType | 'seasonal' | 'holiday_surcharge' | 'promo_code';
 
 export interface DiscountRule {
   id: string;
@@ -49,6 +49,7 @@ export interface DiscountCalculationInput {
   endDate: string;
   recurrenceWeeks: number;
   basePrice: number;
+  promoCode?: string;
 }
 
 export interface ApplicableDiscount {
@@ -328,7 +329,22 @@ export async function calculateApplicableDiscounts(
     const today = new Date();
     const daysInAdvance = Math.floor((bookingDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
+    interface RawDiscount {
+      type: CalculatedDiscountType;
+      name: string;
+      description: string;
+      unit: 'percent' | 'fixed';
+      value: number;
+      maxAmount?: number;
+      isIncrease: boolean;
+      priority: number;
+    }
+    const rawDiscounts: RawDiscount[] = [];
+
     // 1. Check for holiday pricing (surcharges or seasonal discounts)
+    // We should use an admin service client here if the user isn't authenticated, but server actions mostly work?
+    // Wait, the client used here is the authenticated user's client, which can read holiday pricing and rules because of RLS:
+    // "Active promo codes are viewable by everyone" - this means user can fetch them
     const { data: holidayPricing } = await supabase
       .from('holiday_pricing')
       .select('*')
@@ -342,23 +358,29 @@ export async function calculateApplicableDiscounts(
       const holiday = holidayPricing[0];
       const isIncrease = holiday.price_multiplier > 1.0;
 
-      let amount = 0;
       if (holiday.fixed_surcharge) {
-        amount = holiday.fixed_surcharge;
+        rawDiscounts.push({
+          type: isIncrease ? 'holiday_surcharge' : 'seasonal',
+          name: holiday.name,
+          description: holiday.description || (isIncrease ? `Holiday surcharge` : `Seasonal discount`),
+          unit: 'fixed',
+          value: Math.abs(holiday.fixed_surcharge),
+          isIncrease,
+          priority: isIncrease ? 100 : 80, // Surcharges have highest priority
+        });
       } else {
-        amount = input.basePrice * (holiday.price_multiplier - 1.0);
+        rawDiscounts.push({
+          type: isIncrease ? 'holiday_surcharge' : 'seasonal',
+          name: holiday.name,
+          description: holiday.description || (isIncrease
+            ? `${Math.round((holiday.price_multiplier - 1) * 100)}% holiday surcharge`
+            : `${Math.round((1 - holiday.price_multiplier) * 100)}% seasonal discount`),
+          unit: 'percent',
+          value: Math.round(Math.abs(holiday.price_multiplier - 1.0) * 100),
+          isIncrease,
+          priority: isIncrease ? 100 : 80,
+        });
       }
-
-      applicableDiscounts.push({
-        type: isIncrease ? 'holiday_surcharge' : 'seasonal',
-        name: holiday.name,
-        description: holiday.description || (isIncrease
-          ? `${Math.round((holiday.price_multiplier - 1) * 100)}% holiday surcharge`
-          : `${Math.round((1 - holiday.price_multiplier) * 100)}% seasonal discount`),
-        amount: Math.abs(amount),
-        isIncrease,
-        priority: isIncrease ? 100 : 80, // Surcharges have highest priority
-      });
     }
 
     // 2. Check for discount rules
@@ -370,33 +392,24 @@ export async function calculateApplicableDiscounts(
       .order('priority', { ascending: false });
 
     if (discountRules && discountRules.length > 0) {
-      // Use input.startDate for validity check to align with local booking time and intended target date
       const targetDateStr = input.startDate;
 
       for (const rule of discountRules) {
-        // Check validity dates
         if (rule.valid_from && rule.valid_from > targetDateStr) continue;
         if (rule.valid_until && rule.valid_until < targetDateStr) continue;
 
         let isApplicable = false;
-        let discountAmount = 0;
 
         switch (rule.discount_type) {
           case 'recurring':
             if (rule.min_weeks && Number(input.recurrenceWeeks) >= Number(rule.min_weeks)) {
               isApplicable = true;
-              discountAmount = rule.discount_unit === 'percent'
-                ? (Number(input.basePrice) * Number(rule.discount_value)) / 100
-                : Number(rule.discount_value);
             }
             break;
 
           case 'early_bird':
             if (rule.advance_days && daysInAdvance >= Number(rule.advance_days)) {
               isApplicable = true;
-              discountAmount = rule.discount_unit === 'percent'
-                ? (Number(input.basePrice) * Number(rule.discount_value)) / 100
-                : Number(rule.discount_value);
             }
             break;
 
@@ -404,12 +417,13 @@ export async function calculateApplicableDiscounts(
             break;
         }
 
-        if (isApplicable && discountAmount > 0) {
-          applicableDiscounts.push({
+        if (isApplicable) {
+          rawDiscounts.push({
             type: rule.discount_type,
             name: rule.name,
             description: rule.description || `${rule.discount_value}${rule.discount_unit === 'percent' ? '%' : ' PHP'} discount`,
-            amount: Number(discountAmount),
+            unit: rule.discount_unit,
+            value: Number(rule.discount_value),
             isIncrease: false,
             priority: Number(rule.priority),
           });
@@ -417,26 +431,84 @@ export async function calculateApplicableDiscounts(
       }
     }
 
-    // Sort by priority (highest first)
-    applicableDiscounts.sort((a, b) => b.priority - a.priority);
+    // 3. Check for Promo Code
+    if (input.promoCode) {
+      // Use service client for checking promo codes since anonymous users might be checking out
+      // or to ensure we can check usages properly without RLS blocking edge cases
+      // although RLS "Active promo codes are viewable by everyone" should suffice.
+      const { data: promoData } = await supabase
+        .from('promo_codes')
+        .select('*')
+        .eq('code', input.promoCode.toUpperCase())
+        .eq('is_active', true)
+        .single();
 
-    // Calculate total discount (subtract discounts, add surcharges)
-    let totalDiscount = 0;
-    for (const discount of applicableDiscounts) {
-      if (discount.isIncrease) {
-        totalDiscount -= Number(discount.amount); // Negative discount = surcharge
-      } else {
-        totalDiscount += Number(discount.amount);
+      if (promoData) {
+        const nowStr = new Date().toISOString();
+        const isValidDate = promoData.valid_from <= nowStr && promoData.valid_until >= nowStr;
+        const isValidVenue = !promoData.venue_id || promoData.venue_id === input.venueId;
+        const hasUsesLeft = promoData.max_uses === null || promoData.current_uses < promoData.max_uses;
+
+        if (isValidDate && isValidVenue && hasUsesLeft) {
+          rawDiscounts.push({
+            type: 'promo_code',
+            name: `Promo Code: ${promoData.code}`,
+            description: promoData.description || `Special promo discount`,
+            unit: promoData.discount_type,
+            value: Number(promoData.discount_value),
+            maxAmount: promoData.max_discount_amount ? Number(promoData.max_discount_amount) : undefined,
+            isIncrease: false,
+            priority: 200, // Promo codes apply first or with highest priority (customizable)
+          });
+        }
       }
     }
 
-    const finalPrice = Math.max(0, input.basePrice - totalDiscount);
+    // Sort all applicable raw discounts by priority
+    rawDiscounts.sort((a, b) => b.priority - a.priority);
+
+    // Calculate sequential impacts on running price
+    let currentPrice = input.basePrice;
+
+    for (const raw of rawDiscounts) {
+      let amount = 0;
+      if (raw.unit === 'fixed') {
+        amount = raw.value;
+      } else if (raw.unit === 'percent') {
+        amount = currentPrice * (raw.value / 100);
+        if (raw.maxAmount && amount > raw.maxAmount) {
+          amount = raw.maxAmount;
+        }
+      }
+
+      if (amount > 0) {
+        if (raw.isIncrease) {
+          currentPrice += amount;
+        } else {
+          currentPrice -= amount;
+        }
+
+        // Prevent price from dropping below zero
+        if (currentPrice < 0) currentPrice = 0;
+
+        applicableDiscounts.push({
+          type: raw.type,
+          name: raw.name,
+          description: raw.description,
+          amount: amount,
+          isIncrease: raw.isIncrease,
+          priority: raw.priority
+        });
+      }
+    }
+
+    let totalDiscount = input.basePrice - currentPrice;
 
     return {
       success: true,
       discounts: applicableDiscounts,
       totalDiscount,
-      finalPrice,
+      finalPrice: currentPrice,
     };
   } catch (error) {
     console.error('[calculateApplicableDiscounts] Exception:', error);
