@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { cancelReservationAction } from '@/app/actions/reservations'
 import { markRescheduleResultSeenAction } from '@/app/actions/reschedule-actions'
 
@@ -310,48 +309,78 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
           </div>
 
           {/* Stats Cards (Only show for Upcoming) */}
-          <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-3 gap-4">
-            <Card className="p-4 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="grid grid-cols-3 gap-3">
+            {/* Total Bookings */}
+            <div className="stat-glass stat-glass-teal relative overflow-hidden rounded-2xl p-4 border border-white/20 transition-transform duration-300 hover:-translate-y-1 hover:scale-[1.02]"
+              style={{
+                backgroundImage: [
+                  'radial-gradient(ellipse 80% 60% at 15% 20%, rgba(20,184,166,0.55) 0%, transparent 55%)',
+                  'radial-gradient(ellipse 60% 70% at 90% 85%, rgba(6,182,212,0.40) 0%, transparent 55%)',
+                  'linear-gradient(135deg, #0d9488 0%, #0f766e 100%)'
+                ].join(','),
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.22), 0 4px 20px rgba(13,148,136,0.2)'
+              }}>
+              <div className="absolute inset-0 pointer-events-none opacity-[0.04]" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E\")", backgroundSize: '180px 180px', mixBlendMode: 'overlay' }} />
+              <div className="relative z-10 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center border border-white/30" style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', boxShadow: '0 0 0 3px rgba(255,255,255,0.06)' }}>
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 </div>
                 <div>
-                  <p className="text-sm text-primary font-medium">Total Bookings</p>
-                  <p className="text-2xl font-bold text-gray-900">{filteredBookings.length}</p>
+                  <p className="text-xs font-medium text-white/75">Total Bookings</p>
+                  <p className="text-2xl font-bold text-white" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.15)' }}>{filteredBookings.length}</p>
                 </div>
               </div>
-            </Card>
+            </div>
 
-            <Card className="p-4 bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-amber-500 rounded-lg flex items-center justify-center">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {/* Awaiting Payment */}
+            <div className="stat-glass stat-glass-amber relative overflow-hidden rounded-2xl p-4 border border-white/20 transition-transform duration-300 hover:-translate-y-1 hover:scale-[1.02]"
+              style={{
+                backgroundImage: [
+                  'radial-gradient(ellipse 80% 60% at 20% 25%, rgba(251,191,36,0.50) 0%, transparent 55%)',
+                  'radial-gradient(ellipse 60% 70% at 85% 80%, rgba(245,158,11,0.40) 0%, transparent 55%)',
+                  'linear-gradient(135deg, #d97706 0%, #b45309 100%)'
+                ].join(','),
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.22), 0 4px 20px rgba(217,119,6,0.2)'
+              }}>
+              <div className="absolute inset-0 pointer-events-none opacity-[0.04]" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E\")", backgroundSize: '180px 180px', mixBlendMode: 'overlay' }} />
+              <div className="relative z-10 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center border border-white/30" style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', boxShadow: '0 0 0 3px rgba(255,255,255,0.06)' }}>
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3" />
                   </svg>
                 </div>
                 <div>
-                  <p className="text-sm text-amber-700 font-medium">Awaiting Payment</p>
-                  <p className="text-2xl font-bold text-amber-900">{awaitingPayment}</p>
+                  <p className="text-xs font-medium text-white/75">Awaiting Payment</p>
+                  <p className="text-2xl font-bold text-white" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.15)' }}>{awaitingPayment}</p>
                 </div>
               </div>
-            </Card>
+            </div>
 
-            <Card className="p-4 bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-emerald-500 rounded-lg flex items-center justify-center">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {/* Confirmed / Paid */}
+            <div className="stat-glass stat-glass-emerald relative overflow-hidden rounded-2xl p-4 border border-white/20 transition-transform duration-300 hover:-translate-y-1 hover:scale-[1.02]"
+              style={{
+                backgroundImage: [
+                  'radial-gradient(ellipse 80% 60% at 80% 20%, rgba(52,211,153,0.50) 0%, transparent 55%)',
+                  'radial-gradient(ellipse 60% 70% at 15% 85%, rgba(16,185,129,0.40) 0%, transparent 55%)',
+                  'linear-gradient(135deg, #059669 0%, #047857 100%)'
+                ].join(','),
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.22), 0 4px 20px rgba(5,150,105,0.2)'
+              }}>
+              <div className="absolute inset-0 pointer-events-none opacity-[0.04]" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E\")", backgroundSize: '180px 180px', mixBlendMode: 'overlay' }} />
+              <div className="relative z-10 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center border border-white/30" style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', boxShadow: '0 0 0 3px rgba(255,255,255,0.06)' }}>
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
                 <div>
-                  <p className="text-sm text-emerald-700 font-medium">Confirmed / Paid</p>
-                  <p className="text-2xl font-bold text-emerald-900">{totalConfirmed}</p>
+                  <p className="text-xs font-medium text-white/75">Confirmed / Paid</p>
+                  <p className="text-2xl font-bold text-white" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.15)' }}>{totalConfirmed}</p>
                 </div>
               </div>
-            </Card>
+            </div>
           </div>
 
           {/* Bookings List for Upcoming */}
