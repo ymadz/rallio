@@ -425,7 +425,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
 
       {/* Booking Detail Modal */}
       <Dialog open={!!selectedBooking} onOpenChange={(open) => !open && setSelectedBooking(null)}>
-        <DialogContent className="max-w-lg p-0 overflow-hidden max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg p-0 overflow-hidden max-h-[90vh] flex flex-col !rounded-2xl border-primary/15 shadow-xl shadow-primary/10">
           <VisuallyHidden>
             <DialogTitle>Booking Details</DialogTitle>
           </VisuallyHidden>
