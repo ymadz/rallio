@@ -6,6 +6,7 @@ import { NearbyQueues } from '@/components/home/nearby-queues'
 import { UpcomingBookings } from '@/components/home/upcoming-bookings'
 import { formatCurrency } from '@rallio/shared'
 import { HomeTutorial } from '@/components/home/home-tutorial'
+import { IOChat, IOChatCard } from '@/components/home/io-chat'
 
 export const metadata = {
   title: 'Home | Rallio',
@@ -337,7 +338,7 @@ export default async function HomePage() {
         <ActiveBookingBanner />
 
         {/* Quick Actions - Large Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
 
           {/* Book a Court Card */}
           <Link href="/courts" className="quick-card"
@@ -398,6 +399,9 @@ export default async function HomePage() {
               <span className="card-label">My Bookings</span>
             </div>
           </Link>
+
+          {/* Ask IO Card */}
+          <IOChatCard />
 
         </div>
 
@@ -481,6 +485,9 @@ export default async function HomePage() {
           <UpcomingBookings bookings={(upcomingBookings || []) as any} />
         </section>
       </div>
+
+      {/* IO Chatbot */}
+      <IOChat />
     </div>
   )
 }
