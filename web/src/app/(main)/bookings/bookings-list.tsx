@@ -91,13 +91,16 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
         return startTime <= weekFromNow
       }
       return true
-    } else {
-      // History: Past or Cancelled/Refunded/Completed
-      const isHistoryStatus = ['cancelled', 'refunded', 'pending_refund', 'completed', 'no_show'].includes(booking.status)
+    } else if (activeTab === 'history') {
+      // History: Past or Cancelled/Completed (exclude refund statuses)
+      const isHistoryStatus = ['cancelled', 'completed', 'no_show'].includes(booking.status)
       const endTime = new Date(booking.end_time)
       // It's history if it's a history status OR if it was an active status but the time has fully passed
       const isPastActive = activeStatuses.includes(booking.status) && endTime < now
       return isHistoryStatus || isPastActive
+    } else {
+      // Refunds: Only refund-related statuses
+      return ['refunded', 'pending_refund'].includes(booking.status)
     }
   })
 
@@ -281,9 +284,10 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
       {/* Main Tabs */}
       <Tabs defaultValue="upcoming" className="w-full" onValueChange={setActiveTab}>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-          <TabsList className="grid w-full sm:w-[400px] grid-cols-2">
+          <TabsList className="grid w-full sm:w-[500px] grid-cols-3">
             <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-            <TabsTrigger value="history">History & Refunds</TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
+            <TabsTrigger value="refunds">Refunds</TabsTrigger>
           </TabsList>
         </div>
 
@@ -435,6 +439,33 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                 </div>
                 <h3 className="text-xl font-bold text-gray-900 mb-2">No booking history</h3>
                 <p className="text-sm text-gray-500 leading-relaxed">Your past bookings and completed sessions will appear here.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {filteredBookings.map((booking) => (
+                <BookingPreviewCard
+                  key={booking.id}
+                  booking={booking}
+                  serverDate={serverDate}
+                  onClick={() => handleSelectBooking(booking)}
+                />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="refunds">
+          {filteredBookings.length === 0 ? (
+            <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-gray-50 via-white to-gray-50 p-10 text-center">
+              <div className="max-w-sm mx-auto">
+                <div className="w-16 h-16 bg-gradient-to-br from-primary/10 to-teal-100 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-sm">
+                  <svg className="w-7 h-7 text-primary/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">No refund requests</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">Your refund requests and processed refunds will appear here.</p>
               </div>
             </div>
           ) : (

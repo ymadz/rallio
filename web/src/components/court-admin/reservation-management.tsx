@@ -239,6 +239,14 @@ export function ReservationManagement() {
       return { key: 'ongoing', label: 'Ongoing' }
     }
 
+    if (effectiveStatus === 'pending_refund') {
+      return { key: 'pending_refund', label: 'Refund Requested' }
+    }
+
+    if (effectiveStatus === 'refunded') {
+      return { key: 'refunded', label: 'Refunded' }
+    }
+
     const label = effectiveStatus
       .split('_')
       .map((part: string) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -254,6 +262,7 @@ export function ReservationManagement() {
     ongoing: reservations.filter(r => getEffectiveStatus(r) === 'ongoing').length,
     completed: reservations.filter(r => getEffectiveStatus(r) === 'completed').length,
     cancelled: reservations.filter(r => ['cancelled', 'rejected'].includes(getEffectiveStatus(r))).length,
+    refunds: reservations.filter(r => ['pending_refund', 'refunded'].includes(getEffectiveStatus(r))).length,
   }
 
   if (isLoading) {
@@ -357,7 +366,7 @@ export function ReservationManagement() {
             }`}
         >
           <Undo2 className="w-4 h-4" />
-          Refund Requests
+          Refund Requests ({statusCounts.refunds})
         </button>
       </div>
 
