@@ -203,6 +203,7 @@ export function AvailabilityModal({
           startDate: startDateTime,
           endDate: endDateTime,
           recurrenceWeeks: Number(recurrenceWeeks),
+          targetDateCount: actualSlotCount,
           basePrice
         })
 

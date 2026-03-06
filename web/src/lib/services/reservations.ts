@@ -169,6 +169,7 @@ export async function createReservation(
         startDate: targetSlots[0].start.toISOString(),
         endDate: targetSlots[targetSlots.length - 1].end.toISOString(),
         recurrenceWeeks: recurrenceWeeks,
+        targetDateCount: targetSlots.length,
         basePrice: totalBasePrice,
         promoCode: data.promoCode
     })

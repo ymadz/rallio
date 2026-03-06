@@ -176,10 +176,10 @@ export function CreateSessionForm() {
       const endDateTimeStr = endDateObj.toISOString()
 
       const basePrice = selectedCourt.hourly_rate * duration * (selectedDays.length > 0 ? selectedDays.length : 1) * recurrenceWeeks
-
       try {
         const venueId = selectedVenue?.id
         if (!venueId) throw new Error("Venue ID not found")
+        const targetDateCount = (selectedDays.length > 0 ? selectedDays.length : 1) * recurrenceWeeks
 
         const result = await calculateApplicableDiscounts({
           venueId,
@@ -187,9 +187,9 @@ export function CreateSessionForm() {
           startDate: startDateTimeStr,
           endDate: endDateTimeStr,
           recurrenceWeeks,
+          targetDateCount,
           basePrice
         })
-
         if (result.success) {
           setCalculatedPrice({
             original: basePrice,

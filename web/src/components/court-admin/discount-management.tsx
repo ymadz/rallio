@@ -65,6 +65,7 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
     discount_unit: 'percent' as 'percent' | 'fixed',
     min_weeks: null as number | null,
     advance_days: null as number | null,
+    min_days: null as number | null,
     is_active: true,
     priority: 50,
     valid_from: null as string | null,
@@ -117,6 +118,7 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
         discount_unit: rule.discount_unit,
         min_weeks: rule.min_weeks ?? null,
         advance_days: rule.advance_days ?? null,
+        min_days: rule.min_days ?? null,
         is_active: rule.is_active,
         priority: rule.priority,
         valid_from: rule.valid_from,
@@ -132,6 +134,7 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
         discount_unit: 'percent',
         min_weeks: null,
         advance_days: null,
+        min_days: null,
         is_active: true,
         priority: 50,
         valid_from: null,
@@ -360,6 +363,8 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
         return <Calendar className="h-4 w-4" />;
       case 'early_bird':
         return <Clock className="h-4 w-4" />;
+      case 'multi_day':
+        return <Calendar className="h-4 w-4" />;
       default:
         return <Percent className="h-4 w-4" />;
     }
@@ -371,6 +376,8 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
         return 'Recurring Booking';
       case 'early_bird':
         return 'Early Bird Special';
+      case 'multi_day':
+        return 'Multi-Day Booking';
       default:
         return type;
     }
@@ -471,6 +478,12 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
                               <div className="flex items-center gap-1">
                                 <span className="text-muted-foreground">Book Ahead:</span>
                                 <span className="font-medium">{rule.advance_days} days</span>
+                              </div>
+                            )}
+                            {rule.min_days && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-muted-foreground">Min Days:</span>
+                                <span className="font-medium">{rule.min_days} days</span>
                               </div>
                             )}
                           </div>
@@ -677,6 +690,7 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
                   <SelectContent>
                     <SelectItem value="recurring">Recurring Booking</SelectItem>
                     <SelectItem value="early_bird">Early Bird Special</SelectItem>
+                    <SelectItem value="multi_day">Multi-Day Booking</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -759,6 +773,22 @@ export default function DiscountManagement({ venueId }: DiscountManagementProps)
                     setRuleForm({ ...ruleForm, advance_days: parseInt(e.target.value) || null })
                   }
                   placeholder="e.g., 7"
+                />
+              </div>
+            )}
+
+            {ruleForm.discount_type === 'multi_day' && (
+              <div className="space-y-2">
+                <Label htmlFor="min-days">Minimum Days Required</Label>
+                <Input
+                  id="min-days"
+                  type="number"
+                  min="2"
+                  value={ruleForm.min_days || ''}
+                  onChange={(e) =>
+                    setRuleForm({ ...ruleForm, min_days: parseInt(e.target.value) || null })
+                  }
+                  placeholder="e.g., 2"
                 />
               </div>
             )}

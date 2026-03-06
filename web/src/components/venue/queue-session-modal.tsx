@@ -197,14 +197,16 @@ export function QueueSessionModal({
             try {
                 const dateStr = format(selectedDate, 'yyyy-MM-dd')
                 const startDateTime = `${dateStr}T${startSlot.time}:00+08:00`
-                const endDateTime = `${dateStr}T${endTime}:00+08:00`
+                const startDateTimeStr = `${dateStr}T${startSlot.time}:00+08:00`
+                const endDateTimeStr = `${dateStr}T${endTime}:00+08:00`
 
                 const result = await calculateApplicableDiscounts({
                     venueId,
                     courtId,
-                    startDate: startDateTime,
-                    endDate: endDateTime,
+                    startDate: startDateTimeStr,
+                    endDate: endDateTimeStr,
                     recurrenceWeeks: Number(recurrenceWeeks),
+                    targetDateCount: actualSlotCount,
                     basePrice
                 })
 
