@@ -159,7 +159,7 @@ export async function initiatePaymentAction(
           // For down payments, sum the down_payment_amount from each reservation's metadata
           amountToCharge = groupReservations.reduce((sum, res) => {
             const meta = res.metadata as any
-            return sum + (meta?.down_payment_amount || 0)
+            return sum + Number(meta?.down_payment_amount || 0)
           }, 0)
           description += ` (Down Payment - ${groupReservations.length} sessions)`
         } else {
@@ -678,7 +678,7 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
           if (isDownPayment) {
             const resMeta = (res as any).metadata as any
             resStatus = 'partially_paid'
-            resAmountPaid = resMeta?.down_payment_amount || 0
+            resAmountPaid = Number(resMeta?.down_payment_amount || 0)
           }
 
           const { error: bulkUpdateError } = await supabase
