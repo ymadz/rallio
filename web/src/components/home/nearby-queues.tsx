@@ -128,6 +128,7 @@ export function NearbyQueues() {
             const isLive = queue.status === 'active';
             const isOpen = queue.status === 'waiting';
             const startDate = new Date(queue.startTime);
+            const isUpcoming = !isLive && startDate > new Date();
             const endDate = new Date(queue.endTime);
             const avatarCount = Math.min(queue.players?.length || queue.currentPlayers || 0, 4);
             const totalPlayers = queue.players?.length || queue.currentPlayers || 0;
@@ -313,20 +314,32 @@ export function NearbyQueues() {
                     href={`/queue/${queue.courtId}`}
                     className="flex items-center justify-center gap-1 w-full py-1.5 rounded-full text-[11px] font-bold text-white border border-white/20 backdrop-blur-md transition-all duration-200 hover:border-white/30 hover:shadow-lg hover:shadow-teal-700/20"
                     style={{
-                      background:
-                        'linear-gradient(135deg, rgba(13,148,136,0.85) 0%, rgba(15,118,110,0.9) 50%, rgba(8,70,64,0.85) 100%)',
+                      background: isUpcoming
+                        ? 'linear-gradient(135deg, rgba(0,102,102,0.9) 0%, rgba(0,128,128,0.9) 50%, rgba(0,76,76,0.85) 100%)'
+                        : 'linear-gradient(135deg, rgba(13,148,136,0.85) 0%, rgba(15,118,110,0.9) 50%, rgba(8,70,64,0.85) 100%)',
                       textShadow: '0 1px 3px rgba(0,0,0,0.2)',
                     }}
                   >
-                    {isLive ? 'Watch' : 'Join Queue'}
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2.5}
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
+                    {isUpcoming ? (
+                      <>
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Opening Soon
+                      </>
+                    ) : (
+                      <>
+                        {isLive ? 'Watch' : 'Join Queue'}
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2.5}
+                            d="M9 5l7 7-7 7"
+                          />
+                        </svg>
+                      </>
+                    )}
                   </Link>
                 </div>
               </div>
