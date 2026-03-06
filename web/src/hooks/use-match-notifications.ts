@@ -113,8 +113,12 @@ export function useMatchNotifications(userId?: string) {
               }
             }
 
+            const finalScore = isTeamA
+              ? `${match.score_a} - ${match.score_b}`
+              : `${match.score_b} - ${match.score_a}`
+
             toast.success(didWin ? 'You won! 🎉' : 'Match completed', {
-              description: `Final Score: ${match.score_a} - ${match.score_b}${eloDiffString}`,
+              description: `Final Score: ${finalScore}${eloDiffString}`,
               duration: 8000,
             })
 
