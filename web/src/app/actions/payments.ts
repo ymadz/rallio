@@ -146,6 +146,17 @@ export async function initiatePaymentAction(
       }
     }
 
+    console.log('[initiatePaymentAction] 🔍 Down payment debug:', {
+      recurrenceGroupId,
+      isDownPayment,
+      amountToCharge,
+      reservationStatus: reservation.status,
+      paymentMethod,
+      intendedMethod: reservation.metadata?.intended_payment_method,
+      downPaymentInMeta: reservation.metadata?.down_payment_amount,
+      reservationPaymentMethod: reservation.payment_method,
+    })
+
     if (recurrenceGroupId) {
       // Fetch all reservations in this group
       const { data: groupReservations } = await supabase

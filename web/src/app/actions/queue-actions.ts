@@ -872,7 +872,7 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
   const createdSessions: QueueSessionData[] = []
 
   // Generate a recurrence group ID if applicable
-  const recurrenceGroupId = recurrenceWeeks > 1 ? crypto.randomUUID() : undefined
+  const recurrenceGroupId = (recurrenceWeeks > 1 || (data.selectedDays && data.selectedDays.length > 1)) ? crypto.randomUUID() : undefined
 
   try {
     const supabase = await createClient()
@@ -1174,6 +1174,7 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
           discount_applied: discountResult.totalDiscount,
           discount_type: primaryDiscountName || null,
           discount_reason: primaryDiscountReason || null,
+          recurrence_group_id: recurrenceGroupId,
           metadata: {
             booking_origin: 'queue_session',
             queue_session_organizer: true,
