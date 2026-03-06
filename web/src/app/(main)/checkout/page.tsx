@@ -11,10 +11,12 @@ import { PaymentMethodSelector } from '@/components/checkout/payment-method-sele
 import { CancellationPolicy } from '@/components/checkout/cancellation-policy'
 import { PaymentProcessing } from '@/components/checkout/payment-processing'
 import { CancelBookingModal } from '@/components/checkout/cancel-booking-modal'
+import { createClient } from '@/lib/supabase/client'
 
 export default function CheckoutPage() {
     const router = useRouter()
     const [showCancelModal, setShowCancelModal] = useState(false)
+    const [courtImageUrl, setCourtImageUrl] = useState<string | null>(null)
     const {
         bookingData,
         currentStep,
@@ -56,6 +58,37 @@ export default function CheckoutPage() {
             router.push('/courts')
         }
     }, [bookingData, router])
+
+    // Fetch court image
+    useEffect(() => {
+        if (!bookingData) return
+        const supabase = createClient()
+        async function fetchImage() {
+            // Try court-specific image first
+            const { data: courtImg } = await supabase
+                .from('court_images')
+                .select('url')
+                .eq('court_id', bookingData!.courtId)
+                .order('is_primary', { ascending: false })
+                .order('display_order', { ascending: true })
+                .limit(1)
+                .single()
+            if (courtImg?.url) {
+                setCourtImageUrl(courtImg.url)
+                return
+            }
+            // Fall back to venue image
+            const { data: venue } = await supabase
+                .from('venues')
+                .select('image_url')
+                .eq('id', bookingData!.venueId)
+                .single()
+            if (venue?.image_url) {
+                setCourtImageUrl(venue.image_url)
+            }
+        }
+        fetchImage()
+    }, [bookingData?.courtId, bookingData?.venueId])
 
     if (!bookingData) {
         return (
@@ -138,7 +171,7 @@ export default function CheckoutPage() {
             <div className="bg-white border-b border-gray-200">
                 <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-4">
                     <button
-                        onClick={handleCancel}
+                        onClick={currentStep === 'details' ? handleCancel : handleBack}
                         className="text-gray-600 hover:text-gray-900 transition-colors"
                     >
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -168,10 +201,20 @@ export default function CheckoutPage() {
                                 <div className="bg-white border border-gray-200 rounded-xl p-6">
                                     <h3 className="font-semibold text-gray-900 text-lg mb-4">Court Details</h3>
                                     <div className="flex gap-4">
-                                        <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                            <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                            </svg>
+                                        <div className="w-32 h-32 bg-gray-100 rounded-lg flex-shrink-0 overflow-hidden">
+                                            {courtImageUrl ? (
+                                                <img
+                                                    src={courtImageUrl}
+                                                    alt={bookingData.courtName}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center">
+                                                    <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                    </svg>
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="flex-1">
                                             <h4 className="font-semibold text-gray-900 text-xl mb-2">{bookingData.courtName}</h4>
@@ -255,9 +298,6 @@ export default function CheckoutPage() {
                                         </div>
                                     </div>
                                 </div>
-
-                                {/* Promo Code Input */}
-                                {!bookingData.isQueueSession && <PromoCodeInput />}
 
                                 {/* Split Payment Controls (hidden for queue sessions) */}
                                 {!bookingData.isQueueSession && <SplitPaymentControls />}
@@ -449,10 +489,14 @@ export default function CheckoutPage() {
                     </div>
 
                     {/* Right Column - Summary */}
-                    <div className="lg:col-span-1">
+                    <div className="lg:col-span-1 space-y-4">
+                        {/* Promo Code */}
+                        {currentStep === 'details' && !bookingData.isQueueSession && <PromoCodeInput />}
+
                         <BookingSummaryCard
                             onContinue={handleContinue}
                             onBack={handleBack}
+                            onCancel={handleCancel}
                             canContinue={canContinue()}
                             currentStep={currentStep}
                             showButtons={true}
