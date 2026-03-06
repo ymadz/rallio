@@ -13,7 +13,9 @@ import {
   assignMatchFromQueue,
   recordMatchScore,
   getActiveMatch,
-  startMatch
+  startMatch,
+  resetPlayerToWaiting,
+  resetAllPlayersToWaiting,
 } from '@/app/actions/match-actions'
 import { PayMongoError } from '@/lib/paymongo/client'
 import { initiatePaymentAction } from '@/app/actions/payments'
@@ -553,16 +555,24 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                     Complete payment to activate your session and allow players to join.
                     {session.metadata?.payment_required && ` Amount due: ₱${parseFloat(session.metadata.payment_required).toFixed(2)}`}
                   </p>
+                  {session.metadata?.payment_method === 'cash' && (
+                    <p className="mt-1 text-xs text-orange-600">
+                      Cash payment — pay at the venue. The venue will activate your session once payment is confirmed.
+                    </p>
+                  )}
                 </div>
               </div>
-              <button
-                onClick={handlePayNow}
-                disabled={actionLoading === 'pay'}
-                className="ml-4 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50 flex items-center gap-2"
-              >
-                {actionLoading === 'pay' && <Loader2 className="w-4 h-4 animate-spin" />}
-                Pay Now
-              </button>
+              {/* Only show electronic Pay Now for e-wallet sessions */}
+              {session.metadata?.payment_method !== 'cash' && (
+                <button
+                  onClick={handlePayNow}
+                  disabled={actionLoading === 'pay'}
+                  className="ml-4 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {actionLoading === 'pay' && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Pay Now
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -863,9 +873,25 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
             {/* Playing Players */}
             {playingPlayers.length > 0 && (
               <div>
-                <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wider">
-                  Playing ({playingPlayers.length})
-                </h3>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                    Playing ({playingPlayers.length})
+                  </h3>
+                  <button
+                    onClick={async () => {
+                      if (!confirm(`Reset all ${playingPlayers.length} playing player(s) back to the waiting queue?`)) return
+                      const result = await resetAllPlayersToWaiting(session.id)
+                      if (result.success) {
+                        loadSession()
+                      } else {
+                        alert('Reset failed: ' + result.error)
+                      }
+                    }}
+                    className="text-xs px-2.5 py-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors font-medium"
+                  >
+                    Reset All to Queue
+                  </button>
+                </div>
                 <div className="space-y-2">
                   {playingPlayers.map((player) => (
                     <div
@@ -896,11 +922,26 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                           </div>
                         </div>
                       </div>
+                      <button
+                        onClick={async () => {
+                          const result = await resetPlayerToWaiting(player.id, session.id)
+                          if (result.success) {
+                            loadSession()
+                          } else {
+                            alert('Reset failed: ' + result.error)
+                          }
+                        }}
+                        title="Return this player to the waiting queue"
+                        className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors font-medium"
+                      >
+                        Reset
+                      </button>
                     </div>
                   ))}
                 </div>
               </div>
             )}
+
 
             {session.players.length === 0 && (
               <div className="text-center py-12">

@@ -751,8 +751,9 @@ export async function calculateQueuePayment(sessionId: string) {
 
     const costPerGame = parseFloat(participant.queue_sessions.cost_per_game || '0')
     const gamesPlayed = participant.games_played || 0
-    const totalOwed = costPerGame * gamesPlayed
-    const amountPaid = 0 // Track separately if needed
+    // Use stored amount_owed so QM-applied waivers are respected (honours QM fee waivers)
+    const totalOwed = parseFloat(participant.amount_owed || '0')
+    const amountPaid = participant.payment_status === 'paid' ? totalOwed : 0
 
     return {
       success: true,
@@ -1683,6 +1684,20 @@ export async function closeQueueSession(sessionId: string): Promise<{
       return { success: false, error: 'Failed to complete queue session' }
     }
 
+    // 5a. Mark all remaining active participants as 'completed'
+    const { error: participantStatusError } = await supabase
+      .from('queue_participants')
+      .update({ status: 'completed' })
+      .eq('queue_session_id', sessionId)
+      .is('left_at', null)
+      .in('status', ['waiting', 'playing'])
+
+    if (participantStatusError) {
+      console.warn('[closeQueueSession] ⚠️ Failed to mark participants as completed:', participantStatusError)
+    } else {
+      console.log('[closeQueueSession] ✅ Marked active participants as completed')
+    }
+
     console.log('[closeQueueSession] ✅ Queue session completed successfully:', summary)
 
     // 5b. Also complete the linked reservation (belt-and-suspenders with DB trigger)
@@ -1951,17 +1966,25 @@ export async function removeParticipant(
       }
     }
 
-    // 5. Calculate amount owed if not already set
+    // 5. Preserve stored amount_owed if fee was already waived; otherwise calculated from games
     const gamesPlayed = participant.games_played || 0
     const costPerGame = parseFloat(session.cost_per_game || '0')
-    const amountOwed = gamesPlayed * costPerGame
+    const storedAmountOwed = parseFloat(participant.amount_owed || '0')
+    const existingPaymentStatus = participant.payment_status
+    // If fee was waived (amount_owed is 0 and status is paid/waived), keep it; otherwise recalculate
+    const amountOwed = (existingPaymentStatus === 'paid' && storedAmountOwed === 0)
+      ? 0  // preserve waiver
+      : storedAmountOwed > 0
+        ? storedAmountOwed  // use stored value if it already reflects updates
+        : gamesPlayed * costPerGame  // fallback to calculation only if nothing stored
 
     // 6. Update participant record
+    const leftAt = await getServerNow()
     const { error: updateError } = await supabase
       .from('queue_participants')
       .update({
         status: 'left',
-        left_at: new Date().toISOString(),
+        left_at: leftAt.toISOString(),
         amount_owed: amountOwed,
       })
       .eq('id', participant.id)
@@ -2438,24 +2461,23 @@ export async function getQueueMasterStats(): Promise<{
     let totalPlayers = 0
     let evaluatedSessions = 0
 
-    sessions?.forEach(session => {
+    for (const session of (sessions || [])) {
       const startTime = new Date(session.start_time)
       const endTime = session.end_time ? new Date(session.end_time) : null
       const isExpired = endTime && endTime < now && ['open', 'active'].includes(session.status)
 
-      // Auto-complete if expired (fire and forget)
+      // Auto-complete if expired (await so counts below are accurate)
       if (isExpired) {
-        supabase.from('queue_sessions').update({ status: 'completed' }).eq('id', session.id).then(({ error }) => {
-          if (error) console.error('Failed to auto-complete expired session:', session.id, error)
-        })
+        const { error } = await supabase.from('queue_sessions').update({ status: 'completed' }).eq('id', session.id)
+        if (error) console.error('Failed to auto-complete expired session:', session.id, error)
+        else session.status = 'completed'
       }
 
-      // Auto-activate: open sessions whose start_time has passed (fire and forget)
+      // Auto-activate: open sessions whose start_time has passed
       if (!isExpired && session.status === 'open' && startTime <= now) {
-        supabase.from('queue_sessions').update({ status: 'active' }).eq('id', session.id).then(({ error }) => {
-          if (error) console.error('Failed to auto-activate session:', session.id, error)
-        })
-        session.status = 'active' // Use corrected status for counting
+        const { error } = await supabase.from('queue_sessions').update({ status: 'active' }).eq('id', session.id)
+        if (error) console.error('Failed to auto-activate session:', session.id, error)
+        else session.status = 'active'
       }
 
       // Count logic matching Dashboard filters
@@ -2478,7 +2500,8 @@ export async function getQueueMasterStats(): Promise<{
         totalPlayers += session.queue_participants?.length || 0
         evaluatedSessions++
       }
-    })
+    }
+
 
     const averagePlayers = evaluatedSessions > 0 ? Math.round(totalPlayers / evaluatedSessions) : 0
 

@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
 import { checkRateLimit, createRateLimitConfig } from '@/lib/rate-limiter'
 import { createBulkNotifications, NotificationTemplates } from '@/lib/notifications'
@@ -392,6 +393,8 @@ export async function recordMatchScore(
 
   try {
     const supabase = await createClient()
+    // Service client bypasses RLS — needed because the QM updates participants they don't own
+    const serviceDb = createServiceClient()
 
     const {
       data: { user },
@@ -411,7 +414,7 @@ export async function recordMatchScore(
       }
     }
 
-    // Get match details
+    // Get match details (auth client is fine for reads with RLS)
     const { data: match, error: matchError } = await supabase
       .from('matches')
       .select(`
@@ -445,78 +448,97 @@ export async function recordMatchScore(
       return { success: false, error: 'Cannot record result for cancelled match' }
     }
 
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('update_match_results', {
+    // Call RPC via service client so it runs with full DB permissions
+    const { data: rpcResult, error: rpcError } = await serviceDb.rpc('update_match_results', {
       p_match_id: matchId,
       p_winner: scores.winner,
       p_metadata: scores.metadata || null
     })
 
-    if (rpcError || (rpcResult && !rpcResult.success)) {
-      console.error('[recordMatchScore] ❌ Failed to record match via RPC:', rpcError || rpcResult?.error)
-      return { success: false, error: 'Failed to record match result and update stats' }
-    }
+    const rpcFailed = rpcError || (rpcResult && !rpcResult.success)
 
-    // The RPC might return rating changes. If it did, update the metadata one last time so clients receive it
-    if (rpcResult?.ratingChanges && Object.keys(rpcResult.ratingChanges).length > 0) {
-      console.log('[recordMatchScore] 📈 Save rating changes to metadata:', rpcResult.ratingChanges)
-      const currentMetadata = scores.metadata || {}
-      await supabase.from('matches').update({
-        metadata: { ...currentMetadata, ratingChanges: rpcResult.ratingChanges }
-      }).eq('id', matchId)
-    }
-
-    // Fallback: Directly update participants in case the RPC's FOREACH loop silently skipped it
-    const allPlayerIds = [...(match.team_a_players || []), ...(match.team_b_players || [])]
-    const costPerGame = parseFloat(match.queue_sessions?.cost_per_game || '0')
-    console.log('[recordMatchScore] 🔄 Fallback: updating participants, cost_per_game:', costPerGame)
-
-    for (const playerId of allPlayerIds) {
-      const isWinner = scores.winner === 'team_a'
-        ? (match.team_a_players || []).includes(playerId)
-        : scores.winner === 'team_b'
-          ? (match.team_b_players || []).includes(playerId)
-          : false
-
-      // Fetch current values so we can increment properly
-      const { data: current } = await supabase
-        .from('queue_participants')
-        .select('games_played, games_won, amount_owed, status')
-        .eq('queue_session_id', match.queue_session_id)
-        .eq('user_id', playerId)
-        .single()
-
-      if (!current) {
-        console.warn('[recordMatchScore] ⚠️ Participant not found for fallback:', playerId)
-        continue
-      }
-
-      const { error: partError } = await supabase
-        .from('queue_participants')
-        .update({
-          status: 'waiting',
-          games_played: (current.games_played || 0) + 1,
-          games_won: isWinner ? (current.games_won || 0) + 1 : (current.games_won || 0),
-          amount_owed: (parseFloat(current.amount_owed || '0')) + costPerGame,
-          joined_at: new Date().toISOString(), // Move to back of queue
-        })
-        .eq('queue_session_id', match.queue_session_id)
-        .eq('user_id', playerId)
-
-      if (partError) {
-        console.error('[recordMatchScore] ⚠️ Fallback update failed for player', playerId, partError)
-      } else {
-        console.log('[recordMatchScore] ✅ Fallback updated participant', playerId, {
-          gamesPlayed: (current.games_played || 0) + 1,
-          amountOwed: (parseFloat(current.amount_owed || '0')) + costPerGame,
-          isWinner,
-        })
+    if (rpcFailed) {
+      console.warn('[recordMatchScore] ⚠️ RPC failed, running service-client fallback:', rpcError || rpcResult?.error)
+    } else {
+      // RPC succeeded — save rating changes to match metadata so clients can display them
+      if (rpcResult?.ratingChanges && Object.keys(rpcResult.ratingChanges).length > 0) {
+        console.log('[recordMatchScore] 📈 Saving rating changes to metadata:', rpcResult.ratingChanges)
+        const currentMetadata = scores.metadata || {}
+        await serviceDb.from('matches').update({
+          metadata: { ...currentMetadata, ratingChanges: rpcResult.ratingChanges }
+        }).eq('id', matchId)
       }
     }
 
-    console.log('[recordMatchScore] ✅ Match winner recorded successfully:', scores.winner)
+    // Fallback: run via service client if RPC failed (bypasses RLS for cross-user updates)
+    if (rpcFailed) {
+      const allPlayerIds = [...(match.team_a_players || []), ...(match.team_b_players || [])]
+      const costPerGame = parseFloat(match.queue_sessions?.cost_per_game || '0')
+      console.log('[recordMatchScore] 🔄 Service fallback: updating participants, cost_per_game:', costPerGame)
+
+      for (const playerId of allPlayerIds) {
+        const isWinner = scores.winner === 'team_a'
+          ? (match.team_a_players || []).includes(playerId)
+          : scores.winner === 'team_b'
+            ? (match.team_b_players || []).includes(playerId)
+            : false
+
+        const { data: current } = await serviceDb
+          .from('queue_participants')
+          .select('games_played, games_won, amount_owed')
+          .eq('queue_session_id', match.queue_session_id)
+          .eq('user_id', playerId)
+          .single()
+
+        if (!current) {
+          console.warn('[recordMatchScore] ⚠️ Participant not found for fallback:', playerId)
+          continue
+        }
+
+        const { error: partError } = await serviceDb
+          .from('queue_participants')
+          .update({
+            status: 'waiting',
+            games_played: (current.games_played || 0) + 1,
+            games_won: isWinner ? (current.games_won || 0) + 1 : (current.games_won || 0),
+            amount_owed: (parseFloat(current.amount_owed || '0')) + costPerGame,
+            joined_at: new Date().toISOString(),
+          })
+          .eq('queue_session_id', match.queue_session_id)
+          .eq('user_id', playerId)
+
+        if (partError) {
+          console.error('[recordMatchScore] ❌ Service fallback update failed for player', playerId, partError)
+        } else {
+          console.log('[recordMatchScore] ✅ Service fallback updated player', playerId)
+        }
+      }
+    } // end rpcFailed fallback
+
+    // GUARANTEED STATUS RESET via service client (catches any edge case where RPC skipped the status)
+    const allMatchPlayers = [...(match.team_a_players || []), ...(match.team_b_players || [])]
+    const { error: statusResetError } = await serviceDb
+      .from('queue_participants')
+      .update({
+        status: 'waiting',
+        joined_at: new Date().toISOString(),
+      })
+      .eq('queue_session_id', match.queue_session_id)
+      .in('user_id', allMatchPlayers)
+      .eq('status', 'playing')
+
+    if (statusResetError) {
+      console.error('[recordMatchScore] ⚠️ Status reset failed:', statusResetError)
+    } else {
+      console.log('[recordMatchScore] ✅ Status reset to waiting for', allMatchPlayers.length, 'players')
+    }
+
+    console.log('[recordMatchScore] ✅ Match recorded, rpcFailed:', rpcFailed)
 
     revalidatePath(`/queue/${match.queue_sessions.court_id}`)
+    revalidatePath(`/queue-master/sessions/${match.queue_session_id}`)
     revalidatePath('/queue')
+    revalidatePath('/queue-master')
 
     return { success: true }
   } catch (error: any) {
@@ -651,5 +673,97 @@ export async function returnPlayersToQueue(matchId: string) {
   } catch (error: any) {
     console.error('[returnPlayersToQueue] ❌ Error:', error)
     return { success: false, error: error.message || 'Failed to return players to queue' }
+  }
+}
+
+/**
+ * QM override: manually reset a stuck participant from 'playing' back to 'waiting'
+ * Used when a match was completed but participant status wasn't updated
+ */
+export async function resetPlayerToWaiting(
+  participantId: string,
+  sessionId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: 'Not authenticated' }
+
+    // Verify caller is the session organizer
+    const { data: session } = await supabase
+      .from('queue_sessions')
+      .select('organizer_id, court_id')
+      .eq('id', sessionId)
+      .single()
+
+    if (!session || session.organizer_id !== user.id) {
+      return { success: false, error: 'Not authorized' }
+    }
+
+    const { error } = await supabase
+      .from('queue_participants')
+      .update({
+        status: 'waiting',
+        joined_at: new Date().toISOString(),
+      })
+      .eq('id', participantId)
+      .eq('queue_session_id', sessionId)
+
+    if (error) {
+      console.error('[resetPlayerToWaiting] ❌ Error:', error)
+      return { success: false, error: error.message }
+    }
+
+    revalidatePath(`/queue/${session.court_id}`)
+    revalidatePath('/queue-master')
+
+    return { success: true }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
+/**
+ * QM override: reset ALL stuck 'playing' participants in a session back to 'waiting'
+ */
+export async function resetAllPlayersToWaiting(
+  sessionId: string
+): Promise<{ success: boolean; error?: string; count?: number }> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: 'Not authenticated' }
+
+    const { data: session } = await supabase
+      .from('queue_sessions')
+      .select('organizer_id, court_id')
+      .eq('id', sessionId)
+      .single()
+
+    if (!session || session.organizer_id !== user.id) {
+      return { success: false, error: 'Not authorized' }
+    }
+
+    const { data, error } = await supabase
+      .from('queue_participants')
+      .update({
+        status: 'waiting',
+        joined_at: new Date().toISOString(),
+      })
+      .eq('queue_session_id', sessionId)
+      .eq('status', 'playing')
+      .select('id')
+
+    if (error) {
+      console.error('[resetAllPlayersToWaiting] ❌ Error:', error)
+      return { success: false, error: error.message }
+    }
+
+    revalidatePath(`/queue/${session.court_id}`)
+    revalidatePath('/queue-master')
+
+    return { success: true, count: data?.length || 0 }
+  } catch (error: any) {
+    return { success: false, error: error.message }
   }
 }
