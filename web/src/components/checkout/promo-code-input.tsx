@@ -27,17 +27,17 @@ export function PromoCodeInput() {
     // If a promotion is already applied, show success state
     if (promoCode && promoDiscountAmount > 0) {
         return (
-            <div className="bg-white border border-green-200 bg-green-50/50 rounded-xl p-4">
+            <div className="bg-white border border-gray-200 rounded-xl p-5">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center shrink-0">
                             <CheckCircle className="w-5 h-5 text-green-600" />
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-green-800">
+                            <p className="text-sm font-medium text-gray-900">
                                 {promoCode.toUpperCase()} applied
                             </p>
-                            <p className="text-xs text-green-600 mt-0.5">
+                            <p className="text-xs text-gray-500 mt-0.5">
                                 {promoDiscountType === 'percent' ? 'Percentage' : 'Fixed amount'} discount
                             </p>
                         </div>
@@ -93,13 +93,14 @@ export function PromoCodeInput() {
     }
 
     return (
-        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
+            <div className="flex items-center gap-2 mb-1">
                 <Tag className="w-4 h-4 text-primary" />
-                <span className="text-sm font-bold text-gray-700 uppercase tracking-wider">Promo Code</span>
+                <span className="font-semibold text-gray-900 text-lg">Promo Code</span>
             </div>
+            <p className="text-sm text-gray-500 mb-4">Have a promo code? Apply it for a discount!</p>
 
-            <form onSubmit={handleApply} className="relative group">
+            <form onSubmit={handleApply} className="relative">
                 <input
                     type="text"
                     value={code}

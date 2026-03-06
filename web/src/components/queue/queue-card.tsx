@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { QueueSession } from '@/hooks/use-queue'
-import { MapPin, Calendar, Users, ChevronRight } from 'lucide-react'
+import { MapPin, Calendar, Users, ChevronRight, Clock } from 'lucide-react'
 import { format } from 'date-fns'
 
 interface QueueCardProps {
@@ -78,6 +78,7 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
   const bg = CARD_GRADIENTS[idx % CARD_GRADIENTS.length].join(', ')
 
   const isActive = variant === 'active'
+  const isUpcoming = !isActive && startTime > new Date()
 
   return (
     <>
@@ -155,8 +156,8 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
                 </div>
               </div>
               <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${remaining <= 3
-                  ? 'bg-amber-50 border-amber-200 text-amber-600'
-                  : 'bg-teal-50 border-teal-200 text-teal-600'
+                ? 'bg-amber-50 border-amber-200 text-amber-600'
+                : 'bg-teal-50 border-teal-200 text-teal-600'
                 }`}>
                 {remaining} {remaining === 1 ? 'slot' : 'slots'} left
               </span>
@@ -191,9 +192,21 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
                 </span>
               </div>
             ) : (
-              <div className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 to-teal-500 text-white text-sm font-bold transition-all duration-300 group-hover:from-teal-500 group-hover:to-teal-400 group-hover:shadow-[0_4px_14px_rgba(13,148,136,0.35)]">
-                <span>{isActive ? 'VIEW SESSION' : 'JOIN NOW'}</span>
-                <ChevronRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-0.5" />
+              <div className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${isUpcoming
+                  ? 'bg-gradient-to-r from-[#006666] to-[#008080] text-white group-hover:from-[#008080] group-hover:to-[#66b2b2] group-hover:shadow-[0_4px_14px_rgba(0,102,102,0.35)]'
+                  : 'bg-gradient-to-r from-teal-600 to-teal-500 text-white group-hover:from-teal-500 group-hover:to-teal-400 group-hover:shadow-[0_4px_14px_rgba(13,148,136,0.35)]'
+                }`}>
+                {isUpcoming ? (
+                  <>
+                    <Clock className="w-4 h-4" />
+                    <span>OPENING SOON</span>
+                  </>
+                ) : (
+                  <>
+                    <span>{isActive ? 'VIEW SESSION' : 'JOIN NOW'}</span>
+                    <ChevronRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-0.5" />
+                  </>
+                )}
               </div>
             )}
           </div>
