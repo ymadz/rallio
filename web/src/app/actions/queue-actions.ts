@@ -439,7 +439,7 @@ export async function getMyQueues() {
       `)
       .eq('user_id', user.id)
       .is('left_at', null)
-      .in('queue_sessions.status', ['open', 'active'])
+      .in('queue_sessions.status', ['open', 'active', 'pending_payment'])
       .gt('queue_sessions.end_time', (await getServerNow()).toISOString()) // Filter out expired sessions
       .order('joined_at', { ascending: false })
 

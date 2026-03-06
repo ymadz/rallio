@@ -31,7 +31,7 @@ export interface QueueSession {
   courtName: string
   venueName: string
   venueId: string
-  status: 'waiting' | 'active' | 'completed'
+  status: 'waiting' | 'active' | 'completed' | 'pending_payment'
   players: QueuePlayer[]
   userPosition: number | null
   maxPlayers: number
@@ -59,12 +59,14 @@ export interface QueueSession {
  * - active: session is live -> 'active'
  * - completed/cancelled: session ended -> 'completed'
  */
-function mapQueueStatusForPlayer(dbStatus: string): 'waiting' | 'active' | 'completed' {
+function mapQueueStatusForPlayer(dbStatus: string): 'waiting' | 'active' | 'completed' | 'pending_payment' {
   switch (dbStatus) {
     case 'open':
       return 'waiting'
     case 'active':
       return 'active'
+    case 'pending_payment':
+      return 'pending_payment'
     case 'completed':
     case 'cancelled':
     case 'closed': // legacy
