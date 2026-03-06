@@ -498,6 +498,52 @@ async function markReservationPaidAndConfirmed({
         }
       }
 
+      // Update linked queue sessions for each reservation in the group
+      for (const update of updates) {
+        try {
+          const { data: linkedQueueSession } = await supabase
+            .from('queue_sessions')
+            .select('id, status, metadata, start_time, end_time')
+            .filter('metadata->>reservation_id', 'eq', update.id)
+            .single()
+
+          if (linkedQueueSession && ['pending_payment', 'pending_approval'].includes(linkedQueueSession.status)) {
+            const qsUpdateData: any = {
+              metadata: {
+                ...linkedQueueSession.metadata,
+                payment_status: isDownPayment ? 'partially_paid' : 'paid',
+                payment_confirmed_at: nowISO
+              }
+            }
+
+            // Only transition to open/active when fully paid
+            if (!isDownPayment) {
+              const now = new Date()
+              const startTime = new Date(linkedQueueSession.start_time)
+              const endTime = new Date(linkedQueueSession.end_time)
+
+              if (now >= endTime) {
+                qsUpdateData.status = 'completed'
+              } else if (now >= startTime) {
+                qsUpdateData.status = 'active'
+              } else {
+                qsUpdateData.status = 'open'
+              }
+              console.log(`[markReservationPaidAndConfirmed] 🔓 Queue session ${linkedQueueSession.id} → ${qsUpdateData.status}`)
+            } else {
+              console.log(`[markReservationPaidAndConfirmed] 💰 Queue session ${linkedQueueSession.id} stays pending_payment (down payment)`)
+            }
+
+            await supabase
+              .from('queue_sessions')
+              .update(qsUpdateData)
+              .eq('id', linkedQueueSession.id)
+          }
+        } catch (qErr) {
+          console.error(`[markReservationPaidAndConfirmed] Error updating queue session for reservation ${update.id}:`, qErr)
+        }
+      }
+
       // Update the main reservationRecord reference for notifications
       reservationRecord.status = targetStatus
       return // Exit here as we handled everything
@@ -624,16 +670,15 @@ async function markReservationPaidAndConfirmed({
       const updateData: any = {
         metadata: {
           ...queueSession.metadata,
-          payment_status: 'paid',
+          payment_status: isDownPayment ? 'partially_paid' : 'paid',
           payment_confirmed_at: nowISO
         }
       }
 
-
-
-      // Calculate correct status based on time lifecycle
-      // pending_payment → open (if within 12h before start) or open (default after payment)
-      if (['pending_payment', 'pending_approval'].includes(queueSession.status)) {
+      // Only transition queue session to open/active when FULLY paid.
+      // Down payments (partially_paid) keep the session in pending_payment
+      // so it stays hidden from public until the queue master pays in full.
+      if (!isDownPayment && ['pending_payment', 'pending_approval'].includes(queueSession.status)) {
         const now = new Date()
         const startTime = new Date(queueSession.start_time)
         const endTime = new Date(queueSession.end_time)
@@ -647,10 +692,12 @@ async function markReservationPaidAndConfirmed({
           console.log('[markReservationPaidAndConfirmed] 🚀 Session already started → active')
         } else {
           newStatus = 'open'
-          console.log('[markReservationPaidAndConfirmed] 🔓 Session paid → open')
+          console.log('[markReservationPaidAndConfirmed] 🔓 Session fully paid → open')
         }
 
         updateData.status = newStatus
+      } else if (isDownPayment) {
+        console.log('[markReservationPaidAndConfirmed] 💰 Down payment only — keeping queue session as pending_payment (not public)')
       }
 
       const { error: qError } = await supabase

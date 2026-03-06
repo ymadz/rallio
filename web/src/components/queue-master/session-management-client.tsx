@@ -549,10 +549,10 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                 <DollarSign className="h-5 w-5 text-orange-400 mt-0.5 mr-3 flex-shrink-0" />
                 <div>
                   <h3 className="text-sm font-medium text-orange-800">
-                    Payment Required
+                    Payment Required — Session Not Public
                   </h3>
                   <p className="mt-1 text-sm text-orange-700">
-                    Complete payment to activate your session and allow players to join.
+                    Your session is hidden from players until payment is completed. Pay the remaining balance to make it public and allow players to join.
                     {session.metadata?.payment_required && ` Amount due: ₱${parseFloat(session.metadata.payment_required).toFixed(2)}`}
                   </p>
                   {session.metadata?.payment_method === 'cash' && (
