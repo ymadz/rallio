@@ -849,6 +849,8 @@ export interface CreateQueueSessionParams {
   recurrenceWeeks?: number
   selectedDays?: number[]
   paymentMethod?: 'cash' | 'e-wallet'
+  promoCode?: string
+  customDownPaymentAmount?: number
 }
 
 /**
@@ -1098,7 +1100,8 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
         startDate: sessionStart.toISOString(),
         endDate: sessionEnd.toISOString(),
         recurrenceWeeks: recurrenceWeeks,
-        basePrice: baseCourtRental
+        basePrice: baseCourtRental,
+        promoCode: data.promoCode,
       })
 
       const courtRental = discountResult.finalPrice
@@ -1126,7 +1129,17 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
       const venueData = court.venues as any;
       const venueMetadata = venueData ? (Array.isArray(venueData) ? venueData[0]?.metadata : venueData.metadata) : null;
       const downPaymentPercentage = parseFloat(venueMetadata?.down_payment_percentage || '20')
-      const downPaymentAmount = data.paymentMethod === 'cash' ? (totalAmount * downPaymentPercentage) / 100 : undefined;
+
+      let downPaymentAmount: number | undefined = undefined;
+
+      if (data.paymentMethod === 'cash') {
+        const minimumDownPayment = (totalAmount * downPaymentPercentage) / 100;
+        if (data.customDownPaymentAmount !== undefined && data.customDownPaymentAmount > 0) {
+          downPaymentAmount = Math.min(Math.max(data.customDownPaymentAmount, minimumDownPayment), totalAmount);
+        } else {
+          downPaymentAmount = minimumDownPayment;
+        }
+      }
 
       if (downPaymentAmount && downPaymentAmount > 0 && data.paymentMethod === 'cash') {
         isDownPaymentRequired = true;
@@ -1172,7 +1185,7 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
             total_with_fee: totalAmount,
             intended_payment_method: data.paymentMethod,
             down_payment_percentage: data.paymentMethod === 'cash' ? downPaymentPercentage : undefined,
-            down_payment_amount: data.paymentMethod === 'cash' ? downPaymentAmount : undefined
+            down_payment_amount: downPaymentAmount
           },
           notes: `Queue Session (${data.mode}) - ${sessionStart.toLocaleDateString()}${data.paymentMethod === 'cash' ? ' (Cash Payment)' : ''}`,
         })
@@ -1209,7 +1222,7 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
             discount_amount: discountResult.totalDiscount,
             court_rental: courtRental,
             platform_fee: platformFee,
-            down_payment_amount: data.paymentMethod === 'cash' ? downPaymentAmount : undefined
+            down_payment_amount: downPaymentAmount
           },
         })
         .select()

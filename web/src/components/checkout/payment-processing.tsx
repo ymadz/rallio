@@ -144,7 +144,9 @@ export function PaymentProcessing() {
             isPublic: bookingData.queueSessionData.isPublic,
             recurrenceWeeks: bookingData.recurrenceWeeks,
             selectedDays: bookingData.selectedDays,
-            paymentMethod
+            paymentMethod,
+            promoCode: promoCode || discountCode,
+            customDownPaymentAmount: paymentMethod === 'cash' ? getDownPaymentAmount() || undefined : undefined,
           })
 
           if (!sessionResult.success) {

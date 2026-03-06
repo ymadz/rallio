@@ -680,7 +680,7 @@ export function QueueSessionModal({
                                     <h4 className="font-semibold text-gray-900 mb-2">Session Schedule</h4>
                                     <div className="text-sm text-gray-600 space-y-1">
                                         <p><strong>Court:</strong> {courtName}</p>
-                                        <p>
+                                        <div>
                                             <strong>Date:</strong>{' '}
                                             {(() => {
                                                 if (selectedDays.length <= 1 && recurrenceWeeks === 1) {
@@ -712,7 +712,7 @@ export function QueueSessionModal({
 
                                                 return (
                                                     <div className="mt-2 text-xs">
-                                                        <p className="font-medium text-gray-700 mb-1">Booked Dates ({bookedDates.length}):</p>
+                                                        <span className="block font-medium text-gray-700 mb-1">Booked Dates ({bookedDates.length}):</span>
                                                         <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto p-1.5 bg-white/50 rounded-md border border-primary/10">
                                                             {bookedDates.map((date, idx) => (
                                                                 <span key={idx} className="bg-white border border-gray-200 text-gray-600 px-2 py-0.5 rounded-md shadow-sm">
@@ -723,7 +723,7 @@ export function QueueSessionModal({
                                                     </div>
                                                 )
                                             })()}
-                                        </p>
+                                        </div>
                                         <p><strong>Time:</strong> {startSlot && formatTime(startSlot.time)} - {formatTime(getEndTime())}</p>
                                         <p><strong>Duration:</strong> {duration} hour{duration > 1 ? 's' : ''}</p>
                                     </div>

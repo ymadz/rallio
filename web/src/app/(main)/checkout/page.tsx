@@ -257,7 +257,7 @@ export default function CheckoutPage() {
                                 </div>
 
                                 {/* Promo Code Input */}
-                                {!bookingData.isQueueSession && <PromoCodeInput />}
+                                <PromoCodeInput />
 
                                 {/* Split Payment Controls (hidden for queue sessions) */}
                                 {!bookingData.isQueueSession && <SplitPaymentControls />}

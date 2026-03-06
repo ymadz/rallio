@@ -396,6 +396,33 @@ export function AvailabilityModal({
 
   const disabledDays = { before: new Date() }
 
+  const additionalBookedDates = (() => {
+    if (selectedDays.length <= 1 && recurrenceWeeks === 1) return []
+
+    const initialStartTime = new Date(selectedDate)
+    initialStartTime.setHours(0, 0, 0, 0)
+    const startDayIndex = initialStartTime.getDay()
+
+    const uniqueSelectedDays = selectedDays.length > 0
+      ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
+      : [startDayIndex]
+
+    const dates: Date[] = []
+
+    for (let i = 0; i < recurrenceWeeks; i++) {
+      for (const dayIndex of uniqueSelectedDays) {
+        if (i === 0 && dayIndex === startDayIndex) continue
+
+        const dayOffset = (dayIndex - startDayIndex + 7) % 7
+        const slotDate = new Date(initialStartTime.getTime())
+        slotDate.setDate(slotDate.getDate() + (i * 7) + dayOffset)
+
+        dates.push(slotDate)
+      }
+    }
+    return dates
+  })()
+
   // Helpers for styling
   const isSlotSelected = (slot: TimeSlot) => {
     if (!startSlot) return false
@@ -458,9 +485,13 @@ export function AvailabilityModal({
                     onSelect={(date) => date && setSelectedDate(date)}
                     disabled={disabledDays}
                     className="mx-auto"
+                    modifiers={{
+                      additionalBookings: additionalBookedDates
+                    }}
                     modifiersClassNames={{
                       selected: 'bg-primary text-white hover:bg-primary',
                       today: 'font-bold text-primary',
+                      additionalBookings: 'border-2 border-dashed border-primary bg-primary/10 rounded-md text-primary font-medium',
                     }}
                   />
 
