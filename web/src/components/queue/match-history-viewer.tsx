@@ -192,12 +192,12 @@ export function MatchHistoryViewer({ sessionId, userId, courtId }: MatchHistoryV
                 key={match.id}
                 href={`/queue/${courtId}/match/${match.id}`}
                 className={`block p-4 border-2 rounded-lg transition-all hover:shadow-md ${isUserMatch
-                    ? userWon
-                      ? 'border-green-200 bg-green-50 hover:border-green-300'
-                      : isDraw
-                        ? 'border-gray-200 bg-gray-50 hover:border-gray-300'
-                        : 'border-red-200 bg-red-50 hover:border-red-300'
-                    : 'border-gray-200 bg-white hover:border-gray-300'
+                  ? userWon
+                    ? 'border-green-200 bg-green-50 hover:border-green-300'
+                    : isDraw
+                      ? 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                      : 'border-red-200 bg-red-50 hover:border-red-300'
+                  : 'border-gray-200 bg-white hover:border-gray-300'
                   }`}
               >
                 <div className="flex items-center justify-between">
@@ -209,48 +209,49 @@ export function MatchHistoryViewer({ sessionId, userId, courtId }: MatchHistoryV
 
                     {/* Match Result / ELO */}
                     <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`text-xl font-bold ${userWon ? 'text-green-600' : isDraw ? 'text-gray-600' : 'text-red-500'
-                          }`}>
-                          {userWon ? 'Victory' : isDraw ? 'Draw' : 'Defeat'}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-500 capitalize">
-                        <span>{match.game_format}</span>
-                        {match.metadata?.ratingChanges?.[userId] && (
-                          <>
-                            <span className="w-1 h-1 rounded-full bg-gray-300"></span>
-                            <span className={`font-semibold ${match.metadata.ratingChanges[userId].diff > 0
-                                ? 'text-green-600'
-                                : match.metadata.ratingChanges[userId].diff < 0
-                                  ? 'text-red-500'
-                                  : 'text-gray-500'
+                      {isUserMatch ? (
+                        <>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`text-xl font-bold ${userWon ? 'text-green-600' : isDraw ? 'text-gray-600' : 'text-red-500'
                               }`}>
-                              {match.metadata.ratingChanges[userId].diff > 0 ? '+' : ''}
-                              {match.metadata.ratingChanges[userId].diff} ELO
+                              {userWon ? 'Victory' : isDraw ? 'Draw' : 'Defeat'}
                             </span>
-                          </>
-                        )}
-                      </div>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-gray-500 capitalize">
+                            <span>{match.game_format}</span>
+                            {match.metadata?.ratingChanges?.[userId] && (
+                              <>
+                                <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                                <span className={`font-semibold ${match.metadata.ratingChanges[userId].diff > 0
+                                    ? 'text-green-600'
+                                    : match.metadata.ratingChanges[userId].diff < 0
+                                      ? 'text-red-500'
+                                      : 'text-gray-500'
+                                  }`}>
+                                  {match.metadata.ratingChanges[userId].diff > 0 ? '+' : ''}
+                                  {match.metadata.ratingChanges[userId].diff} ELO
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-lg font-bold text-gray-800">
+                              {match.winner === 'team_a' ? 'Team A Won' : match.winner === 'team_b' ? 'Team B Won' : 'Draw'}
+                            </span>
+                          </div>
+                          <div className="text-xs text-gray-500 capitalize">{match.game_format}</div>
+                        </>
+                      )}
                     </div>
                   </div>
 
-                  {/* Result Badge */}
+                  {/* Duration Badge */}
                   <div className="text-right">
-                    {isUserMatch && (
-                      <div
-                        className={`px-3 py-1 rounded-full text-xs font-semibold mb-1 ${userWon
-                            ? 'bg-green-600 text-white'
-                            : isDraw
-                              ? 'bg-gray-600 text-white'
-                              : 'bg-red-600 text-white'
-                          }`}
-                      >
-                        {userWon ? '✓ Won' : isDraw ? '= Draw' : '✗ Lost'}
-                      </div>
-                    )}
                     {duration !== null && (
-                      <div className="flex items-center gap-1 text-xs text-gray-500">
+                      <div className="flex items-center justify-end gap-1 text-xs text-gray-500 bg-gray-50 px-2 py-1.5 rounded-md">
                         <Clock className="w-3 h-3" />
                         <span>{duration} min</span>
                       </div>
