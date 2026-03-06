@@ -82,6 +82,7 @@ export function BookingCard({
     const activeStatuses = ['pending_payment', 'pending', 'confirmed', 'partially_paid']
     const startDate = new Date(booking.start_time)
     const endDate = new Date(booking.end_time)
+    const isPastBooking = endDate < (serverDate || new Date())
 
     // -- Helper Logic --
 
@@ -479,19 +480,6 @@ export function BookingCard({
                         bookingStatus={booking.status}
                     />
 
-                    {/* Refund button for paid confirmed bookings (>24h) */}
-                    {booking.status === 'confirmed' && booking.amount_paid > 0 && canCancelBooking(booking) && (
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => onRefundBooking(booking)}
-                            className="w-full rounded-xl text-primary border-primary/30 hover:bg-primary/5 hover:text-primary"
-                        >
-                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
-                            Request Refund
-                        </Button>
-                    )}
-
                     {booking.status === 'pending_refund' && (
                         <div className="w-full p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-center text-sm text-emerald-700 font-medium">
                             Refund Request Pending Approval
@@ -583,6 +571,37 @@ export function BookingCard({
                                     </Button>
                                 </Link>
 
+                                {/* Refund button - shown on all cards with payments, disabled within 24h of start */}
+                                {booking.amount_paid > 0 && !['cancelled', 'refunded', 'pending_refund', 'rejected'].includes(booking.status) && (() => {
+                                    const now = serverDate || new Date()
+                                    const hoursUntilStart = (startDate.getTime() - now.getTime()) / (1000 * 60 * 60)
+                                    const isWithin24h = hoursUntilStart >= 0 && hoursUntilStart < 24
+
+                                    return (
+                                        <div className="w-full">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => onRefundBooking(booking)}
+                                                disabled={isWithin24h}
+                                                className={`w-full h-10 rounded-xl transition-colors ${
+                                                    isWithin24h
+                                                        ? 'text-gray-400 border-gray-200 cursor-not-allowed'
+                                                        : 'text-primary border-primary/30 hover:bg-primary/5 hover:text-primary hover:border-primary/40'
+                                                }`}
+                                            >
+                                                <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                                                Request Refund
+                                            </Button>
+                                            {isWithin24h && (
+                                                <p className="text-[10px] text-gray-400 mt-1 text-center">
+                                                    Not eligible within 24 hours of booking
+                                                </p>
+                                            )}
+                                        </div>
+                                    )
+                                })()}
+
                                 {canCancelBooking(booking) && (
                                     <>
                                         <Button
@@ -597,8 +616,8 @@ export function BookingCard({
                                             Reschedule
                                         </Button>
 
-                                        {/* Show Cancel for unpaid, nothing extra for paid (refund button is above) */}
-                                        {!(booking.status === 'confirmed' && booking.amount_paid > 0) && (
+                                        {/* Show Cancel for unpaid bookings */}
+                                        {booking.amount_paid <= 0 && (
                                             <Button
                                                 variant="outline"
                                                 size="sm"

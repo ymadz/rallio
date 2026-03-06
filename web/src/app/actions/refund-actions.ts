@@ -87,6 +87,15 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
       }
     }
 
+    // 24-hour policy: cannot refund within 24 hours of booking start time
+    const hoursUntilStart = (new Date(reservation.start_time).getTime() - Date.now()) / (1000 * 60 * 60)
+    if (hoursUntilStart >= 0 && hoursUntilStart < 24) {
+      return {
+        success: false,
+        error: 'Refund requests are not eligible within 24 hours of the booking start time'
+      }
+    }
+
     // DEBUG: Get ALL payments for this reservation to see what's going on
     const { data: allPayments } = await supabase
       .from('payments')
