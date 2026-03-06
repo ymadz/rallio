@@ -439,7 +439,8 @@ type Intent =
   | null
 
 function detectIntent(text: string): Intent {
-  const t = text.toLowerCase().trim()
+  // Truncate input to prevent ReDoS on long strings
+  const t = text.toLowerCase().trim().slice(0, 200)
 
   // Greetings
   if (/^(hi|hello|hey|yo|sup|kumusta|musta|good\s*(morning|afternoon|evening))[\s!?.]*$/i.test(t))
@@ -447,14 +448,14 @@ function detectIntent(text: string): Intent {
 
   // Open plays / queues tonight
   if (
-    /(tonight|this evening).*(open\s*play|queue|session|game)/i.test(t) ||
-    /(open\s*play|queue|session|game).*(tonight|this evening)/i.test(t)
+    /(tonight|this evening).{0,50}(open\s*play|queue|session|game)/i.test(t) ||
+    /(open\s*play|queue|session|game).{0,50}(tonight|this evening)/i.test(t)
   )
     return 'open_plays_tonight'
 
   // Open plays general
   if (
-    /open\s*play|active\s*(queue|session)|available\s*(queue|session)|join.*(queue|game|play|session)|any.*(queue|open|session|game)/i.test(t)
+    /open\s*play|active\s*(queue|session)|available\s*(queue|session)|join.{0,30}(queue|game|play|session)|any.{0,30}(queue|open|session|game)/i.test(t)
   )
     return 'open_plays'
 
@@ -462,23 +463,23 @@ function detectIntent(text: string): Intent {
   if (
     /my\s*(booking|reservation|schedule|upcoming)/i.test(t) ||
     /upcoming\s*(booking|reservation)/i.test(t) ||
-    /(do i have|check).*(booking|reservation)/i.test(t)
+    /(do i have|check).{0,30}(booking|reservation)/i.test(t)
   )
     return 'my_bookings'
 
   // Available courts
   if (
     /available\s*court/i.test(t) ||
-    /court.*(available|open|free)/i.test(t) ||
-    /where.*(play|book|badminton)/i.test(t) ||
-    /show.*(court|venue)/i.test(t) ||
-    /list.*(court|venue)/i.test(t) ||
-    /find.*(court|venue)/i.test(t)
+    /court.{0,30}(available|open|free)/i.test(t) ||
+    /where.{0,30}(play|book|badminton)/i.test(t) ||
+    /show.{0,30}(court|venue)/i.test(t) ||
+    /list.{0,30}(court|venue)/i.test(t) ||
+    /find.{0,30}(court|venue)/i.test(t)
   )
     return 'available_courts'
 
   // How to book
-  if (/how\s*(to|do\s*i|can\s*i)\s*(book|reserve|make.*reservation)/i.test(t))
+  if (/how\s*(to|do\s*i|can\s*i)\s*(book|reserve|make.{0,20}reservation)/i.test(t))
     return 'how_to_book'
 
   // How to join queue
