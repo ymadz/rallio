@@ -1135,7 +1135,9 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
       if (data.paymentMethod === 'cash') {
         const minimumDownPayment = (totalAmount * downPaymentPercentage) / 100;
         if (data.customDownPaymentAmount !== undefined && data.customDownPaymentAmount > 0) {
-          downPaymentAmount = Math.min(Math.max(data.customDownPaymentAmount, minimumDownPayment), totalAmount);
+          const customPerSlot = data.customDownPaymentAmount / targetDates.length;
+          const clampedAmount = Math.min(Math.max(customPerSlot, minimumDownPayment), totalAmount);
+          downPaymentAmount = Math.round(clampedAmount * 100) / 100;
         } else {
           downPaymentAmount = minimumDownPayment;
         }
@@ -1294,6 +1296,43 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
     } catch (notificationError) {
       // Non-critical error - log but don't fail
       console.error('[createQueueSession] ⚠️ Failed to send notifications (non-critical):', notificationError)
+    }
+
+    // 8.5 APPLY PROMO CODE USAGE
+    if (data.promoCode && createdSessions.length > 0) {
+      try {
+        const adminDb = createServiceClient()
+        // Get the promo code ID from the code string
+        const { data: promoData } = await adminDb
+          .from('promo_codes')
+          .select('id, current_uses')
+          .eq('code', data.promoCode.toUpperCase())
+          .single()
+
+        if (promoData) {
+          // Add usage records for each created reservation
+          const usageRecords = createdSessions.map(session => ({
+            promo_code_id: promoData.id,
+            user_id: user.id,
+            reservation_id: session.reservationId,
+          }))
+
+          const { error: usageError } = await adminDb.from('promo_code_usage').insert(usageRecords)
+          if (usageError) console.error('Error inserting usage records:', usageError)
+
+          // Increment current_uses
+          const { error: updateError } = await adminDb
+            .from('promo_codes')
+            .update({ current_uses: promoData.current_uses + createdSessions.length })
+            .eq('id', promoData.id)
+          if (updateError) console.error('Error updating promo code uses:', updateError)
+
+          console.log(`✅ Applied promo code ${data.promoCode} to ${createdSessions.length} queue sessions`)
+        }
+      } catch (error) {
+        console.error('❌ Failed to record promo code usage:', error)
+        // Don't fail the whole booking if just the tracking fails
+      }
     }
 
     // 9. Revalidate paths
