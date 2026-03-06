@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { waiveFee, markAsPaid } from '@/app/actions/queue-actions'
+import { markAsPaid } from '@/app/actions/queue-actions'
 import { X, DollarSign, Loader2, CheckCircle, AlertCircle } from 'lucide-react'
 
 interface PaymentManagementModalProps {
@@ -31,7 +31,6 @@ export function PaymentManagementModal({
   onSuccess,
 }: PaymentManagementModalProps) {
   const [isMarkingPaid, setIsMarkingPaid] = useState(false)
-  const [isWaiving, setIsWaiving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   if (!isOpen) return null
@@ -51,21 +50,6 @@ export function PaymentManagementModal({
     }
   }
 
-  const handleWaiveFee = async () => {
-    setIsWaiving(true)
-    setError(null)
-    try {
-      const result = await waiveFee(participant.id, 'Waived by Queue Master')
-      if (!result.success) throw new Error(result.error || 'Failed to waive fee')
-      onSuccess?.()
-      onClose()
-    } catch (err: any) {
-      setError(err.message || 'Failed to waive fee')
-    } finally {
-      setIsWaiving(false)
-    }
-  }
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'paid': return 'bg-green-100 text-green-700 border-green-200'
@@ -76,7 +60,7 @@ export function PaymentManagementModal({
   }
 
   const isPaid = participant.paymentStatus === 'paid'
-  const isProcessing = isMarkingPaid || isWaiving
+  const isProcessing = isMarkingPaid
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -166,11 +150,11 @@ export function PaymentManagementModal({
               <p className="text-sm font-medium text-green-800">This player has already paid.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-3">
               <button
                 onClick={handleMarkPaid}
                 disabled={isProcessing}
-                className="flex flex-col items-center gap-2 p-5 border-2 border-green-200 rounded-xl hover:bg-green-50 active:bg-green-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex flex-col items-center justify-center gap-2 p-5 border-2 border-green-200 rounded-xl hover:bg-green-50 active:bg-green-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isMarkingPaid ? (
                   <Loader2 className="w-7 h-7 text-green-600 animate-spin" />
@@ -179,20 +163,6 @@ export function PaymentManagementModal({
                 )}
                 <span className="font-semibold text-gray-900 text-sm">Mark as Paid</span>
                 <span className="text-xs text-gray-500 text-center">Player paid in cash</span>
-              </button>
-
-              <button
-                onClick={handleWaiveFee}
-                disabled={isProcessing}
-                className="flex flex-col items-center gap-2 p-5 border-2 border-orange-200 rounded-xl hover:bg-orange-50 active:bg-orange-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isWaiving ? (
-                  <Loader2 className="w-7 h-7 text-orange-600 animate-spin" />
-                ) : (
-                  <DollarSign className="w-7 h-7 text-orange-600" />
-                )}
-                <span className="font-semibold text-gray-900 text-sm">Waive Payment</span>
-                <span className="text-xs text-gray-500 text-center">Forgive the amount owed</span>
               </button>
             </div>
           )}

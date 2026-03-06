@@ -7,7 +7,6 @@ import { getQueueDetails } from '@/app/actions/queue-actions'
 import {
   closeQueueSession,
   removeParticipant,
-  waiveFee
 } from '@/app/actions/queue-actions'
 import {
   assignMatchFromQueue,

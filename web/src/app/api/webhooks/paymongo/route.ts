@@ -723,6 +723,53 @@ async function markReservationPaidAndConfirmed({
   }
 }
 
+async function markQueueParticipantPaidAndLeft({
+  supabase,
+  payment,
+  eventId,
+  eventType,
+}: {
+  supabase: ReturnType<typeof createServiceClient>
+  payment: any
+  eventId?: string | null
+  eventType: string
+}) {
+  console.log(`[markQueueParticipantPaidAndLeft] 🎯 Starting participant confirmation for event ${eventId}`)
+
+  const participantId = payment.metadata?.participant_id
+  if (!participantId) {
+    console.error('[markQueueParticipantPaidAndLeft] ❌ Missing participant_id in payment metadata')
+    return
+  }
+
+  const { error: updateError } = await supabase
+    .from('queue_participants')
+    .update({
+      payment_status: 'paid',
+      status: 'left',
+      left_at: new Date().toISOString(),
+    })
+    .eq('id', participantId)
+
+  if (updateError) {
+    console.error('[markQueueParticipantPaidAndLeft] ❌ Failed to mark queue participant as paid:', updateError)
+    throw updateError
+  }
+
+  console.log(`[markQueueParticipantPaidAndLeft] ✅ Successfully marked participant ${participantId} as paid and left the queue`)
+
+  if (payment.metadata?.queue_session_id) {
+    const queueSessionId = payment.metadata.queue_session_id
+    // Instead of directly querying the court_id from the queue_sessions table (which we don't need strictly for just clearing the cache),
+    // we just use the global queue paths since Next.js cache can be broadly targeted
+    try {
+      revalidatePath('/queue')
+      revalidatePath('/queue-master')
+      revalidatePath(`/queue-master/sessions/${queueSessionId}`)
+    } catch (e) { }
+  }
+}
+
 /**
  * Handle source.chargeable event
  * This fires when a payment source (GCash/Maya) becomes ready to charge
@@ -811,14 +858,23 @@ async function handleSourceChargeable(data: any, eventId?: string) {
     }
 
     try {
-      await markReservationPaidAndConfirmed({
-        supabase,
-        payment,
-        eventId,
-        eventType: 'source.chargeable:duplicate',
-      })
+      if (payment.metadata?.payment_type === 'queue_session') {
+        await markQueueParticipantPaidAndLeft({
+          supabase,
+          payment,
+          eventId,
+          eventType: 'source.chargeable:duplicate',
+        })
+      } else {
+        await markReservationPaidAndConfirmed({
+          supabase,
+          payment,
+          eventId,
+          eventType: 'source.chargeable:duplicate',
+        })
+      }
     } catch (verifyError) {
-      console.error('Failed to verify reservation for already completed payment:', verifyError)
+      console.error('Failed to verify entity for already completed payment:', verifyError)
     }
     return
   }
@@ -905,14 +961,25 @@ async function handleSourceChargeable(data: any, eventId?: string) {
       })
       .eq('id', payment.id)
 
-    await markReservationPaidAndConfirmed({
-      supabase,
-      payment,
-      eventId,
-      eventType: 'source.chargeable',
-    })
+      .eq('id', payment.id)
 
-    console.log('✅ Webhook: Payment completed and reservation confirmed:', payment.reservation_id)
+    if (payment.metadata?.payment_type === 'queue_session') {
+      await markQueueParticipantPaidAndLeft({
+        supabase,
+        payment,
+        eventId,
+        eventType: 'source.chargeable',
+      })
+      console.log('✅ Webhook: Queue Participant paid:', payment.metadata.participant_id)
+    } else {
+      await markReservationPaidAndConfirmed({
+        supabase,
+        payment,
+        eventId,
+        eventType: 'source.chargeable',
+      })
+      console.log('✅ Webhook: Payment completed and reservation confirmed:', payment.reservation_id)
+    }
 
     try {
       revalidatePath('/reservations')
@@ -1038,14 +1105,23 @@ async function handlePaymentPaid(data: any, eventId?: string) {
   if (eventId && processedEvents.includes(eventId)) {
     console.log('payment.paid webhook already processed for event:', eventId)
     try {
-      await markReservationPaidAndConfirmed({
-        supabase,
-        payment,
-        eventId,
-        eventType: 'payment.paid:duplicate',
-      })
+      if (payment.metadata?.payment_type === 'queue_session') {
+        await markQueueParticipantPaidAndLeft({
+          supabase,
+          payment,
+          eventId,
+          eventType: 'payment.paid:duplicate',
+        })
+      } else {
+        await markReservationPaidAndConfirmed({
+          supabase,
+          payment,
+          eventId,
+          eventType: 'payment.paid:duplicate',
+        })
+      }
     } catch (verifyError) {
-      console.error('Failed to verify reservation on duplicate payment.paid event:', verifyError)
+      console.error('Failed to verify entity on duplicate payment.paid event:', verifyError)
     }
     return
   }
@@ -1105,14 +1181,23 @@ async function handlePaymentPaid(data: any, eventId?: string) {
     }
   }
 
-  await markReservationPaidAndConfirmed({
-    supabase,
-    payment,
-    eventId,
-    eventType: 'payment.paid',
-  })
-
-  console.log('✅ payment.paid webhook: Reservation confirmed:', payment.reservation_id)
+  if (payment.metadata?.payment_type === 'queue_session') {
+    await markQueueParticipantPaidAndLeft({
+      supabase,
+      payment,
+      eventId,
+      eventType: 'payment.paid',
+    })
+    console.log('✅ payment.paid webhook: Queue Participant paid:', payment.metadata.participant_id)
+  } else {
+    await markReservationPaidAndConfirmed({
+      supabase,
+      payment,
+      eventId,
+      eventType: 'payment.paid',
+    })
+    console.log('✅ payment.paid webhook: Reservation confirmed:', payment.reservation_id)
+  }
 
   try {
     revalidatePath('/reservations')

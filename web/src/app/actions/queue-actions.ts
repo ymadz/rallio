@@ -2075,88 +2075,6 @@ export async function removeParticipant(
 }
 
 /**
- * Waive fee for a participant
- * Queue Master action
- */
-export async function waiveFee(
-  participantId: string,
-  reason: string
-): Promise<{
-  success: boolean
-  error?: string
-}> {
-  console.log('[waiveFee] 💸 Waiving fee for participant:', participantId, reason)
-
-  try {
-    const supabase = await createClient()
-
-    // 1. Verify user is authenticated
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { success: false, error: 'User not authenticated' }
-    }
-
-    // 2. Use service client for all reads (Queue Master is not the participant, RLS blocks regular client)
-    const serviceClient = createServiceClient()
-
-    const { data: participant, error: participantError } = await serviceClient
-      .from('queue_participants')
-      .select('*')
-      .eq('id', participantId)
-      .single()
-
-    if (participantError || !participant) {
-      return { success: false, error: 'Participant not found' }
-    }
-
-    // 3. Get queue session details separately to verify organizer
-    const { data: queueSession, error: sessionError } = await serviceClient
-      .from('queue_sessions')
-      .select('id, organizer_id, court_id')
-      .eq('id', participant.queue_session_id)
-      .single()
-
-    if (sessionError || !queueSession) {
-      return { success: false, error: 'Queue session not found' }
-    }
-
-    // 4. Verify user is session organizer
-    if (queueSession.organizer_id !== user.id) {
-      return { success: false, error: 'Unauthorized: Not session organizer' }
-    }
-
-    // 5. Update participant to waive fee using service client (bypasses RLS for admin operation)
-    const { error: updateError } = await serviceClient
-      .from('queue_participants')
-      .update({
-        amount_owed: 0,
-        payment_status: 'paid',
-      })
-      .eq('id', participantId)
-
-    if (updateError) {
-      console.error('[waiveFee] ❌ Failed to waive fee:', updateError)
-      return { success: false, error: 'Failed to waive fee' }
-    }
-
-    console.log('[waiveFee] ✅ Fee waived successfully')
-
-    // 6. Revalidate paths
-    revalidatePath('/queue')
-    revalidatePath('/queue-master')
-    revalidatePath(`/queue/${queueSession.court_id}`)
-
-    return { success: true }
-  } catch (error: any) {
-    console.error('[waiveFee] ❌ Error:', error)
-    return { success: false, error: error.message || 'Failed to waive fee' }
-  }
-}
-
-/**
  * Mark participant as paid (cash payment)
  * Queue Master action
  */
@@ -2238,11 +2156,13 @@ export async function markAsPaid(
       return { success: true } // Idempotent - already paid is success
     }
 
-    // 6. Update participant to mark as paid using service client (bypasses RLS for admin operation)
+    // 6. Update participant to mark as paid and remove them from the session
     const { error: updateError } = await serviceClient
       .from('queue_participants')
       .update({
         payment_status: 'paid',
+        status: 'left',
+        left_at: new Date().toISOString(),
       })
       .eq('id', participantId)
 
