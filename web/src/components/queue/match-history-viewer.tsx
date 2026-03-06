@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Trophy, Clock, Users, TrendingUp, Loader2 } from 'lucide-react'
-import Link from 'next/link'
 
 interface Match {
   id: string
@@ -188,16 +187,15 @@ export function MatchHistoryViewer({ sessionId, userId, courtId }: MatchHistoryV
               : null
 
             return (
-              <Link
+              <div
                 key={match.id}
-                href={`/queue/${courtId}/match/${match.id}`}
-                className={`block p-4 border-2 rounded-lg transition-all hover:shadow-md ${isUserMatch
+                className={`block p-4 border-2 rounded-lg transition-all ${isUserMatch
                   ? userWon
-                    ? 'border-green-200 bg-green-50 hover:border-green-300'
+                    ? 'border-green-200 bg-green-50'
                     : isDraw
-                      ? 'border-gray-200 bg-gray-50 hover:border-gray-300'
-                      : 'border-red-200 bg-red-50 hover:border-red-300'
-                  : 'border-gray-200 bg-white hover:border-gray-300'
+                      ? 'border-gray-200 bg-gray-50'
+                      : 'border-red-200 bg-red-50'
+                  : 'border-gray-200 bg-white'
                   }`}
               >
                 <div className="flex items-center justify-between">
@@ -223,10 +221,10 @@ export function MatchHistoryViewer({ sessionId, userId, courtId }: MatchHistoryV
                               <>
                                 <span className="w-1 h-1 rounded-full bg-gray-300"></span>
                                 <span className={`font-semibold ${match.metadata.ratingChanges[userId].diff > 0
-                                    ? 'text-green-600'
-                                    : match.metadata.ratingChanges[userId].diff < 0
-                                      ? 'text-red-500'
-                                      : 'text-gray-500'
+                                  ? 'text-green-600'
+                                  : match.metadata.ratingChanges[userId].diff < 0
+                                    ? 'text-red-500'
+                                    : 'text-gray-500'
                                   }`}>
                                   {match.metadata.ratingChanges[userId].diff > 0 ? '+' : ''}
                                   {match.metadata.ratingChanges[userId].diff} ELO
@@ -288,7 +286,7 @@ export function MatchHistoryViewer({ sessionId, userId, courtId }: MatchHistoryV
                     </div>
                   </div>
                 </div>
-              </Link>
+              </div>
             )
           })}
         </div>
