@@ -1149,8 +1149,11 @@ export async function getMyVenueRefunds(options?: {
   }
 
   try {
+    // Use service client to bypass RLS — admin needs to see refunds created by other users
+    const serviceClient = createServiceClient()
+
     // Get all venue IDs owned by user
-    const { data: venues } = await supabase
+    const { data: venues } = await serviceClient
       .from('venues')
       .select('id')
       .eq('owner_id', user.id)
@@ -1162,7 +1165,7 @@ export async function getMyVenueRefunds(options?: {
     }
 
     // Get court IDs for these venues
-    const { data: courts } = await supabase
+    const { data: courts } = await serviceClient
       .from('courts')
       .select('id')
       .in('venue_id', venueIds)
@@ -1174,7 +1177,7 @@ export async function getMyVenueRefunds(options?: {
     }
 
     // Get reservations for these courts
-    const { data: reservations } = await supabase
+    const { data: reservations } = await serviceClient
       .from('reservations')
       .select('id')
       .in('court_id', courtIds)
@@ -1186,7 +1189,7 @@ export async function getMyVenueRefunds(options?: {
     }
 
     // Now get refunds for these reservations
-    let query = supabase
+    let query = serviceClient
       .from('refunds')
       .select(`
         *,
@@ -1229,7 +1232,7 @@ export async function getMyVenueRefunds(options?: {
 
     let profilesMap: Record<string, any> = {}
     if (userIds.length > 0) {
-      const { data: profiles } = await supabase
+      const { data: profiles } = await serviceClient
         .from('profiles')
         .select('id, first_name, last_name, email, phone')
         .in('id', userIds)

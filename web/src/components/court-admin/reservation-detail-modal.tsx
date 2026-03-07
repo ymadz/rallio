@@ -11,7 +11,6 @@ import {
   MapPin,
   Calendar,
   Banknote,
-  DollarSign,
   Users,
   FileText,
   Loader2,
@@ -161,6 +160,8 @@ export function ReservationDetailModal({
       case 'cancelled':
       case 'rejected': return 'bg-red-100 text-red-700 border-red-200'
       case 'completed': return 'bg-blue-100 text-blue-700 border-blue-200'
+      case 'pending_refund': return 'bg-orange-100 text-orange-700 border-orange-200'
+      case 'refunded': return 'bg-purple-100 text-purple-700 border-purple-200'
       default: return 'bg-gray-100 text-gray-700 border-gray-200'
     }
   }
@@ -247,7 +248,9 @@ export function ReservationDetailModal({
                 {getDisplayStatus() === 'confirmed' && <CheckCircle className="w-4 h-4" />}
                 {(getDisplayStatus() === 'pending' || getDisplayStatus() === 'pending_payment' || getDisplayStatus() === 'partially_paid') && <Clock className="w-4 h-4" />}
                 {(getDisplayStatus() === 'cancelled' || getDisplayStatus() === 'rejected') && <XCircle className="w-4 h-4" />}
-                <span className="capitalize">{getDisplayStatus().replace('_', ' ')}</span>
+                {getDisplayStatus() === 'pending_refund' && <Clock className="w-4 h-4" />}
+                {getDisplayStatus() === 'refunded' && <Banknote className="w-4 h-4" />}
+                <span className="capitalize">{getDisplayStatus().replace(/_/g, ' ')}</span>
               </span>
               {reservation.metadata?.is_queue_session_reservation && (
                 <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-green-50 text-green-700 border border-green-200 text-sm font-medium">
@@ -563,6 +566,34 @@ export function ReservationDetailModal({
             </div>
           )}
 
+          {/* Refund Info Section */}
+          {(reservation.status === 'pending_refund' || reservation.status === 'refunded') && (
+            <div className={`border rounded-lg p-4 ${reservation.status === 'pending_refund' ? 'bg-orange-50 border-orange-200' : 'bg-purple-50 border-purple-200'}`}>
+              <div className="flex items-center gap-2 mb-3">
+                <Banknote className={`w-5 h-5 ${reservation.status === 'pending_refund' ? 'text-orange-500' : 'text-purple-500'}`} />
+                <h3 className={`font-semibold ${reservation.status === 'pending_refund' ? 'text-orange-900' : 'text-purple-900'}`}>
+                  {reservation.status === 'pending_refund' ? 'Refund Requested' : 'Refund Completed'}
+                </h3>
+                {reservation.status === 'pending_refund' && (
+                  <span className="ml-auto inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 animate-pulse">
+                    Action Needed
+                  </span>
+                )}
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className={reservation.status === 'pending_refund' ? 'text-orange-700' : 'text-purple-700'}>Amount Paid:</span>
+                  <span className="font-medium text-gray-900">₱{parseFloat(reservation.amount_paid).toFixed(2)}</span>
+                </div>
+                <p className={`text-xs ${reservation.status === 'pending_refund' ? 'text-orange-600' : 'text-purple-600'}`}>
+                  {reservation.status === 'pending_refund'
+                    ? 'Go to Refund Requests tab to review and process this refund.'
+                    : 'This reservation has been refunded.'}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Reject Form */}
           {showRejectForm && (isPendingApproval() || isPendingPayment()) && (
             <div ref={rejectFormRef} className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -651,7 +682,7 @@ export function ReservationDetailModal({
                 </>
               ) : (
                 <>
-                  <DollarSign className="w-5 h-5" />
+                  <Banknote className="w-5 h-5" />
                   <span>{reservation.status === 'partially_paid' ? 'Collect Remaining Balance' : 'Mark as Paid (Cash Received)'}</span>
                 </>
               )}
