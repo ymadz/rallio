@@ -501,13 +501,34 @@ async function markReservationPaidAndConfirmed({
       // Update linked queue sessions for each reservation in the group
       for (const update of updates) {
         try {
-          const { data: linkedQueueSession } = await supabase
+          // Try finding queue session linked to this reservation via metadata
+          let linkedQueueSession = null
+
+          const { data: qsData, error: qsError } = await supabase
             .from('queue_sessions')
             .select('id, status, metadata, start_time, end_time')
             .filter('metadata->>reservation_id', 'eq', update.id)
             .single()
 
-          if (linkedQueueSession && ['pending_payment', 'pending_approval'].includes(linkedQueueSession.status)) {
+          if (qsError) {
+            console.warn(`[markReservationPaidAndConfirmed] ⚠️ metadata->> filter failed for reservation ${update.id}:`, qsError.message)
+            // Fallback: try text cast filter
+            const { data: qsFallback } = await supabase
+              .from('queue_sessions')
+              .select('id, status, metadata, start_time, end_time')
+              .filter('metadata->>reservation_id', 'eq', String(update.id))
+              .maybeSingle()
+            linkedQueueSession = qsFallback
+          } else {
+            linkedQueueSession = qsData
+          }
+
+          if (!linkedQueueSession) {
+            console.log(`[markReservationPaidAndConfirmed] ℹ️ No queue session found for reservation ${update.id}`)
+            continue
+          }
+
+          if (['pending_payment', 'pending_approval'].includes(linkedQueueSession.status)) {
             const qsUpdateData: any = {
               metadata: {
                 ...linkedQueueSession.metadata,
@@ -534,10 +555,16 @@ async function markReservationPaidAndConfirmed({
               console.log(`[markReservationPaidAndConfirmed] 💰 Queue session ${linkedQueueSession.id} stays pending_payment (down payment)`)
             }
 
-            await supabase
+            const { error: qsUpdateError } = await supabase
               .from('queue_sessions')
               .update(qsUpdateData)
               .eq('id', linkedQueueSession.id)
+
+            if (qsUpdateError) {
+              console.error(`[markReservationPaidAndConfirmed] ❌ Failed to update queue session ${linkedQueueSession.id}:`, qsUpdateError)
+            } else {
+              console.log(`[markReservationPaidAndConfirmed] ✅ Queue session ${linkedQueueSession.id} updated successfully`)
+            }
           }
         } catch (qErr) {
           console.error(`[markReservationPaidAndConfirmed] Error updating queue session for reservation ${update.id}:`, qErr)

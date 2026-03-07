@@ -282,6 +282,47 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
       // Call centralized status auto-advancement to handle upcoming->open->active->completed
       await supabase.rpc('auto_advance_session_statuses')
 
+      // Self-healing: if queue session is stuck in pending_payment but the linked reservation
+      // is already confirmed/partially_paid, auto-fix the queue session status.
+      if (sessionData.status === 'pending_payment' && sessionData.metadata?.reservation_id) {
+        const { data: linkedRes } = await supabase
+          .from('reservations')
+          .select('status')
+          .eq('id', sessionData.metadata.reservation_id)
+          .single()
+
+        if (linkedRes && ['confirmed', 'partially_paid', 'ongoing'].includes(linkedRes.status)) {
+          console.log('[loadSession] 🔧 Self-healing: reservation is', linkedRes.status, 'but queue session stuck at pending_payment. Fixing...')
+          const now = new Date()
+          const startTime = new Date(sessionData.start_time)
+          const endTime = new Date(sessionData.end_time)
+
+          let correctedStatus: string
+          if (now >= endTime) {
+            correctedStatus = 'completed'
+          } else if (now >= startTime) {
+            correctedStatus = 'active'
+          } else {
+            correctedStatus = 'open'
+          }
+
+          await supabase
+            .from('queue_sessions')
+            .update({
+              status: correctedStatus,
+              metadata: {
+                ...sessionData.metadata,
+                payment_status: linkedRes.status === 'confirmed' ? 'paid' : 'partially_paid',
+                self_healed_at: now.toISOString(),
+              }
+            })
+            .eq('id', sessionData.id)
+
+          formattedSession.status = correctedStatus
+          console.log('[loadSession] ✅ Queue session status corrected to:', correctedStatus)
+        }
+      }
+
       // Double check status after potential auto-advancement
       const { data: updatedSession } = await supabase
         .from('queue_sessions')
