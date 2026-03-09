@@ -41,13 +41,6 @@ async function getVenueByIdServer(venueId: string) {
         is_active,
         is_verified,
         metadata,
-        court_amenities (
-          amenities (
-            id,
-            name,
-            icon
-          )
-        ),
         court_images (
           id,
           url,
@@ -90,7 +83,6 @@ async function getVenueByIdServer(venueId: string) {
   const processedCourts = (venue.courts || []).map((court: any) => ({
     ...court,
     venue_id: venue.id,
-    amenities: court.court_amenities?.map((m: any) => m.amenities) || [],
     images: court.court_images || [],
   }))
 
@@ -128,16 +120,6 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
   // Get venue status
   const isOpen = isVenueOpen(venue.opening_hours)
 
-  // Collect all unique amenities from active courts
-  const uniqueAmenityNames = new Set<string>()
-  activeCourts.forEach(court => {
-    court.amenities?.forEach((amenity: any) => {
-      if (amenity?.name) uniqueAmenityNames.add(amenity.name)
-    })
-  })
-  const allAmenities = Array.from(uniqueAmenityNames)
-
-  // Parse opening hours if it's a JSONB object
   const formatTo12Hour = (time: string) => {
     const [hours, minutes] = time.split(':').map(Number)
     const period = hours >= 12 ? 'PM' : 'AM'
@@ -269,8 +251,8 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
             <div className="bg-white border border-gray-200 rounded-xl p-4 sticky top-6">
               {/* Venue Status Banner */}
               <div className={`rounded-xl p-4 mb-4 ${isOpen
-                  ? 'bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200'
-                  : 'bg-gradient-to-r from-red-50 to-orange-50 border border-red-200'
+                ? 'bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200'
+                : 'bg-gradient-to-r from-red-50 to-orange-50 border border-red-200'
                 }`}>
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isOpen ? 'bg-green-100' : 'bg-red-100'
@@ -315,8 +297,8 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
                         <div
                           key={index}
                           className={`flex items-center justify-between px-3 py-2 rounded-lg ${schedule.closed
-                              ? 'bg-gray-50'
-                              : 'bg-primary/5'
+                            ? 'bg-gray-50'
+                            : 'bg-primary/5'
                             }`}
                         >
                           <span className={`text-xs font-semibold ${schedule.closed ? 'text-gray-400' : 'text-gray-700'
@@ -378,25 +360,8 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
                 </div>
               </div>
 
-              {/* Amenities */}
-              {allAmenities.length > 0 && (
-                <div>
-                  <h4 className="font-semibold text-gray-900 text-sm mb-2">Amenities</h4>
-                  <div className="flex flex-wrap gap-1.5">
-                    {allAmenities.map((amenity: string) => (
-                      <span
-                        key={amenity}
-                        className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full"
-                      >
-                        {amenity}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
+
             </div>
-
-
           </div>
         </div>
       </div>

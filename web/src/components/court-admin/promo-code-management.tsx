@@ -69,16 +69,12 @@ export function PromoCodeManagement({ venueId }: PromoCodeManagementProps) {
                 max_discount_amount: code.max_discount_amount ? code.max_discount_amount.toString() : '',
                 max_uses: code.max_uses ? code.max_uses.toString() : '',
                 max_uses_per_user: code.max_uses_per_user ? code.max_uses_per_user.toString() : '',
-                valid_from: new Date(code.valid_from).toISOString().slice(0, 16),
-                valid_until: new Date(code.valid_until).toISOString().slice(0, 16),
+                valid_from: code.valid_from ? new Date(code.valid_from).toISOString().slice(0, 10) : '',
+                valid_until: code.valid_until ? new Date(code.valid_until).toISOString().slice(0, 10) : '',
                 is_active: code.is_active
             })
         } else {
             setEditingCode(null)
-            // Provide default dates: valid from now, until 1 month from now
-            const now = new Date()
-            const nextMonth = new Date(now)
-            nextMonth.setMonth(now.getMonth() + 1)
 
             setFormData({
                 code: '',
@@ -88,8 +84,8 @@ export function PromoCodeManagement({ venueId }: PromoCodeManagementProps) {
                 max_discount_amount: '',
                 max_uses: '',
                 max_uses_per_user: '',
-                valid_from: now.toISOString().slice(0, 16),
-                valid_until: nextMonth.toISOString().slice(0, 16),
+                valid_from: '',
+                valid_until: '',
                 is_active: true
             })
         }
@@ -116,8 +112,8 @@ export function PromoCodeManagement({ venueId }: PromoCodeManagementProps) {
                 max_discount_amount: formData.max_discount_amount ? Number(formData.max_discount_amount) : null,
                 max_uses: formData.max_uses ? Number(formData.max_uses) : null,
                 max_uses_per_user: formData.max_uses_per_user ? Number(formData.max_uses_per_user) : null,
-                valid_from: new Date(formData.valid_from).toISOString(),
-                valid_until: new Date(formData.valid_until).toISOString(),
+                valid_from: formData.valid_from ? new Date(formData.valid_from).toISOString() : null,
+                valid_until: formData.valid_until ? new Date(formData.valid_until).toISOString() : null,
                 is_active: formData.is_active
             }
 
@@ -227,7 +223,7 @@ export function PromoCodeManagement({ venueId }: PromoCodeManagementProps) {
                             </thead>
                             <tbody className="divide-y divide-gray-200">
                                 {promoCodes.map((promo) => {
-                                    const isExpired = new Date(promo.valid_until) < new Date()
+                                    const isExpired = promo.valid_until && new Date(promo.valid_until) < new Date()
                                     const isExhausted = promo.max_uses !== null && promo.current_uses >= promo.max_uses
                                     const isActuallyActive = promo.is_active && !isExpired && !isExhausted
 
@@ -260,13 +256,17 @@ export function PromoCodeManagement({ venueId }: PromoCodeManagementProps) {
                                                 )}
                                             </td>
                                             <td className="px-6 py-4 hidden sm:table-cell">
-                                                <div className="flex items-center gap-1.5 text-gray-600">
-                                                    <CalendarIcon className="w-3.5 h-3.5" />
-                                                    <span>{format(new Date(promo.valid_until), 'MMM d, yyyy')}</span>
-                                                </div>
-                                                <div className="text-xs text-gray-500 ml-5 mt-0.5">
-                                                    From: {format(new Date(promo.valid_from), 'MMM d')}
-                                                </div>
+                                                {promo.valid_until ? (
+                                                    <div className="flex items-center gap-1.5 text-gray-600">
+                                                        <CalendarIcon className="w-3.5 h-3.5" />
+                                                        <span>{format(new Date(promo.valid_until), 'MMM d, yyyy')}</span>
+                                                    </div>
+                                                ) : <span className="text-gray-400">No expiration</span>}
+                                                {promo.valid_from && (
+                                                    <div className="text-xs text-gray-500 ml-5 mt-0.5">
+                                                        From: {format(new Date(promo.valid_from), 'MMM d')}
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="px-6 py-4">
                                                 {isExpired ? (
@@ -469,11 +469,10 @@ export function PromoCodeManagement({ venueId }: PromoCodeManagementProps) {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Valid From <span className="text-red-500">*</span>
+                                            Valid From (Optional)
                                         </label>
                                         <input
-                                            type="datetime-local"
-                                            required
+                                            type="date"
                                             value={formData.valid_from}
                                             onChange={(e) => setFormData({ ...formData, valid_from: e.target.value })}
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm"
@@ -481,11 +480,10 @@ export function PromoCodeManagement({ venueId }: PromoCodeManagementProps) {
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Valid Until <span className="text-red-500">*</span>
+                                            Valid Until (Optional)
                                         </label>
                                         <input
-                                            type="datetime-local"
-                                            required
+                                            type="date"
                                             value={formData.valid_until}
                                             onChange={(e) => setFormData({ ...formData, valid_until: e.target.value })}
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm"

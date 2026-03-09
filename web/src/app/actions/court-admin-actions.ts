@@ -1060,14 +1060,11 @@ export async function getVenueCourts(venueId: string) {
       return { success: false, error: 'Unauthorized' }
     }
 
-    // Get courts with amenities
+    // Get courts
     const { data: courts, error } = await supabase
       .from('courts')
       .select(`
-        *,
-        court_amenities(
-          amenity:amenities(id, name, icon)
-        )
+        *
       `)
       .eq('venue_id', venueId)
       .order('created_at', { ascending: true })
@@ -1115,9 +1112,6 @@ export async function getPendingCourts() {
           name,
           city,
           address
-        ),
-        court_amenities(
-          amenity:amenities(id, name, icon)
         )
       `)
       .in('venue_id', venueIds)

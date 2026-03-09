@@ -13,21 +13,7 @@ import {
 import { useAuthStore } from '@/stores/auth-store';
 import { Sparkles } from 'lucide-react';
 
-// Filter options
-const amenityOptions = [
-  'Parking',
-  'Restroom',
-  'Shower',
-  'Lockers',
-  'Water',
-  'Air Conditioning',
-  'Lighting',
-  'Waiting Area',
-  'Equipment Rental',
-  'First Aid',
-  'WiFi',
-  'Canteen',
-];
+
 
 type SortOption = 'distance' | 'price_low' | 'price_high' | 'rating' | 'newest';
 
@@ -47,7 +33,7 @@ export default function CourtsPage() {
 
   // Filter states
   const [priceRange, setPriceRange] = useState<[number, number]>([100, 1000]);
-  const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
+
   const [courtType, setCourtType] = useState<'indoor' | 'outdoor' | null>(null);
   const [category, setCategory] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>('newest');
@@ -61,7 +47,7 @@ export default function CourtsPage() {
 
   useEffect(() => {
     fetchVenues(true);
-  }, [search, priceRange, selectedAmenities, courtType, category, sortBy, minRating, userLocation]);
+  }, [search, priceRange, courtType, category, sortBy, minRating, userLocation]);
 
   const fetchVenues = async (reset: boolean = false) => {
     if (reset) {
@@ -76,7 +62,7 @@ export default function CourtsPage() {
       searchQuery: search || undefined,
       minPrice: 0,
       maxPrice: priceRange[1],
-      amenities: selectedAmenities.length > 0 ? selectedAmenities : undefined,
+
       category: category || undefined,
       courtType: courtType || undefined,
       rating: minRating > 0 ? minRating : undefined,
@@ -95,7 +81,7 @@ export default function CourtsPage() {
         let finalVenues = result.venues;
 
         // Only inject recommendations on the default un-filtered feed!
-        const isDefaultFeed = !search && !category && !courtType && minRating === 0 && selectedAmenities.length === 0;
+        const isDefaultFeed = !search && !category && !courtType && minRating === 0;
 
         if (isDefaultFeed) {
           // Fetch ML Recommendations to inject at the top of the grid
@@ -142,7 +128,7 @@ export default function CourtsPage() {
                     maxPrice: court.hourly_rate || 0,
                     totalCourts: 1,
                     activeCourtCount: 1,
-                    amenities: court.amenities || [],
+
                     averageRating: court.average_rating,
                     totalReviews: court.review_count || 0,
                     category: 'Recommended for You',
@@ -203,11 +189,7 @@ export default function CourtsPage() {
     }
   };
 
-  const toggleAmenity = (amenity: string) => {
-    setSelectedAmenities((prev) =>
-      prev.includes(amenity) ? prev.filter((a) => a !== amenity) : [...prev, amenity]
-    );
-  };
+
 
   const getUserLocation = () => {
     setLocationLoading(true);
@@ -296,8 +278,7 @@ export default function CourtsPage() {
                   />
                 </svg>
                 Filters
-                {(selectedAmenities.length > 0 ||
-                  courtType ||
+                {(courtType ||
                   category ||
                   minRating > 0 ||
                   priceRange[1] < 1000) && (
@@ -510,23 +491,7 @@ export default function CourtsPage() {
                 </div>
               </div>
 
-              <div>
-                <h3 className="font-semibold mb-3">Amenities</h3>
-                <div className="flex flex-wrap gap-2">
-                  {amenityOptions.slice(0, 6).map((amenity) => (
-                    <button
-                      key={amenity}
-                      onClick={() => toggleAmenity(amenity)}
-                      className={`px-2 py-1 rounded text-xs border ${selectedAmenities.includes(amenity)
-                        ? 'bg-primary/10 border-primary text-primary'
-                        : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                        }`}
-                    >
-                      {amenity}
-                    </button>
-                  ))}
-                </div>
-              </div>
+
             </div>
           </div>
         )}
@@ -720,50 +685,50 @@ export default function CourtsPage() {
                     <div className="cv-badges">
                       {/* Top-left badges */}
                       <div className="absolute top-2 left-2 md:top-3 md:left-3 flex flex-col gap-1" style={{ zIndex: 6 }}>
-                      {(venue as any).is_ml_recommendation && (
-                        <span className="px-2 py-0.5 md:px-2.5 md:py-1 bg-amber-500/90 text-white text-[10px] md:text-[11px] font-bold rounded-full shadow-sm flex items-center gap-1 backdrop-blur-sm">
-                          <Sparkles className="w-2.5 h-2.5" />
-                          Recommended
-                        </span>
-                      )}
-                      {venue.hasActiveDiscounts && venue.activeDiscountLabels && venue.activeDiscountLabels.map((discount, i) => (
-                        <span key={i} title={discount.description || discount.name}
-                          className={`px-2 py-0.5 md:px-2.5 md:py-1 ${discount.isSurcharge ? 'bg-orange-500/90' : 'bg-green-600/90'} text-white text-[10px] md:text-[11px] font-bold rounded-full shadow-sm flex items-center gap-1 backdrop-blur-sm`}
-                        >
-                          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            {discount.isSurcharge
-                              ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                              : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                            }
-                          </svg>
-                          {discount.label}
-                        </span>
-                      ))}
+                        {(venue as any).is_ml_recommendation && (
+                          <span className="px-2 py-0.5 md:px-2.5 md:py-1 bg-amber-500/90 text-white text-[10px] md:text-[11px] font-bold rounded-full shadow-sm flex items-center gap-1 backdrop-blur-sm">
+                            <Sparkles className="w-2.5 h-2.5" />
+                            Recommended
+                          </span>
+                        )}
+                        {venue.hasActiveDiscounts && venue.activeDiscountLabels && venue.activeDiscountLabels.map((discount, i) => (
+                          <span key={i} title={discount.description || discount.name}
+                            className={`px-2 py-0.5 md:px-2.5 md:py-1 ${discount.isSurcharge ? 'bg-orange-500/90' : 'bg-green-600/90'} text-white text-[10px] md:text-[11px] font-bold rounded-full shadow-sm flex items-center gap-1 backdrop-blur-sm`}
+                          >
+                            <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              {discount.isSurcharge
+                                ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                                : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                              }
+                            </svg>
+                            {discount.label}
+                          </span>
+                        ))}
                       </div>
 
                       {/* Top-right: Open/Closed + Rating */}
-                    <div className="absolute top-2 right-2 md:top-3 md:right-3 flex flex-col items-end gap-1" style={{ zIndex: 6 }}>
-                      <span className={`px-2 py-0.5 md:px-2.5 md:py-1 text-white text-[10px] md:text-[11px] font-bold rounded-full shadow-sm backdrop-blur-sm ${isOpen ? 'bg-green-500/85' : 'bg-gray-600/80'}`}>
-                        {isOpen ? 'OPEN' : 'CLOSED'}
-                      </span>
-                      {rating && (
-                        <span className="cv-rating-pill">
-                          {rating.avg.toFixed(1)}
-                          <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                          </svg>
+                      <div className="absolute top-2 right-2 md:top-3 md:right-3 flex flex-col items-end gap-1" style={{ zIndex: 6 }}>
+                        <span className={`px-2 py-0.5 md:px-2.5 md:py-1 text-white text-[10px] md:text-[11px] font-bold rounded-full shadow-sm backdrop-blur-sm ${isOpen ? 'bg-green-500/85' : 'bg-gray-600/80'}`}>
+                          {isOpen ? 'OPEN' : 'CLOSED'}
                         </span>
-                      )}
+                        {rating && (
+                          <span className="cv-rating-pill">
+                            {rating.avg.toFixed(1)}
+                            <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                            </svg>
+                          </span>
+                        )}
                       </div>
 
                       {/* Distance badge */}
                       {userLocation && venue.distance !== undefined && (
                         <div className="absolute bottom-[calc(42%+8px)] right-2 md:right-3 px-1.5 py-0.5 bg-black/50 backdrop-blur-sm text-white text-[9px] md:text-[10px] rounded-full flex items-center gap-1" style={{ zIndex: 6 }}>
-                        <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        {formatDistance(venue.distance)}
+                          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          {formatDistance(venue.distance)}
                         </div>
                       )}
                     </div>{/* end cv-badges */}
@@ -856,7 +821,6 @@ export default function CourtsPage() {
                 onClick={() => {
                   setSearch('');
                   setPriceRange([0, 2000]);
-                  setSelectedAmenities([]);
                   setCourtType(null);
                   setCategory(null);
                   setSortBy('newest');
