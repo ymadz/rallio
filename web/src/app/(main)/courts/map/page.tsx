@@ -1,58 +1,57 @@
-'use client'
+'use client';
 
-import { useState, useEffect } from 'react'
-import Link from 'next/link'
-import dynamic from 'next/dynamic'
-import { createClient } from '@/lib/supabase/client'
-import { ErrorBoundary } from '@/components/error-boundary'
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import dynamic from 'next/dynamic';
+import { createClient } from '@/lib/supabase/client';
+import { ErrorBoundary } from '@/components/error-boundary';
 
 interface Venue {
-  id: string
-  name: string
-  address: string
-  latitude: number
-  longitude: number
-  courtCount: number
-  minPrice: number
-  maxPrice: number
-  averageRating?: number
-  totalReviews?: number
-  opening_hours?: Record<string, { open: string; close: string }> | null
-  distance?: number
+  id: string;
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  courtCount: number;
+  minPrice: number;
+  maxPrice: number;
+  averageRating?: number;
+  totalReviews?: number;
+  opening_hours?: Record<string, { open: string; close: string }> | null;
+  distance?: number;
+  amenities?: string[];
 }
 
 // Dynamically import the map component to avoid SSR issues with Leaflet
-const VenueMap = dynamic(
-  () => import('@/components/map/venue-map'),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="w-full h-full flex items-center justify-center bg-gray-100">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    )
-  }
-)
-
-
+const VenueMap = dynamic(() => import('@/components/map/venue-map'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-full flex items-center justify-center bg-gray-100">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+    </div>
+  ),
+});
 
 export default function MapViewPage() {
-  const [allVenues, setAllVenues] = useState<Venue[]>([]) // Store original unfiltered data
-  const [venues, setVenues] = useState<Venue[]>([]) // Store filtered data for display
-  const [loading, setLoading] = useState(true)
-  const [showFilters, setShowFilters] = useState(true)
-  const [priceRange, setPriceRange] = useState([100, 1000])
+  const [allVenues, setAllVenues] = useState<Venue[]>([]); // Store original unfiltered data
+  const [venues, setVenues] = useState<Venue[]>([]); // Store filtered data for display
+  const [loading, setLoading] = useState(true);
+  const [showFilters, setShowFilters] = useState(true);
+  const [priceRange, setPriceRange] = useState([100, 1000]);
 
-  const [minRating, setMinRating] = useState(0)
-  const [searchQuery, setSearchQuery] = useState('')
+  const [minRating, setMinRating] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [availableAmenities, setAvailableAmenities] = useState<string[]>([]);
+  const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
 
   const fetchVenues = async () => {
-    setLoading(true)
+    setLoading(true);
     try {
-      const supabase = createClient()
+      const supabase = createClient();
       const { data, error } = await supabase
         .from('venues')
-        .select(`
+        .select(
+          `
           id,
           name,
           address,
@@ -65,109 +64,136 @@ export default function MapViewPage() {
             is_active,
             court_ratings(
               overall_rating
+            ),
+            court_amenities(
+              amenity:amenities(
+                id,
+                name
+              )
             )
           )
-        `)
+        `
+        )
         .eq('is_active', true)
-        .eq('is_verified', true) // Only show verified/approved venues
+        .eq('is_verified', true); // Only show verified/approved venues
 
       if (error) {
-        console.error('Error fetching venues:', error)
-        setLoading(false)
-        return
+        console.error('Error fetching venues:', error?.message ?? error, error);
+        setLoading(false);
+        return;
       }
 
       if (data) {
-        const transformedData = data.map(venue => {
-          const activeCourts = venue.courts?.filter((c: any) => c.is_active) || []
-          const prices = activeCourts.map((c: any) => c.hourly_rate).filter(Boolean)
+        const transformedData = data
+          .map((venue) => {
+            const activeCourts = venue.courts?.filter((c: any) => c.is_active) || [];
+            const prices = activeCourts.map((c: any) => c.hourly_rate).filter(Boolean);
 
-          // Calculate average rating across all courts
-          const allRatings = activeCourts.flatMap((c: any) =>
-            c.court_ratings?.map((r: any) => r.overall_rating) || []
-          )
-          const averageRating = allRatings.length > 0
-            ? allRatings.reduce((sum: number, r: number) => sum + r, 0) / allRatings.length
-            : undefined
+            // Calculate average rating across all courts
+            const allRatings = activeCourts.flatMap(
+              (c: any) => c.court_ratings?.map((r: any) => r.overall_rating) || []
+            );
+            const averageRating =
+              allRatings.length > 0
+                ? allRatings.reduce((sum: number, r: number) => sum + r, 0) / allRatings.length
+                : undefined;
 
+            const venueAmenities = Array.from(
+              new Set(
+                activeCourts.flatMap((c: any) =>
+                  (c.court_amenities || [])
+                    .map((ca: any) => ca?.amenity?.name)
+                    .filter(Boolean)
+                )
+              )
+            );
 
-
-          return {
-            id: venue.id,
-            name: venue.name,
-            address: venue.address || '',
-            latitude: venue.latitude || 0,
-            longitude: venue.longitude || 0,
-            courtCount: activeCourts.length,
-            minPrice: prices.length > 0 ? Math.min(...prices) : 0,
-            maxPrice: prices.length > 0 ? Math.max(...prices) : 0,
-            averageRating,
-            totalReviews: allRatings.length,
-            opening_hours: venue.opening_hours
-          }
-        }).filter(v => v.latitude && v.longitude)
+            return {
+              id: venue.id,
+              name: venue.name,
+              address: venue.address || '',
+              latitude: venue.latitude || 0,
+              longitude: venue.longitude || 0,
+              courtCount: activeCourts.length,
+              minPrice: prices.length > 0 ? Math.min(...prices) : 0,
+              maxPrice: prices.length > 0 ? Math.max(...prices) : 0,
+              averageRating,
+              totalReviews: allRatings.length,
+              opening_hours: venue.opening_hours,
+              amenities: venueAmenities,
+            };
+          })
+          .filter((v) => v.latitude && v.longitude);
 
         // Store original unfiltered data
-        setAllVenues(transformedData)
-        setVenues(transformedData) // Initially show all
+        setAllVenues(transformedData);
+        setVenues(transformedData); // Initially show all
+
+        // Derive available amenities for filter UI
+        const allAmenities = Array.from(
+          new Set(transformedData.flatMap((v) => v.amenities || []))
+        );
+        setAvailableAmenities(allAmenities.sort());
       }
-      setLoading(false)
+      setLoading(false);
     } catch (error) {
-      console.error('Unexpected error fetching venues:', error)
-      setAllVenues([])
-      setVenues([])
-      setLoading(false)
+      console.error('Unexpected error fetching venues:', error);
+      setAllVenues([]);
+      setVenues([]);
+      setLoading(false);
     }
-  }
+  };
 
   const applyFilters = () => {
-    if (allVenues.length === 0) return
+    if (allVenues.length === 0) return;
 
-    let filtered = [...allVenues]
+    let filtered = [...allVenues];
 
     // Search query filter
     if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase()
-      filtered = filtered.filter(v =>
-        v.name.toLowerCase().includes(query) ||
-        v.address.toLowerCase().includes(query)
-      )
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (v) => v.name.toLowerCase().includes(query) || v.address.toLowerCase().includes(query)
+      );
     }
 
     // Price range filter
-    filtered = filtered.filter(v =>
-      v.minPrice <= priceRange[1] && v.maxPrice >= priceRange[0]
-    )
+    filtered = filtered.filter((v) => v.minPrice <= priceRange[1] && v.maxPrice >= priceRange[0]);
 
-
-
-    // Rating filter
+    // Rating filter (3 stars & up, etc.)
     if (minRating > 0) {
-      filtered = filtered.filter(v =>
-        v.averageRating && Math.floor(v.averageRating) === minRating
-      )
+      filtered = filtered.filter(
+        (v) => (v.averageRating ?? 0) >= minRating
+      );
     }
 
-    setVenues(filtered)
-  }
+    // Amenities filter
+    if (selectedAmenities.length > 0) {
+      filtered = filtered.filter((v) => {
+        const venueAmenities = v.amenities || [];
+        return selectedAmenities.every((amenity) => venueAmenities.includes(amenity));
+      });
+    }
+
+    setVenues(filtered);
+  };
 
   useEffect(() => {
-    fetchVenues()
-  }, [])
+    fetchVenues();
+  }, []);
 
   // Apply filters when filter state changes
   useEffect(() => {
-    applyFilters()
-  }, [allVenues, priceRange, minRating, searchQuery])
+    applyFilters();
+  }, [allVenues, priceRange, minRating, searchQuery, selectedAmenities]);
 
   const handleClearFilters = () => {
-    setPriceRange([100, 1000])
-    setMinRating(0)
-    setSearchQuery('')
+    setPriceRange([100, 1000]);
+    setMinRating(0);
+    setSearchQuery('');
+    setSelectedAmenities([]);
     // Filters will auto-apply via useEffect, showing all venues
-  }
-
-
+  };
 
   return (
     <ErrorBoundary>
@@ -184,8 +210,18 @@ export default function MapViewPage() {
 
               {/* Desktop: Search Bar inline */}
               <div className="hidden md:flex flex-1 max-w-md relative">
-                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                <svg
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
                 </svg>
                 <input
                   type="text"
@@ -204,20 +240,31 @@ export default function MapViewPage() {
               {/* Right Side Actions - Desktop */}
               <div className="hidden md:flex items-center gap-3">
                 {/* Near Me Button */}
-                <button
-                  className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                <button className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                  <svg
+                    className="w-4 h-4 text-gray-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                    />
                   </svg>
                   <span className="text-sm font-medium text-gray-700">Near Me</span>
                 </button>
 
                 {/* Sort Dropdown */}
-                <select
-                  className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm font-medium text-gray-700"
-                >
+                <select className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm font-medium text-gray-700">
                   <option value="newest">Newest</option>
                   <option value="distance">Distance</option>
                   <option value="price_low">Price: Low to High</option>
@@ -232,15 +279,23 @@ export default function MapViewPage() {
                     className="px-4 py-2.5 text-sm font-medium flex items-center gap-2 bg-white text-gray-700 hover:bg-gray-50 transition-colors border-r border-gray-300"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 6h16M4 10h16M4 14h16M4 18h16"
+                      />
                     </svg>
                     <span>List</span>
                   </Link>
-                  <button
-                    className="px-4 py-2.5 text-sm font-medium flex items-center gap-2 bg-primary text-white"
-                  >
+                  <button className="px-4 py-2.5 text-sm font-medium flex items-center gap-2 bg-primary text-white">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+                      />
                     </svg>
                     <span>Map</span>
                   </button>
@@ -250,13 +305,19 @@ export default function MapViewPage() {
               {/* Mobile: Filter Toggle Button */}
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`md:hidden flex items-center justify-center w-10 h-10 rounded-full transition-colors ${showFilters
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
+                className={`md:hidden flex items-center justify-center w-10 h-10 rounded-full transition-colors ${
+                  showFilters
+                    ? 'bg-primary text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+                  />
                 </svg>
               </button>
             </div>
@@ -264,8 +325,18 @@ export default function MapViewPage() {
             {/* Mobile: Search Bar */}
             <div className="md:hidden flex gap-2">
               <div className="flex-1 relative">
-                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                <svg
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
                 </svg>
                 <input
                   type="text"
@@ -287,23 +358,29 @@ export default function MapViewPage() {
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 whitespace-nowrap"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 6h16M4 10h16M4 14h16M4 18h16"
+                  />
                 </svg>
                 List
               </Link>
-              <button
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-primary text-white whitespace-nowrap"
-              >
+              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-primary text-white whitespace-nowrap">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+                  />
                 </svg>
                 Map
               </button>
 
               {/* Results count - Mobile */}
-              <span className="text-xs text-gray-500 ml-auto pl-2">
-                {venues.length} found
-              </span>
+              <span className="text-xs text-gray-500 ml-auto pl-2">{venues.length} found</span>
             </div>
           </div>
         </header>
@@ -318,8 +395,18 @@ export default function MapViewPage() {
               </div>
             ) : venues.length === 0 ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50">
-                <svg className="w-16 h-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                <svg
+                  className="w-16 h-16 text-gray-400 mb-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+                  />
                 </svg>
                 <p className="text-gray-600 font-medium mb-2">No venues found</p>
                 <p className="text-sm text-gray-500">Try adjusting your filters</p>
@@ -333,8 +420,9 @@ export default function MapViewPage() {
 
           {/* Filters Sidebar */}
           <div
-            className={`bg-white border-l border-gray-200 transition-all duration-300 flex-shrink-0 overflow-hidden relative z-20 ${showFilters ? 'w-80' : 'w-0'
-              }`}
+            className={`bg-white border-l border-gray-200 transition-all duration-300 flex-shrink-0 overflow-hidden relative z-20 ${
+              showFilters ? 'w-80' : 'w-0'
+            }`}
           >
             <div className="w-80 h-full overflow-y-auto p-6">
               {/* Filters Header */}
@@ -350,7 +438,9 @@ export default function MapViewPage() {
 
               {/* Price Range */}
               <div className="mb-6">
-                <label className="block text-sm font-semibold text-gray-900 mb-3">Price Range</label>
+                <label className="block text-sm font-semibold text-gray-900 mb-3">
+                  Price Range
+                </label>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between text-sm text-gray-600">
                     <span>₱{priceRange[0]}</span>
@@ -372,11 +462,11 @@ export default function MapViewPage() {
                 </div>
               </div>
 
-
-
               {/* Customer Rating */}
               <div className="mb-6">
-                <label className="block text-sm font-semibold text-gray-900 mb-3">Customer Review</label>
+                <label className="block text-sm font-semibold text-gray-900 mb-3">
+                  Customer Review
+                </label>
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-1">
                     {[1, 2, 3, 4, 5].map((rating) => (
@@ -386,8 +476,11 @@ export default function MapViewPage() {
                         className="focus:outline-none transition-transform hover:scale-110"
                       >
                         <svg
-                          className={`w-8 h-8 ${rating <= minRating ? 'text-primary fill-primary' : 'text-gray-300 fill-gray-300'
-                            }`}
+                          className={`w-8 h-8 ${
+                            rating <= minRating
+                              ? 'text-primary fill-primary'
+                              : 'text-gray-300 fill-gray-300'
+                          }`}
                           viewBox="0 0 20 20"
                         >
                           <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
@@ -399,6 +492,46 @@ export default function MapViewPage() {
                     {minRating > 0 ? `${minRating} Stars & Up` : 'Any Rating'}
                   </span>
                 </div>
+              </div>
+
+              {/* Amenities Filter */}
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-900 mb-3">
+                  Amenities
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {availableAmenities.length === 0 ? (
+                    <span className="text-sm text-gray-500">Loading amenities...</span>
+                  ) : (
+                    availableAmenities.map((amenity) => {
+                      const selected = selectedAmenities.includes(amenity);
+                      return (
+                        <button
+                          key={amenity}
+                          onClick={() => {
+                            setSelectedAmenities((prev) =>
+                              prev.includes(amenity)
+                                ? prev.filter((a) => a !== amenity)
+                                : [...prev, amenity]
+                            );
+                          }}
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                            selected
+                              ? 'bg-primary text-white border-primary'
+                              : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          {amenity}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+                {selectedAmenities.length > 0 && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    Showing venues with {selectedAmenities.length} selected amenit{selectedAmenities.length === 1 ? 'y' : 'ies'}.
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -421,5 +554,5 @@ export default function MapViewPage() {
         </div>
       </div>
     </ErrorBoundary>
-  )
+  );
 }
