@@ -19,7 +19,6 @@ interface Venue {
   totalReviews?: number;
   opening_hours?: Record<string, { open: string; close: string }> | null;
   distance?: number;
-  amenities?: string[];
 }
 
 // Dynamically import the map component to avoid SSR issues with Leaflet
@@ -41,8 +40,6 @@ export default function MapViewPage() {
 
   const [minRating, setMinRating] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
-  const [availableAmenities, setAvailableAmenities] = useState<string[]>([]);
-  const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
 
   const fetchVenues = async () => {
     setLoading(true);
@@ -64,12 +61,6 @@ export default function MapViewPage() {
             is_active,
             court_ratings(
               overall_rating
-            ),
-            court_amenities(
-              amenity:amenities(
-                id,
-                name
-              )
             )
           )
         `
@@ -98,16 +89,6 @@ export default function MapViewPage() {
                 ? allRatings.reduce((sum: number, r: number) => sum + r, 0) / allRatings.length
                 : undefined;
 
-            const venueAmenities = Array.from(
-              new Set(
-                activeCourts.flatMap((c: any) =>
-                  (c.court_amenities || [])
-                    .map((ca: any) => ca?.amenity?.name)
-                    .filter(Boolean)
-                )
-              )
-            );
-
             return {
               id: venue.id,
               name: venue.name,
@@ -120,7 +101,6 @@ export default function MapViewPage() {
               averageRating,
               totalReviews: allRatings.length,
               opening_hours: venue.opening_hours,
-              amenities: venueAmenities,
             };
           })
           .filter((v) => v.latitude && v.longitude);
@@ -129,11 +109,6 @@ export default function MapViewPage() {
         setAllVenues(transformedData);
         setVenues(transformedData); // Initially show all
 
-        // Derive available amenities for filter UI
-        const allAmenities = Array.from(
-          new Set(transformedData.flatMap((v) => v.amenities || []))
-        );
-        setAvailableAmenities(allAmenities.sort());
       }
       setLoading(false);
     } catch (error) {
@@ -167,13 +142,6 @@ export default function MapViewPage() {
       );
     }
 
-    // Amenities filter
-    if (selectedAmenities.length > 0) {
-      filtered = filtered.filter((v) => {
-        const venueAmenities = v.amenities || [];
-        return selectedAmenities.every((amenity) => venueAmenities.includes(amenity));
-      });
-    }
 
     setVenues(filtered);
   };
@@ -185,13 +153,12 @@ export default function MapViewPage() {
   // Apply filters when filter state changes
   useEffect(() => {
     applyFilters();
-  }, [allVenues, priceRange, minRating, searchQuery, selectedAmenities]);
+  }, [allVenues, priceRange, minRating, searchQuery]);
 
   const handleClearFilters = () => {
     setPriceRange([100, 1000]);
     setMinRating(0);
     setSearchQuery('');
-    setSelectedAmenities([]);
     // Filters will auto-apply via useEffect, showing all venues
   };
 
@@ -494,45 +461,6 @@ export default function MapViewPage() {
                 </div>
               </div>
 
-              {/* Amenities Filter */}
-              <div className="mb-6">
-                <label className="block text-sm font-semibold text-gray-900 mb-3">
-                  Amenities
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {availableAmenities.length === 0 ? (
-                    <span className="text-sm text-gray-500">Loading amenities...</span>
-                  ) : (
-                    availableAmenities.map((amenity) => {
-                      const selected = selectedAmenities.includes(amenity);
-                      return (
-                        <button
-                          key={amenity}
-                          onClick={() => {
-                            setSelectedAmenities((prev) =>
-                              prev.includes(amenity)
-                                ? prev.filter((a) => a !== amenity)
-                                : [...prev, amenity]
-                            );
-                          }}
-                          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                            selected
-                              ? 'bg-primary text-white border-primary'
-                              : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-                          }`}
-                        >
-                          {amenity}
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-                {selectedAmenities.length > 0 && (
-                  <p className="text-xs text-gray-500 mt-2">
-                    Showing venues with {selectedAmenities.length} selected amenit{selectedAmenities.length === 1 ? 'y' : 'ies'}.
-                  </p>
-                )}
-              </div>
             </div>
           </div>
 
