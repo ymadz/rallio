@@ -46,6 +46,10 @@ export function CourtAdminDashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // Only render reservations that have a valid ID (prevents /reservations/undefined routes)
+  const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$/
+  const validReservations = reservations.filter((r) => r.id && uuidRegex.test(r.id))
+
   useEffect(() => {
     loadDashboard()
   }, [])
@@ -67,7 +71,16 @@ export function CourtAdminDashboard() {
       }
 
       setStats((statsResult as any).stats!)
-      setReservations((reservationsResult as any).reservations!)
+      const fetchedReservations = (reservationsResult as any).reservations || []
+      setReservations(fetchedReservations)
+
+      const invalidIds = fetchedReservations
+        .filter((r: any) => !r.id || !uuidRegex.test(r.id))
+        .map((r: any) => r.id)
+
+      if (invalidIds.length > 0) {
+        console.warn('CourtAdminDashboard: Found reservations with invalid IDs (these will not be clickable):', invalidIds)
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load dashboard')
     } finally {
@@ -245,7 +258,7 @@ export function CourtAdminDashboard() {
           </Link>
         </div>
 
-        {reservations.length === 0 ? (
+        {validReservations.length === 0 ? (
           <div className="text-center py-12">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Calendar className="w-8 h-8 text-gray-400" />
@@ -257,10 +270,10 @@ export function CourtAdminDashboard() {
           </div>
         ) : (
           <div className="space-y-3">
-            {reservations.map((reservation) => (
+            {validReservations.map((reservation) => (
               <Link
                 key={reservation.id}
-                href={`/court-admin/reservations/${reservation.id}`}
+                href={`/court-admin/reservations?reservationId=${reservation.id}`}
                 className="block border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
               >
                 <div className="flex items-center justify-between">
