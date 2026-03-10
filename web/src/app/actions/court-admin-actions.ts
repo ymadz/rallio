@@ -5,6 +5,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
 import { createNotification, NotificationTemplates } from '@/lib/notifications'
 import { getServerNow } from '@/lib/time-server'
+import { importQueueActions } from '@/lib/queue-actions'
 
 /**
  * Get all venues owned by the current user (Court Admin)
@@ -1287,6 +1288,41 @@ export async function getVenueQueueHistory(filters?: {
 
     const targetVenueIds = filters?.venueId ? [filters.venueId] : venueIds
 
+    // Load courts for the target venues (used to filter sessions)
+    const { data: courts } = await supabase
+      .from('courts')
+      .select('id')
+      .in('venue_id', targetVenueIds)
+
+    const courtIds = courts?.map(c => c.id) || []
+
+    if (courtIds.length === 0) {
+      return { success: true, sessions: [] }
+    }
+
+    const now = await getServerNow()
+
+    console.log('[getVenueQueueHistory] 🔍 Starting query with:', {
+      targetVenueIds,
+      courtIds,
+      currentTime: now.toISOString(),
+    })
+
+    // First, let's see ALL sessions for these courts (debug)
+    const { data: allSessions } = await supabase
+      .from('queue_sessions')
+      .select('id, status, start_time, end_time, court_id')
+      .in('court_id', courtIds)
+      .order('start_time', { ascending: false })
+
+    console.log('[getVenueQueueHistory] 📊 ALL sessions in courts:',allSessions?.map(s => ({
+        id: s.id,
+        status: s.status,
+        isPast: new Date(s.end_time) < now,
+        endTime: s.end_time,
+      })) || []
+    )
+
     let query = supabase
       .from('queue_sessions')
       .select(`
@@ -1299,13 +1335,17 @@ export async function getVenueQueueHistory(filters?: {
             name
           )
         ),
-        organizer:profiles!inner(
+        organizer:profiles!queue_sessions_organizer_id_fkey(
           display_name,
           email
         )
       `)
-      .in('court.venue_id', targetVenueIds)
-      .in('status', ['closed', 'cancelled']) // Only show closed/cancelled sessions for history
+      .in('court_id', courtIds)
+      // History includes sessions that have finished (completed/closed), were cancelled/rejected,
+      // or are past their end time even if status hasn’t been auto-updated yet.
+      .or(
+        `status.in.(completed,closed,cancelled,rejected),end_time.lt.${now.toISOString()}`
+      )
       .order('start_time', { ascending: false })
 
     // Apply date filters
@@ -1318,29 +1358,65 @@ export async function getVenueQueueHistory(filters?: {
 
     const { data: sessions, error } = await query
 
-    if (error) throw error
+    if (error) {
+      console.error('[getVenueQueueHistory] ❌ Query error:', error)
+      throw error
+    }
 
-    // Format for display
-    const formattedSessions = sessions?.map(s => ({
-      id: s.id,
-      venueName: s.court?.venue?.name,
-      courtName: s.court?.name,
-      organizerName: s.organizer?.display_name || 'Unknown',
-      startTime: new Date(s.start_time),
-      endTime: new Date(s.end_time),
-      status: s.status,
-      maxPlayers: s.max_players,
-      costPerGame: s.cost_per_game,
-      // Calculate revenue if available in summary, otherwise 0
-      totalRevenue: s.settings?.summary?.totalRevenue || 0,
-      totalGames: s.settings?.summary?.totalGames || 0,
-      closedBy: s.settings?.summary?.closedBy || 'unknown',
+    console.log('[getVenueQueueHistory] ✅ Sessions found:', sessions?.length || 0)
+
+    // Backfill summary data for sessions missing it
+    const formattedSessions = await Promise.all((sessions || []).map(async (s) => {
+      let summary = s.settings?.summary
+      
+      // If summary is missing, calculate it from participants
+      if (!summary) {
+        try {
+          const { data: participants } = await supabase
+            .from('queue_participants')
+            .select('games_played, amount_owed, payment_status')
+            .eq('queue_session_id', s.id)
+
+          if (participants) {
+            const totalGames = participants.reduce((sum, p) => sum + (p.games_played || 0), 0)
+            const totalRevenue = participants.reduce((sum, p) => sum + parseFloat(p.amount_owed || '0'), 0)
+            summary = {
+              totalGames,
+              totalRevenue,
+              totalParticipants: participants.length,
+              closedBy: s.organizer?.display_name || 'Unknown',
+            }
+          }
+        } catch (err) {
+          console.warn(`[getVenueQueueHistory] Failed to backfill summary for session ${s.id}:`, err)
+        }
+      }
+
+      return {
+        id: s.id,
+        venueName: s.court?.venue?.name,
+        courtName: s.court?.name,
+        organizerName: s.organizer?.display_name || 'Unknown',
+        startTime: new Date(s.start_time),
+        endTime: new Date(s.end_time),
+        status: s.status,
+        maxPlayers: s.max_players,
+        costPerGame: s.cost_per_game,
+        totalRevenue: summary?.totalRevenue || 0,
+        totalGames: summary?.totalGames || 0,
+        closedBy: summary?.closedBy || 'unknown',
+      }
     }))
 
     return { success: true, sessions: formattedSessions }
   } catch (error: any) {
-    console.error('Error fetching queue history:', error)
-    return { success: false, error: error.message }
+    // Supabase errors can be plain objects without `message`, so stringify to capture full details
+    const formattedError = error && typeof error === 'object'
+      ? JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
+      : String(error)
+
+    console.error('Error fetching queue history:', formattedError)
+    return { success: false, error: (error?.message || formattedError || 'Unknown error') }
   }
 }
 

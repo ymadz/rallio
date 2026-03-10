@@ -314,7 +314,7 @@ export function ReviewsManagement({ venueId }: ReviewsManagementProps) {
                       {review.customerAvatar ? (
                         <img
                           src={review.customerAvatar}
-                          alt={`${review.player_name || review.customerName || 'User'} avatar`}
+                          alt={review.player_name || review.customerName}
                           className="w-10 h-10 rounded-full object-cover"
                         />
                       ) : (
@@ -405,7 +405,7 @@ export function ReviewsManagement({ venueId }: ReviewsManagementProps) {
                   {selectedReview.customerAvatar ? (
                     <img
                       src={selectedReview.customerAvatar}
-                      alt={`${selectedReview.player_name || selectedReview.customerName || 'User'} avatar`}
+                      alt={selectedReview.player_name || selectedReview.customerName}
                       className="w-8 h-8 rounded-full object-cover"
                     />
                   ) : (

@@ -449,6 +449,7 @@ export async function recordMatchScore(
     }
 
     // Call RPC via service client so it runs with full DB permissions
+    console.log('[recordMatchScore] 🚀 Calling RPC with:', { matchId, winner: scores.winner })
     const { data: rpcResult, error: rpcError } = await serviceDb.rpc('update_match_results', {
       p_match_id: matchId,
       p_winner: scores.winner,
@@ -460,6 +461,7 @@ export async function recordMatchScore(
     if (rpcFailed) {
       console.warn('[recordMatchScore] ⚠️ RPC failed, running service-client fallback:', rpcError || rpcResult?.error)
     } else {
+      console.log('[recordMatchScore] ✅ RPC succeeded:', rpcResult)
       // RPC succeeded — save rating changes to match metadata so clients can display them
       if (rpcResult?.ratingChanges && Object.keys(rpcResult.ratingChanges).length > 0) {
         console.log('[recordMatchScore] 📈 Saving rating changes to metadata:', rpcResult.ratingChanges)
@@ -474,7 +476,12 @@ export async function recordMatchScore(
     if (rpcFailed) {
       const allPlayerIds = [...(match.team_a_players || []), ...(match.team_b_players || [])]
       const costPerGame = parseFloat(match.queue_sessions?.cost_per_game || '0')
-      console.log('[recordMatchScore] 🔄 Service fallback: updating participants, cost_per_game:', costPerGame)
+      
+      console.log('[recordMatchScore] 🔄 Service fallback triggered')
+      console.log('[recordMatchScore]   costPerGame:', costPerGame)
+      console.log('[recordMatchScore]   players involved:', allPlayerIds.length)
+      console.log('[recordMatchScore]   team_a:', match.team_a_players?.length || 0, 'players')
+      console.log('[recordMatchScore]   team_b:', match.team_b_players?.length || 0, 'players')
 
       for (const playerId of allPlayerIds) {
         const isWinner = scores.winner === 'team_a'
@@ -491,17 +498,24 @@ export async function recordMatchScore(
           .single()
 
         if (!current) {
-          console.warn('[recordMatchScore] ⚠️ Participant not found for fallback:', playerId)
+          console.warn('[recordMatchScore] ⚠️ Participant not found for:', playerId)
           continue
         }
+
+        const newGamesPlayed = (current.games_played || 0) + 1
+        const newAmountOwed = (parseFloat(current.amount_owed || '0')) + costPerGame
+        
+        console.log(`[recordMatchScore]   Player ${playerId.slice(0, 8)}...:`)
+        console.log(`      old: games_played=${current.games_played}, amount_owed=${current.amount_owed}`)
+        console.log(`      new: games_played=${newGamesPlayed}, amount_owed=${newAmountOwed}`)
 
         const { error: partError } = await serviceDb
           .from('queue_participants')
           .update({
             status: 'waiting',
-            games_played: (current.games_played || 0) + 1,
+            games_played: newGamesPlayed,
             games_won: isWinner ? (current.games_won || 0) + 1 : (current.games_won || 0),
-            amount_owed: (parseFloat(current.amount_owed || '0')) + costPerGame,
+            amount_owed: newAmountOwed,
             joined_at: new Date().toISOString(),
           })
           .eq('queue_session_id', match.queue_session_id)

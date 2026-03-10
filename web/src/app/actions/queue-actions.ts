@@ -1705,6 +1705,13 @@ export async function closeQueueSession(sessionId: string): Promise<{
       return { success: false, error: 'Failed to fetch participants' }
     }
 
+    console.log('[closeQueueSession] 📊 Fetched participants count:', participants?.length || 0)
+    if (participants && participants.length > 0) {
+      participants.forEach((p, idx) => {
+        console.log(`      [${idx + 1}] games_played=${p.games_played}, amount_owed=${p.amount_owed}, payment_status=${p.payment_status}`)
+      })
+    }
+
     // 4. Calculate summary
     const totalGames = participants?.reduce((sum, p) => sum + (p.games_played || 0), 0) || 0
     const totalRevenue = participants?.reduce((sum, p) => sum + parseFloat(p.amount_owed || '0'), 0) || 0
@@ -1718,7 +1725,10 @@ export async function closeQueueSession(sessionId: string): Promise<{
       unpaidBalances,
     }
 
+    console.log('[closeQueueSession] ✅ Calculated summary:', summary)
+
     // 5. Update session status to completed
+    console.log('[closeQueueSession] 💾 Updating session with summary...')
     const { error: updateError } = await supabase
       .from('queue_sessions')
       .update({
@@ -1736,6 +1746,17 @@ export async function closeQueueSession(sessionId: string): Promise<{
       console.error('[closeQueueSession] ❌ Failed to complete session:', updateError)
       return { success: false, error: 'Failed to complete queue session' }
     }
+
+    console.log('[closeQueueSession] ✅ Session updated successfully')
+
+    // Verify the update worked
+    const { data: verify } = await supabase
+      .from('queue_sessions')
+      .select('settings')
+      .eq('id', sessionId)
+      .single()
+
+    console.log('[closeQueueSession] 🔍 Verification - settings saved:', verify?.settings?.['summary'] || 'NOT FOUND')
 
     // 5a. Mark all remaining active participants as 'completed'
     const { error: participantStatusError } = await supabase
