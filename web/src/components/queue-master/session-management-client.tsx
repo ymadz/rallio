@@ -22,7 +22,7 @@ import { StatusBadge } from '@/components/shared/status-badge'
 import {
   Users,
   Clock,
-  DollarSign,
+  PhilippinePeso,
   PlayCircle,
   StopCircle,
   Loader2,
@@ -586,7 +586,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
           <div className="bg-orange-50 border-l-4 border-orange-400 p-4 mb-6 rounded-r-lg">
             <div className="flex items-start justify-between">
               <div className="flex items-start">
-                <DollarSign className="h-5 w-5 text-orange-400 mt-0.5 mr-3 flex-shrink-0" />
+                <PhilippinePeso className="h-5 w-5 text-orange-400 mt-0.5 mr-3 flex-shrink-0" />
                 <div>
                   <h3 className="text-sm font-medium text-orange-800">
                     Payment Required — Session Not Public
@@ -691,7 +691,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
           </div>
           <div className="bg-gray-50 rounded-lg p-3">
             <div className="flex items-center gap-2 mb-1">
-              <DollarSign className="w-4 h-4 text-emerald-500" />
+              <PhilippinePeso className="w-4 h-4 text-emerald-500" />
               <span className="text-xs text-gray-600">Revenue</span>
             </div>
             <p className="text-lg font-bold text-emerald-700">₱{totalRevenue.toFixed(0)}</p>
@@ -892,7 +892,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                             }`}
                           title="Manage payment"
                         >
-                          <DollarSign className="w-3 h-3 inline mr-0.5" />
+                          <PhilippinePeso className="w-3 h-3 inline mr-0.5" />
                           {player.paymentStatus}
                         </button>
                       </div>
@@ -1225,7 +1225,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                     <div className="bg-green-50 rounded-xl p-4 text-center">
                       <div className="text-3xl font-bold text-green-600">₱{sessionSummary.totalRevenue.toFixed(2)}</div>
                       <div className="text-sm text-gray-600 flex items-center justify-center gap-1 mt-1">
-                        <DollarSign className="w-4 h-4" />
+                        <PhilippinePeso className="w-4 h-4" />
                         Total Revenue
                       </div>
                     </div>
