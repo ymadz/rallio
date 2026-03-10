@@ -77,10 +77,11 @@ export function ReservationManagement() {
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
 
-  // Routing (query param based modal opening)
+  // Routing (query param based modal opening + status filter)
   const router = useRouter()
   const searchParams = useSearchParams()
   const reservationIdFromQuery = searchParams.get('reservationId')
+  const statusFromQuery = searchParams.get('status') || 'all'
 
   useEffect(() => {
     if (!reservationIdFromQuery) return
@@ -91,6 +92,11 @@ export function ReservationManagement() {
       setShowDetailModal(true)
     }
   }, [reservationIdFromQuery, reservations])
+
+  useEffect(() => {
+    if (!statusFromQuery) return
+    setStatusFilter(statusFromQuery)
+  }, [statusFromQuery])
 
   useEffect(() => {
     loadReservations()
@@ -227,8 +233,9 @@ export function ReservationManagement() {
     setSelectedReservation(null)
     loadReservations()
 
-    // Remove reservationId from the URL when modal is closed
-    router.replace('/court-admin/reservations')
+    // Keep the status filter in the URL when closing the modal
+    const statusQuery = statusFromQuery ? `?status=${statusFromQuery}` : ''
+    router.replace(`/court-admin/reservations${statusQuery}`)
   }
 
   // getStatusColor and getStatusIcon removed in favor of generic StatusBadge
