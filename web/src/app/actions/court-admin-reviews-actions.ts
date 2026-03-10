@@ -76,10 +76,44 @@ export async function getVenueReviews(
     // Filter by hasResponse if specified
     let reviews = ratings || []
     if (filters?.hasResponse !== undefined) {
-      reviews = reviews.filter(r => filters.hasResponse ? r.response !== null : r.response === null)
+      reviews = reviews.filter((r) => {
+        const hasResponse = Array.isArray(r.response)
+          ? r.response.length > 0
+          : !!r.response
+        return filters.hasResponse ? hasResponse : !hasResponse
+      })
     }
 
-    return { success: true, reviews }
+    // Normalize review shape for UI consumption
+    const formattedReviews = (reviews || []).map((r: any) => {
+      const responseEntry = Array.isArray(r.response) ? r.response[0] : r.response
+      const customerName =
+        r.user?.display_name ||
+        `${r.user?.first_name || ''} ${r.user?.last_name || ''}`.trim() ||
+        'Anonymous'
+
+      const metadata = r.metadata || {}
+      const flags = metadata.flags || []
+
+      return {
+        id: r.id,
+        rating: r.overall_rating,
+        comment: r.review,
+        created_at: r.created_at,
+        court_name: r.court?.name,
+        player_name: customerName,
+        customerName,
+        customerAvatar: r.user?.avatar_url,
+        helpful_count: r.helpful_count || metadata.helpful_count || 0,
+        is_flagged: metadata.flagged || false,
+        isReported: flags.length > 0,
+        owner_response: responseEntry?.response || null,
+        response_date: responseEntry?.created_at || null,
+        response: responseEntry ? { text: responseEntry.response, date: responseEntry.created_at } : null,
+      }
+    })
+
+    return { success: true, reviews: formattedReviews }
   } catch (error: any) {
     console.error('Error fetching venue reviews:', error)
     return { success: false, error: error.message }
@@ -313,7 +347,11 @@ export async function getReviewStats(venueId: string) {
       ratingDistribution[r.overall_rating] = (ratingDistribution[r.overall_rating] || 0) + 1
     })
 
-    const reviewsWithResponse = ratings?.filter((r: any) => r.response !== null).length || 0
+    const reviewsWithResponse = ratings?.filter((r: any) => {
+      if (!r.response) return false
+      if (Array.isArray(r.response)) return r.response.length > 0
+      return true
+    }).length || 0
     const reviewsWithoutResponse = totalReviews - reviewsWithResponse
 
     return {
