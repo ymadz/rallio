@@ -14,9 +14,12 @@ export function BookingPreviewCard({ booking, serverDate, onClick }: BookingPrev
   const startDate = new Date(booking.start_time)
   const endDate = new Date(booking.end_time)
 
-  const courtImages = booking.courts.court_images || []
+  const courtImages = booking.courts?.court_images || []
   const primaryImage = courtImages.find(img => img.is_primary)
-  const imageUrl = primaryImage?.url || courtImages[0]?.url || booking.courts.venues.image_url
+  const imageUrl =
+    primaryImage?.url ||
+    courtImages[0]?.url ||
+    booking.courts?.venues?.image_url
 
   const isPastBooking = endDate < (serverDate || new Date())
 
@@ -64,7 +67,7 @@ export function BookingPreviewCard({ booking, serverDate, onClick }: BookingPrev
       type="button"
     >
       {imageUrl ? (
-        <img src={imageUrl} alt={booking.courts.name} className="bk-card-img" />
+        <img src={imageUrl} alt={booking.courts?.name ?? 'Court'} className="bk-card-img" />
       ) : (
         <div className="bk-card-placeholder">
           <svg style={{ width: 36, height: 36, color: '#0d9488', opacity: 0.4 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -104,13 +107,13 @@ export function BookingPreviewCard({ booking, serverDate, onClick }: BookingPrev
 
       {/* Content overlay at bottom */}
       <div className="bk-content">
-        <div className="bk-name uppercase">{booking.courts.name}</div>
+        <div className="bk-name uppercase">{booking.courts?.name ?? 'Court'}</div>
         <div className="bk-venue">
           <svg className="w-3 h-3 inline-block mr-0.5 -mt-px" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          {booking.courts.venues.name}
+          {booking.courts?.venues?.name ?? 'Venue'}
         </div>
         <div className="bk-date">
           📅 {format(startDate, 'EEE, MMM d')} · {format(startDate, 'h:mm a')} – {format(endDate, 'h:mm a')}
