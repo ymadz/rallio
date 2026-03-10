@@ -65,9 +65,8 @@ export default function MapViewPage() {
             is_active,
             court_ratings(
               overall_rating
-            ),
-              overall_rating
             )
+          )
         `)
         .eq('is_active', true)
         .eq('is_verified', true) // Only show verified/approved venues
