@@ -145,7 +145,7 @@ export async function getAllVenues(options: {
 }
 
 /**
- * Get venue details with courts and amenities
+ * Get venue details with courts
  */
 export async function getVenueDetails(venueId: string) {
   const auth = await verifyGlobalAdmin()
@@ -172,19 +172,11 @@ export async function getVenueDetails(venueId: string) {
     return { success: false, error: error.message }
   }
 
-  // Get courts with amenities
+  // Get courts
   const { data: courts } = await supabase
     .from('courts')
     .select(`
       *,
-      court_amenities (
-        amenity:amenity_id (
-          id,
-          name,
-          icon,
-          description
-        )
-      ),
       court_images (
         id,
         url,
@@ -215,7 +207,6 @@ export async function getVenueDetails(venueId: string) {
       ...venue,
       courts: courts?.map(c => ({
         ...c,
-        amenities: c.court_amenities?.map((ca: any) => ca.amenity).filter(Boolean) || [],
         images: c.court_images || []
       })) || [],
       stats
@@ -463,12 +454,6 @@ export async function getPendingCourts(options: {
           email,
           display_name
         )
-      ),
-      court_amenities (
-        amenity:amenity_id (
-          name,
-          icon
-        )
       )
     `, { count: 'exact' })
     .eq('is_verified', false)
@@ -493,27 +478,6 @@ export async function getPendingCourts(options: {
 // ============= COURT ACTIONS =============
 
 /**
- * Get all amenities
- */
-export async function getAllAmenities() {
-  const auth = await verifyGlobalAdmin()
-  if (!auth.success) return auth
-
-  const supabase = await createClient()
-
-  const { data: amenities, error } = await supabase
-    .from('amenities')
-    .select('*')
-    .order('name')
-
-  if (error) {
-    return { success: false, error: error.message }
-  }
-
-  return { success: true, amenities }
-}
-
-/**
  * Create a new court
  */
 export async function createCourt(data: {
@@ -524,7 +488,6 @@ export async function createCourt(data: {
   court_type: 'indoor' | 'outdoor'
   capacity?: number
   hourly_rate: number
-  amenity_ids?: string[]
 }) {
   const auth = await verifyGlobalAdmin()
   if (!auth.success) return auth
@@ -551,16 +514,6 @@ export async function createCourt(data: {
     return { success: false, error: error.message }
   }
 
-  // Add amenities if provided
-  if (data.amenity_ids && data.amenity_ids.length > 0) {
-    const amenityMappings = data.amenity_ids.map(amenityId => ({
-      court_id: court.id,
-      amenity_id: amenityId
-    }))
-
-    await supabase.from('court_amenities').insert(amenityMappings)
-  }
-
   await logAdminAction({
     actionType: 'create_court',
     targetType: 'court',
@@ -582,7 +535,6 @@ export async function updateCourt(courtId: string, data: {
   court_type?: 'indoor' | 'outdoor'
   capacity?: number
   hourly_rate?: number
-  amenity_ids?: string[]
 }) {
   const auth = await verifyGlobalAdmin()
   if (!auth.success) return auth
@@ -614,25 +566,6 @@ export async function updateCourt(courtId: string, data: {
 
   if (error) {
     return { success: false, error: error.message }
-  }
-
-  // Update amenities if provided
-  if (data.amenity_ids !== undefined) {
-    // Delete existing amenities
-    await supabase
-      .from('court_amenities')
-      .delete()
-      .eq('court_id', courtId)
-
-    // Add new amenities
-    if (data.amenity_ids.length > 0) {
-      const amenityMappings = data.amenity_ids.map(amenityId => ({
-        court_id: courtId,
-        amenity_id: amenityId
-      }))
-
-      await supabase.from('court_amenities').insert(amenityMappings)
-    }
   }
 
   await logAdminAction({
@@ -713,116 +646,6 @@ export async function deleteCourt(courtId: string) {
   return { success: true, message: 'Court deleted successfully' }
 }
 
-// ============= AMENITY ACTIONS =============
-
-/**
- * Create a new amenity
- */
-export async function createAmenity(data: {
-  name: string
-  icon?: string
-  description?: string
-}) {
-  const auth = await verifyGlobalAdmin()
-  if (!auth.success) return auth
-
-  const supabase = await createClient()
-
-  const { data: amenity, error } = await supabase
-    .from('amenities')
-    .insert({
-      name: data.name,
-      icon: data.icon || null,
-      description: data.description || null
-    })
-    .select()
-    .single()
-
-  if (error) {
-    return { success: false, error: error.message }
-  }
-
-  await logAdminAction({
-    actionType: 'create_amenity',
-    targetType: 'amenity',
-    targetId: amenity.id,
-    newValue: { name: data.name }
-  })
-
-  revalidatePath('/admin/venues')
-  return { success: true, amenity, message: 'Amenity created successfully' }
-}
-
-/**
- * Update amenity
- */
-export async function updateAmenity(amenityId: string, data: {
-  name?: string
-  icon?: string
-  description?: string
-}) {
-  const auth = await verifyGlobalAdmin()
-  if (!auth.success) return auth
-
-  const supabase = await createClient()
-
-  const { data: amenity, error } = await supabase
-    .from('amenities')
-    .update(data)
-    .eq('id', amenityId)
-    .select()
-    .single()
-
-  if (error) {
-    return { success: false, error: error.message }
-  }
-
-  await logAdminAction({
-    actionType: 'update_amenity',
-    targetType: 'amenity',
-    targetId: amenityId,
-    newValue: data
-  })
-
-  revalidatePath('/admin/venues')
-  return { success: true, amenity, message: 'Amenity updated successfully' }
-}
-
-/**
- * Delete amenity
- */
-export async function deleteAmenity(amenityId: string) {
-  const auth = await verifyGlobalAdmin()
-  if (!auth.success) return auth
-
-  const supabase = await createClient()
-
-  // Get amenity details for audit
-  const { data: amenity } = await supabase
-    .from('amenities')
-    .select('name')
-    .eq('id', amenityId)
-    .single()
-
-  const { error } = await supabase
-    .from('amenities')
-    .delete()
-    .eq('id', amenityId)
-
-  if (error) {
-    return { success: false, error: error.message }
-  }
-
-  await logAdminAction({
-    actionType: 'delete_amenity',
-    targetType: 'amenity',
-    targetId: amenityId,
-    oldValue: amenity
-  })
-
-  revalidatePath('/admin/venues')
-  return { success: true, message: 'Amenity deleted successfully' }
-}
 
 /**
  * Toggle court verified status

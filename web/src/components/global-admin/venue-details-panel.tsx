@@ -7,8 +7,7 @@ import {
   updateCourt,
   deleteCourt,
   toggleCourtActive,
-  toggleCourtVerified,
-  getAllAmenities
+  toggleCourtVerified
 } from '@/app/actions/global-admin-venue-actions'
 import {
   X,
@@ -51,17 +50,10 @@ interface Court {
   hourly_rate: number
   is_active: boolean
   is_verified: boolean
-  amenities: Array<{ id: string; name: string; icon?: string }>
   images: any[]
   created_at: string
 }
 
-interface Amenity {
-  id: string
-  name: string
-  icon?: string
-  description?: string
-}
 
 export function VenueDetailsPanel({ venueId, onClose, onRefresh, onEdit }: VenueDetailsPanelProps) {
   const [venue, setVenue] = useState<any>(null)
@@ -445,18 +437,6 @@ export function VenueDetailsPanel({ venueId, onClose, onRefresh, onEdit }: Venue
                         </div>
                       </div>
 
-                      {court.amenities && court.amenities.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {court.amenities.map((amenity) => (
-                            <span
-                              key={amenity.id}
-                              className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded"
-                            >
-                              {amenity.name}
-                            </span>
-                          ))}
-                        </div>
-                      )}
 
                       {!court.is_active && (
                         <div className="mt-2 inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs">
@@ -560,22 +540,9 @@ function CourtFormModal({ venueId, court, onClose, onSuccess }: {
     surface_type: court?.surface_type || '',
     court_type: court?.court_type || 'indoor',
     capacity: court?.capacity || 4,
-    hourly_rate: court?.hourly_rate || 0,
-    amenity_ids: court?.amenities?.map(a => a.id) || []
+    hourly_rate: court?.hourly_rate || 0
   })
-  const [amenities, setAmenities] = useState<Amenity[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
-
-  useEffect(() => {
-    loadAmenities()
-  }, [])
-
-  const loadAmenities = async () => {
-    const result = await getAllAmenities()
-    if (result.success) {
-      setAmenities((result as any).amenities || [])
-    }
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -599,14 +566,6 @@ function CourtFormModal({ venueId, court, onClose, onSuccess }: {
     }
   }
 
-  const toggleAmenity = (amenityId: string) => {
-    setFormData(prev => ({
-      ...prev,
-      amenity_ids: prev.amenity_ids.includes(amenityId)
-        ? prev.amenity_ids.filter(id => id !== amenityId)
-        : [...prev.amenity_ids, amenityId]
-    }))
-  }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
@@ -714,28 +673,6 @@ function CourtFormModal({ venueId, court, onClose, onSuccess }: {
             </div>
           </div>
 
-          {/* Amenities */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Amenities
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-60 overflow-y-auto border border-gray-200 rounded-lg p-3">
-              {amenities.map((amenity) => (
-                <label
-                  key={amenity.id}
-                  className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={formData.amenity_ids.includes(amenity.id)}
-                    onChange={() => toggleAmenity(amenity.id)}
-                    className="rounded border-gray-300 text-primary focus:ring-primary"
-                  />
-                  <span className="text-sm text-gray-700">{amenity.name}</span>
-                </label>
-              ))}
-            </div>
-          </div>
 
           {/* Actions */}
           <div className="flex gap-3 justify-end pt-4">

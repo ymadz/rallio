@@ -14,8 +14,8 @@ export interface PromoCode {
     max_uses_per_user: number | null
     current_uses: number
     venue_id: string | null
-    valid_from: string
-    valid_until: string
+    valid_from: string | null
+    valid_until: string | null
     is_active: boolean
     created_at: string
 }
@@ -215,15 +215,19 @@ export async function validatePromoCode(
 
         // 2. Check Dates
         const now = new Date()
-        const validFrom = new Date(promoCode.valid_from)
-        const validUntil = new Date(promoCode.valid_until)
 
-        if (now < validFrom) {
-            return { valid: false, error: 'This promo code is not yet valid' }
+        if (promoCode.valid_from) {
+            const validFrom = new Date(promoCode.valid_from)
+            if (now < validFrom) {
+                return { valid: false, error: 'This promo code is not yet valid' }
+            }
         }
 
-        if (now > validUntil) {
-            return { valid: false, error: 'This promo code has expired' }
+        if (promoCode.valid_until) {
+            const validUntil = new Date(promoCode.valid_until)
+            if (now > validUntil) {
+                return { valid: false, error: 'This promo code has expired' }
+            }
         }
 
         // 3. Check Max Uses (Global)

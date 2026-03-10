@@ -2,14 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { VenueManagementGlobal } from '@/components/global-admin/venue-management-global'
-import { AmenityManagement } from '@/components/global-admin/amenity-management'
 import { PendingVenueApprovals } from '@/components/global-admin/pending-venue-approvals'
 import { PendingCourtApprovals } from '@/components/global-admin/pending-court-approvals'
-import { Building2, Package, Clock } from 'lucide-react'
+import { Building2, Clock } from 'lucide-react'
 import { getAllVenues, getPendingCourts } from '@/app/actions/global-admin-venue-actions'
 
 export default function VenuesPage() {
-  const [activeTab, setActiveTab] = useState<'venues' | 'pending' | 'amenities'>('venues')
+  const [activeTab, setActiveTab] = useState<'venues' | 'pending'>('venues')
   const [pendingCount, setPendingCount] = useState(0)
 
   const loadPendingCount = async () => {
@@ -69,16 +68,6 @@ export default function VenuesPage() {
               </span>
             )}
           </button>
-          <button
-            onClick={() => setActiveTab('amenities')}
-            className={`inline-flex items-center gap-2 px-1 pb-4 border-b-2 font-medium text-sm transition-colors ${activeTab === 'amenities'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-          >
-            <Package className="w-5 h-5" />
-            Amenities
-          </button>
         </nav>
       </div>
 
@@ -90,7 +79,6 @@ export default function VenuesPage() {
           <PendingCourtApprovals onApprovalComplete={handleApprovalComplete} />
         </div>
       )}
-      {activeTab === 'amenities' && <AmenityManagement />}
     </div>
   )
 }

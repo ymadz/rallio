@@ -65,7 +65,6 @@ export async function getRecommendationsForUser(userId: string, limit: number = 
         // Transform raw data to match Court type
         return sortedCourts.map((court) => ({
             ...court,
-            amenities: court.court_amenities?.map((ca: any) => ca.amenities).filter(Boolean) || [],
             images: court.images || [],
             venue_name: court.venue?.name,
             average_rating:

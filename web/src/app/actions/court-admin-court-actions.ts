@@ -26,14 +26,11 @@ export async function getVenueCourts(venueId: string) {
       return { success: false, error: 'Unauthorized - You do not own this venue' }
     }
 
-    // Get courts with amenities and stats
+    // Get courts with stats
     const { data: courts, error } = await supabase
       .from('courts')
       .select(`
         *,
-        court_amenities(
-          amenity:amenities(id, name, icon, description)
-        ),
         court_images(id, url, alt_text, is_primary, display_order)
       `)
       .eq('venue_id', venueId)
@@ -93,9 +90,6 @@ export async function getCourtById(courtId: string) {
           name,
           owner_id
         ),
-        court_amenities(
-          amenity:amenities(id, name, icon, description)
-        ),
         court_images(id, url, alt_text, is_primary, display_order)
       `)
       .eq('id', courtId)
@@ -125,7 +119,6 @@ export async function createCourt(venueId: string, courtData: {
   court_type: 'indoor' | 'outdoor'
   capacity?: number
   hourly_rate: number
-  amenities?: string[] // Array of amenity IDs
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -164,23 +157,6 @@ export async function createCourt(venueId: string, courtData: {
 
     if (courtError) throw courtError
 
-    // Add amenities if provided
-    if (courtData.amenities && courtData.amenities.length > 0) {
-      const amenityInserts = courtData.amenities.map(amenityId => ({
-        court_id: court.id,
-        amenity_id: amenityId,
-      }))
-
-      const { error: amenityError } = await supabase
-        .from('court_amenities')
-        .insert(amenityInserts)
-
-      if (amenityError) {
-        console.error('Error adding amenities:', amenityError)
-        // Don't fail the whole operation, just log it
-      }
-    }
-
     revalidatePath(`/court-admin/venues/${venueId}`)
     revalidatePath('/court-admin/courts')
     revalidatePath('/court-admin')
@@ -203,7 +179,6 @@ export async function updateCourt(courtId: string, updates: {
   capacity?: number
   hourly_rate?: number
   is_active?: boolean
-  amenities?: string[] // Array of amenity IDs
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -228,41 +203,13 @@ export async function updateCourt(courtId: string, updates: {
       return { success: false, error: 'Unauthorized - You do not own this court' }
     }
 
-    // Prepare update object (exclude amenities from main update)
-    const { amenities, ...courtUpdates } = updates
-
     // Update court
     const { error: updateError } = await supabase
       .from('courts')
-      .update({ ...courtUpdates, updated_at: new Date().toISOString() })
+      .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', courtId)
 
     if (updateError) throw updateError
-
-    // Update amenities if provided
-    if (amenities !== undefined) {
-      // Delete existing amenities
-      await supabase
-        .from('court_amenities')
-        .delete()
-        .eq('court_id', courtId)
-
-      // Insert new amenities
-      if (amenities.length > 0) {
-        const amenityInserts = amenities.map(amenityId => ({
-          court_id: courtId,
-          amenity_id: amenityId,
-        }))
-
-        const { error: amenityError } = await supabase
-          .from('court_amenities')
-          .insert(amenityInserts)
-
-        if (amenityError) {
-          console.error('Error updating amenities:', amenityError)
-        }
-      }
-    }
 
     revalidatePath(`/court-admin/venues/${court.venue_id}`)
     revalidatePath(`/court-admin/courts`)
@@ -392,23 +339,3 @@ export async function updateCourtPricing(courtId: string, hourlyRate: number) {
   }
 }
 
-/**
- * Get all available amenities (for dropdowns/checkboxes)
- */
-export async function getAvailableAmenities() {
-  const supabase = await createClient()
-
-  try {
-    const { data: amenities, error } = await supabase
-      .from('amenities')
-      .select('*')
-      .order('name', { ascending: true })
-
-    if (error) throw error
-
-    return { success: true, amenities }
-  } catch (error: any) {
-    console.error('Error fetching amenities:', error)
-    return { success: false, error: error.message }
-  }
-}

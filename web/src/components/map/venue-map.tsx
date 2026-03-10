@@ -21,7 +21,6 @@ interface Venue {
   totalReviews?: number
   opening_hours?: Record<string, { open: string; close: string }> | null
   distance?: number
-  amenities?: string[]
 }
 
 interface VenueMapProps {
@@ -346,22 +345,6 @@ export default function VenueMap({ venues }: VenueMapProps) {
           background: linear-gradient(to right, transparent, #e5e7eb, transparent);
           margin: 12px 0;
         }
-        .vm-popup-amenities {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 5px;
-          margin-bottom: 14px;
-        }
-        .vm-popup-amenity {
-          font-size: 0.68rem;
-          font-weight: 600;
-          padding: 4px 10px;
-          border-radius: 8px;
-          background: rgba(13,148,136,0.07);
-          color: #0f766e;
-          border: 1px solid rgba(13,148,136,0.12);
-          letter-spacing: 0.01em;
-        }
 
         .vm-popup-actions { display: flex; gap: 8px; }
         .vm-popup-btn-primary {
@@ -503,21 +486,6 @@ export default function VenueMap({ venues }: VenueMapProps) {
                       </svg>
                       <span>{formatDistance(venue.distance)} away</span>
                     </div>
-                  )}
-
-                  {/* Amenities */}
-                  {venue.amenities && venue.amenities.length > 0 && (
-                    <>
-                      <div className="vm-popup-divider" />
-                      <div className="vm-popup-amenities">
-                        {venue.amenities.slice(0, 3).map((amenity) => (
-                          <span key={amenity} className="vm-popup-amenity">{amenity}</span>
-                        ))}
-                        {venue.amenities.length > 3 && (
-                          <span className="vm-popup-amenity">+{venue.amenities.length - 3}</span>
-                        )}
-                      </div>
-                    </>
                   )}
 
                   <div className="vm-popup-divider" />

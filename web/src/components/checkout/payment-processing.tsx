@@ -144,7 +144,9 @@ export function PaymentProcessing() {
             isPublic: bookingData.queueSessionData.isPublic,
             recurrenceWeeks: bookingData.recurrenceWeeks,
             selectedDays: bookingData.selectedDays,
-            paymentMethod
+            paymentMethod,
+            promoCode: promoCode || discountCode,
+            customDownPaymentAmount: paymentMethod === 'cash' ? getDownPaymentAmount() || undefined : undefined,
           })
 
           if (!sessionResult.success) {
@@ -187,14 +189,18 @@ export function PaymentProcessing() {
           if (discountAmount !== 0) {
             try {
               const sessionPrice = bookingData.hourlyRate * Math.max(1, endHour - startHour)
-              const totalBasePrice = sessionPrice * (bookingData.recurrenceWeeks || 1)
+              const daysPerWeek = bookingData.selectedDays?.length || 1
+              const weeks = bookingData.recurrenceWeeks || 1
+              const totalSessions = daysPerWeek * weeks
+              const totalBasePrice = sessionPrice * totalSessions
 
               const discountResult = await calculateApplicableDiscounts({
                 venueId: bookingData.venueId,
                 courtId: bookingData.courtId,
                 startDate: startTimeISO,
                 endDate: endTimeISO,
-                recurrenceWeeks: bookingData.recurrenceWeeks || 1,
+                recurrenceWeeks: weeks,
+                targetDateCount: totalSessions,
                 basePrice: totalBasePrice,
                 promoCode: promoCode || discountCode,
               })

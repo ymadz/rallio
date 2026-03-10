@@ -87,6 +87,15 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
       }
     }
 
+    // 24-hour policy: cannot refund within 24 hours of booking start time
+    const hoursUntilStart = (new Date(reservation.start_time).getTime() - Date.now()) / (1000 * 60 * 60)
+    if (hoursUntilStart >= 0 && hoursUntilStart < 24) {
+      return {
+        success: false,
+        error: 'Refund requests are not eligible within 24 hours of the booking start time'
+      }
+    }
+
     // DEBUG: Get ALL payments for this reservation to see what's going on
     const { data: allPayments } = await supabase
       .from('payments')
@@ -185,9 +194,10 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
 
     const paymongoPaymentId = paymentToRefund.external_id || paymentToRefund.metadata?.paymongo_payment?.id
 
-    // For bulk payments, ensure we don't refund more than the reservation amount
+    // Cap refund at reservation amount_paid AND at the individual payment amount
     const amountPaidCentavos = Math.round(reservation.amount_paid * 100)
-    const actualRefundAmountCentavos = Math.min(refundableAmountCentavos, amountPaidCentavos)
+    const paymentAmountCentavos = Math.round(paymentToRefund.amount * 100)
+    const actualRefundAmountCentavos = Math.min(refundableAmountCentavos, amountPaidCentavos, paymentAmountCentavos)
 
     // 5. Create refund record
     const { data: refundRecord, error: insertError } = await supabase
@@ -205,6 +215,7 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
         metadata: {
           requested_at: new Date().toISOString(),
           original_payment_amount: paymentToRefund.amount,
+          original_reservation_status: reservation.status,
           is_bulk_partial_refund: !!reservation.recurrence_group_id
         }
       })
@@ -357,9 +368,10 @@ export async function cancelRefundRequestAction(refundId: string): Promise<Refun
 
     // Revert reservation status if it was pending_refund
     if (refund.reservations?.status === 'pending_refund') {
+      const originalStatus = refund.metadata?.original_reservation_status || 'confirmed'
       await supabase
         .from('reservations')
-        .update({ status: 'confirmed' }) // Revert to confirmed
+        .update({ status: originalStatus })
         .eq('id', refund.reservation_id)
     }
 
@@ -452,10 +464,11 @@ export async function adminProcessRefundAction(
         return { success: false, error: 'Failed to process refund rejection' }
       }
 
-      // Revert reservation status
+      // Revert reservation status to what it was before the refund request
+      const originalStatus = refund.metadata?.original_reservation_status || 'confirmed'
       const { error: resError } = await serviceClient
         .from('reservations')
-        .update({ status: 'confirmed' }) // Revert to confirmed
+        .update({ status: originalStatus })
         .eq('id', refund.reservation_id)
 
       if (resError) {
@@ -481,15 +494,37 @@ export async function adminProcessRefundAction(
     }
 
     try {
-      console.log('🐞 [DEBUG] Submitting to PayMongo with:', {
+      // Verify the actual payment amount from PayMongo to prevent over-refund
+      let refundAmount = refund.amount
+      try {
+        const paymongoPayment = await getPayment(refund.payment_external_id)
+        const paymentAmountCentavos = paymongoPayment.attributes.amount
+        if (refundAmount > paymentAmountCentavos) {
+          console.log('⚠️ [adminProcessRefundAction] Capping refund amount:', {
+            requested: refundAmount,
+            paymentAmount: paymentAmountCentavos,
+          })
+          refundAmount = paymentAmountCentavos
+
+          // Update the stored refund amount to the capped value
+          await serviceClient
+            .from('refunds')
+            .update({ amount: refundAmount })
+            .eq('id', refundId)
+        }
+      } catch (paymentCheckError: any) {
+        console.error('⚠️ [adminProcessRefundAction] Could not verify payment amount:', paymentCheckError.message)
+        // Continue with original amount — PayMongo will reject if invalid
+      }
+
+      console.log('🔄 [adminProcessRefundAction] Submitting to PayMongo:', {
         payment_id: refund.payment_external_id,
-        amount: refund.amount,
-        amount_type: typeof refund.amount,
+        amount: refundAmount,
         reason: refund.reason_code || 'requested_by_customer'
-      });
+      })
       const paymongoRefund = await createRefund({
         payment_id: refund.payment_external_id,
-        amount: refund.amount,
+        amount: refundAmount,
         reason: refund.reason_code || 'requested_by_customer',
         notes: adminNotes,
         metadata: {
@@ -542,6 +577,91 @@ export async function adminProcessRefundAction(
   } catch (error: any) {
     console.error('❌ [adminProcessRefundAction] Error:', error)
     return { success: false, error: error.message || 'Failed to process refund' }
+  }
+}
+
+/**
+ * Admin: Check the status of a processing refund from PayMongo
+ * and sync it with the local database
+ */
+export async function adminCheckRefundStatusAction(
+  refundId: string
+): Promise<RefundResult> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return { success: false, error: 'Not authenticated' }
+    }
+
+    const serviceClient = createServiceClient()
+
+    // Get the refund record
+    const { data: refund, error: refundError } = await serviceClient
+      .from('refunds')
+      .select(`
+        *,
+        reservations (
+          courts (
+            venues (owner_id)
+          )
+        )
+      `)
+      .eq('id', refundId)
+      .single()
+
+    if (refundError || !refund) {
+      return { success: false, error: 'Refund not found' }
+    }
+
+    // Verify ownership
+    const { data: roles } = await serviceClient
+      .from('user_roles')
+      .select('role:roles(name)')
+      .eq('user_id', user.id)
+      .in('role.name', ['global_admin', 'court_admin'])
+
+    const isGlobalAdmin = roles?.some(r => (r.role as any)?.name === 'global_admin') || false
+    const venueOwnerId = (refund.reservations as any)?.courts?.venues?.owner_id
+    const isVenueOwner = venueOwnerId === user.id
+
+    if (!isGlobalAdmin && !isVenueOwner) {
+      return { success: false, error: 'Not authorized' }
+    }
+
+    if (!refund.external_id) {
+      return { success: false, error: 'No PayMongo refund ID found — refund may not have been submitted' }
+    }
+
+    // Check status from PayMongo
+    const paymongoRefund = await getRefund(refund.external_id)
+    const paymongoStatus = paymongoRefund.attributes.status
+
+    if (paymongoStatus === refund.status) {
+      return { success: true, refundId, error: `Status unchanged: ${paymongoStatus}` }
+    }
+
+    // Update local record
+    await serviceClient
+      .from('refunds')
+      .update({
+        status: paymongoStatus === 'succeeded' ? 'succeeded' : paymongoStatus === 'failed' ? 'failed' : 'processing',
+        processed_at: new Date().toISOString(),
+      })
+      .eq('id', refundId)
+
+    // If succeeded, complete the refund flow
+    if (paymongoStatus === 'succeeded') {
+      await handleSuccessfulRefund(refundId, refund.reservation_id, refund.user_id)
+    }
+
+    revalidatePath('/bookings')
+    revalidatePath('/court-admin/reservations')
+    return { success: true, refundId }
+
+  } catch (error: any) {
+    console.error('❌ [adminCheckRefundStatusAction] Error:', error)
+    return { success: false, error: error.message || 'Failed to check refund status' }
   }
 }
 

@@ -58,7 +58,7 @@ export function AddressAutocomplete({
 
       autocompleteRef.current.addListener('place_changed', () => {
         const place = autocompleteRef.current?.getPlace()
-        
+
         if (!place?.geometry?.location) {
           console.warn('No location data for selected place')
           return

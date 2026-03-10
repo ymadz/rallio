@@ -1,11 +1,24 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Loader2, Phone, Mail, Globe } from 'lucide-react'
+import { X, Loader2, Phone, Mail, Globe, MapPin } from 'lucide-react'
 import { updateVenue } from '@/app/actions/court-admin-actions'
 import { useRouter } from 'next/navigation'
 import { AddressAutocomplete } from '@/components/ui/address-autocomplete'
 import { VenuePhotoUpload } from './venue-photo-upload'
+import dynamic from 'next/dynamic'
+
+const LocationPicker = dynamic(
+  () => import('@/components/map/location-picker'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-full w-full flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+)
 
 interface VenueEditModalProps {
   venue: {
@@ -30,6 +43,7 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showMapPicker, setShowMapPicker] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -115,7 +129,7 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
       {/* Modal */}
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
           <h2 className="text-xl font-semibold text-gray-900">Edit Venue</h2>
           <button
             onClick={onClose}
@@ -169,28 +183,44 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
             />
           </div>
 
-          {/* Address with Autocomplete */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Address
-            </label>
-            <AddressAutocomplete
-              value={formData.address}
-              onChange={(address) => setFormData({ ...formData, address })}
-              onPlaceSelect={(place) => {
-                setFormData({
-                  ...formData,
-                  address: place.address,
-                  city: place.city || formData.city,
-                  latitude: place.latitude.toString(),
-                  longitude: place.longitude.toString()
-                })
-              }}
-              placeholder="Search for an address..."
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              Select from suggestions to auto-fill coordinates
-            </p>
+          {/* Venue Location Component Group */}
+          <div className="space-y-4 pt-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-sm font-medium text-gray-700">
+                Venue Location
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowMapPicker(true)}
+                className="inline-flex items-center gap-1.5 text-sm text-primary font-medium hover:text-primary-dark hover:bg-primary/5 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <MapPin className="w-4 h-4" />
+                Pick on Map
+              </button>
+            </div>
+            {/* Address with Autocomplete */}
+            <div>
+              <AddressAutocomplete
+                value={formData.address}
+                onChange={(address) => setFormData({ ...formData, address })}
+                onPlaceSelect={(place) => {
+                  setFormData({
+                    ...formData,
+                    address: place.address,
+                    city: place.city || formData.city,
+                    latitude: place.latitude.toString(),
+                    longitude: place.longitude.toString()
+                  })
+                }}
+                placeholder="Search for an address..."
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Select from suggestions to auto-fill coordinates
+              </p>
+            </div>
+            {/* Hidden Coordinates */}
+            <input type="hidden" value={formData.latitude} />
+            <input type="hidden" value={formData.longitude} />
           </div>
 
           {/* City */}
@@ -259,37 +289,6 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
             />
           </div>
 
-          {/* Coordinates */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Latitude
-              </label>
-              <input
-                type="number"
-                step="any"
-                value={formData.latitude}
-                onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
-                placeholder="e.g., 6.9214"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Longitude
-              </label>
-              <input
-                type="number"
-                step="any"
-                value={formData.longitude}
-                onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
-                placeholder="e.g., 122.0790"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
-              />
-            </div>
-          </div>
-
           {/* Actions */}
           <div className="flex gap-3 justify-end pt-4 border-t border-gray-200">
             <button
@@ -311,6 +310,28 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
           </div>
         </form>
       </div>
+
+      {/* Map Picker Modal - Z-index higher than Edit Modal */}
+      {showMapPicker && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full h-[600px] overflow-hidden animate-in zoom-in-95 duration-200 ring-1 ring-gray-200">
+            <LocationPicker
+              initialLatitude={formData.latitude ? parseFloat(formData.latitude) : undefined}
+              initialLongitude={formData.longitude ? parseFloat(formData.longitude) : undefined}
+              onConfirm={(lat, lng, address) => {
+                setFormData({
+                  ...formData,
+                  latitude: lat.toString(),
+                  longitude: lng.toString(),
+                  address: address || formData.address
+                })
+                setShowMapPicker(false)
+              }}
+              onCancel={() => setShowMapPicker(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

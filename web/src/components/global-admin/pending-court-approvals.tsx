@@ -43,12 +43,6 @@ interface PendingCourt {
             display_name: string
         }
     }
-    court_amenities?: {
-        amenity: {
-            name: string
-            icon?: string
-        }
-    }[]
 }
 
 interface Props {
@@ -214,15 +208,6 @@ export function PendingCourtApprovals({ onApprovalComplete }: Props) {
                                         )}
                                     </div>
 
-                                    {court.court_amenities && court.court_amenities.length > 0 && (
-                                        <div className="mt-3 flex flex-wrap gap-2">
-                                            {court.court_amenities.map((ca, idx) => (
-                                                <span key={idx} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
-                                                    {ca.amenity.name}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    )}
 
                                     {court.description && (
                                         <p className="mt-3 text-sm text-gray-600 line-clamp-2">{court.description}</p>

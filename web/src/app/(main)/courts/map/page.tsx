@@ -19,7 +19,6 @@ interface Venue {
   totalReviews?: number
   opening_hours?: Record<string, { open: string; close: string }> | null
   distance?: number
-  amenities?: string[]
 }
 
 // Dynamically import the map component to avoid SSR issues with Leaflet
@@ -35,19 +34,7 @@ const VenueMap = dynamic(
   }
 )
 
-const amenityOptions = [
-  'Parking',
-  'Restroom',
-  'Shower',
-  'Lockers',
-  'Water',
-  'Air Conditioning',
-  'Lighting',
-  'Waiting Area',
-  'Equipment Rental',
-  'WiFi',
-  'Canteen',
-]
+
 
 export default function MapViewPage() {
   const [allVenues, setAllVenues] = useState<Venue[]>([]) // Store original unfiltered data
@@ -55,7 +42,7 @@ export default function MapViewPage() {
   const [loading, setLoading] = useState(true)
   const [showFilters, setShowFilters] = useState(true)
   const [priceRange, setPriceRange] = useState([100, 1000])
-  const [selectedAmenities, setSelectedAmenities] = useState<string[]>([])
+
   const [minRating, setMinRating] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -79,12 +66,8 @@ export default function MapViewPage() {
             court_ratings(
               overall_rating
             ),
-            court_amenities(
-              amenity:amenities(
-                name
-              )
+              overall_rating
             )
-          )
         `)
         .eq('is_active', true)
         .eq('is_verified', true) // Only show verified/approved venues
@@ -108,15 +91,7 @@ export default function MapViewPage() {
             ? allRatings.reduce((sum: number, r: number) => sum + r, 0) / allRatings.length
             : undefined
 
-          // Collect unique amenities from all courts
-          const amenitiesSet = new Set<string>()
-          activeCourts.forEach((c: any) => {
-            c.court_amenities?.forEach((ca: any) => {
-              if (ca.amenity?.name) {
-                amenitiesSet.add(ca.amenity.name)
-              }
-            })
-          })
+
 
           return {
             id: venue.id,
@@ -129,8 +104,7 @@ export default function MapViewPage() {
             maxPrice: prices.length > 0 ? Math.max(...prices) : 0,
             averageRating,
             totalReviews: allRatings.length,
-            opening_hours: venue.opening_hours,
-            amenities: Array.from(amenitiesSet)
+            opening_hours: venue.opening_hours
           }
         }).filter(v => v.latitude && v.longitude)
 
@@ -166,12 +140,7 @@ export default function MapViewPage() {
       v.minPrice <= priceRange[1] && v.maxPrice >= priceRange[0]
     )
 
-    // Amenities filter
-    if (selectedAmenities.length > 0) {
-      filtered = filtered.filter(v =>
-        selectedAmenities.every(amenity => v.amenities?.includes(amenity))
-      )
-    }
+
 
     // Rating filter
     if (minRating > 0) {
@@ -190,23 +159,16 @@ export default function MapViewPage() {
   // Apply filters when filter state changes
   useEffect(() => {
     applyFilters()
-  }, [allVenues, priceRange, selectedAmenities, minRating, searchQuery])
+  }, [allVenues, priceRange, minRating, searchQuery])
 
   const handleClearFilters = () => {
     setPriceRange([100, 1000])
-    setSelectedAmenities([])
     setMinRating(0)
     setSearchQuery('')
     // Filters will auto-apply via useEffect, showing all venues
   }
 
-  const toggleAmenity = (amenity: string) => {
-    setSelectedAmenities(prev =>
-      prev.includes(amenity)
-        ? prev.filter(a => a !== amenity)
-        : [...prev, amenity]
-    )
-  }
+
 
   return (
     <ErrorBoundary>
@@ -411,24 +373,7 @@ export default function MapViewPage() {
                 </div>
               </div>
 
-              {/* Amenities */}
-              <div className="mb-6">
-                <label className="block text-sm font-semibold text-gray-900 mb-3">Amenities</label>
-                <div className="flex flex-wrap gap-2">
-                  {amenityOptions.map((amenity) => (
-                    <button
-                      key={amenity}
-                      onClick={() => toggleAmenity(amenity)}
-                      className={`px-3 py-1.5 text-sm rounded-full transition-colors ${selectedAmenities.includes(amenity)
-                        ? 'bg-primary text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                    >
-                      {amenity}
-                    </button>
-                  ))}
-                </div>
-              </div>
+
 
               {/* Customer Rating */}
               <div className="mb-6">

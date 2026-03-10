@@ -31,7 +31,7 @@ export interface QueueSession {
   courtName: string
   venueName: string
   venueId: string
-  status: 'waiting' | 'active' | 'completed'
+  status: 'waiting' | 'active' | 'completed' | 'pending_payment'
   players: QueuePlayer[]
   userPosition: number | null
   maxPlayers: number
@@ -59,12 +59,14 @@ export interface QueueSession {
  * - active: session is live -> 'active'
  * - completed/cancelled: session ended -> 'completed'
  */
-function mapQueueStatusForPlayer(dbStatus: string): 'waiting' | 'active' | 'completed' {
+function mapQueueStatusForPlayer(dbStatus: string): 'waiting' | 'active' | 'completed' | 'pending_payment' {
   switch (dbStatus) {
     case 'open':
       return 'waiting'
     case 'active':
       return 'active'
+    case 'pending_payment':
+      return 'pending_payment'
     case 'completed':
     case 'cancelled':
     case 'closed': // legacy
@@ -179,12 +181,35 @@ export function useQueue(courtId: string) {
     fetchQueue()
   }, [courtId])
 
-  // Set up real-time subscription for queue updates
+  // Early subscription on courtId — avoids the gap between initial fetch and session ID being known
+  // This catches any status changes to the queue session while data is still loading.
+  useEffect(() => {
+    const earlyChannel = supabase
+      .channel(`queue-early-${courtId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'queue_sessions',
+        },
+        (payload) => {
+          // Only trigger if no queue loaded yet (once queue is set, the session-specific sub takes over)
+          if (!queue?.id) debouncedFetch()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(earlyChannel)
+    }
+  }, [courtId])
+
+  // Session-specific subscription (granular, filtered — kicks in once session ID is known)
   useEffect(() => {
     if (!queue?.id) return
 
     const sessionId = queue.id
-    console.log('[useQueue] 🔔 Setting up real-time subscription for queue:', sessionId)
 
     const channel = supabase
       .channel(`queue-${sessionId}`)
@@ -196,10 +221,7 @@ export function useQueue(courtId: string) {
           table: 'queue_participants',
           filter: `queue_session_id=eq.${sessionId}`,
         },
-        (payload) => {
-          console.log('[useQueue] 🔔 Queue participants changed:', payload)
-          debouncedFetch()
-        }
+        () => debouncedFetch()
       )
       .on(
         'postgres_changes',
@@ -209,10 +231,7 @@ export function useQueue(courtId: string) {
           table: 'matches',
           filter: `queue_session_id=eq.${sessionId}`,
         },
-        (payload) => {
-          console.log('[useQueue] 🔔 Match changed:', payload)
-          debouncedFetch()
-        }
+        () => debouncedFetch()
       )
       .on(
         'postgres_changes',
@@ -222,17 +241,11 @@ export function useQueue(courtId: string) {
           table: 'queue_sessions',
           filter: `id=eq.${sessionId}`,
         },
-        (payload) => {
-          console.log('[useQueue] 🔔 Queue session updated:', payload)
-          debouncedFetch()
-        }
+        () => debouncedFetch()
       )
-      .subscribe((status) => {
-        console.log('[useQueue] 🔔 Subscription status:', status)
-      })
+      .subscribe()
 
     return () => {
-      console.log('[useQueue] 🔕 Cleaning up real-time subscription')
       if (debounceRef.current) clearTimeout(debounceRef.current)
       supabase.removeChannel(channel)
     }
@@ -325,15 +338,14 @@ export function useMyQueues() {
   const [queues, setQueues] = useState<QueueSession[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const supabase = createClient()
+  const debounceRef = useRef<NodeJS.Timeout | null>(null)
+  const sessionIdsRef = useRef<string[]>([])
 
   const fetchMyQueues = async () => {
-    console.log('[useMyQueues] 🔍 Fetching user queues')
-
     try {
       const result = await getMyQueuesAction()
 
       if (!result.success) {
-        console.error('[useMyQueues] ❌ Failed to fetch queues:', result.error)
         setQueues([])
         return
       }
@@ -356,8 +368,8 @@ export function useMyQueues() {
         organizerName: q.organizerName,
       }))
 
+      sessionIdsRef.current = transformedQueues.map(q => q.id)
       setQueues(transformedQueues)
-      console.log('[useMyQueues] ✅ Loaded queues:', transformedQueues.length)
     } catch (err: any) {
       console.error('[useMyQueues] ❌ Error:', err)
       setQueues([])
@@ -366,32 +378,51 @@ export function useMyQueues() {
     }
   }
 
+  const debouncedFetch = () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => fetchMyQueues(), 500)
+  }
+
   useEffect(() => {
     fetchMyQueues()
   }, [])
 
-  // Set up real-time subscription for user's queue participations
+  // Subscribe only to queue_sessions that belong to this user (filtered via current user's auth)
+  // We subscribe broadly to queue_participants changes for JOIN/LEAVE events that affect the user.
+  // The server action already filters by user.id, so stale data from other sessions won't appear.
   useEffect(() => {
-    console.log('[useMyQueues] 🔔 Setting up real-time subscription')
-
     const channel = supabase
-      .channel('my-queues')
+      .channel('my-queues-realtime')
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'queue_participants',
+          // Supabase doesn't support user_id filter on postgres_changes without RLS broadcast;
+          // we debounce heavily to avoid flooding.
         },
-        () => {
-          console.log('[useMyQueues] 🔔 Queue participation changed, refreshing')
-          fetchMyQueues()
+        debouncedFetch
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'queue_sessions',
+        },
+        (payload) => {
+          // Only refetch if the updated session is one the user is in
+          const changedId = (payload.new as any)?.id
+          if (changedId && sessionIdsRef.current.includes(changedId)) {
+            debouncedFetch()
+          }
         }
       )
       .subscribe()
 
     return () => {
-      console.log('[useMyQueues] 🔕 Cleaning up real-time subscription')
+      if (debounceRef.current) clearTimeout(debounceRef.current)
       supabase.removeChannel(channel)
     }
   }, [])
@@ -482,40 +513,50 @@ export function useNearbyQueues(latitude?: number, longitude?: number) {
     fetchNearbyQueues()
   }, [latitude, longitude])
 
-  // Set up real-time subscription for queue sessions and participants
-  useEffect(() => {
-    console.log('[useNearbyQueues] 🔔 Setting up real-time subscriptions')
+  // Debounce ref to avoid flooding on bursts of changes
+  const nearbyDebounceRef = useRef<NodeJS.Timeout | null>(null)
+  const debouncedNearbyFetch = () => {
+    if (nearbyDebounceRef.current) clearTimeout(nearbyDebounceRef.current)
+    nearbyDebounceRef.current = setTimeout(fetchNearbyQueues, 600)
+  }
 
+  // Real-time: subscribe only to queue_sessions INSERT/UPDATE (new sessions or status changes).
+  // Participant changes are debounced to avoid flooding when many players join at once.
+  useEffect(() => {
     const channel = supabase
-      .channel('nearby-queues')
+      .channel('nearby-queues-realtime')
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
           table: 'queue_sessions',
         },
-        () => {
-          console.log('[useNearbyQueues] 🔔 Queue sessions changed, refreshing')
-          fetchNearbyQueues()
-        }
+        debouncedNearbyFetch
       )
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'queue_sessions',
+        },
+        debouncedNearbyFetch
+      )
+      // Participants: debounced refresh (counts change frequently)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
           schema: 'public',
           table: 'queue_participants',
         },
-        () => {
-          console.log('[useNearbyQueues] 🔔 Participant joined/left, refreshing')
-          fetchNearbyQueues()
-        }
+        debouncedNearbyFetch
       )
       .subscribe()
 
     return () => {
-      console.log('[useNearbyQueues] 🔕 Cleaning up real-time subscriptions')
+      if (nearbyDebounceRef.current) clearTimeout(nearbyDebounceRef.current)
       supabase.removeChannel(channel)
     }
   }, [])

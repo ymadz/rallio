@@ -176,10 +176,10 @@ export function CreateSessionForm() {
       const endDateTimeStr = endDateObj.toISOString()
 
       const basePrice = selectedCourt.hourly_rate * duration * (selectedDays.length > 0 ? selectedDays.length : 1) * recurrenceWeeks
-
       try {
         const venueId = selectedVenue?.id
         if (!venueId) throw new Error("Venue ID not found")
+        const targetDateCount = (selectedDays.length > 0 ? selectedDays.length : 1) * recurrenceWeeks
 
         const result = await calculateApplicableDiscounts({
           venueId,
@@ -187,9 +187,9 @@ export function CreateSessionForm() {
           startDate: startDateTimeStr,
           endDate: endDateTimeStr,
           recurrenceWeeks,
+          targetDateCount,
           basePrice
         })
-
         if (result.success) {
           setCalculatedPrice({
             original: basePrice,
@@ -533,6 +533,14 @@ export function CreateSessionForm() {
     return dates.sort((a, b) => a.getTime() - b.getTime())
   }, [startDate, recurrenceWeeks, selectedDays])
 
+  const additionalBookedDates = useMemo(() => {
+    if (!startDate) return []
+    if (selectedDays.length <= 1 && recurrenceWeeks === 1) return []
+    const startObj = new Date(startDate)
+    startObj.setHours(0, 0, 0, 0)
+    return allSessionDates.filter(d => d.getTime() !== startObj.getTime())
+  }, [allSessionDates, startDate, selectedDays, recurrenceWeeks])
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -644,9 +652,13 @@ export function CreateSessionForm() {
                           return date < today
                         }}
                         className="mx-auto"
+                        modifiers={{
+                          additionalBookings: additionalBookedDates
+                        }}
                         modifiersClassNames={{
                           selected: 'bg-primary text-white hover:bg-primary',
                           today: 'font-bold text-primary',
+                          additionalBookings: 'border-2 border-dashed border-primary bg-primary/10 rounded-md text-primary font-medium',
                         }}
                       />
 

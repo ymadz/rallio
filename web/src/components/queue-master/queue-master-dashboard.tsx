@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { getMyQueueMasterSessions, getQueueMasterStats } from '@/app/actions/queue-actions'
 import { Plus, Calendar, TrendingUp, PhilippinePeso, Users, Clock, PlayCircle, CheckCircle, XCircle, Loader2, AlertCircle } from 'lucide-react'
 import { useServerTime } from '@/hooks/use-server-time'
@@ -58,10 +59,39 @@ export function QueueMasterDashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const { date: serverDate } = useServerTime()
+  const supabase = createClient()
+  const debounceRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     loadDashboard()
   }, [filter])
+
+  // Real-time: reload dashboard when sessions or participants change
+  useEffect(() => {
+    const debouncedLoad = () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      debounceRef.current = setTimeout(() => loadDashboard(), 600)
+    }
+
+    const channel = supabase
+      .channel('qm-dashboard-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'queue_sessions' },
+        debouncedLoad
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'queue_participants' },
+        debouncedLoad
+      )
+      .subscribe()
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      supabase.removeChannel(channel)
+    }
+  }, [])
 
   const loadDashboard = async () => {
     setIsLoading(true)

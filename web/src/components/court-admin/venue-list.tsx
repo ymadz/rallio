@@ -477,29 +477,47 @@ export function VenueList() {
                 />
               </div>
 
-              {/* Address with Autocomplete */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Address
-                </label>
-                <AddressAutocomplete
-                  value={formData.address}
-                  onChange={(address) => setFormData({ ...formData, address })}
-                  onPlaceSelect={(place) => {
-                    setFormData({
-                      ...formData,
-                      address: place.address,
-                      city: place.city || formData.city,
-                      latitude: place.latitude.toString(),
-                      longitude: place.longitude.toString()
-                    })
-                  }}
-                  placeholder="Search for an address..."
-                  className="rounded-xl"
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  Select from suggestions to auto-fill city and coordinates
-                </p>
+              {/* Venue Location (Map Picker & Address) */}
+              <div className="space-y-4 pt-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Venue Location
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowMapPicker(true)}
+                    className="inline-flex items-center gap-1.5 text-sm text-primary font-medium hover:text-primary-dark hover:bg-primary/5 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    <MapPin className="w-4 h-4" />
+                    Pick on Map
+                  </button>
+                </div>
+
+                {/* Address with Autocomplete */}
+                <div>
+                  <AddressAutocomplete
+                    value={formData.address}
+                    onChange={(address) => setFormData({ ...formData, address })}
+                    onPlaceSelect={(place) => {
+                      setFormData({
+                        ...formData,
+                        address: place.address,
+                        city: place.city || formData.city,
+                        latitude: place.latitude.toString(),
+                        longitude: place.longitude.toString()
+                      })
+                    }}
+                    placeholder="Search for an address..."
+                    className="rounded-xl"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Select from suggestions to auto-fill city and coordinates
+                  </p>
+                </div>
+
+                {/* Additional hidden inputs that save lat/long from map/address but aren't visible to user */}
+                <input type="hidden" value={formData.latitude} />
+                <input type="hidden" value={formData.longitude} />
               </div>
 
               {/* City */}
@@ -565,51 +583,6 @@ export function VenueList() {
                   placeholder="https://www.yourwebsite.com"
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all outline-none"
                 />
-              </div>
-
-              {/* Coordinates */}
-              {/* Coordinates */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold text-gray-700">Venue Location</div>
-                  <button
-                    type="button"
-                    onClick={() => setShowMapPicker(true)}
-                    className="inline-flex items-center gap-1.5 text-sm text-primary font-medium hover:text-primary-dark hover:bg-primary/5 px-3 py-1.5 rounded-lg transition-colors"
-                  >
-                    <MapPin className="w-4 h-4" />
-                    Pick on Map
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
-                      Latitude
-                    </label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={formData.latitude}
-                      onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
-                      placeholder="e.g., 6.9214"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
-                      Longitude
-                    </label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={formData.longitude}
-                      onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
-                      placeholder="e.g., 122.0790"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all outline-none"
-                    />
-                  </div>
-                </div>
               </div>
 
               {/* Modal Footer */}

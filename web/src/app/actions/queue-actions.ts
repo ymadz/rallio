@@ -439,7 +439,7 @@ export async function getMyQueues() {
       `)
       .eq('user_id', user.id)
       .is('left_at', null)
-      .in('queue_sessions.status', ['open', 'active'])
+      .in('queue_sessions.status', ['open', 'active', 'pending_payment'])
       .gt('queue_sessions.end_time', (await getServerNow()).toISOString()) // Filter out expired sessions
       .order('joined_at', { ascending: false })
 
@@ -751,8 +751,9 @@ export async function calculateQueuePayment(sessionId: string) {
 
     const costPerGame = parseFloat(participant.queue_sessions.cost_per_game || '0')
     const gamesPlayed = participant.games_played || 0
-    const totalOwed = costPerGame * gamesPlayed
-    const amountPaid = 0 // Track separately if needed
+    // Use stored amount_owed so QM-applied waivers are respected (honours QM fee waivers)
+    const totalOwed = parseFloat(participant.amount_owed || '0')
+    const amountPaid = participant.payment_status === 'paid' ? totalOwed : 0
 
     return {
       success: true,
@@ -848,6 +849,8 @@ export interface CreateQueueSessionParams {
   recurrenceWeeks?: number
   selectedDays?: number[]
   paymentMethod?: 'cash' | 'e-wallet'
+  promoCode?: string
+  customDownPaymentAmount?: number
 }
 
 /**
@@ -869,7 +872,7 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
   const createdSessions: QueueSessionData[] = []
 
   // Generate a recurrence group ID if applicable
-  const recurrenceGroupId = recurrenceWeeks > 1 ? crypto.randomUUID() : undefined
+  const recurrenceGroupId = (recurrenceWeeks > 1 || (data.selectedDays && data.selectedDays.length > 1)) ? crypto.randomUUID() : undefined
 
   try {
     const supabase = await createClient()
@@ -1097,7 +1100,8 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
         startDate: sessionStart.toISOString(),
         endDate: sessionEnd.toISOString(),
         recurrenceWeeks: recurrenceWeeks,
-        basePrice: baseCourtRental
+        basePrice: baseCourtRental,
+        promoCode: data.promoCode,
       })
 
       const courtRental = discountResult.finalPrice
@@ -1125,7 +1129,19 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
       const venueData = court.venues as any;
       const venueMetadata = venueData ? (Array.isArray(venueData) ? venueData[0]?.metadata : venueData.metadata) : null;
       const downPaymentPercentage = parseFloat(venueMetadata?.down_payment_percentage || '20')
-      const downPaymentAmount = data.paymentMethod === 'cash' ? (totalAmount * downPaymentPercentage) / 100 : undefined;
+
+      let downPaymentAmount: number | undefined = undefined;
+
+      if (data.paymentMethod === 'cash') {
+        const minimumDownPayment = (totalAmount * downPaymentPercentage) / 100;
+        if (data.customDownPaymentAmount !== undefined && data.customDownPaymentAmount > 0) {
+          const customPerSlot = data.customDownPaymentAmount / targetDates.length;
+          const clampedAmount = Math.min(Math.max(customPerSlot, minimumDownPayment), totalAmount);
+          downPaymentAmount = Math.round(clampedAmount * 100) / 100;
+        } else {
+          downPaymentAmount = minimumDownPayment;
+        }
+      }
 
       if (downPaymentAmount && downPaymentAmount > 0 && data.paymentMethod === 'cash') {
         isDownPaymentRequired = true;
@@ -1158,6 +1174,7 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
           discount_applied: discountResult.totalDiscount,
           discount_type: primaryDiscountName || null,
           discount_reason: primaryDiscountReason || null,
+          recurrence_group_id: recurrenceGroupId,
           metadata: {
             booking_origin: 'queue_session',
             queue_session_organizer: true,
@@ -1171,7 +1188,7 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
             total_with_fee: totalAmount,
             intended_payment_method: data.paymentMethod,
             down_payment_percentage: data.paymentMethod === 'cash' ? downPaymentPercentage : undefined,
-            down_payment_amount: data.paymentMethod === 'cash' ? downPaymentAmount : undefined
+            down_payment_amount: downPaymentAmount
           },
           notes: `Queue Session (${data.mode}) - ${sessionStart.toLocaleDateString()}${data.paymentMethod === 'cash' ? ' (Cash Payment)' : ''}`,
         })
@@ -1208,7 +1225,7 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
             discount_amount: discountResult.totalDiscount,
             court_rental: courtRental,
             platform_fee: platformFee,
-            down_payment_amount: data.paymentMethod === 'cash' ? downPaymentAmount : undefined
+            down_payment_amount: downPaymentAmount
           },
         })
         .select()
@@ -1280,6 +1297,43 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
     } catch (notificationError) {
       // Non-critical error - log but don't fail
       console.error('[createQueueSession] ⚠️ Failed to send notifications (non-critical):', notificationError)
+    }
+
+    // 8.5 APPLY PROMO CODE USAGE
+    if (data.promoCode && createdSessions.length > 0) {
+      try {
+        const adminDb = createServiceClient()
+        // Get the promo code ID from the code string
+        const { data: promoData } = await adminDb
+          .from('promo_codes')
+          .select('id, current_uses')
+          .eq('code', data.promoCode.toUpperCase())
+          .single()
+
+        if (promoData) {
+          // Add usage records for each created reservation
+          const usageRecords = createdSessions.map(session => ({
+            promo_code_id: promoData.id,
+            user_id: user.id,
+            reservation_id: session.reservationId,
+          }))
+
+          const { error: usageError } = await adminDb.from('promo_code_usage').insert(usageRecords)
+          if (usageError) console.error('Error inserting usage records:', usageError)
+
+          // Increment current_uses
+          const { error: updateError } = await adminDb
+            .from('promo_codes')
+            .update({ current_uses: promoData.current_uses + createdSessions.length })
+            .eq('id', promoData.id)
+          if (updateError) console.error('Error updating promo code uses:', updateError)
+
+          console.log(`✅ Applied promo code ${data.promoCode} to ${createdSessions.length} queue sessions`)
+        }
+      } catch (error) {
+        console.error('❌ Failed to record promo code usage:', error)
+        // Don't fail the whole booking if just the tracking fails
+      }
     }
 
     // 9. Revalidate paths
@@ -1683,6 +1737,20 @@ export async function closeQueueSession(sessionId: string): Promise<{
       return { success: false, error: 'Failed to complete queue session' }
     }
 
+    // 5a. Mark all remaining active participants as 'completed'
+    const { error: participantStatusError } = await supabase
+      .from('queue_participants')
+      .update({ status: 'completed' })
+      .eq('queue_session_id', sessionId)
+      .is('left_at', null)
+      .in('status', ['waiting', 'playing'])
+
+    if (participantStatusError) {
+      console.warn('[closeQueueSession] ⚠️ Failed to mark participants as completed:', participantStatusError)
+    } else {
+      console.log('[closeQueueSession] ✅ Marked active participants as completed')
+    }
+
     console.log('[closeQueueSession] ✅ Queue session completed successfully:', summary)
 
     // 5b. Also complete the linked reservation (belt-and-suspenders with DB trigger)
@@ -1951,17 +2019,25 @@ export async function removeParticipant(
       }
     }
 
-    // 5. Calculate amount owed if not already set
+    // 5. Preserve stored amount_owed if fee was already waived; otherwise calculated from games
     const gamesPlayed = participant.games_played || 0
     const costPerGame = parseFloat(session.cost_per_game || '0')
-    const amountOwed = gamesPlayed * costPerGame
+    const storedAmountOwed = parseFloat(participant.amount_owed || '0')
+    const existingPaymentStatus = participant.payment_status
+    // If fee was waived (amount_owed is 0 and status is paid/waived), keep it; otherwise recalculate
+    const amountOwed = (existingPaymentStatus === 'paid' && storedAmountOwed === 0)
+      ? 0  // preserve waiver
+      : storedAmountOwed > 0
+        ? storedAmountOwed  // use stored value if it already reflects updates
+        : gamesPlayed * costPerGame  // fallback to calculation only if nothing stored
 
     // 6. Update participant record
+    const leftAt = await getServerNow()
     const { error: updateError } = await supabase
       .from('queue_participants')
       .update({
         status: 'left',
-        left_at: new Date().toISOString(),
+        left_at: leftAt.toISOString(),
         amount_owed: amountOwed,
       })
       .eq('id', participant.id)
@@ -1996,88 +2072,6 @@ export async function removeParticipant(
   } catch (error: any) {
     console.error('[removeParticipant] ❌ Error:', error)
     return { success: false, error: error.message || 'Failed to remove participant' }
-  }
-}
-
-/**
- * Waive fee for a participant
- * Queue Master action
- */
-export async function waiveFee(
-  participantId: string,
-  reason: string
-): Promise<{
-  success: boolean
-  error?: string
-}> {
-  console.log('[waiveFee] 💸 Waiving fee for participant:', participantId, reason)
-
-  try {
-    const supabase = await createClient()
-
-    // 1. Verify user is authenticated
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { success: false, error: 'User not authenticated' }
-    }
-
-    // 2. Use service client for all reads (Queue Master is not the participant, RLS blocks regular client)
-    const serviceClient = createServiceClient()
-
-    const { data: participant, error: participantError } = await serviceClient
-      .from('queue_participants')
-      .select('*')
-      .eq('id', participantId)
-      .single()
-
-    if (participantError || !participant) {
-      return { success: false, error: 'Participant not found' }
-    }
-
-    // 3. Get queue session details separately to verify organizer
-    const { data: queueSession, error: sessionError } = await serviceClient
-      .from('queue_sessions')
-      .select('id, organizer_id, court_id')
-      .eq('id', participant.queue_session_id)
-      .single()
-
-    if (sessionError || !queueSession) {
-      return { success: false, error: 'Queue session not found' }
-    }
-
-    // 4. Verify user is session organizer
-    if (queueSession.organizer_id !== user.id) {
-      return { success: false, error: 'Unauthorized: Not session organizer' }
-    }
-
-    // 5. Update participant to waive fee using service client (bypasses RLS for admin operation)
-    const { error: updateError } = await serviceClient
-      .from('queue_participants')
-      .update({
-        amount_owed: 0,
-        payment_status: 'paid',
-      })
-      .eq('id', participantId)
-
-    if (updateError) {
-      console.error('[waiveFee] ❌ Failed to waive fee:', updateError)
-      return { success: false, error: 'Failed to waive fee' }
-    }
-
-    console.log('[waiveFee] ✅ Fee waived successfully')
-
-    // 6. Revalidate paths
-    revalidatePath('/queue')
-    revalidatePath('/queue-master')
-    revalidatePath(`/queue/${queueSession.court_id}`)
-
-    return { success: true }
-  } catch (error: any) {
-    console.error('[waiveFee] ❌ Error:', error)
-    return { success: false, error: error.message || 'Failed to waive fee' }
   }
 }
 
@@ -2163,11 +2157,13 @@ export async function markAsPaid(
       return { success: true } // Idempotent - already paid is success
     }
 
-    // 6. Update participant to mark as paid using service client (bypasses RLS for admin operation)
+    // 6. Update participant to mark as paid and remove them from the session
     const { error: updateError } = await serviceClient
       .from('queue_participants')
       .update({
         payment_status: 'paid',
+        status: 'left',
+        left_at: new Date().toISOString(),
       })
       .eq('id', participantId)
 
@@ -2438,24 +2434,23 @@ export async function getQueueMasterStats(): Promise<{
     let totalPlayers = 0
     let evaluatedSessions = 0
 
-    sessions?.forEach(session => {
+    for (const session of (sessions || [])) {
       const startTime = new Date(session.start_time)
       const endTime = session.end_time ? new Date(session.end_time) : null
       const isExpired = endTime && endTime < now && ['open', 'active'].includes(session.status)
 
-      // Auto-complete if expired (fire and forget)
+      // Auto-complete if expired (await so counts below are accurate)
       if (isExpired) {
-        supabase.from('queue_sessions').update({ status: 'completed' }).eq('id', session.id).then(({ error }) => {
-          if (error) console.error('Failed to auto-complete expired session:', session.id, error)
-        })
+        const { error } = await supabase.from('queue_sessions').update({ status: 'completed' }).eq('id', session.id)
+        if (error) console.error('Failed to auto-complete expired session:', session.id, error)
+        else session.status = 'completed'
       }
 
-      // Auto-activate: open sessions whose start_time has passed (fire and forget)
+      // Auto-activate: open sessions whose start_time has passed
       if (!isExpired && session.status === 'open' && startTime <= now) {
-        supabase.from('queue_sessions').update({ status: 'active' }).eq('id', session.id).then(({ error }) => {
-          if (error) console.error('Failed to auto-activate session:', session.id, error)
-        })
-        session.status = 'active' // Use corrected status for counting
+        const { error } = await supabase.from('queue_sessions').update({ status: 'active' }).eq('id', session.id)
+        if (error) console.error('Failed to auto-activate session:', session.id, error)
+        else session.status = 'active'
       }
 
       // Count logic matching Dashboard filters
@@ -2478,7 +2473,8 @@ export async function getQueueMasterStats(): Promise<{
         totalPlayers += session.queue_participants?.length || 0
         evaluatedSessions++
       }
-    })
+    }
+
 
     const averagePlayers = evaluatedSessions > 0 ? Math.round(totalPlayers / evaluatedSessions) : 0
 

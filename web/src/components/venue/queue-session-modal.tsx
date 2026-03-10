@@ -197,14 +197,16 @@ export function QueueSessionModal({
             try {
                 const dateStr = format(selectedDate, 'yyyy-MM-dd')
                 const startDateTime = `${dateStr}T${startSlot.time}:00+08:00`
-                const endDateTime = `${dateStr}T${endTime}:00+08:00`
+                const startDateTimeStr = `${dateStr}T${startSlot.time}:00+08:00`
+                const endDateTimeStr = `${dateStr}T${endTime}:00+08:00`
 
                 const result = await calculateApplicableDiscounts({
                     venueId,
                     courtId,
-                    startDate: startDateTime,
-                    endDate: endDateTime,
+                    startDate: startDateTimeStr,
+                    endDate: endDateTimeStr,
                     recurrenceWeeks: Number(recurrenceWeeks),
+                    targetDateCount: actualSlotCount,
                     basePrice
                 })
 
@@ -403,6 +405,33 @@ export function QueueSessionModal({
     const duration = getDuration()
     const disabledDays = { before: new Date() }
 
+    const additionalBookedDates = (() => {
+        if (selectedDays.length <= 1 && recurrenceWeeks === 1) return []
+
+        const initialStartTime = new Date(selectedDate)
+        initialStartTime.setHours(0, 0, 0, 0)
+        const startDayIndex = initialStartTime.getDay()
+
+        const uniqueSelectedDays = selectedDays.length > 0
+            ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
+            : [startDayIndex]
+
+        const dates: Date[] = []
+
+        for (let i = 0; i < recurrenceWeeks; i++) {
+            for (const dayIndex of uniqueSelectedDays) {
+                if (i === 0 && dayIndex === startDayIndex) continue
+
+                const dayOffset = (dayIndex - startDayIndex + 7) % 7
+                const slotDate = new Date(initialStartTime.getTime())
+                slotDate.setDate(slotDate.getDate() + (i * 7) + dayOffset)
+
+                dates.push(slotDate)
+            }
+        }
+        return dates
+    })()
+
     return (
         <div className="fixed inset-0 z-50 overflow-y-auto">
             <div
@@ -454,9 +483,13 @@ export function QueueSessionModal({
                                                 onSelect={(date) => date && setSelectedDate(date)}
                                                 disabled={disabledDays}
                                                 className="mx-auto"
+                                                modifiers={{
+                                                    additionalBookings: additionalBookedDates
+                                                }}
                                                 modifiersClassNames={{
                                                     selected: 'bg-primary text-white hover:bg-primary',
                                                     today: 'font-bold text-primary',
+                                                    additionalBookings: 'border-2 border-dashed border-primary bg-primary/10 rounded-md text-primary font-medium',
                                                 }}
                                             />
 
@@ -649,7 +682,7 @@ export function QueueSessionModal({
                                     <h4 className="font-semibold text-gray-900 mb-2">Session Schedule</h4>
                                     <div className="text-sm text-gray-600 space-y-1">
                                         <p><strong>Court:</strong> {courtName}</p>
-                                        <p>
+                                        <div>
                                             <strong>Date:</strong>{' '}
                                             {(() => {
                                                 if (selectedDays.length <= 1 && recurrenceWeeks === 1) {
@@ -681,7 +714,7 @@ export function QueueSessionModal({
 
                                                 return (
                                                     <div className="mt-2 text-xs">
-                                                        <p className="font-medium text-gray-700 mb-1">Booked Dates ({bookedDates.length}):</p>
+                                                        <span className="block font-medium text-gray-700 mb-1">Booked Dates ({bookedDates.length}):</span>
                                                         <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto p-1.5 bg-white/50 rounded-md border border-primary/10">
                                                             {bookedDates.map((date, idx) => (
                                                                 <span key={idx} className="bg-white border border-gray-200 text-gray-600 px-2 py-0.5 rounded-md shadow-sm">
@@ -692,7 +725,7 @@ export function QueueSessionModal({
                                                     </div>
                                                 )
                                             })()}
-                                        </p>
+                                        </div>
                                         <p><strong>Time:</strong> {startSlot && formatTime(startSlot.time)} - {formatTime(getEndTime())}</p>
                                         <p><strong>Duration:</strong> {duration} hour{duration > 1 ? 's' : ''}</p>
                                     </div>

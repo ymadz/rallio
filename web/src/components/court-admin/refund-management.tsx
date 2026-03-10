@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { getMyVenueRefunds } from '@/app/actions/court-admin-actions'
-import { adminProcessRefundAction } from '@/app/actions/refund-actions'
+import { adminProcessRefundAction, adminCheckRefundStatusAction } from '@/app/actions/refund-actions'
 import { createClient } from '@/lib/supabase/client'
 import {
   Undo2,
@@ -29,8 +29,10 @@ interface Refund {
   reason: string
   reason_code: string
   notes?: string
-  created_at: string
+  error_message?: string
+  processed_by?: string
   processed_at?: string
+  created_at: string
   profiles?: {
     first_name?: string
     last_name?: string
@@ -58,6 +60,7 @@ export function RefundManagement({ hideHeader = false }: { hideHeader?: boolean 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [processingId, setProcessingId] = useState<string | null>(null)
+  const [checkingStatusId, setCheckingStatusId] = useState<string | null>(null)
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -67,6 +70,7 @@ export function RefundManagement({ hideHeader = false }: { hideHeader?: boolean 
   const [selectedRefund, setSelectedRefund] = useState<Refund | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [adminNotes, setAdminNotes] = useState('')
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
 
   useEffect(() => {
     loadRefunds()
@@ -144,19 +148,45 @@ export function RefundManagement({ hideHeader = false }: { hideHeader?: boolean 
 
   const handleProcessRefund = async (refundId: string, action: 'approve' | 'reject') => {
     setProcessingId(refundId)
+    setFeedback(null)
     try {
       const result = await adminProcessRefundAction(refundId, action, adminNotes)
       if (result.success) {
+        setFeedback({ type: 'success', message: `Refund ${action === 'approve' ? 'approved' : 'rejected'} successfully` })
         loadRefunds()
-        setShowDetailModal(false)
         setAdminNotes('')
+        // Update selected refund so UI reflects new state
+        setSelectedRefund(prev => prev ? { ...prev, status: action === 'reject' ? 'failed' : 'processing', notes: action === 'reject' ? (adminNotes || 'Rejected by admin') : prev.notes, processed_by: 'current' } : null)
       } else {
-        alert(result.error || `Failed to ${action} refund`)
+        setFeedback({ type: 'error', message: result.error || `Failed to ${action} refund` })
       }
     } catch (err: any) {
-      alert(err.message || `Failed to ${action} refund`)
+      setFeedback({ type: 'error', message: err.message || `Failed to ${action} refund` })
     } finally {
       setProcessingId(null)
+    }
+  }
+
+  const handleCheckStatus = async (refundId: string) => {
+    setCheckingStatusId(refundId)
+    setFeedback(null)
+    try {
+      const result = await adminCheckRefundStatusAction(refundId)
+      if (result.success) {
+        loadRefunds()
+        if (result.error) {
+          setFeedback({ type: 'info', message: result.error })
+        } else {
+          setFeedback({ type: 'success', message: 'Refund status updated from PayMongo' })
+          setSelectedRefund(prev => prev ? { ...prev, status: 'succeeded' } : null)
+        }
+      } else {
+        setFeedback({ type: 'error', message: result.error || 'Failed to check status' })
+      }
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err.message || 'Failed to check status' })
+    } finally {
+      setCheckingStatusId(null)
     }
   }
 
@@ -351,6 +381,7 @@ export function RefundManagement({ hideHeader = false }: { hideHeader?: boolean 
                       onClick={() => {
                         setSelectedRefund(refund)
                         setShowDetailModal(true)
+                        setFeedback(null)
                       }}
                     >
                       <Eye className="w-4 h-4 mr-1" />
@@ -411,8 +442,8 @@ export function RefundManagement({ hideHeader = false }: { hideHeader?: boolean 
                 <p className="text-gray-700">{selectedRefund.reason || 'No reason provided'}</p>
               </div>
 
-              {/* Admin Notes (for pending and failed refunds) */}
-              {(selectedRefund.status === 'pending' || selectedRefund.status === 'failed') && (
+              {/* Admin Notes (for pending refunds only) */}
+              {selectedRefund.status === 'pending' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Admin Notes (optional)
@@ -426,6 +457,54 @@ export function RefundManagement({ hideHeader = false }: { hideHeader?: boolean 
                   />
                 </div>
               )}
+
+              {/* Rejected info banner */}
+              {selectedRefund.status === 'failed' && selectedRefund.processed_by && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <XCircle className="w-4 h-4 text-red-500" />
+                    <span className="font-medium text-red-800">
+                      {selectedRefund.notes?.includes('Rejected') ? 'Rejected by Admin' : 'Approval Failed'}
+                    </span>
+                  </div>
+                  {selectedRefund.notes && (
+                    <p className="text-sm text-red-700 mt-1">{selectedRefund.notes}</p>
+                  )}
+                  {selectedRefund.error_message && (
+                    <p className="text-sm text-red-600 mt-1">Error: {selectedRefund.error_message}</p>
+                  )}
+                  {selectedRefund.processed_at && (
+                    <p className="text-xs text-red-500 mt-2">Processed: {formatDate(selectedRefund.processed_at)}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Succeeded info banner */}
+              {selectedRefund.status === 'succeeded' && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    <span className="font-medium text-green-800">Refund Completed</span>
+                  </div>
+                  {selectedRefund.processed_at && (
+                    <p className="text-xs text-green-600 mt-2">Processed: {formatDate(selectedRefund.processed_at)}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Feedback message */}
+              {feedback && (
+                <div className={`rounded-lg p-3 flex items-center gap-2 text-sm ${
+                  feedback.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' :
+                  feedback.type === 'error' ? 'bg-red-50 border border-red-200 text-red-800' :
+                  'bg-blue-50 border border-blue-200 text-blue-800'
+                }`}>
+                  {feedback.type === 'success' && <CheckCircle className="w-4 h-4 flex-shrink-0" />}
+                  {feedback.type === 'error' && <AlertCircle className="w-4 h-4 flex-shrink-0" />}
+                  {feedback.type === 'info' && <Clock className="w-4 h-4 flex-shrink-0" />}
+                  <span>{feedback.message}</span>
+                </div>
+              )}
             </div>
 
             <div className="p-6 border-t border-gray-200 flex gap-3">
@@ -436,12 +515,13 @@ export function RefundManagement({ hideHeader = false }: { hideHeader?: boolean 
                   setShowDetailModal(false)
                   setSelectedRefund(null)
                   setAdminNotes('')
+                  setFeedback(null)
                 }}
               >
                 Close
               </Button>
 
-              {(selectedRefund.status === 'pending' || selectedRefund.status === 'failed') && (
+              {selectedRefund.status === 'pending' && (
                 <>
                   <Button
                     variant="outline"
@@ -469,6 +549,36 @@ export function RefundManagement({ hideHeader = false }: { hideHeader?: boolean 
                     Approve
                   </Button>
                 </>
+              )}
+
+              {selectedRefund.status === 'failed' && selectedRefund.error_message && (
+                <Button
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                  onClick={() => handleProcessRefund(selectedRefund.id, 'approve')}
+                  disabled={processingId === selectedRefund.id}
+                >
+                  {processingId === selectedRefund.id ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                  )}
+                  Retry Approval
+                </Button>
+              )}
+
+              {selectedRefund.status === 'processing' && (
+                <Button
+                  className="flex-1"
+                  onClick={() => handleCheckStatus(selectedRefund.id)}
+                  disabled={checkingStatusId === selectedRefund.id}
+                >
+                  {checkingStatusId === selectedRefund.id ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                  )}
+                  Check Status from PayMongo
+                </Button>
               )}
             </div>
           </div>

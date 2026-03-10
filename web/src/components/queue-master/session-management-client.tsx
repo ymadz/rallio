@@ -7,13 +7,14 @@ import { getQueueDetails } from '@/app/actions/queue-actions'
 import {
   closeQueueSession,
   removeParticipant,
-  waiveFee
 } from '@/app/actions/queue-actions'
 import {
   assignMatchFromQueue,
   recordMatchScore,
   getActiveMatch,
-  startMatch
+  startMatch,
+  resetPlayerToWaiting,
+  resetAllPlayersToWaiting,
 } from '@/app/actions/match-actions'
 import { PayMongoError } from '@/lib/paymongo/client'
 import { initiatePaymentAction } from '@/app/actions/payments'
@@ -281,6 +282,47 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
       // Call centralized status auto-advancement to handle upcoming->open->active->completed
       await supabase.rpc('auto_advance_session_statuses')
 
+      // Self-healing: if queue session is stuck in pending_payment but the linked reservation
+      // is already confirmed/partially_paid, auto-fix the queue session status.
+      if (sessionData.status === 'pending_payment' && sessionData.metadata?.reservation_id) {
+        const { data: linkedRes } = await supabase
+          .from('reservations')
+          .select('status')
+          .eq('id', sessionData.metadata.reservation_id)
+          .single()
+
+        if (linkedRes && ['confirmed', 'partially_paid', 'ongoing'].includes(linkedRes.status)) {
+          console.log('[loadSession] 🔧 Self-healing: reservation is', linkedRes.status, 'but queue session stuck at pending_payment. Fixing...')
+          const now = new Date()
+          const startTime = new Date(sessionData.start_time)
+          const endTime = new Date(sessionData.end_time)
+
+          let correctedStatus: string
+          if (now >= endTime) {
+            correctedStatus = 'completed'
+          } else if (now >= startTime) {
+            correctedStatus = 'active'
+          } else {
+            correctedStatus = 'open'
+          }
+
+          await supabase
+            .from('queue_sessions')
+            .update({
+              status: correctedStatus,
+              metadata: {
+                ...sessionData.metadata,
+                payment_status: linkedRes.status === 'confirmed' ? 'paid' : 'partially_paid',
+                self_healed_at: now.toISOString(),
+              }
+            })
+            .eq('id', sessionData.id)
+
+          formattedSession.status = correctedStatus
+          console.log('[loadSession] ✅ Queue session status corrected to:', correctedStatus)
+        }
+      }
+
       // Double check status after potential auto-advancement
       const { data: updatedSession } = await supabase
         .from('queue_sessions')
@@ -547,22 +589,30 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                 <PhilippinePeso className="h-5 w-5 text-orange-400 mt-0.5 mr-3 flex-shrink-0" />
                 <div>
                   <h3 className="text-sm font-medium text-orange-800">
-                    Payment Required
+                    Payment Required — Session Not Public
                   </h3>
                   <p className="mt-1 text-sm text-orange-700">
-                    Complete payment to activate your session and allow players to join.
+                    Your session is hidden from players until payment is completed. Pay the remaining balance to make it public and allow players to join.
                     {session.metadata?.payment_required && ` Amount due: ₱${parseFloat(session.metadata.payment_required).toFixed(2)}`}
                   </p>
+                  {session.metadata?.payment_method === 'cash' && (
+                    <p className="mt-1 text-xs text-orange-600">
+                      Cash payment — pay at the venue. The venue will activate your session once payment is confirmed.
+                    </p>
+                  )}
                 </div>
               </div>
-              <button
-                onClick={handlePayNow}
-                disabled={actionLoading === 'pay'}
-                className="ml-4 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50 flex items-center gap-2"
-              >
-                {actionLoading === 'pay' && <Loader2 className="w-4 h-4 animate-spin" />}
-                Pay Now
-              </button>
+              {/* Only show electronic Pay Now for e-wallet sessions */}
+              {session.metadata?.payment_method !== 'cash' && (
+                <button
+                  onClick={handlePayNow}
+                  disabled={actionLoading === 'pay'}
+                  className="ml-4 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {actionLoading === 'pay' && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Pay Now
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -863,9 +913,25 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
             {/* Playing Players */}
             {playingPlayers.length > 0 && (
               <div>
-                <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wider">
-                  Playing ({playingPlayers.length})
-                </h3>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                    Playing ({playingPlayers.length})
+                  </h3>
+                  <button
+                    onClick={async () => {
+                      if (!confirm(`Reset all ${playingPlayers.length} playing player(s) back to the waiting queue?`)) return
+                      const result = await resetAllPlayersToWaiting(session.id)
+                      if (result.success) {
+                        loadSession()
+                      } else {
+                        alert('Reset failed: ' + result.error)
+                      }
+                    }}
+                    className="text-xs px-2.5 py-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors font-medium"
+                  >
+                    Reset All to Queue
+                  </button>
+                </div>
                 <div className="space-y-2">
                   {playingPlayers.map((player) => (
                     <div
@@ -896,11 +962,26 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                           </div>
                         </div>
                       </div>
+                      <button
+                        onClick={async () => {
+                          const result = await resetPlayerToWaiting(player.id, session.id)
+                          if (result.success) {
+                            loadSession()
+                          } else {
+                            alert('Reset failed: ' + result.error)
+                          }
+                        }}
+                        title="Return this player to the waiting queue"
+                        className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors font-medium"
+                      >
+                        Reset
+                      </button>
                     </div>
                   ))}
                 </div>
               </div>
             )}
+
 
             {session.players.length === 0 && (
               <div className="text-center py-12">

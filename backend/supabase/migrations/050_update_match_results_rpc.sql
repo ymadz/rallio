@@ -91,7 +91,7 @@ BEGIN
     WHERE queue_session_id = v_match.queue_session_id AND user_id = v_player_id
     FOR UPDATE;
 
-    IF v_current_participant IS NOT NULL THEN
+    IF v_current_participant.id IS NOT NULL THEN
       UPDATE queue_participants
       SET 
         games_played = COALESCE(games_played, 0) + 1,
@@ -105,7 +105,7 @@ BEGIN
     -- Update Player Stats
     SELECT * INTO v_player_record FROM players WHERE user_id = v_player_id FOR UPDATE;
 
-    IF v_player_record IS NOT NULL THEN
+    IF v_player_record.id IS NOT NULL THEN
       -- Calculate ELO if competitive
       IF v_is_competitive THEN
         v_current_rating := COALESCE(v_player_record.rating, 1500);

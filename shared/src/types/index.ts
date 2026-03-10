@@ -82,12 +82,6 @@ export type SurfaceType = 'wood' | 'synthetic' | 'concrete' | 'rubber';
 // Court category for additional classification if needed
 export type CourtCategory = 'standard' | 'professional' | 'training';
 
-export interface CourtAmenity {
-  id: string;
-  name: string;
-  icon?: string;
-}
-
 // Availability & Reservation Types
 export interface CourtAvailability {
   id: string;
@@ -234,7 +228,6 @@ export interface CourtSearchParams {
   isIndoor?: boolean;
   minPrice?: number;
   maxPrice?: number;
-  amenities?: string[];
   date?: Date;
   startTime?: string;
   endTime?: string;

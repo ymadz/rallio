@@ -9,7 +9,6 @@ export interface VenueFilters {
   searchQuery?: string
   minPrice?: number
   maxPrice?: number
-  amenities?: string[]
   category?: string
   courtType?: 'indoor' | 'outdoor' | null
   rating?: number
@@ -42,7 +41,6 @@ export interface VenueWithDetails {
   maxPrice: number
   totalCourts: number
   activeCourtCount: number
-  amenities: string[]
   distance?: number // in kilometers
   averageRating?: number
   totalReviews?: number
@@ -65,7 +63,6 @@ export interface CourtWithDetails {
   hourly_rate: number
   is_active: boolean
   metadata: Record<string, any> | null
-  amenities: Array<{ id: string; name: string; icon: string | null }>
   images: Array<{
     id: string
     url: string
@@ -137,7 +134,6 @@ export async function getVenues(filters: VenueFilters = {}, retries = 2): Promis
     searchQuery,
     minPrice = 0,
     maxPrice = 10000,
-    amenities = [],
     category,
     courtType,
     rating = 0,
@@ -195,13 +191,6 @@ export async function getVenues(filters: VenueFilters = {}, retries = 2): Promis
           capacity,
           description,
           metadata,
-          court_amenities (
-            amenities (
-              id,
-              name,
-              icon
-            )
-          ),
           images:court_images (
             id,
             url,
@@ -242,11 +231,8 @@ export async function getVenues(filters: VenueFilters = {}, retries = 2): Promis
       // Simplified optimization:
       // query = query.gte('courts.hourly_rate', minPrice).lte('courts.hourly_rate', maxPrice)
 
-      // Amenities Filter
-      // PostgREST filtering on nested array is hard. 
       // STRICT OPTIMIZATION: Only use server pagination if filters are simple.
-      // If amenities are selected, fall back to slow path (safe).
-      const isSimpleFilters = amenities.length === 0 && !category && minPrice === 0 && maxPrice === 10000;
+      const isSimpleFilters = !category && minPrice === 0 && maxPrice === 10000;
 
       if (isSimpleFilters) {
         // Apply Pagination
@@ -274,7 +260,7 @@ export async function getVenues(filters: VenueFilters = {}, retries = 2): Promis
     }
 
     // --- ORIGINAL / FALLBACK PATH (Slow) ---
-    // (Kept for complex filters: rating, price, amenities, distance sort)
+    // (Kept for complex filters: rating, price, distance sort)
 
     // Build the query
     let query = supabase
@@ -307,13 +293,6 @@ export async function getVenues(filters: VenueFilters = {}, retries = 2): Promis
           capacity,
           description,
           metadata,
-          court_amenities (
-            amenities (
-              id,
-              name,
-              icon
-            )
-          ),
           images:court_images (
             id,
             url,
@@ -363,13 +342,7 @@ export async function getVenues(filters: VenueFilters = {}, retries = 2): Promis
         if (!hasMatchingType) return false
       }
 
-      // Amenities filter
-      if (amenities.length > 0) {
-        const hasAllAmenities = amenities.every(amenity =>
-          venue.amenities.includes(amenity)
-        )
-        if (!hasAllAmenities) return false
-      }
+
 
       // Rating filter
       if (rating > 0) {
@@ -512,15 +485,7 @@ async function processVenuesList(supabase: any, rawVenues: any[], latitude?: num
     const minCourtPrice = prices.length > 0 ? Math.min(...prices) : 0
     const maxCourtPrice = prices.length > 0 ? Math.max(...prices) : 0
 
-    // Collect unique amenities across all courts
-    const uniqueAmenities = new Set<string>()
-    activeCourts.forEach((court: any) => {
-      court.court_amenities?.forEach((mapping: any) => {
-        if (mapping.amenities?.name) {
-          uniqueAmenities.add(mapping.amenities.name)
-        }
-      })
-    })
+
 
     // Compute per-venue average rating using courtAggregates
     let venueSum = 0
@@ -539,14 +504,12 @@ async function processVenuesList(supabase: any, rawVenues: any[], latitude?: num
       courts: activeCourts.map((court: any) => ({
         ...court,
         venue_id: venue.id,
-        amenities: court.court_amenities?.map((m: any) => m.amenities).filter(Boolean) || [],
         images: court.images || [],
       })),
       minPrice: minCourtPrice,
       maxPrice: maxCourtPrice,
       totalCourts: activeCourts.length,
       activeCourtCount: activeCourts.length,
-      amenities: Array.from(uniqueAmenities),
       averageRating: venueAvg,
       totalReviews: venueCount,
       category: venue.metadata?.category,
@@ -609,13 +572,6 @@ export async function getVenueById(
           hourly_rate,
           is_active,
           metadata,
-          court_amenities (
-            amenities (
-              id,
-              name,
-              icon
-            )
-          ),
           court_images (
             id,
             url,
@@ -646,15 +602,7 @@ export async function getVenueById(
     const activeCourts = venue.courts.filter((c: any) => c.is_active && c.is_verified)
     const prices = activeCourts.map(c => c.hourly_rate)
 
-    // Collect unique amenities
-    const uniqueAmenities = new Set<string>()
-    activeCourts.forEach(court => {
-      court.court_amenities?.forEach((mapping: any) => {
-        if (mapping.amenities?.name) {
-          uniqueAmenities.add(mapping.amenities.name)
-        }
-      })
-    })
+
 
     // Calculate distance if coordinates provided
     let distance: number | undefined
@@ -699,14 +647,12 @@ export async function getVenueById(
       courts: activeCourts.map(court => ({
         ...court,
         venue_id: venue.id,
-        amenities: court.court_amenities?.map((m: any) => m.amenities) || [],
         images: court.court_images || [],
       })),
       minPrice: prices.length > 0 ? Math.min(...prices) : 0,
       maxPrice: prices.length > 0 ? Math.max(...prices) : 0,
       totalCourts: activeCourts.length,
       activeCourtCount: activeCourts.length,
-      amenities: Array.from(uniqueAmenities),
       distance,
       averageRating,
       totalReviews: allRatings.length,
@@ -794,7 +740,6 @@ export async function searchNearby(
         maxPrice: 0,
         totalCourts: (extra.courts || []).length,
         activeCourtCount: (extra.courts || []).length,
-        amenities: [],
         distance: v.distance_km ?? undefined,
       } as VenueWithDetails
     })

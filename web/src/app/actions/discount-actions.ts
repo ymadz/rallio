@@ -7,7 +7,7 @@ import { revalidatePath } from 'next/cache';
 // TYPES
 // ==========================================
 
-export type RuleDiscountType = 'recurring' | 'early_bird';
+export type RuleDiscountType = 'recurring' | 'early_bird' | 'multi_day';
 export type CalculatedDiscountType = RuleDiscountType | 'seasonal' | 'holiday_surcharge' | 'promo_code';
 
 export interface DiscountRule {
@@ -19,6 +19,7 @@ export interface DiscountRule {
   discount_value: number;
   discount_unit: 'percent' | 'fixed';
   min_weeks?: number | null;
+  min_days?: number | null;
   advance_days?: number | null;
   is_active: boolean;
   priority: number;
@@ -48,6 +49,7 @@ export interface DiscountCalculationInput {
   startDate: string;
   endDate: string;
   recurrenceWeeks: number;
+  targetDateCount?: number;
   basePrice: number;
   promoCode?: string;
 }
@@ -409,6 +411,12 @@ export async function calculateApplicableDiscounts(
 
           case 'early_bird':
             if (rule.advance_days && daysInAdvance >= Number(rule.advance_days)) {
+              isApplicable = true;
+            }
+            break;
+
+          case 'multi_day':
+            if (rule.min_days && input.targetDateCount && input.targetDateCount >= Number(rule.min_days)) {
               isApplicable = true;
             }
             break;
