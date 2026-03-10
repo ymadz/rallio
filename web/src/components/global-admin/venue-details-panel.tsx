@@ -18,7 +18,7 @@ import {
   Mail,
   Globe,
   User,
-  DollarSign,
+  PhilippinePeso,
   Calendar,
   CheckCircle,
   XCircle,
@@ -295,7 +295,7 @@ export function VenueDetailsPanel({ venueId, onClose, onRefresh, onEdit }: Venue
 
                   <div className="p-4 bg-teal-50 rounded-lg">
                     <div className="flex items-center gap-2 mb-1">
-                      <DollarSign className="w-4 h-4 text-teal-600" />
+                      <PhilippinePeso className="w-4 h-4 text-teal-600" />
                       <div className="text-sm font-medium text-teal-900">Total Revenue</div>
                     </div>
                     <div className="text-2xl font-bold text-teal-600">

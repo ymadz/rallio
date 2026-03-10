@@ -12,7 +12,7 @@ import {
   Star,
   TrendingUp,
   Calendar,
-  DollarSign,
+  PhilippinePeso,
   CheckCircle,
   XCircle,
   Loader2,

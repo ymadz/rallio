@@ -15,7 +15,7 @@ import {
   Clock,
   RefreshCw,
   Eye,
-  DollarSign
+  PhilippinePeso
 } from 'lucide-react'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { Button } from '@/components/ui/button'

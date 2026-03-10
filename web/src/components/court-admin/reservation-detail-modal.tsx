@@ -11,7 +11,7 @@ import {
   MapPin,
   Calendar,
   Banknote,
-  DollarSign,
+  PhilippinePeso,
   Users,
   FileText,
   Loader2,
@@ -651,7 +651,7 @@ export function ReservationDetailModal({
                 </>
               ) : (
                 <>
-                  <DollarSign className="w-5 h-5" />
+                  <PhilippinePeso className="w-5 h-5" />
                   <span>{reservation.status === 'partially_paid' ? 'Collect Remaining Balance' : 'Mark as Paid (Cash Received)'}</span>
                 </>
               )}

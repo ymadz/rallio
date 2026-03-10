@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { waiveFee, markAsPaid } from '@/app/actions/queue-actions'
-import { X, DollarSign, Loader2, CheckCircle, AlertCircle } from 'lucide-react'
+import { X, PhilippinePeso, Loader2, CheckCircle, AlertCircle } from 'lucide-react'
 
 interface PaymentManagementModalProps {
   isOpen: boolean
@@ -86,7 +86,7 @@ export function PaymentManagementModal({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
-                <DollarSign className="w-5 h-5" />
+                <PhilippinePeso className="w-5 h-5" />
               </div>
               <div>
                 <h2 className="text-xl font-bold">Payment Management</h2>
@@ -189,7 +189,7 @@ export function PaymentManagementModal({
                 {isWaiving ? (
                   <Loader2 className="w-7 h-7 text-orange-600 animate-spin" />
                 ) : (
-                  <DollarSign className="w-7 h-7 text-orange-600" />
+                  <PhilippinePeso className="w-7 h-7 text-orange-600" />
                 )}
                 <span className="font-semibold text-gray-900 text-sm">Waive Payment</span>
                 <span className="text-xs text-gray-500 text-center">Forgive the amount owed</span>

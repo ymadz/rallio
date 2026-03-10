@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import {
-  DollarSign,
+  PhilippinePeso,
   Clock,
   Plus,
   Edit,
@@ -109,7 +109,7 @@ export function PricingManagement({ venueId }: PricingManagementProps) {
       case 'special':
         return { icon: Zap, color: 'bg-yellow-100 text-yellow-700 border-yellow-200', label: 'Special' }
       default:
-        return { icon: DollarSign, color: 'bg-gray-100 text-gray-700 border-gray-200', label: 'Standard' }
+        return { icon: PhilippinePeso, color: 'bg-gray-100 text-gray-700 border-gray-200', label: 'Standard' }
     }
   }
 
@@ -143,7 +143,7 @@ export function PricingManagement({ venueId }: PricingManagementProps) {
       {/* Empty State */}
       {!isLoading && !error && courts.length === 0 && (
         <div className="bg-primary/5 border border-primary/20 rounded-xl p-8 text-center">
-          <DollarSign className="w-12 h-12 text-primary mx-auto mb-3" />
+          <PhilippinePeso className="w-12 h-12 text-primary mx-auto mb-3" />
           <h3 className="text-lg font-semibold text-primary/80 mb-2">No Courts Yet</h3>
           <p className="text-sm text-primary/70 mb-4">
             Add courts to your venue to start configuring pricing.
