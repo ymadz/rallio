@@ -128,7 +128,7 @@ export function NearbyQueues() {
             const isLive = queue.status === 'active';
             const isOpen = queue.status === 'waiting';
             const startDate = new Date(queue.startTime);
-            const isUpcoming = !isLive && startDate > new Date();
+            const isUpcoming = !isLive && !isOpen && startDate > new Date();
             const endDate = new Date(queue.endTime);
             const avatarCount = Math.min(queue.players?.length || queue.currentPlayers || 0, 4);
             const totalPlayers = queue.players?.length || queue.currentPlayers || 0;

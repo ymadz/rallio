@@ -79,7 +79,8 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
   const bg = CARD_GRADIENTS[idx % CARD_GRADIENTS.length].join(', ')
 
   const isActive = variant === 'active'
-  const isUpcoming = !isActive && startTime > new Date()
+  const isOpen = queue.status === 'waiting' || queue.status === 'active'
+  const isUpcoming = !isActive && !isOpen && startTime > new Date()
 
   return (
     <>
