@@ -466,10 +466,10 @@ export default function AuditLogsViewer() {
                     <td className="px-4 py-3 text-sm text-gray-700">
                       {log.target_type ? (
                         <div>
-                          <div className="font-medium">{log.target_type}</div>
+                          <div className="font-medium capitalize">{log.target_type}</div>
                           {log.target_id && (
-                            <div className="text-xs text-gray-500 font-mono">
-                              {log.target_id.slice(0, 8)}...
+                            <div className={`text-xs ${log.target_user_name ? 'text-purple-600 font-medium' : 'text-gray-500 font-mono'}`}>
+                              {log.target_user_name ? log.target_user_name : `${log.target_id.slice(0, 8)}...`}
                             </div>
                           )}
                         </div>
@@ -529,7 +529,7 @@ export default function AuditLogsViewer() {
       {/* Details Modal */}
       {selectedLog && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-gray-500/50 flex items-center justify-center z-50 p-4"
           onClick={() => setSelectedLog(null)}
         >
           <div
@@ -539,61 +539,35 @@ export default function AuditLogsViewer() {
             <div className="p-6 border-b border-gray-200">
               <h2 className="text-xl font-bold text-gray-900">Audit Log Details</h2>
             </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="text-sm font-semibold text-gray-700">Timestamp</label>
-                <p className="text-sm text-gray-900 mt-1">{formatDate(selectedLog.created_at)}</p>
-              </div>
-              <div>
-                <label className="text-sm font-semibold text-gray-700">Admin</label>
-                <p className="text-sm text-gray-900 mt-1">
-                  {selectedLog.admin?.full_name} ({selectedLog.admin?.email})
-                </p>
-              </div>
-              <div>
-                <label className="text-sm font-semibold text-gray-700">Action Type</label>
-                <p className="text-sm text-gray-900 mt-1">{selectedLog.action_type}</p>
-              </div>
-              {selectedLog.target_type && (
-                <>
+            <div className="p-6 overflow-y-auto max-h-[80vh]">
+
+              {/* Overview Section */}
+              <div className="mb-6 bg-gray-50 rounded-lg p-4 border border-gray-100">
+                <h3 className="text-sm font-semibold text-gray-900 mb-4 border-b border-gray-200 pb-2">Overview</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-semibold text-gray-700">Target Type</label>
-                    <p className="text-sm text-gray-900 mt-1">{selectedLog.target_type}</p>
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Timestamp</label>
+                    <p className="text-sm font-medium text-gray-900 mt-1">{formatDate(selectedLog.created_at)}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-semibold text-gray-700">Target ID</label>
-                    <p className="text-sm text-gray-900 mt-1 font-mono">{selectedLog.target_id}</p>
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Action Type</label>
+                    <p className="mt-1">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getActionColor(selectedLog.action_type)}`}>
+                        {selectedLog.action_type}
+                      </span>
+                    </p>
                   </div>
-                </>
-              )}
-              {selectedLog.old_value && (
-                <div>
-                  <label className="text-sm font-semibold text-gray-700">Old Value</label>
-                  <pre className="text-xs text-gray-900 mt-1 bg-gray-50 p-3 rounded-lg overflow-x-auto">
-                    {JSON.stringify(selectedLog.old_value, null, 2)}
-                  </pre>
+                  <div className="md:col-span-2">
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Admin Executed</label>
+                    <div className="flex items-center gap-2 mt-1 bg-white p-2 rounded-md border border-gray-200">
+                      <User className="w-4 h-4 text-gray-400" />
+                      <p className="text-sm font-medium text-gray-900">
+                        {selectedLog.admin?.full_name} <span className="text-gray-500 font-normal">({selectedLog.admin?.email})</span>
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              )}
-              {selectedLog.new_value && (
-                <div>
-                  <label className="text-sm font-semibold text-gray-700">New Value</label>
-                  <pre className="text-xs text-gray-900 mt-1 bg-gray-50 p-3 rounded-lg overflow-x-auto">
-                    {JSON.stringify(selectedLog.new_value, null, 2)}
-                  </pre>
-                </div>
-              )}
-              {selectedLog.ip_address && (
-                <div>
-                  <label className="text-sm font-semibold text-gray-700">IP Address</label>
-                  <p className="text-sm text-gray-900 mt-1 font-mono">{selectedLog.ip_address}</p>
-                </div>
-              )}
-              {selectedLog.user_agent && (
-                <div>
-                  <label className="text-sm font-semibold text-gray-700">User Agent</label>
-                  <p className="text-xs text-gray-700 mt-1 break-all">{selectedLog.user_agent}</p>
-                </div>
-              )}
+              </div>
             </div>
             <div className="p-6 border-t border-gray-200 flex justify-end">
               <button

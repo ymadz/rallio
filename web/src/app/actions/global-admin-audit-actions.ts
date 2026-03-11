@@ -43,6 +43,7 @@ export interface AuditLog {
     full_name: string
     email: string
   }
+  target_user_name?: string
 }
 
 export interface GetAuditLogsParams {
@@ -83,7 +84,9 @@ export async function getAuditLogs(params: GetAuditLogsParams = {}) {
         *,
         admin:profiles!admin_id (
           id,
-          full_name,
+          display_name,
+          first_name,
+          last_name,
           email
         )
       `, { count: 'exact' })
@@ -123,9 +126,41 @@ export async function getAuditLogs(params: GetAuditLogsParams = {}) {
 
     if (error) throw error
 
+    const userIds = [
+      ...new Set(
+        (logs || [])
+          .filter(log => log.target_type === 'user' || log.target_type === 'profile')
+          .map(log => log.target_id)
+          .filter(Boolean) as string[]
+      )
+    ]
+
+    let userMap: Record<string, string> = {}
+    if (userIds.length > 0) {
+      const { data: users } = await supabase
+        .from('profiles')
+        .select('id, display_name, first_name, last_name')
+        .in('id', userIds)
+
+      if (users) {
+        userMap = users.reduce((acc, u) => {
+          acc[u.id] = u.display_name || [u.first_name, u.last_name].filter(Boolean).join(' ') || 'Unknown User'
+          return acc
+        }, {} as Record<string, string>)
+      }
+    }
+
     return {
       success: true,
-      logs: logs as AuditLog[],
+      logs: logs?.map((log: any) => ({
+        ...log,
+        admin: {
+          id: log.admin?.id,
+          full_name: log.admin?.display_name || [log.admin?.first_name, log.admin?.last_name].filter(Boolean).join(' ') || 'Unknown',
+          email: log.admin?.email
+        },
+        target_user_name: (log.target_type === 'user' || log.target_type === 'profile') && log.target_id ? userMap[log.target_id] : undefined
+      })) as AuditLog[],
       pagination: {
         page,
         limit,
@@ -175,7 +210,7 @@ export async function getAuditStats() {
     // Most active admins
     const { data: topAdmins } = await supabase
       .from('admin_audit_logs')
-      .select('admin_id, admin:profiles!admin_id(full_name, email)')
+      .select('admin_id, admin:profiles!admin_id(display_name, first_name, last_name, email)')
       .gte('created_at', sevenDaysAgo.toISOString())
 
     const adminCounts = topAdmins?.reduce((acc: any, log: any) => {
@@ -183,7 +218,7 @@ export async function getAuditStats() {
       if (!acc[adminId]) {
         acc[adminId] = {
           admin_id: adminId,
-          full_name: log.admin?.full_name || 'Unknown',
+          full_name: log.admin?.display_name || [log.admin?.first_name, log.admin?.last_name].filter(Boolean).join(' ') || 'Unknown',
           email: log.admin?.email || '',
           count: 0
         }
@@ -296,9 +331,12 @@ export async function getAdminList() {
       .from('user_roles')
       .select(`
         user_id,
-        profiles!inner (
+        roles!inner(name),
+        profiles!user_roles_user_id_fkey!inner(
           id,
-          full_name,
+          display_name,
+          first_name,
+          last_name,
           email
         )
       `)
@@ -306,7 +344,7 @@ export async function getAdminList() {
 
     const adminList = admins?.map((a: any) => ({
       id: a.profiles.id,
-      full_name: a.profiles.full_name,
+      full_name: a.profiles.display_name || [a.profiles.first_name, a.profiles.last_name].filter(Boolean).join(' ') || 'Unknown',
       email: a.profiles.email,
     })) || []
 
@@ -335,7 +373,9 @@ export async function exportAuditLogs(params: GetAuditLogsParams = {}) {
       .select(`
         *,
         admin:profiles!admin_id (
-          full_name,
+          display_name,
+          first_name,
+          last_name,
           email
         )
       `)
@@ -353,14 +393,40 @@ export async function exportAuditLogs(params: GetAuditLogsParams = {}) {
 
     if (error) throw error
 
+    // Fetch target user names for the export
+    const userIds = [
+      ...new Set(
+        (logs || [])
+          .filter(log => log.target_type === 'user' || log.target_type === 'profile')
+          .map(log => log.target_id)
+          .filter(Boolean) as string[]
+      )
+    ]
+
+    let userMap: Record<string, string> = {}
+    if (userIds.length > 0) {
+      const { data: users } = await supabase
+        .from('profiles')
+        .select('id, display_name, first_name, last_name')
+        .in('id', userIds)
+
+      if (users) {
+        userMap = users.reduce((acc, u) => {
+          acc[u.id] = u.display_name || [u.first_name, u.last_name].filter(Boolean).join(' ') || 'Unknown User'
+          return acc
+        }, {} as Record<string, string>)
+      }
+    }
+
     // Generate CSV
-    const headers = ['Timestamp', 'Admin', 'Action', 'Target Type', 'Target ID', 'Details']
+    const headers = ['Timestamp', 'Admin', 'Action', 'Target Type', 'Target ID', 'Target Name', 'Details']
     const rows = logs?.map((log: any) => [
       new Date(log.created_at).toISOString(),
-      log.admin?.full_name || 'Unknown',
+      log.admin?.display_name || [log.admin?.first_name, log.admin?.last_name].filter(Boolean).join(' ') || 'Unknown',
       log.action_type,
       log.target_type || '-',
       log.target_id || '-',
+      (log.target_type === 'user' || log.target_type === 'profile') && log.target_id ? userMap[log.target_id] || '' : '',
       JSON.stringify({ old: log.old_value, new: log.new_value })
     ]) || []
 

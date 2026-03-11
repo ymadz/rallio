@@ -1,0 +1,39 @@
+[
+  {
+    "id": "97a88e59-94aa-472d-82c6-bdda21dcd967",
+    "admin_id": "a38032e2-46f9-43a9-a95a-9d6a8465af70",
+    "action_type": "unban_user",
+    "target_type": "user",
+    "target_id": "9f0a96fd-d37d-4505-8fc5-6f2215e043fd",
+    "old_value": {
+      "is_banned": true,
+      "banned_until": null,
+      "banned_reason": "ban"
+    },
+    "new_value": {
+      "is_banned": false
+    },
+    "ip_address": null,
+    "user_agent": null,
+    "created_at": "2026-03-11T04:49:10.358013+00:00"
+  },
+  {
+    "id": "6d55f329-1db3-472d-ace0-5dbf2e270e7e",
+    "admin_id": "a38032e2-46f9-43a9-a95a-9d6a8465af70",
+    "action_type": "ban_user",
+    "target_type": "user",
+    "target_id": "9f0a96fd-d37d-4505-8fc5-6f2215e043fd",
+    "old_value": {
+      "is_banned": false,
+      "banned_reason": null
+    },
+    "new_value": {
+      "is_banned": true,
+      "permanent": true,
+      "banned_reason": "ban"
+    },
+    "ip_address": null,
+    "user_agent": null,
+    "created_at": "2026-03-11T05:12:17.377499+00:00"
+  }
+]
