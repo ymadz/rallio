@@ -2,6 +2,49 @@
 
 import { Users, Clock } from 'lucide-react'
 
+/* ── Glassmorphism progress bar styles ── */
+const qptStyles = `
+  .qpt-progress-track {
+    position: relative;
+    height: 0.625rem;
+    border-radius: 9999px;
+    background: rgba(13, 148, 136, 0.08);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(13, 148, 136, 0.12);
+    overflow: hidden;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.04);
+  }
+
+  .qpt-progress-fill {
+    height: 100%;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, #14b8a6 0%, #0d9488 40%, #2dd4bf 100%);
+    box-shadow: 0 0 8px rgba(20, 184, 166, 0.35), inset 0 1px 0 rgba(255,255,255,0.25);
+    transition: width 0.5s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .qpt-progress-fill::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255,255,255,0.3) 50%,
+      transparent 100%
+    );
+    animation: qpt-bar-shine 2.5s ease-in-out infinite;
+  }
+
+  @keyframes qpt-bar-shine {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+`
+
 interface QueuePositionTrackerProps {
   position: number
   totalPlayers: number
@@ -22,20 +65,52 @@ export function QueuePositionTracker({
 
   // Status colors
   const statusColors = {
-    waiting: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-    playing: 'bg-green-100 text-green-800 border-green-200',
-    completed: 'bg-blue-100 text-blue-800 border-blue-200',
+    waiting: 'bg-teal-500/10 text-teal-700 border-teal-400/30 shadow-[0_0_8px_rgba(20,184,166,0.12)]',
+    playing: 'bg-emerald-500/10 text-emerald-700 border-emerald-400/30 shadow-[0_0_8px_rgba(16,185,129,0.12)]',
+    completed: 'bg-sky-500/10 text-sky-700 border-sky-400/30 shadow-[0_0_8px_rgba(14,165,233,0.12)]',
   }
 
+  // Pre-session state: user is registered but session hasn't started
+  const isPreSession = !isSessionLive && status === 'waiting'
+
+  // Badge to show
+  const badgeClass = isPreSession
+    ? 'bg-sky-500/10 text-sky-700 border-sky-400/30 shadow-[0_0_8px_rgba(14,165,233,0.12)]'
+    : statusColors[status]
+
+  const badgeLabel = isPreSession ? 'Spot Reserved' : status === 'waiting'
+    ? 'Waiting in Queue'
+    : status === 'playing'
+      ? 'Currently Playing'
+      : 'Session Complete'
   const statusLabels = {
     waiting: 'Waiting in Queue',
     playing: 'Currently Playing',
     completed: 'Session Complete',
   }
 
+  const badgeIcon = isPreSession
+    ? <CalendarClock className="w-3.5 h-3.5" />
+    : status === 'waiting'
+      ? <Clock className="w-3.5 h-3.5" />
+      : status === 'playing'
+        ? <Users className="w-3.5 h-3.5" />
+        : null
+
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+    <>
+      <style>{qptStyles}</style>
+      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
       {/* Status Badge */}
+      <div className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border backdrop-blur-sm mb-4 ${badgeClass}`}>
+        {badgeIcon}
+        {status === 'waiting' && !isPreSession && (
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-500" />
+          </span>
+        )}
+        <span className="font-semibold text-xs uppercase tracking-wider">{badgeLabel}</span>
       <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border mb-4 ${statusColors[status]}`}>
         <span className="font-semibold text-sm">{statusLabels[status]}</span>
       </div>
@@ -56,9 +131,17 @@ export function QueuePositionTracker({
             </div>
 
             {/* Progress Bar */}
-            <div className="relative h-3 bg-gray-200 rounded-full overflow-hidden">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-gray-600">
+                Position {position} of {totalPlayers}
+              </p>
+              <p className="text-xs font-semibold text-teal-600">
+                {Math.round(progressPercentage)}%
+              </p>
+            </div>
+            <div className="qpt-progress-track">
               <div
-                className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary to-blue-500 transition-all duration-500 ease-out rounded-full"
+                className="qpt-progress-fill"
                 style={{ width: `${Math.min(progressPercentage, 100)}%` }}
               />
               {/* Position Marker */}
@@ -120,6 +203,7 @@ export function QueuePositionTracker({
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   )
 }

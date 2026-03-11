@@ -149,6 +149,8 @@ export function useQueue(courtId: string) {
         endTime: queueData.endTime,
         mode: queueData.mode as 'casual' | 'competitive',
         organizerId: queueData.organizerId,
+        organizerName: queueData.organizerName,
+        costPerGame: queueData.costPerGame,
       }
 
       setQueue(transformedQueue)

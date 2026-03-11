@@ -193,10 +193,24 @@ export async function getQueueDetails(courtId: string) {
     const userParticipant = formattedParticipants.find(p => p.userId === user.id)
     const userPosition = userParticipant ? userParticipant.position : null
 
+    // Fetch organizer display name
+    let organizerName = 'Unknown Host'
+    if (session.organizer_id) {
+      const { data: orgProfile } = await supabase
+        .from('profiles')
+        .select('display_name, first_name, last_name')
+        .eq('id', session.organizer_id)
+        .single()
+      if (orgProfile) {
+        organizerName = orgProfile.display_name || `${orgProfile.first_name || ''} ${orgProfile.last_name || ''}`.trim() || 'Unknown Host'
+      }
+    }
+
     const queueData: QueueSessionData & {
       players: QueueParticipantData[]
       userPosition: number | null
       organizerId: string
+      organizerName: string
     } = {
       id: session.id,
       courtId: session.court_id,
@@ -215,6 +229,7 @@ export async function getQueueDetails(courtId: string) {
       players: formattedParticipants,
       userPosition,
       organizerId: session.organizer_id,
+      organizerName,
     }
 
     console.log('[getQueueDetails] ✅ Queue fetched successfully:', {

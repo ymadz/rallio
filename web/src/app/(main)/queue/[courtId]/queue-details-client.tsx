@@ -9,6 +9,7 @@ import { QueueStatusBadge } from '@/components/queue/queue-status-badge'
 import { QueuePositionTracker } from '@/components/queue/queue-position-tracker'
 import { MatchHistoryViewer } from '@/components/queue/match-history-viewer'
 import { SessionManagementClient } from '@/components/queue-master/session-management-client'
+import { QueueEventCard } from '@/components/queue/queue-event-card'
 
 import { Users, Clock, Activity, Loader2, AlertCircle, Trophy, Calendar, X, CreditCard } from 'lucide-react'
 import { useState, useEffect } from 'react'
@@ -237,6 +238,8 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
       )}
 
       <div className="space-y-6">
+        {/* Event Details Card */}
+        <QueueEventCard queue={queue} onBack={() => router.back()} />
         {/* Court Info Header */}
         <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
           <div className="flex items-start justify-between mb-4">

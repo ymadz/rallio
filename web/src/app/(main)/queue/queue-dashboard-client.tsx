@@ -156,9 +156,11 @@ export function QueueDashboardClient() {
                   </Link>
                 </div>
               ) : (
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                   {myQueues.map((queue) => (
-                    <QueueCard key={queue.id} queue={queue} variant="active" />
+                    <div key={queue.id} className="max-w-[380px]">
+                      <QueueCard queue={queue} variant="active" />
+                    </div>
                   ))}
                 </div>
               )}
@@ -184,9 +186,11 @@ export function QueueDashboardClient() {
                   </p>
                 </div>
               ) : (
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                   {nearbyQueues.map((queue) => (
-                    <QueueCard key={queue.id} queue={queue} variant="available" />
+                    <div key={queue.id} className="max-w-[380px]">
+                      <QueueCard queue={queue} variant="available" />
+                    </div>
                   ))}
                 </div>
               )}
