@@ -39,6 +39,13 @@ import {
 import { toast } from 'sonner'
 import { VenueDetailsPanel } from './venue-details-panel'
 import { VenueFormModal } from './venue-form-modal'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 interface Venue {
   id: string
@@ -522,91 +529,79 @@ export function VenueManagementGlobal() {
                         {getStatusBadge(venue)}
                       </td>
                       <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                        <div className="relative">
-                          <button
-                            onClick={() => setOpenDropdown(openDropdown === venue.id ? null : venue.id)}
-                            className="p-1 hover:bg-gray-100 rounded transition-colors"
-                          >
-                            <MoreVertical className="w-5 h-5 text-gray-400" />
-                          </button>
-
-                          {openDropdown === venue.id && (
-                            <>
-                              <div
-                                className="fixed inset-0 z-10"
-                                onClick={() => setOpenDropdown(null)}
-                              />
-                              <div className={`absolute right-0 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1 ${index >= venues.length - 2 ? 'bottom-full mb-1' : 'mt-1'
-                                }`}>
-                                <button
-                                  onClick={() => {
-                                    loadVenueDetails(venue.id)
-                                    setOpenDropdown(null)
-                                  }}
-                                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                  View Details
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setSelectedVenue(venue)
-                                    setShowEditModal(true)
-                                    setOpenDropdown(null)
-                                  }}
-                                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                                >
-                                  <Edit className="w-4 h-4" />
-                                  Edit Venue
-                                </button>
-                                <button
-                                  onClick={() => handleToggleActive(venue.id, venue.is_active)}
-                                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                                >
-                                  {venue.is_active ? (
-                                    <>
-                                      <Ban className="w-4 h-4" />
-                                      Deactivate
-                                    </>
-                                  ) : (
-                                    <>
-                                      <CheckCircle className="w-4 h-4" />
-                                      Activate
-                                    </>
-                                  )}
-                                </button>
-                                <button
-                                  onClick={() => handleToggleVerified(venue.id, venue.is_verified)}
-                                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                                >
-                                  {venue.is_verified ? (
-                                    <>
-                                      <XCircle className="w-4 h-4" />
-                                      Unverify
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Shield className="w-4 h-4" />
-                                      Verify
-                                    </>
-                                  )}
-                                </button>
-                                <div className="my-1 border-t border-gray-200" />
-                                <button
-                                  onClick={() => {
-                                    setVenueToDelete(venue.id)
-                                    setShowDeleteModal(true)
-                                    setOpenDropdown(null)
-                                  }}
-                                  className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                  Delete
-                                </button>
-                              </div>
-                            </>
-                          )}
-                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              className="p-1 hover:bg-gray-100 rounded transition-colors"
+                            >
+                              <MoreVertical className="w-5 h-5 text-gray-400" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48 bg-white" onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                loadVenueDetails(venue.id)
+                              }}
+                              className="flex items-center gap-2 cursor-pointer text-gray-700"
+                            >
+                              <Eye className="w-4 h-4" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSelectedVenue(venue)
+                                setShowEditModal(true)
+                              }}
+                              className="flex items-center gap-2 cursor-pointer text-gray-700"
+                            >
+                              <Edit className="w-4 h-4" />
+                              Edit Venue
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleToggleActive(venue.id, venue.is_active)}
+                              className="flex items-center gap-2 cursor-pointer text-gray-700"
+                            >
+                              {venue.is_active ? (
+                                <>
+                                  <Ban className="w-4 h-4" />
+                                  Deactivate
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle className="w-4 h-4" />
+                                  Activate
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleToggleVerified(venue.id, venue.is_verified)}
+                              className="flex items-center gap-2 cursor-pointer text-gray-700"
+                            >
+                              {venue.is_verified ? (
+                                <>
+                                  <XCircle className="w-4 h-4" />
+                                  Unverify
+                                </>
+                              ) : (
+                                <>
+                                  <Shield className="w-4 h-4" />
+                                  Verify
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setVenueToDelete(venue.id)
+                                setShowDeleteModal(true)
+                              }}
+                              className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-700 focus:bg-red-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </td>
                     </tr>
                   ))}

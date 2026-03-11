@@ -290,6 +290,7 @@ export async function createReservation(
                     down_payment_amount: data.paymentMethod === 'cash' ? downPaymentAmount : undefined,
                     recurrence_index: i,
                     recurrence_total: targetSlots.length,
+                    promo_code: data.promoCode,
                     // Add week-specific metadata for proper display
                     week_index: slot.weekIndex,
                     weeks_total: recurrenceWeeks,
@@ -330,13 +331,23 @@ export async function createReservation(
     }
 
     // 4. APPLY PROMO CODE USAGE
-    if (data.promoCode && createdReservationIds.length > 0) {
+    // We only apply it immediately if the booking is fully free, OR it's a cash payment with no down payment required.
+    // Otherwise, we wait for the PayMongo webhook to successfully confirm the payment before consuming the code.
+    const isFree = perInstanceAmount <= 0;
+    const isCashNoDownPayment = data.paymentMethod === 'cash' && (downPaymentAmount === undefined || downPaymentAmount <= 0);
+    const shouldConsumePromoImmediately = isFree || isCashNoDownPayment;
+
+    if (data.promoCode && createdReservationIds.length > 0 && shouldConsumePromoImmediately) {
         try {
             // Get the promo code ID from the code string
             const { data: promoData } = await adminDb
                 .from('promo_codes')
                 .select('id, current_uses')
                 .eq('code', data.promoCode.toUpperCase())
+                // Ensure we get the appropriate promo code (could be venue_id specific or platform wide)
+                .or(`venue_id.eq.${court.venue_id},venue_id.is.null`)
+                .order('venue_id', { ascending: false })
+                .limit(1)
                 .single()
 
             if (promoData) {
@@ -357,12 +368,14 @@ export async function createReservation(
                     .eq('id', promoData.id)
                 if (updateError) console.error('Error updating promo code uses:', updateError)
 
-                console.log(`✅ Applied promo code ${data.promoCode} to ${createdReservationIds.length} reservations`)
+                console.log(`✅ Applied promo code ${data.promoCode} to ${createdReservationIds.length} reservations. Consumed immediately.`)
             }
         } catch (error) {
             console.error('❌ Failed to record promo code usage:', error)
             // Don't fail the whole booking if just the tracking fails, but maybe log it
         }
+    } else if (data.promoCode) {
+        console.log(`⏳ Promo code ${data.promoCode} detected but consumption delayed pending successful payment.`)
     }
 
     return {

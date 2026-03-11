@@ -64,24 +64,29 @@ export async function createPromoCode(
         // Upper case the code directly unconditionally
         promoData.code = promoData.code.toUpperCase().trim()
 
-        // Check if code already exists
+        // Check if code already exists for this venue
         const { data: existingCode } = await supabase
             .from('promo_codes')
             .select('id')
             .eq('code', promoData.code)
-            .single()
+            .eq('venue_id', venueId)
+            .maybeSingle()
 
         if (existingCode) {
-            return { success: false, error: 'A promo code with this code already exists' }
+            return { success: false, error: 'A promo code with this code already exists for this venue' }
+        }
+
+        const payload = {
+            ...promoData,
+            venue_id: venueId,
+            valid_from: promoData.valid_from || new Date('2000-01-01').toISOString(),
+            valid_until: promoData.valid_until || new Date('2100-01-01').toISOString(),
+            metadata: { created_by: user.id }
         }
 
         const { data, error } = await supabase
             .from('promo_codes')
-            .insert({
-                ...promoData,
-                venue_id: venueId,
-                metadata: { created_by: user.id }
-            })
+            .insert(payload)
             .select()
             .single()
 
@@ -108,21 +113,38 @@ export async function updatePromoCode(
             updates.code = updates.code.toUpperCase().trim()
 
             // Check if code already exists and is not this promo code
-            const { data: existingCode } = await supabase
+            const { data: promo } = await supabase
                 .from('promo_codes')
-                .select('id')
-                .eq('code', updates.code)
-                .neq('id', promoId)
+                .select('venue_id')
+                .eq('id', promoId)
                 .single()
 
-            if (existingCode) {
-                return { success: false, error: 'A promo code with this code already exists' }
+            const actualVenueId = promo?.venue_id
+
+            if (actualVenueId) {
+                const { data: existingCode } = await supabase
+                    .from('promo_codes')
+                    .select('id')
+                    .eq('code', updates.code)
+                    .eq('venue_id', actualVenueId)
+                    .neq('id', promoId)
+                    .maybeSingle()
+
+                if (existingCode) {
+                    return { success: false, error: 'A promo code with this code already exists for this venue' }
+                }
             }
         }
 
+        const payload = { ...updates }
+
+        // Handle explicit nulls being sent when dates are cleared/empty
+        if (payload.valid_from === null) payload.valid_from = new Date('2000-01-01').toISOString()
+        if (payload.valid_until === null) payload.valid_until = new Date('2100-01-01').toISOString()
+
         const { data, error } = await supabase
             .from('promo_codes')
-            .update(updates)
+            .update(payload)
             .eq('id', promoId)
             .select()
             .single()
@@ -195,13 +217,20 @@ export async function validatePromoCode(
         if (!user) return { valid: false, error: 'Log in to apply promo codes' }
 
         // 1. Find the promo code (venue specific or platform wide)
-        const { data: promoCode, error: fetchError } = await supabase
+        const { data: promoCodes, error: fetchError } = await supabase
             .from('promo_codes')
             .select('*')
             .eq('code', code)
-            .single()
+            .or(`venue_id.eq.${venueId},venue_id.is.null`)
 
-        if (fetchError || !promoCode) {
+        if (fetchError || !promoCodes || promoCodes.length === 0) {
+            return { valid: false, error: 'Invalid or expired promo code' }
+        }
+
+        // Prefer venue-specific over platform-wide if both exist
+        const promoCode = promoCodes.find((p) => p.venue_id === venueId) || promoCodes.find((p) => p.venue_id === null)
+
+        if (!promoCode) {
             return { valid: false, error: 'Invalid or expired promo code' }
         }
 
@@ -280,3 +309,74 @@ export async function validatePromoCode(
 // NOTE: applyPromoCode logic should typically be handled in the reservation creation step 
 // to ensure atomicity via an RPC, or by applying it immediately after reservation creation.
 // A reference to it will be implemented alongside creating the reservation.
+
+export async function consumeDeferredPromoCode(
+    promoCodeStr: string,
+    userId: string,
+    reservationIds: string[]
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        if (!promoCodeStr || !userId || reservationIds.length === 0) return { success: true }
+
+        // We use the service client since this is often called from webhooks or admin actions
+        const { createServiceClient } = await import('@/lib/supabase/service')
+        const adminDb = createServiceClient()
+
+        // Find the promo code
+        const { data: promoData, error: fetchError } = await adminDb
+            .from('promo_codes')
+            .select('id, current_uses')
+            .eq('code', promoCodeStr.toUpperCase())
+            .order('venue_id', { ascending: false })
+            .limit(1)
+            .single()
+
+        if (fetchError || !promoData) {
+            console.error('[consumeDeferredPromoCode] Promo code not found for consumption:', promoCodeStr)
+            return { success: false, error: 'Promo code not found' }
+        }
+
+        // Ensure we haven't already inserted for these reservations to prevent double consumption
+        const { data: existingUsages, error: checkError } = await adminDb
+            .from('promo_code_usage')
+            .select('reservation_id')
+            .eq('promo_code_id', promoData.id)
+            .in('reservation_id', reservationIds)
+
+        if (checkError) {
+            console.error('[consumeDeferredPromoCode] Error checking existing usages:', checkError)
+        }
+
+        const existingReservationIds = new Set(existingUsages?.map(u => u.reservation_id) || [])
+        const newReservationIds = reservationIds.filter(id => !existingReservationIds.has(id))
+
+        if (newReservationIds.length === 0) {
+            console.log(`[consumeDeferredPromoCode] No new usages to record for promo code ${promoCodeStr}`)
+            return { success: true }
+        }
+
+        // Insert usage records
+        const usageRecords = newReservationIds.map(resId => ({
+            promo_code_id: promoData.id,
+            user_id: userId,
+            reservation_id: resId,
+        }))
+
+        const { error: usageError } = await adminDb.from('promo_code_usage').insert(usageRecords)
+        if (usageError) throw usageError
+
+        // Increment current_uses
+        const { error: updateError } = await adminDb
+            .from('promo_codes')
+            .update({ current_uses: promoData.current_uses + newReservationIds.length })
+            .eq('id', promoData.id)
+
+        if (updateError) throw updateError
+
+        console.log(`[consumeDeferredPromoCode] ✅ Successfully consumed promo code ${promoCodeStr} for ${newReservationIds.length} reservations.`)
+        return { success: true }
+    } catch (error: any) {
+        console.error('[consumeDeferredPromoCode] ❌ Failed to consume deferred promo code:', error)
+        return { success: false, error: error.message || 'Failed to consume promo code' }
+    }
+}

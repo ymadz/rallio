@@ -1086,44 +1086,50 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
     // Creation Loop
     let isDownPaymentRequired = false;
 
+    // Calculate actual discounts on the backend (queue masters get discounts too!)
+    // Calculate for the FULL duration across all sessions to trigger multi-day/recurring rules
+    const durationHours = durationMs / (1000 * 60 * 60)
+    const baseCourtRentalPerSlot = court.hourly_rate * durationHours
+    const totalBasePrice = baseCourtRentalPerSlot * targetDates.length
+
+    const discountResult = await calculateApplicableDiscounts({
+      venueId: venue.id,
+      courtId: data.courtId,
+      startDate: targetDates[0].toISOString(),
+      // End date of the very last session
+      endDate: new Date(targetDates[targetDates.length - 1].getTime() + durationMs).toISOString(),
+      recurrenceWeeks: recurrenceWeeks,
+      targetDateCount: targetDates.length,
+      basePrice: totalBasePrice,
+      promoCode: data.promoCode,
+    })
+
+    const courtAmountPerSlot = discountResult.finalPrice / targetDates.length
+    const perInstanceDiscount = discountResult.totalDiscount / targetDates.length
+
+    // Add platform fee on top of the discounted rate per slot
+    const platformFeePerSlot = courtAmountPerSlot * 0.05
+    const totalAmountPerSlot = Math.round((courtAmountPerSlot + platformFeePerSlot) * 100) / 100
+
+    let primaryDiscountName: string | null = null
+    let primaryDiscountReason: string | null = null
+    if (discountResult.discounts.length > 0) {
+      primaryDiscountName = discountResult.discounts[0].name
+      primaryDiscountReason = discountResult.discounts.map(d => d.description).join(', ')
+    }
+
+    console.log(`[createQueueSession] 💰 Payment calculation per slot:`, {
+      hourlyRate: court.hourly_rate,
+      durationHours,
+      baseCourtRentalPerSlot,
+      perInstanceDiscount,
+      courtAmountPerSlot,
+      platformFeePerSlot,
+      totalAmountPerSlot
+    })
+
     for (const sessionStart of targetDates) {
       const sessionEnd = new Date(sessionStart.getTime() + durationMs)
-
-      // Calculate base payment amounts
-      const durationHours = durationMs / (1000 * 60 * 60)
-      const baseCourtRental = court.hourly_rate * durationHours
-
-      // Calculate actual discounts on the backend (queue masters get discounts too!)
-      const discountResult = await calculateApplicableDiscounts({
-        venueId: venue.id,
-        courtId: data.courtId,
-        startDate: sessionStart.toISOString(),
-        endDate: sessionEnd.toISOString(),
-        recurrenceWeeks: recurrenceWeeks,
-        basePrice: baseCourtRental,
-        promoCode: data.promoCode,
-      })
-
-      const courtRental = discountResult.finalPrice
-      const platformFee = courtRental * 0.05
-      const totalAmount = courtRental + platformFee
-
-      let primaryDiscountName = null
-      let primaryDiscountReason = null
-      if (discountResult.discounts.length > 0) {
-        primaryDiscountName = discountResult.discounts[0].name
-        primaryDiscountReason = discountResult.discounts.map(d => d.description).join(', ')
-      }
-
-      console.log(`[createQueueSession] 💰 Payment calculation:`, {
-        hourlyRate: court.hourly_rate,
-        durationHours,
-        baseCourtRental,
-        discountApplied: discountResult.totalDiscount,
-        courtRental,
-        platformFee,
-        totalAmount
-      })
 
       // Calculate down payment if applicable
       const venueData = court.venues as any;
@@ -1133,10 +1139,10 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
       let downPaymentAmount: number | undefined = undefined;
 
       if (data.paymentMethod === 'cash') {
-        const minimumDownPayment = (totalAmount * downPaymentPercentage) / 100;
+        const minimumDownPayment = (totalAmountPerSlot * downPaymentPercentage) / 100;
         if (data.customDownPaymentAmount !== undefined && data.customDownPaymentAmount > 0) {
           const customPerSlot = data.customDownPaymentAmount / targetDates.length;
-          const clampedAmount = Math.min(Math.max(customPerSlot, minimumDownPayment), totalAmount);
+          const clampedAmount = Math.min(Math.max(customPerSlot, minimumDownPayment), totalAmountPerSlot);
           downPaymentAmount = Math.round(clampedAmount * 100) / 100;
         } else {
           downPaymentAmount = minimumDownPayment;
@@ -1165,13 +1171,13 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
           start_time: sessionStart.toISOString(),
           end_time: sessionEnd.toISOString(),
           status: 'pending_payment',
-          total_amount: totalAmount, // Fixed: Include platform fee in total_amount
+          total_amount: totalAmountPerSlot,
           amount_paid: 0,
           num_players: data.maxPlayers,
           payment_type: 'full',
           payment_method: data.paymentMethod || null,
           cash_payment_deadline: cashPaymentDeadline,
-          discount_applied: discountResult.totalDiscount,
+          discount_applied: perInstanceDiscount,
           discount_type: primaryDiscountName || null,
           discount_reason: primaryDiscountReason || null,
           recurrence_group_id: recurrenceGroupId,
@@ -1180,12 +1186,12 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
             queue_session_organizer: true,
             is_queue_session_reservation: true,
             recurrence_group_id: recurrenceGroupId,
-            platform_fee: platformFee,
+            platform_fee: platformFeePerSlot,
             hourly_rate: court.hourly_rate,
             duration_hours: durationHours,
-            base_court_rental: baseCourtRental,
-            discount_amount: discountResult.totalDiscount,
-            total_with_fee: totalAmount,
+            base_court_rental: baseCourtRentalPerSlot,
+            discount_amount: perInstanceDiscount,
+            total_with_fee: totalAmountPerSlot,
             intended_payment_method: data.paymentMethod,
             down_payment_percentage: data.paymentMethod === 'cash' ? downPaymentPercentage : undefined,
             down_payment_amount: downPaymentAmount
@@ -1218,13 +1224,13 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
           metadata: {
             reservation_id: reservation.id,
             recurrence_group_id: recurrenceGroupId,
-            payment_required: totalAmount,
+            payment_required: totalAmountPerSlot,
             payment_status: 'pending',
             payment_method: data.paymentMethod || 'e-wallet',
-            base_court_rental: baseCourtRental,
-            discount_amount: discountResult.totalDiscount,
-            court_rental: courtRental,
-            platform_fee: platformFee,
+            base_court_rental: baseCourtRentalPerSlot,
+            discount_amount: perInstanceDiscount,
+            court_rental: courtAmountPerSlot,
+            platform_fee: platformFeePerSlot,
             down_payment_amount: downPaymentAmount
           },
         })
@@ -1267,7 +1273,7 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
         reservationId: reservation.id,
         paymentStatus: session.metadata?.payment_status || 'pending',
         paymentMethod: data.paymentMethod || 'e-wallet',
-        totalCost: totalAmount,
+        totalCost: totalAmountPerSlot,
       })
     }
 

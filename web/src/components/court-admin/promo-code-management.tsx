@@ -69,8 +69,8 @@ export function PromoCodeManagement({ venueId }: PromoCodeManagementProps) {
                 max_discount_amount: code.max_discount_amount ? code.max_discount_amount.toString() : '',
                 max_uses: code.max_uses ? code.max_uses.toString() : '',
                 max_uses_per_user: code.max_uses_per_user ? code.max_uses_per_user.toString() : '',
-                valid_from: code.valid_from ? new Date(code.valid_from).toISOString().slice(0, 10) : '',
-                valid_until: code.valid_until ? new Date(code.valid_until).toISOString().slice(0, 10) : '',
+                valid_from: code.valid_from && !code.valid_from.startsWith('2000-01-01') ? new Date(code.valid_from).toISOString().slice(0, 10) : '',
+                valid_until: code.valid_until && !code.valid_until.startsWith('2100-01-01') ? new Date(code.valid_until).toISOString().slice(0, 10) : '',
                 is_active: code.is_active
             })
         } else {
@@ -223,7 +223,10 @@ export function PromoCodeManagement({ venueId }: PromoCodeManagementProps) {
                             </thead>
                             <tbody className="divide-y divide-gray-200">
                                 {promoCodes.map((promo) => {
-                                    const isExpired = promo.valid_until && new Date(promo.valid_until) < new Date()
+                                    const hasValidUntil = promo.valid_until && !promo.valid_until.startsWith('2100-01-01')
+                                    const hasValidFrom = promo.valid_from && !promo.valid_from.startsWith('2000-01-01')
+
+                                    const isExpired = hasValidUntil && new Date(promo.valid_until as string) < new Date()
                                     const isExhausted = promo.max_uses !== null && promo.current_uses >= promo.max_uses
                                     const isActuallyActive = promo.is_active && !isExpired && !isExhausted
 
@@ -256,15 +259,15 @@ export function PromoCodeManagement({ venueId }: PromoCodeManagementProps) {
                                                 )}
                                             </td>
                                             <td className="px-6 py-4 hidden sm:table-cell">
-                                                {promo.valid_until ? (
+                                                {hasValidUntil ? (
                                                     <div className="flex items-center gap-1.5 text-gray-600">
                                                         <CalendarIcon className="w-3.5 h-3.5" />
-                                                        <span>{format(new Date(promo.valid_until), 'MMM d, yyyy')}</span>
+                                                        <span>{format(new Date(promo.valid_until as string), 'MMM d, yyyy')}</span>
                                                     </div>
                                                 ) : <span className="text-gray-400">No expiration</span>}
-                                                {promo.valid_from && (
+                                                {hasValidFrom && (
                                                     <div className="text-xs text-gray-500 ml-5 mt-0.5">
-                                                        From: {format(new Date(promo.valid_from), 'MMM d')}
+                                                        From: {format(new Date(promo.valid_from as string), 'MMM d')}
                                                     </div>
                                                 )}
                                             </td>

@@ -634,6 +634,13 @@ export async function markReservationAsPaid(reservationId: string) {
       )
     })
 
+    // Consume promo code usage if this was the first payment (not just balance payment)
+    const promoCodeStr = reservation.metadata?.promo_code
+    if (promoCodeStr && !isPartiallyPaid) {
+      const { consumeDeferredPromoCode } = await import('@/app/actions/promo-code-actions')
+      await consumeDeferredPromoCode(promoCodeStr, reservation.user_id, [reservationId])
+    }
+
     revalidatePath('/court-admin/reservations')
     revalidatePath('/court-admin')
     return { success: true }

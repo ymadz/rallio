@@ -333,7 +333,7 @@ async function markReservationPaidAndConfirmed({
     console.log('[markReservationPaidAndConfirmed] 🔍 Fetching reservation from database')
     const { data, error } = await supabase
       .from('reservations')
-      .select('id, status, amount_paid, metadata')
+      .select('id, status, amount_paid, metadata, user_id')
       .eq('id', reservationId)
       .single()
 
@@ -436,7 +436,7 @@ async function markReservationPaidAndConfirmed({
     // 1. Fetch ALL pending reservations in this group
     const { data: groupReservations, error: groupFetchError } = await supabase
       .from('reservations')
-      .select('id, status, total_amount, metadata')
+      .select('id, status, total_amount, metadata, user_id')
       .eq('recurrence_group_id', recurrenceGroupId)
       .in('status', ['pending_payment', 'paid']) // Include 'paid' just in case
 
@@ -571,6 +571,14 @@ async function markReservationPaidAndConfirmed({
         }
       }
 
+      // Process deferred promo code consumption for the bulk group
+      const promoCodeStr = reservationRecord.metadata?.promo_code
+      if (promoCodeStr && reservationRecord.status === 'pending_payment') { // original status
+        const { consumeDeferredPromoCode } = await import('@/app/actions/promo-code-actions')
+        const allPendingIds = groupReservations.map(r => r.id)
+        await consumeDeferredPromoCode(promoCodeStr, reservationRecord.user_id, allPendingIds)
+      }
+
       // Update the main reservationRecord reference for notifications
       reservationRecord.status = targetStatus
       return // Exit here as we handled everything
@@ -578,6 +586,13 @@ async function markReservationPaidAndConfirmed({
   }
 
   // STANDARD SINGLE CONFIRMATION FALLBACK
+
+  // Process deferred promo code consumption for single reservation
+  const promoCodeStr = reservationRecord.metadata?.promo_code
+  if (promoCodeStr && reservationRecord.status === 'pending_payment') {
+    const { consumeDeferredPromoCode } = await import('@/app/actions/promo-code-actions')
+    await consumeDeferredPromoCode(promoCodeStr, reservationRecord.user_id, [reservationId])
+  }
 
   const { data: confirmedReservation, error: confirmError } = await supabase
     .from('reservations')
