@@ -62,10 +62,17 @@ export function ReviewsManagement({ venueId }: ReviewsManagementProps) {
         getReviewStats(venueId)
       ])
 
-      if (reviewsResult.success) {
+      if (!reviewsResult.success) {
+        setError(reviewsResult.error || 'Failed to load reviews')
+        setReviews([])
+      } else {
         setReviews(reviewsResult.reviews || [])
       }
-      if (statsResult.success) {
+
+      if (!statsResult.success) {
+        // Stats failure should not block reviews display
+        console.error('Failed to load review stats:', statsResult.error)
+      } else {
         setStats((statsResult as any).stats)
       }
     } catch (err: any) {
@@ -304,9 +311,17 @@ export function ReviewsManagement({ venueId }: ReviewsManagementProps) {
                   {/* Review Header */}
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold">
-                        {(review.player_name || review.customerName || 'U').charAt(0)}
-                      </div>
+                      {review.customerAvatar ? (
+                        <img
+                          src={review.customerAvatar}
+                          alt={review.player_name || review.customerName}
+                          className="w-10 h-10 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold">
+                          {(review.player_name || review.customerName || 'U').charAt(0)}
+                        </div>
+                      )}
                       <div>
                         <h3 className="font-semibold text-gray-900">{review.player_name || review.customerName}</h3>
                         <p className="text-sm text-gray-500">{review.court_name || review.courtName}</p>
@@ -387,9 +402,17 @@ export function ReviewsManagement({ venueId }: ReviewsManagementProps) {
               {/* Original Review */}
               <div className="bg-gray-50 rounded-lg p-4 mb-4">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-sm">
-                    {(selectedReview.player_name || selectedReview.customerName || 'U').charAt(0)}
-                  </div>
+                  {selectedReview.customerAvatar ? (
+                    <img
+                      src={selectedReview.customerAvatar}
+                      alt={selectedReview.player_name || selectedReview.customerName}
+                      className="w-8 h-8 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-sm">
+                      {(selectedReview.player_name || selectedReview.customerName || 'U').charAt(0)}
+                    </div>
+                  )}
                   <div>
                     <p className="font-semibold text-gray-900">{selectedReview.player_name || selectedReview.customerName}</p>
                     {renderStars(selectedReview.rating, 'sm')}

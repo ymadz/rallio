@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Building2, ChevronDown } from 'lucide-react'
+import { Building2 } from 'lucide-react'
 import { getMyVenues } from '@/app/actions/court-admin-actions'
 
 interface VenueSelectorProps {
   message?: string
   redirectPath?: string
+  actionLabel?: string
 }
 
 interface Venue {
@@ -19,7 +20,8 @@ interface Venue {
 
 export function VenueSelector({
   message = "Select a venue to continue",
-  redirectPath
+  redirectPath,
+  actionLabel = "Tap to view analytics"
 }: VenueSelectorProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -45,13 +47,6 @@ export function VenueSelector({
       const result = await getMyVenues()
       if (result.success && result.venues) {
         setVenues(result.venues)
-
-        // If only one venue, auto-select it
-        if (result.venues.length === 1 && !currentVenueId) {
-          const venueId = result.venues[0].id
-          setSelectedVenueId(venueId)
-          handleVenueChange(venueId)
-        }
       }
       setLoading(false)
     }
@@ -92,35 +87,47 @@ export function VenueSelector({
   }
 
   return (
-    <div className="flex items-center justify-center min-h-[400px]">
-      <div className="text-center max-w-md w-full px-4">
-        <Building2 className="w-16 h-16 text-blue-600 mx-auto mb-4" />
-        <h3 className="text-xl font-semibold text-gray-900 mb-2">{message}</h3>
-        <p className="text-gray-500 mb-6">
-          Choose a venue to view and manage its data.
-        </p>
-
-        <div className="relative">
-          <select
-            value={selectedVenueId}
-            onChange={(e) => handleVenueChange(e.target.value)}
-            className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg appearance-none cursor-pointer hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-left"
+    <div className="w-full">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {venues.map((venue) => (
+          <button
+            key={venue.id}
+            onClick={() => handleVenueChange(venue.id)}
+            className="group relative bg-white border border-gray-200 rounded-xl p-6 hover:border-teal-400 hover:shadow-xl transition-all duration-200 text-left overflow-hidden"
           >
-            <option value="">Select a venue...</option>
-            {venues.map((venue) => (
-              <option key={venue.id} value={venue.id}>
-                {venue.name} {venue.city ? `- ${venue.city}` : ''}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-        </div>
-
-        {venues.length > 0 && (
-          <p className="text-sm text-gray-500 mt-4">
-            You have {venues.length} {venues.length === 1 ? 'venue' : 'venues'}
-          </p>
-        )}
+            {/* Gradient background on hover */}
+            <div className="absolute inset-0 bg-gradient-to-br from-teal-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+            
+            {/* Content */}
+            <div className="relative z-10">
+              <div className="flex items-start justify-between mb-4">
+                <div className="w-12 h-12 bg-teal-100 rounded-lg flex items-center justify-center group-hover:bg-teal-200 transition-colors">
+                  <Building2 className="w-6 h-6 text-teal-600" />
+                </div>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  {actionLabel}
+                </span>
+              </div>
+              
+              <div>
+                <h4 className="font-bold text-gray-900 text-lg mb-1 group-hover:text-teal-600 transition-colors">
+                  {venue.name}
+                </h4>
+                {venue.city && (
+                  <p className="text-sm text-gray-500">{venue.city}</p>
+                )}
+              </div>
+              
+              {/* Arrow indicator */}
+              <div className="mt-4 flex items-center text-teal-600 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                <span className="text-sm font-semibold">View Analytics</span>
+                <svg className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </div>
+          </button>
+        ))}
       </div>
     </div>
   )

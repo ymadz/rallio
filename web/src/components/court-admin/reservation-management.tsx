@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { getMyVenueReservations, getVenueCourts } from '@/app/actions/court-admin-actions'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -75,6 +76,27 @@ export function ReservationManagement() {
   // Modal
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
+
+  // Routing (query param based modal opening + status filter)
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const reservationIdFromQuery = searchParams.get('reservationId')
+  const statusFromQuery = searchParams.get('status') || 'all'
+
+  useEffect(() => {
+    if (!reservationIdFromQuery) return
+
+    const reservation = reservations.find(r => r.id === reservationIdFromQuery)
+    if (reservation) {
+      setSelectedReservation(reservation)
+      setShowDetailModal(true)
+    }
+  }, [reservationIdFromQuery, reservations])
+
+  useEffect(() => {
+    if (!statusFromQuery) return
+    setStatusFilter(statusFromQuery)
+  }, [statusFromQuery])
 
   useEffect(() => {
     loadReservations()
@@ -210,6 +232,10 @@ export function ReservationManagement() {
     setShowDetailModal(false)
     setSelectedReservation(null)
     loadReservations()
+
+    // Keep the status filter in the URL when closing the modal
+    const statusQuery = statusFromQuery ? `?status=${statusFromQuery}` : ''
+    router.replace(`/court-admin/reservations${statusQuery}`)
   }
 
   // getStatusColor and getStatusIcon removed in favor of generic StatusBadge
