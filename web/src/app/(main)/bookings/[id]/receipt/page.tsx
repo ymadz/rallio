@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { format } from 'date-fns';
 import Link from 'next/link';
 import { DownloadReceiptButton } from '@/components/shared/download-receipt-button';
+import { calculateApplicableDiscounts } from '@/app/actions/discount-actions';
 
 export default async function BookingReceiptPage({ params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient();
@@ -25,6 +26,7 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
       courts (
         name,
         hourly_rate,
+        venue_id,
         venues (
           name,
           address,
@@ -55,7 +57,26 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
 
   const formatTime = (timeString: string) => {
     try {
-      return format(new Date(timeString), 'h:mm a');
+      // Use explicit Asia/Manila timezone to avoid server-side UTC rendering issues
+      return new Date(timeString).toLocaleString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'Asia/Manila'
+      });
+    } catch {
+      return timeString;
+    }
+  };
+
+  const formatDate = (timeString: string) => {
+    try {
+      return new Date(timeString).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'Asia/Manila'
+      });
     } catch {
       return timeString;
     }
@@ -64,6 +85,39 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
   const isQueueSession = booking.metadata?.is_queue_session_reservation === true;
   const durationHours =
     (new Date(booking.end_time).getTime() - new Date(booking.start_time).getTime()) / 3600000;
+
+  // For legacy bookings without itemized applied_discounts metadata,
+  // reconstruct individual discount amounts by re-running the calculation
+  let reconstructedDiscounts: Array<{ name: string; amount: number; isIncrease: boolean }> | null = null;
+  if (
+    !booking.metadata?.applied_discounts &&
+    booking.discount_applied > 0 &&
+    booking.court_id
+  ) {
+    try {
+      const basePrice = booking.courts.hourly_rate * durationHours;
+      const result = await calculateApplicableDiscounts({
+        venueId: booking.courts.venue_id,
+        courtId: booking.court_id,
+        startDate: booking.start_time,
+        endDate: booking.end_time,
+        recurrenceWeeks: booking.metadata?.weeks_total || 1,
+        targetDateCount: booking.metadata?.recurrence_total || 1,
+        basePrice: basePrice * (booking.metadata?.recurrence_total || 1),
+        promoCode: booking.metadata?.promo_code,
+      });
+      if (result.success && result.discounts.length > 0) {
+        const slotCount = booking.metadata?.recurrence_total || 1;
+        reconstructedDiscounts = result.discounts.map(d => ({
+          name: d.name,
+          amount: d.amount / slotCount,
+          isIncrease: d.isIncrease,
+        }));
+      }
+    } catch {
+      // Reconstruction failed, fall back to legacy display
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -115,7 +169,7 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
                 <div>
                   <h3 className="text-sm font-medium text-gray-500 mb-1">Date</h3>
                   <p className="font-semibold text-gray-900">
-                    {format(new Date(booking.start_time), 'MMM d, yyyy')}
+                    {formatDate(booking.start_time)}
                   </p>
                 </div>
                 <div>
@@ -166,14 +220,38 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
                     </div>
                   )}
 
-                  {booking.discount_applied > 0 && (
+                  {booking.metadata?.applied_discounts && booking.metadata.applied_discounts.length > 0 ? (
+                    booking.metadata.applied_discounts.map((discount: any, idx: number) => (
+                      <div key={idx} className="flex justify-between py-2">
+                        <span className={discount.isIncrease ? 'text-orange-600' : 'text-green-600'}>
+                          {discount.name}
+                        </span>
+                        <span className={discount.isIncrease ? 'text-orange-600' : 'text-green-600'}>
+                          {discount.isIncrease ? '+' : '-'}₱{parseFloat(discount.amount).toFixed(2)}
+                        </span>
+                      </div>
+                    ))
+                  ) : reconstructedDiscounts && reconstructedDiscounts.length > 0 ? (
+                    reconstructedDiscounts.map((discount, idx) => (
+                      <div key={idx} className="flex justify-between py-2">
+                        <span className={discount.isIncrease ? 'text-orange-600' : 'text-green-600'}>
+                          {discount.name}
+                        </span>
+                        <span className={discount.isIncrease ? 'text-orange-600' : 'text-green-600'}>
+                          {discount.isIncrease ? '+' : '-'}₱{discount.amount.toFixed(2)}
+                        </span>
+                      </div>
+                    ))
+                  ) : booking.discount_applied > 0 ? (
                     <div className="flex justify-between py-2">
                       <span className="text-green-600">
-                        {booking.discount_type || 'Discount'}
+                        {booking.discount_reason
+                          ? `Discounts (${booking.discount_reason})`
+                          : (booking.discount_type || 'Discount')}
                       </span>
                       <span className="text-green-600">-₱{booking.discount_applied.toFixed(2)}</span>
                     </div>
-                  )}
+                  ) : null}
 
                   <div className="flex justify-between py-3 mt-1 border-t-2 border-gray-900">
                     <span className="text-base font-bold text-gray-900">Total</span>
@@ -201,10 +279,10 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
                     </span>
                   </div>
                   <div className="flex justify-between py-1">
-                    <span className="text-gray-600">Promo</span>
+                    <span className="text-gray-600">Promo Code</span>
                     <span className="font-medium">
-                      {booking.discount_applied && booking.discount_applied > 0 ? (
-                        <span className="text-green-600">{booking.discount_type || 'Applied'}</span>
+                      {booking.metadata?.promo_code ? (
+                        <span className="text-green-600">{booking.metadata.promo_code}</span>
                       ) : (
                         <span className="text-gray-400">None</span>
                       )}
@@ -221,7 +299,9 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
                   <div className="mt-3 p-4 bg-amber-50 rounded-lg border border-amber-200 space-y-2">
                     <div className="flex justify-between py-1">
                       <span className="text-amber-800 font-medium">
-                        Down Payment ({booking.metadata.down_payment_percentage || 20}%)
+                        Down Payment{booking.metadata.is_custom_down_payment
+                          ? ` (${Math.round((parseFloat(booking.metadata.down_payment_amount) / booking.total_amount) * 100)}%)`
+                          : ` (${booking.metadata.down_payment_percentage || 20}%)`}
                       </span>
                       <span className="font-bold text-amber-900">
                         ₱{parseFloat(booking.metadata.down_payment_amount).toFixed(2)}
