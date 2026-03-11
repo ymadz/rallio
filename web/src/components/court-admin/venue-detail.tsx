@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Building2,
-  DollarSign,
+  PhilippinePeso,
   Clock,
   BarChart3,
   Star,
@@ -121,8 +121,8 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
 
   const tabs = [
     { id: 'courts', label: 'Courts', icon: Building2 },
-    { id: 'pricing', label: 'Pricing', icon: DollarSign },
-    { id: 'discounts', label: 'Discounts', icon: DollarSign },
+    { id: 'pricing', label: 'Pricing', icon: PhilippinePeso },
+    { id: 'discounts', label: 'Discounts', icon: PhilippinePeso },
     { id: 'promo-codes', label: 'Promo Codes', icon: Tag },
     { id: 'availability', label: 'Availability', icon: Clock },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },

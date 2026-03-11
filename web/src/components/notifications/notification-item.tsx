@@ -6,7 +6,7 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
-  DollarSign,
+  PhilippinePeso,
   Calendar,
   Star,
   Bell
@@ -27,7 +27,7 @@ const notificationConfig: Record<string, { icon: any; color: string }> = {
   queue_approval_request: { icon: Bell, color: 'text-blue-600' },
   queue_approval_approved: { icon: CheckCircle, color: 'text-green-600' },
   queue_approval_rejected: { icon: XCircle, color: 'text-red-600' },
-  payment_received: { icon: DollarSign, color: 'text-green-600' },
+  payment_received: { icon: PhilippinePeso, color: 'text-green-600' },
   match_scheduled: { icon: Calendar, color: 'text-blue-600' },
   rating_received: { icon: Star, color: 'text-yellow-600' },
   general: { icon: Bell, color: 'text-gray-600' },
