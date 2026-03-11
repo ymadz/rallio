@@ -161,7 +161,21 @@ function PaymentSuccessContent() {
                       <div>
                         <p className="text-sm text-gray-500">Payment Method</p>
                         <p className="font-semibold text-gray-900 capitalize">
-                          {payment.payment_method}
+                          {payment.payment_method === 'gcash'
+                            ? 'GCash'
+                            : payment.payment_method === 'paymaya'
+                              ? 'Maya'
+                              : payment.payment_method === 'cash'
+                                ? 'Cash'
+                                : payment.payment_method || 'Cash'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Promo / Discount</p>
+                        <p className="font-semibold text-gray-900">
+                          {session.discount_amount && session.discount_amount > 0
+                            ? <span className="text-green-600">-₱{session.discount_amount.toFixed(2)}</span>
+                            : <span className="text-gray-400">None</span>}
                         </p>
                       </div>
                       <div>
