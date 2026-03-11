@@ -13,7 +13,21 @@ import {
 import { useAuthStore } from '@/stores/auth-store';
 import { Sparkles } from 'lucide-react';
 
-
+// Filter options
+const amenityOptions = [
+  'Parking',
+  'Restroom',
+  'Shower',
+  'Lockers',
+  'Water',
+  'Air Conditioning',
+  'Lighting',
+  'Waiting Area',
+  'Equipment Rental',
+  'First Aid',
+  'WiFi',
+  'Canteen',
+];
 
 type SortOption = 'distance' | 'price_low' | 'price_high' | 'rating' | 'newest';
 
@@ -33,7 +47,7 @@ export default function CourtsPage() {
 
   // Filter states
   const [priceRange, setPriceRange] = useState<[number, number]>([100, 1000]);
-
+  const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
   const [courtType, setCourtType] = useState<'indoor' | 'outdoor' | null>(null);
   const [category, setCategory] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>('newest');
@@ -47,7 +61,7 @@ export default function CourtsPage() {
 
   useEffect(() => {
     fetchVenues(true);
-  }, [search, priceRange, courtType, category, sortBy, minRating, userLocation]);
+  }, [search, priceRange, selectedAmenities, courtType, category, sortBy, minRating, userLocation]);
 
   const fetchVenues = async (reset: boolean = false) => {
     if (reset) {
@@ -62,7 +76,7 @@ export default function CourtsPage() {
       searchQuery: search || undefined,
       minPrice: 0,
       maxPrice: priceRange[1],
-
+      amenities: selectedAmenities.length > 0 ? selectedAmenities : undefined,
       category: category || undefined,
       courtType: courtType || undefined,
       rating: minRating > 0 ? minRating : undefined,
@@ -81,7 +95,7 @@ export default function CourtsPage() {
         let finalVenues = result.venues;
 
         // Only inject recommendations on the default un-filtered feed!
-        const isDefaultFeed = !search && !category && !courtType && minRating === 0;
+        const isDefaultFeed = !search && !category && !courtType && minRating === 0 && selectedAmenities.length === 0;
 
         if (isDefaultFeed) {
           // Fetch ML Recommendations to inject at the top of the grid
@@ -128,7 +142,7 @@ export default function CourtsPage() {
                     maxPrice: court.hourly_rate || 0,
                     totalCourts: 1,
                     activeCourtCount: 1,
-
+                    amenities: court.amenities || [],
                     averageRating: court.average_rating,
                     totalReviews: court.review_count || 0,
                     category: 'Recommended for You',
@@ -189,7 +203,11 @@ export default function CourtsPage() {
     }
   };
 
-
+  const toggleAmenity = (amenity: string) => {
+    setSelectedAmenities((prev) =>
+      prev.includes(amenity) ? prev.filter((a) => a !== amenity) : [...prev, amenity]
+    );
+  };
 
   const getUserLocation = () => {
     setLocationLoading(true);
@@ -278,7 +296,8 @@ export default function CourtsPage() {
                   />
                 </svg>
                 Filters
-                {(courtType ||
+                {(selectedAmenities.length > 0 ||
+                  courtType ||
                   category ||
                   minRating > 0 ||
                   priceRange[1] < 1000) && (
@@ -491,7 +510,23 @@ export default function CourtsPage() {
                 </div>
               </div>
 
-
+              <div>
+                <h3 className="font-semibold mb-3">Amenities</h3>
+                <div className="flex flex-wrap gap-2">
+                  {amenityOptions.slice(0, 6).map((amenity) => (
+                    <button
+                      key={amenity}
+                      onClick={() => toggleAmenity(amenity)}
+                      className={`px-2 py-1 rounded text-xs border ${selectedAmenities.includes(amenity)
+                        ? 'bg-primary/10 border-primary text-primary'
+                        : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                        }`}
+                    >
+                      {amenity}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -503,152 +538,12 @@ export default function CourtsPage() {
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-5">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="rounded-xl animate-pulse" style={{ height: 280, background: 'linear-gradient(135deg, #dde4e2, #ccfbf1)' }} />
+              <div key={i} className="bg-gray-100 rounded-xl h-56 md:h-80 animate-pulse" />
             ))}
           </div>
         ) : venues.length > 0 ? (
           <>
-            <style>{`
-            .cv-card {
-              position: relative;
-              border-radius: 1rem;
-              overflow: hidden;
-              border: 1px solid rgba(13,148,136,0.18);
-              box-shadow: none;
-              text-decoration: none;
-              display: block;
-              height: 260px;
-              background: linear-gradient(135deg, #ccfbf1 0%, #d1fae5 100%);
-              transition: transform 0.30s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.30s ease;
-            }
-            .cv-card .cv-badges { transition: opacity 0.25s ease; }
-            .cv-card:hover .cv-badges { opacity: 0; }
-            @media (min-width: 768px) { .cv-card { height: 300px; } }
-            .cv-card:hover {
-              transform: translateY(-4px) scale(1.012);
-              box-shadow: 0 2px 6px rgba(0,0,0,0.08), 0 8px 28px rgba(13,148,136,0.18), 0 16px 48px rgba(0,0,0,0.10);
-            }
-            .cv-card-img {
-              position: absolute;
-              inset: 0;
-              width: 100%;
-              height: 100%;
-              object-fit: cover;
-              display: block;
-              transition: transform 0.40s cubic-bezier(0.34,1.56,0.64,1);
-            }
-            .cv-card:hover .cv-card-img { transform: scale(1.06); }
-            .cv-card-placeholder {
-              position: absolute;
-              inset: 0;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              background: linear-gradient(135deg, #ccfbf1 0%, #a7f3d0 100%);
-            }
-            .cv-fog-gradient {
-              position: absolute;
-              left: 0; right: 0; bottom: 0;
-              height: 60%;
-              pointer-events: none;
-              z-index: 2;
-              background: linear-gradient(to bottom, transparent 0%, rgba(5,46,40,0.20) 25%, rgba(5,46,40,0.62) 60%, rgba(5,46,40,0.84) 100%);
-              transition: opacity 0.25s ease;
-            }
-            .cv-card:hover .cv-fog-gradient { opacity: 0; }
-            .cv-fog-blur {
-              position: absolute;
-              left: 0; right: 0; bottom: 0;
-              height: 42%;
-              pointer-events: none;
-              z-index: 3;
-              backdrop-filter: blur(16px) saturate(1.4);
-              -webkit-backdrop-filter: blur(16px) saturate(1.4);
-              mask-image: linear-gradient(to bottom, transparent 0%, black 55%);
-              -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 55%);
-              transition: opacity 0.25s ease;
-            }
-            .cv-card:hover .cv-fog-blur { opacity: 0; }
-            .cv-content {
-              position: absolute;
-              left: 0; right: 0; bottom: 0;
-              z-index: 5;
-              padding: 0.75rem;
-              transition: opacity 0.25s ease;
-            }
-            .cv-card:hover .cv-content { opacity: 0; }
-            @media (min-width: 768px) { .cv-content { padding: 1rem; } }
-            .cv-category {
-              font-size: 0.6rem;
-              font-weight: 700;
-              color: rgba(153,246,228,0.85);
-              text-transform: uppercase;
-              letter-spacing: 0.06em;
-              margin-bottom: 2px;
-            }
-            @media (min-width: 768px) { .cv-category { font-size: 0.7rem; } }
-            .cv-name {
-              font-size: 0.875rem;
-              font-weight: 700;
-              color: #fff;
-              line-height: 1.25;
-              overflow: hidden;
-              text-overflow: ellipsis;
-              white-space: nowrap;
-              letter-spacing: -0.01em;
-              text-shadow: 0 1px 4px rgba(0,0,0,0.40);
-              margin-bottom: 3px;
-            }
-            @media (min-width: 768px) { .cv-name { font-size: 1.05rem; } }
-            .cv-location {
-              font-size: 0.6875rem;
-              color: rgba(204,251,241,0.80);
-              overflow: hidden;
-              text-overflow: ellipsis;
-              white-space: nowrap;
-              margin-bottom: 6px;
-            }
-            .cv-footer {
-              display: flex;
-              align-items: center;
-              justify-content: space-between;
-              padding-top: 6px;
-              border-top: 1px solid rgba(255,255,255,0.15);
-            }
-            .cv-price-label { font-size: 0.6rem; color: rgba(204,251,241,0.65); }
-            .cv-price {
-              font-size: 0.875rem;
-              font-weight: 700;
-              color: #fff;
-            }
-            .cv-price-sub { font-size: 0.65rem; font-weight: 400; color: rgba(255,255,255,0.65); }
-            .cv-courts-pill {
-              font-size: 0.625rem;
-              font-weight: 700;
-              color: rgba(255,255,255,0.85);
-              background: rgba(255,255,255,0.14);
-              border: 1px solid rgba(255,255,255,0.22);
-              padding: 3px 8px;
-              border-radius: 999px;
-              backdrop-filter: blur(8px);
-            }
-            .cv-rating-pill {
-              display: inline-flex;
-              align-items: center;
-              gap: 3px;
-              background: rgba(0,0,0,0.30);
-              backdrop-filter: blur(8px);
-              border: 1px solid rgba(255,255,255,0.18);
-              padding: 3px 7px;
-              border-radius: 999px;
-              font-size: 0.6875rem;
-              font-weight: 700;
-              color: #fde68a;
-            }
-          `}</style>
-
             <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-5">
-
               {venues.map((venue) => {
                 const rating = venueRatings[venue.id];
                 const isOpen = isVenueOpen(venue.opening_hours);
@@ -661,41 +556,63 @@ export default function CourtsPage() {
                   <Link
                     key={venue.id}
                     href={`/courts/${venue.id}`}
-                    className="cv-card"
+                    className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg hover:border-primary/30 transition-all group"
                   >
-                    {/* Full-bleed image */}
-                    {(() => {
-                      const imgSrc = venue.image_url || venue.courts.find(c => c.images && c.images.length > 0)?.images[0]?.url;
-                      return imgSrc
-                        ? <img src={imgSrc} alt={venue.name} className="cv-card-img" />
-                        : (
-                          <div className="cv-card-placeholder">
-                            <svg style={{ width: 36, height: 36, color: '#0d9488', opacity: 0.35 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    {/* Venue Image */}
+                    <div className="h-28 md:h-44 bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center relative overflow-hidden">
+                      {(() => {
+                        // Priority 1: Venue Cover Image
+                        if (venue.image_url) {
+                          return (
+                            <img
+                              src={venue.image_url}
+                              alt={venue.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                          )
+                        }
+
+                        // Priority 2: Primary Court Image
+                        const coverImage = venue.courts.find(c => c.images && c.images.length > 0)?.images[0]?.url
+                        if (coverImage) {
+                          return (
+                            <img
+                              src={coverImage}
+                              alt={venue.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                          )
+                        }
+
+                        // Priority 3: Placeholder
+                        return (
+                          <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                            <svg className="w-8 h-8 md:w-12 md:h-12 text-primary/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
                           </div>
-                        );
-                    })()}
+                        )
+                      })()}
 
-                    {/* Fog layers */}
-                    <div className="cv-fog-gradient" />
-                    <div className="cv-fog-blur" />
-
-                    {/* Badges (fade out on hover) */}
-                    <div className="cv-badges">
-                      {/* Top-left badges */}
-                      <div className="absolute top-2 left-2 md:top-3 md:left-3 flex flex-col gap-1" style={{ zIndex: 6 }}>
+                      {/* Badges - Stacked on mobile */}
+                      <div className="absolute top-2 left-2 md:top-3 md:left-3 flex flex-col md:flex-row gap-1 md:gap-2">
+                        {/* ML Recommended Badge */}
                         {(venue as any).is_ml_recommendation && (
-                          <span className="px-2 py-0.5 md:px-2.5 md:py-1 bg-amber-500/90 text-white text-[10px] md:text-[11px] font-bold rounded-full shadow-sm flex items-center gap-1 backdrop-blur-sm">
-                            <Sparkles className="w-2.5 h-2.5" />
+                          <span className="px-1.5 py-0.5 md:px-2.5 md:py-1 bg-amber-500 text-white text-[10px] md:text-xs font-bold rounded md:rounded-md shadow-sm flex items-center gap-1">
+                            <Sparkles className="w-2.5 h-2.5 md:w-3 md:h-3" />
                             Recommended
                           </span>
                         )}
+                        <span
+                          className={`px-1.5 py-0.5 md:px-2.5 md:py-1 text-white text-[10px] md:text-xs font-bold rounded md:rounded-md shadow-sm ${isOpen ? 'bg-green-500' : 'bg-gray-500'
+                            }`}
+                        >
+                          {isOpen ? 'OPEN' : 'CLOSED'}
+                        </span>
+
                         {venue.hasActiveDiscounts && venue.activeDiscountLabels && venue.activeDiscountLabels.map((discount, i) => (
-                          <span key={i} title={discount.description || discount.name}
-                            className={`px-2 py-0.5 md:px-2.5 md:py-1 ${discount.isSurcharge ? 'bg-orange-500/90' : 'bg-green-600/90'} text-white text-[10px] md:text-[11px] font-bold rounded-full shadow-sm flex items-center gap-1 backdrop-blur-sm`}
-                          >
-                            <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <span key={i} title={discount.description || discount.name} className={`px-1.5 py-0.5 md:px-2.5 md:py-1 ${discount.isSurcharge ? 'bg-orange-500' : 'bg-green-600'} text-white text-[10px] md:text-xs font-bold rounded md:rounded-md shadow-sm flex items-center gap-1`}>
+                            <svg className="w-2.5 h-2.5 md:w-3 md:h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               {discount.isSurcharge
                                 ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                                 : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
@@ -706,55 +623,102 @@ export default function CourtsPage() {
                         ))}
                       </div>
 
-                      {/* Top-right: Open/Closed + Rating */}
-                      <div className="absolute top-2 right-2 md:top-3 md:right-3 flex flex-col items-end gap-1" style={{ zIndex: 6 }}>
-                        <span className={`px-2 py-0.5 md:px-2.5 md:py-1 text-white text-[10px] md:text-[11px] font-bold rounded-full shadow-sm backdrop-blur-sm ${isOpen ? 'bg-green-500/85' : 'bg-gray-600/80'}`}>
-                          {isOpen ? 'OPEN' : 'CLOSED'}
-                        </span>
-                        {rating && (
-                          <span className="cv-rating-pill">
-                            {rating.avg.toFixed(1)}
-                            <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                            </svg>
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Distance badge */}
+                      {/* Distance Badge (if location available) */}
                       {userLocation && venue.distance !== undefined && (
-                        <div className="absolute bottom-[calc(42%+8px)] right-2 md:right-3 px-1.5 py-0.5 bg-black/50 backdrop-blur-sm text-white text-[9px] md:text-[10px] rounded-full flex items-center gap-1" style={{ zIndex: 6 }}>
-                          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <div className="absolute bottom-2 right-2 md:bottom-3 md:right-3 px-1.5 py-0.5 md:px-2 md:py-1 bg-black/60 backdrop-blur-sm text-white text-[10px] md:text-xs rounded md:rounded-md flex items-center gap-1">
+                          <svg
+                            className="w-3 h-3"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                            />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                            />
                           </svg>
                           {formatDistance(venue.distance)}
                         </div>
                       )}
-                    </div>{/* end cv-badges */}
+                    </div>
 
-                    {/* Content over fog */}
-                    <div className="cv-content">
-                      <div className="cv-category">{venue.category || 'Sports Venue'}</div>
-                      <div className="cv-name">{venue.name}</div>
-                      <div className="cv-location">
-                        <svg style={{ width: 10, height: 10, display: 'inline', marginRight: 3, verticalAlign: 'middle', flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        {venue.location}
-                      </div>
-                      <div className="cv-footer">
+                    {/* Venue Details */}
+                    <div className="p-3 md:p-4">
+                      <div className="flex justify-between items-start mb-1 md:mb-2">
                         <div>
-                          <div className="cv-price-label">Starting from</div>
-                          <div className="cv-price">
-                            {minPrice !== null
-                              ? <>{`₱${minPrice}`}<span className="cv-price-sub">/hr</span></>
-                              : <span className="cv-price-sub">N/A</span>
-                            }
-                          </div>
+                          <p className="text-[10px] md:text-xs text-primary font-semibold uppercase tracking-wider mb-0.5 md:mb-1">
+                            {venue.category || 'Sports Venue'}
+                          </p>
+                          <h3 className="font-bold text-sm md:text-lg text-gray-900 line-clamp-1 group-hover:text-primary transition-colors">
+                            {venue.name}
+                          </h3>
                         </div>
-                        <span className="cv-courts-pill">{venue.courts.length} Courts</span>
+                        {rating && (
+                          <div className="flex items-center gap-1 bg-yellow-50 px-1.5 py-0.5 md:px-2 md:py-1 rounded md:rounded-md border border-yellow-100">
+                            <span className="font-bold text-xs md:text-sm text-yellow-700">
+                              {rating.avg.toFixed(1)}
+                            </span>
+                            <svg
+                              className="w-3 h-3 md:w-4 md:h-4 text-yellow-400"
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                            >
+                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center text-gray-500 text-[10px] md:text-sm mb-2 md:mb-3">
+                        <svg
+                          className="w-3 h-3 md:w-4 md:h-4 mr-1 flex-shrink-0"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                          />
+                        </svg>
+                        <span className="truncate">{venue.location}</span>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 md:pt-3 border-t border-gray-100">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] md:text-xs text-gray-400">Starting from</span>
+                          <span className="font-bold text-sm md:text-base text-primary">
+                            {minPrice !== null ? (
+                              <>
+                                ₱{minPrice}
+                                <span className="text-[10px] md:text-sm font-normal text-gray-500">
+                                  /hr
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-sm font-medium text-gray-400">N/A</span>
+                            )}
+                          </span>
+                        </div>
+                        <span className="text-[10px] md:text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded-full">
+                          {venue.courts.length} Courts
+                        </span>
                       </div>
                     </div>
                   </Link>
@@ -821,6 +785,7 @@ export default function CourtsPage() {
                 onClick={() => {
                   setSearch('');
                   setPriceRange([0, 2000]);
+                  setSelectedAmenities([]);
                   setCourtType(null);
                   setCategory(null);
                   setSortBy('newest');

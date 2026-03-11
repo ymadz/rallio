@@ -192,11 +192,11 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
                 </span>
               </div>
             ) : (
-              <div className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${isUpcoming
-                  ? 'bg-gradient-to-r from-[#006666] to-[#008080] text-white group-hover:from-[#008080] group-hover:to-[#66b2b2] group-hover:shadow-[0_4px_14px_rgba(0,102,102,0.35)]'
-                  : 'bg-gradient-to-r from-teal-600 to-teal-500 text-white group-hover:from-teal-500 group-hover:to-teal-400 group-hover:shadow-[0_4px_14px_rgba(13,148,136,0.35)]'
+              <div className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${isUpcoming && queue.status !== 'waiting'
+                ? 'bg-gradient-to-r from-[#006666] to-[#008080] text-white group-hover:from-[#008080] group-hover:to-[#66b2b2] group-hover:shadow-[0_4px_14px_rgba(0,102,102,0.35)]'
+                : 'bg-gradient-to-r from-teal-600 to-teal-500 text-white group-hover:from-teal-500 group-hover:to-teal-400 group-hover:shadow-[0_4px_14px_rgba(13,148,136,0.35)]'
                 }`}>
-                {isUpcoming ? (
+                {isUpcoming && queue.status !== 'waiting' ? (
                   <>
                     <Clock className="w-4 h-4" />
                     <span>OPENING SOON</span>
