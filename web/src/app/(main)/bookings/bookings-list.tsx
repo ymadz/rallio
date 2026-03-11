@@ -39,6 +39,11 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
   // We will keep `activeTab` and sync it with Tabs onValueChange to keep logic simple without rewriting everything right away.
   const [activeTab, setActiveTab] = useState('upcoming')
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
+  const [outOfOrderWarning, setOutOfOrderWarning] = useState<{
+    booking: Booking
+    paymentMethod: 'gcash' | 'paymaya'
+    unpaidDays: number[]
+  } | null>(null)
 
   const handleSelectBooking = (booking: Booking) => {
     setSelectedBooking(booking)
@@ -111,7 +116,43 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     return activeTab === 'upcoming' ? timeA - timeB : timeB - timeA
   })
 
+  const getUnpaidEarlierDays = (booking: Booking): number[] => {
+    if (!booking.recurrence_group_id) return []
+
+    const currentIndex = booking.metadata?.recurrence_index ?? booking.metadata?.week_index ?? -1
+    if (currentIndex <= 0) return []
+
+    const sameGroupBookings = bookings.filter(
+      (b) => b.recurrence_group_id === booking.recurrence_group_id && b.id !== booking.id
+    )
+
+    const unpaidDays: number[] = []
+    for (const b of sameGroupBookings) {
+      const bIndex = b.metadata?.recurrence_index ?? b.metadata?.week_index ?? -1
+      if (bIndex < currentIndex) {
+        const isFullyPaid = b.amount_paid >= b.total_amount
+        const isPaidStatus = ['confirmed', 'completed', 'ongoing'].includes(b.status) && isFullyPaid
+        if (!isPaidStatus && b.status !== 'cancelled' && b.status !== 'refunded') {
+          unpaidDays.push(bIndex + 1)
+        }
+      }
+    }
+
+    return unpaidDays.sort((a, b) => a - b)
+  }
+
   const handleResumePayment = async (booking: Booking, paymentMethod: 'gcash' | 'paymaya' = 'gcash') => {
+    // Check for unpaid earlier days in the same recurrence group
+    const unpaidDays = getUnpaidEarlierDays(booking)
+    if (unpaidDays.length > 0) {
+      setOutOfOrderWarning({ booking, paymentMethod, unpaidDays })
+      return
+    }
+
+    await proceedWithPayment(booking, paymentMethod)
+  }
+
+  const proceedWithPayment = async (booking: Booking, paymentMethod: 'gcash' | 'paymaya' = 'gcash') => {
     setResumingPaymentId(booking.id)
 
     try {
@@ -536,6 +577,55 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
           }}
         />
       )}
+
+      {/* Out-of-order payment warning modal */}
+      <Dialog open={!!outOfOrderWarning} onOpenChange={(open) => !open && setOutOfOrderWarning(null)}>
+        <DialogContent className="!rounded-2xl border-amber-200 max-w-md p-6">
+          <DialogTitle className="flex items-center gap-2 text-amber-700 text-lg font-semibold">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+            Unpaid Earlier Booking{outOfOrderWarning && outOfOrderWarning.unpaidDays.length > 1 ? 's' : ''}
+          </DialogTitle>
+          <div className="space-y-3 mt-2">
+            <p className="text-sm text-gray-600">
+              You&apos;re about to pay for{' '}
+              <span className="font-semibold text-gray-900">
+                Day {outOfOrderWarning ? (outOfOrderWarning.booking.metadata?.recurrence_index ?? outOfOrderWarning.booking.metadata?.week_index ?? 0) + 1 : ''}
+              </span>{' '}
+              of your booking, but{' '}
+              <span className="font-semibold text-amber-700">
+                Day {outOfOrderWarning?.unpaidDays.join(', Day ')}
+              </span>{' '}
+              {outOfOrderWarning && outOfOrderWarning.unpaidDays.length > 1 ? 'are' : 'is'} still unpaid.
+            </p>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
+              <p className="font-medium mb-1">Are you sure you want to continue?</p>
+              <p>You can pay for earlier days first by going back and selecting them.</p>
+            </div>
+          </div>
+          <div className="flex gap-3 justify-end mt-4">
+            <Button
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => setOutOfOrderWarning(null)}
+            >
+              Go Back
+            </Button>
+            <Button
+              className="rounded-xl bg-primary hover:bg-primary/90"
+              onClick={() => {
+                if (outOfOrderWarning) {
+                  proceedWithPayment(outOfOrderWarning.booking, outOfOrderWarning.paymentMethod)
+                }
+                setOutOfOrderWarning(null)
+              }}
+            >
+              Continue to Payment
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
