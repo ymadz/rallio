@@ -21,8 +21,6 @@ export async function createReservation(
         discountReason?: string
         recurrenceWeeks?: number
         selectedDays?: number[] // Array of day indices (0-6)
-        customDownPaymentAmount?: number // User-specified down payment amount (must be >= venue minimum)
-        promoCode?: string // The actual code string used
     }) {
     const recurrenceWeeks = data.recurrenceWeeks || 1
     const selectedDays = data.selectedDays || []
@@ -169,9 +167,7 @@ export async function createReservation(
         startDate: targetSlots[0].start.toISOString(),
         endDate: targetSlots[targetSlots.length - 1].end.toISOString(),
         recurrenceWeeks: recurrenceWeeks,
-        targetDateCount: targetSlots.length,
-        basePrice: totalBasePrice,
-        promoCode: data.promoCode
+        basePrice: totalBasePrice
     })
 
     const finalTotalAmount = discountResult.finalPrice
@@ -227,19 +223,7 @@ export async function createReservation(
     const venueData = court.venues as any;
     const venueMetadata = venueData ? (Array.isArray(venueData) ? venueData[0]?.metadata : venueData.metadata) : null;
     const downPaymentPercentage = parseFloat(venueMetadata?.down_payment_percentage || '20')
-    const defaultDownPaymentAmount = data.paymentMethod === 'cash' ? Math.round((perInstanceAmount * downPaymentPercentage / 100) * 100) / 100 : undefined;
-
-    // Allow user to override with a custom amount (must be >= venue minimum, <= total per slot)
-    // NOTE: The user enters a TOTAL custom amount across all sessions.
-    // We must divide by number of slots to get the per-slot amount before clamping.
-    let downPaymentAmount = defaultDownPaymentAmount;
-    if (data.paymentMethod === 'cash' && data.customDownPaymentAmount !== undefined && data.customDownPaymentAmount > 0 && defaultDownPaymentAmount !== undefined) {
-        // Convert total custom amount → per slot
-        const customPerSlot = data.customDownPaymentAmount / targetSlots.length
-        // Clamp between minimum (20% of per-slot) and total per instance
-        const clampedAmount = Math.min(Math.max(customPerSlot, defaultDownPaymentAmount), perInstanceAmount)
-        downPaymentAmount = Math.round(clampedAmount * 100) / 100
-    }
+    const downPaymentAmount = data.paymentMethod === 'cash' ? Math.round((perInstanceAmount * downPaymentPercentage / 100) * 100) / 100 : undefined;
 
     for (let i = 0; i < targetSlots.length; i++) {
         const slot = targetSlots[i]
@@ -298,7 +282,6 @@ export async function createReservation(
                     })),
                     recurrence_index: i,
                     recurrence_total: targetSlots.length,
-                    promo_code: data.promoCode,
                     // Add week-specific metadata for proper display
                     week_index: slot.weekIndex,
                     weeks_total: recurrenceWeeks,
@@ -336,54 +319,6 @@ export async function createReservation(
 
         if (i === 0) primaryReservationId = newRes.id
         createdReservationIds.push(newRes.id)
-    }
-
-    // 4. APPLY PROMO CODE USAGE
-    // We only apply it immediately if the booking is fully free, OR it's a cash payment with no down payment required.
-    // Otherwise, we wait for the PayMongo webhook to successfully confirm the payment before consuming the code.
-    const isFree = perInstanceAmount <= 0;
-    const isCashNoDownPayment = data.paymentMethod === 'cash' && (downPaymentAmount === undefined || downPaymentAmount <= 0);
-    const shouldConsumePromoImmediately = isFree || isCashNoDownPayment;
-
-    if (data.promoCode && createdReservationIds.length > 0 && shouldConsumePromoImmediately) {
-        try {
-            // Get the promo code ID from the code string
-            const { data: promoData } = await adminDb
-                .from('promo_codes')
-                .select('id, current_uses')
-                .eq('code', data.promoCode.toUpperCase())
-                // Ensure we get the appropriate promo code (could be venue_id specific or platform wide)
-                .or(`venue_id.eq.${court.venue_id},venue_id.is.null`)
-                .order('venue_id', { ascending: false })
-                .limit(1)
-                .single()
-
-            if (promoData) {
-                // Add usage records for each created reservation
-                const usageRecords = createdReservationIds.map(resId => ({
-                    promo_code_id: promoData.id,
-                    user_id: data.userId,
-                    reservation_id: resId,
-                }))
-
-                const { error: usageError } = await adminDb.from('promo_code_usage').insert(usageRecords)
-                if (usageError) console.error('Error inserting usage records:', usageError)
-
-                // Increment current_uses
-                const { error: updateError } = await adminDb
-                    .from('promo_codes')
-                    .update({ current_uses: promoData.current_uses + createdReservationIds.length })
-                    .eq('id', promoData.id)
-                if (updateError) console.error('Error updating promo code uses:', updateError)
-
-                console.log(`✅ Applied promo code ${data.promoCode} to ${createdReservationIds.length} reservations. Consumed immediately.`)
-            }
-        } catch (error) {
-            console.error('❌ Failed to record promo code usage:', error)
-            // Don't fail the whole booking if just the tracking fails, but maybe log it
-        }
-    } else if (data.promoCode) {
-        console.log(`⏳ Promo code ${data.promoCode} detected but consumption delayed pending successful payment.`)
     }
 
     return {

@@ -32,7 +32,6 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
   const [isLeaving, setIsLeaving] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [participant, setParticipant] = useState<any>(null)
-  const [profileCompleted, setProfileCompleted] = useState<boolean | null>(null)
 
   const [timeUntilOpen, setTimeUntilOpen] = useState<number | null>(null)
 
@@ -76,28 +75,11 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
   const [paymentError, setPaymentError] = useState<string | null>(null)
   const supabase = createClient()
 
-  // Get current user ID and profile completeness
+  // Get current user ID
   useEffect(() => {
     async function getCurrentUser() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      setCurrentUserId(user.id)
-
-      // Check real profile fields (same logic as home page banner)
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('display_name')
-        .eq('id', user.id)
-        .single()
-
-      const { data: player } = await supabase
-        .from('players')
-        .select('skill_level')
-        .eq('user_id', user.id)
-        .single()
-
-      const isComplete = !!profile?.display_name && !!player?.skill_level
-      setProfileCompleted(isComplete)
+      setCurrentUserId(user?.id || null)
     }
     getCurrentUser()
   }, [])
@@ -131,9 +113,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
     }
 
     fetchParticipant()
-    // Re-fetch participant whenever queue players list updates (triggered by real-time subscription)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queue?.id, currentUserId, queue?.players])
+  }, [queue?.id, currentUserId])
 
 
 
@@ -222,12 +202,42 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
 
   const isUserInQueue = queue.userPosition !== null
   const playersAhead = isUserInQueue ? queue.userPosition! - 1 : 0
+  const estimatedWaitTime = Math.max(playersAhead * 15, 0) // ~15 min per game ahead
   const now = serverDate || new Date()
   const isLive = new Date(queue.startTime) <= now && new Date(queue.endTime) > now
   const displayStatus = queue.status === 'completed' ? 'completed' : isLive ? 'live' : 'open'
 
   return (
     <>
+      {/* Notification Banner */}
+      <QueueNotificationBanner
+        notifications={notifications}
+        onDismiss={dismissNotification}
+      />
+
+      {/* Active Match Alert */}
+      {activeMatch && (
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-5 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center animate-pulse">
+                <Activity className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="font-bold text-green-900 text-lg">You Have an Active Match!</h3>
+                <p className="text-sm text-green-700">Match #{activeMatch.match_number} is ready</p>
+              </div>
+            </div>
+            <Link
+              href={`/queue/${courtId}/match/${activeMatch.id}`}
+              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold shadow-md"
+            >
+              View Match
+            </Link>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-6">
         {/* Event Details Card */}
         <QueueEventCard queue={queue} onBack={() => router.back()} />
@@ -251,15 +261,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                 </span>
               </div>
             </div>
-            <div className="flex flex-col items-end gap-2">
-              <QueueStatusBadge status={displayStatus} size="md" />
-              <span className={`px-2.5 py-1 text-xs font-bold rounded-full border ${queue.mode === 'competitive'
-                ? 'bg-purple-50 text-purple-700 border-purple-200'
-                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                }`}>
-                {queue.mode === 'competitive' ? 'Competitive' : 'Casual'}
-              </span>
-            </div>
+            <QueueStatusBadge status={displayStatus} size="md" />
           </div>
 
           {/* Queue Stats */}
@@ -276,11 +278,11 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
 
             <div className="bg-gray-50 rounded-lg p-3">
               <div className="flex items-center gap-2 mb-1">
-                <Users className="w-4 h-4 text-gray-500" />
-                <span className="text-xs text-gray-600">Max Players</span>
+                <Clock className="w-4 h-4 text-gray-500" />
+                <span className="text-xs text-gray-600">Est. Wait</span>
               </div>
               <p className="text-lg font-bold text-gray-900">
-                {queue.maxPlayers}
+                ~{estimatedWaitTime}m
               </p>
             </div>
 
@@ -301,10 +303,9 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
           <QueuePositionTracker
             position={queue.userPosition!}
             totalPlayers={queue.currentPlayers}
+            estimatedWaitTime={estimatedWaitTime}
             gamesPlayed={participant.games_played || 0}
             status={participant.status || 'waiting'}
-            sessionStartTime={queue.startTime}
-            isSessionLive={isLive}
           />
         )}
 
@@ -393,90 +394,66 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
         {/* Join/Leave Queue Form - hidden from organizer */}
         {!isUserInQueue ? (
           <div className="bg-white border border-gray-200 rounded-xl p-6">
-            {profileCompleted === null ? null : profileCompleted !== true ? (
-              // Profile incomplete gate
-              <>
-                <div className="flex items-start gap-4 mb-5">
-                  <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 mb-1">Complete Your Profile First</h3>
-                    <p className="text-sm text-gray-500">
-                      You need to set up your player profile before joining a queue. This helps the queue master balance teams by skill level.
-                    </p>
+            <h3 className="font-semibold text-gray-900 mb-3">Join Queue</h3>
+
+            {timeUntilOpen !== null && timeUntilOpen > 0 ? (
+              <div className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                  <Clock className="w-8 h-8 text-blue-500 mx-auto mb-2" />
+                  <h4 className="font-semibold text-blue-900 mb-1">Queue Opens Soon</h4>
+                  <p className="text-sm text-blue-700 mb-3">
+                    Joining opens 12 hours before the session starts.
+                  </p>
+                  <div className="text-2xl font-bold text-blue-600 font-mono">
+                    {formatTime(timeUntilOpen)}
                   </div>
                 </div>
-                <Link
-                  href="/setup-profile?from=queue"
-                  className="w-full flex items-center justify-center gap-2 bg-primary text-white py-3.5 rounded-lg font-semibold hover:bg-primary/90 transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                  Set Up Profile
-                </Link>
-              </>
+                <div className="flex items-start gap-2 text-sm text-gray-500">
+                  <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                  <span>You can join this queue starting at {format(subHours(new Date(queue.startTime), 12), 'h:mm a')}</span>
+                </div>
+              </div>
             ) : (
-              // Normal Join Queue UI
               <>
-                <h3 className="font-semibold text-gray-900 mb-3">Join Queue</h3>
-                {timeUntilOpen !== null && timeUntilOpen > 0 ? (
-                  <div className="space-y-4">
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
-                      <Clock className="w-8 h-8 text-blue-500 mx-auto mb-2" />
-                      <h4 className="font-semibold text-blue-900 mb-1">Queue Opens Soon</h4>
-                      <p className="text-sm text-blue-700 mb-3">
-                        Joining opens 12 hours before the session starts.
-                      </p>
-                      <div className="text-2xl font-bold text-blue-600 font-mono">
-                        {formatTime(timeUntilOpen)}
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-2 text-sm text-gray-500">
-                      <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                      <span>You can join this queue starting at {format(subHours(new Date(queue.startTime), 12), 'h:mm a')}</span>
-                    </div>
+                <div className="space-y-3 mb-6">
+                  <div className="flex items-start gap-2 text-sm text-gray-600">
+                    <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>You will be notified when it&apos;s your turn</span>
                   </div>
-                ) : (
-                  <>
-                    <div className="space-y-3 mb-6">
-                      <div className="flex items-start gap-2 text-sm text-gray-600">
-                        <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span>You will be notified when it&apos;s your turn</span>
-                      </div>
-                      <div className="flex items-start gap-2 text-sm text-gray-600">
-                        <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span>Cancel anytime without penalty</span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={handleJoinQueue}
-                      disabled={isJoining || queue.players.length >= queue.maxPlayers}
-                      className="w-full bg-primary text-white py-3.5 rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                      {isJoining ? (
-                        <>
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                          <span>Joining...</span>
-                        </>
-                      ) : queue.players.length >= queue.maxPlayers ? (
-                        <span>Queue Full</span>
-                      ) : (
-                        <>
-                          <Users className="w-5 h-5" />
-                          <span>Join Queue</span>
-                        </>
-                      )}
-                    </button>
-                  </>
-                )}
+                  <div className="flex items-start gap-2 text-sm text-gray-600">
+                    <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Cancel anytime without penalty</span>
+                  </div>
+                  <div className="flex items-start gap-2 text-sm text-gray-600">
+                    <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Estimated wait: ~{estimatedWaitTime} minutes</span>
+                  </div>
+                </div>
+                <button
+                  onClick={handleJoinQueue}
+                  disabled={isJoining || queue.players.length >= queue.maxPlayers}
+                  className="w-full bg-primary text-white py-3.5 rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isJoining ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Joining...</span>
+                    </>
+                  ) : queue.players.length >= queue.maxPlayers ? (
+                    <span>Queue Full</span>
+                  ) : (
+                    <>
+                      <Users className="w-5 h-5" />
+                      <span>Join Queue</span>
+                    </>
+                  )}
+                </button>
               </>
             )}
           </div>
@@ -522,41 +499,62 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
           </div>
         )}
 
+        {/* Game Assignment Placeholder */}
+        {queue.currentMatch && (
+          <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
+                <Activity className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="font-bold text-green-900">Match Assigned!</h3>
+                <p className="text-sm text-green-700">Your turn to play</p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg p-4 space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">Court</span>
+                <span className="font-semibold text-gray-900">{queue.currentMatch.courtName}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">Duration</span>
+                <span className="font-semibold text-gray-900">{queue.currentMatch.duration} minutes</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">Players</span>
+                <span className="font-semibold text-gray-900">{queue.currentMatch.players.join(', ')}</span>
+              </div>
+            </div>
+
+            <button className="w-full mt-4 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors">
+              Start Game
+            </button>
+          </div>
+        )}
 
         {/* Mobile Bottom Bar - Fixed position for join/leave button */}
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 z-50">
           {!isUserInQueue ? (
-            profileCompleted !== true ? (
-              <Link
-                href="/setup-profile?from=queue"
-                className="w-full flex items-center justify-center gap-2 bg-amber-500 text-white py-4 rounded-xl font-semibold hover:bg-amber-600 transition-colors shadow-lg"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-                Set Up Profile to Join
-              </Link>
-            ) : (
-              <button
-                onClick={handleJoinQueue}
-                disabled={isJoining || queue.players.length >= queue.maxPlayers}
-                className="w-full bg-primary text-white py-4 rounded-xl font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg"
-              >
-                {isJoining ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Joining...</span>
-                  </>
-                ) : queue.players.length >= queue.maxPlayers ? (
-                  <span>Queue Full</span>
-                ) : (
-                  <>
-                    <Users className="w-5 h-5" />
-                    <span>Join Queue</span>
-                  </>
-                )}
-              </button>
-            )
+            <button
+              onClick={handleJoinQueue}
+              disabled={isJoining || queue.players.length >= queue.maxPlayers}
+              className="w-full bg-primary text-white py-4 rounded-xl font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg"
+            >
+              {isJoining ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Joining...</span>
+                </>
+              ) : queue.players.length >= queue.maxPlayers ? (
+                <span>Queue Full</span>
+              ) : (
+                <>
+                  <Users className="w-5 h-5" />
+                  <span>Join Queue</span>
+                </>
+              )}
+            </button>
           ) : (
             <div className="space-y-2">
               {participant && participant.amount_owed > 0 && participant.payment_status !== 'paid' && (
