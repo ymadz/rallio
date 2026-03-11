@@ -18,7 +18,6 @@ export interface QueuePlayer {
   avatarUrl?: string
   skillTier?: 'beginner' | 'intermediate' | 'advanced' | 'expert'
   skillLevel?: number
-  rating?: number
   position: number
   joinedAt: Date
   gamesPlayed: number
@@ -134,7 +133,6 @@ export function useQueue(courtId: string) {
           name: p.playerName,
           avatarUrl: p.avatarUrl,
           skillLevel: p.skillLevel,
-          rating: p.rating,
           skillTier: getSkillTier(p.skillLevel),
           position: p.position,
           joinedAt: p.joinedAt,

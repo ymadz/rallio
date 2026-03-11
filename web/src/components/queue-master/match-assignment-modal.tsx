@@ -14,7 +14,6 @@ interface MatchAssignmentModalProps {
     playerName: string
     avatarUrl?: string
     skillLevel: number
-    rating?: number
     gamesPlayed: number
     position?: number
   }>
@@ -329,10 +328,8 @@ export function MatchAssignmentModal({
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center justify-between text-xs mt-1">
-                          <span className="text-gray-600">
-                            Skill: {player.skillLevel} {player.rating ? `(${player.rating})` : ''}
-                          </span>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-600">Skill: {player.skillLevel}</span>
                           <span className="text-gray-600">{player.gamesPlayed} games</span>
                         </div>
                       </button>
@@ -409,9 +406,7 @@ export function MatchAssignmentModal({
                                 <p className="font-medium text-sm text-gray-900 truncate">
                                   {player.playerName}
                                 </p>
-                                <p className="text-xs text-gray-600">
-                                  Skill: {player.skillLevel} {player.rating ? `(${player.rating})` : ''}
-                                </p>
+                                <p className="text-xs text-gray-600">Skill: {player.skillLevel}</p>
                               </div>
                             </div>
                           )
@@ -463,9 +458,7 @@ export function MatchAssignmentModal({
                                 <p className="font-medium text-sm text-gray-900 truncate">
                                   {player.playerName}
                                 </p>
-                                <p className="text-xs text-gray-600">
-                                  Skill: {player.skillLevel} {player.rating ? `(${player.rating})` : ''}
-                                </p>
+                                <p className="text-xs text-gray-600">Skill: {player.skillLevel}</p>
                               </div>
                             </div>
                           )

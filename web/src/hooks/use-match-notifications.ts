@@ -19,34 +19,6 @@ export function useMatchNotifications(userId?: string) {
 
     console.log('[useMatchNotifications] 🔔 Setting up match notifications for user:', userId)
 
-    // Fetch initial active match state
-    const fetchActiveMatch = async () => {
-      const { data: matches } = await supabase
-        .from('matches')
-        .select(`
-          *,
-          queue_sessions (
-            court_id,
-            courts (
-              name,
-              venues (
-                name
-              )
-            )
-          )
-        `)
-        .in('status', ['scheduled', 'in_progress'])
-        .or(`team_a_players.cs.{${userId}},team_b_players.cs.{${userId}}`)
-        .order('created_at', { ascending: false })
-        .limit(1)
-
-      if (matches && matches.length > 0) {
-        setActiveMatch(matches[0])
-      }
-    }
-
-    fetchActiveMatch()
-
     // Subscribe to match assignments
     const channel = supabase
       .channel(`match-notifications-${userId}`)
