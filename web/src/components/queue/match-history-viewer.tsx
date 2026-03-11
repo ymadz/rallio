@@ -262,53 +262,27 @@ export function MatchHistoryViewer({ sessionId, userId, courtId }: MatchHistoryV
                   <div>
                     <div className="text-gray-500 mb-1">Team A</div>
                     <div className="space-y-0.5">
-                      {match.team_a_players.map((playerId) => {
-                        const rChange = match.metadata?.ratingChanges?.[playerId]
-                        return (
-                          <div
-                            key={playerId}
-                            className={`flex items-center justify-between ${playerId === userId ? 'font-semibold text-primary' : 'text-gray-700'}`}
-                          >
-                            <span className="truncate">{playerNames[playerId] || 'Player'}</span>
-                            {rChange && (
-                              <div className="flex items-center gap-1 ml-2 flex-shrink-0">
-                                <span className="text-[10px] text-gray-500 font-medium">
-                                  {rChange.new}
-                                </span>
-                                <span className={`text-[10px] ${rChange.diff > 0 ? 'text-green-600' : rChange.diff < 0 ? 'text-red-500' : 'text-gray-400'}`}>
-                                  {rChange.diff > 0 ? '+' : ''}{rChange.diff}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
+                      {match.team_a_players.map((playerId) => (
+                        <div
+                          key={playerId}
+                          className={playerId === userId ? 'font-semibold text-primary' : 'text-gray-700'}
+                        >
+                          {playerNames[playerId] || 'Player'}
+                        </div>
+                      ))}
                     </div>
                   </div>
                   <div>
                     <div className="text-gray-500 mb-1">Team B</div>
                     <div className="space-y-0.5">
-                      {match.team_b_players.map((playerId) => {
-                        const rChange = match.metadata?.ratingChanges?.[playerId]
-                        return (
-                          <div
-                            key={playerId}
-                            className={`flex items-center justify-between ${playerId === userId ? 'font-semibold text-primary' : 'text-gray-700'}`}
-                          >
-                            <span className="truncate">{playerNames[playerId] || 'Player'}</span>
-                            {rChange && (
-                              <div className="flex items-center gap-1 ml-2 flex-shrink-0">
-                                <span className="text-[10px] text-gray-500 font-medium">
-                                  {rChange.new}
-                                </span>
-                                <span className={`text-[10px] ${rChange.diff > 0 ? 'text-green-600' : rChange.diff < 0 ? 'text-red-500' : 'text-gray-400'}`}>
-                                  {rChange.diff > 0 ? '+' : ''}{rChange.diff}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
+                      {match.team_b_players.map((playerId) => (
+                        <div
+                          key={playerId}
+                          className={playerId === userId ? 'font-semibold text-primary' : 'text-gray-700'}
+                        >
+                          {playerNames[playerId] || 'Player'}
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>

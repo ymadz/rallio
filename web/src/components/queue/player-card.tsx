@@ -61,16 +61,11 @@ export function PlayerCard({ player, isCurrentUser }: PlayerCardProps) {
             )}
           </div>
 
-          <div className="flex items-center flex-wrap gap-2 mt-1">
+          <div className="flex items-center gap-2 mt-1">
             <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${skillColors[player.skillTier || 'beginner']}`}>
               {player.skillLevel ? `Lvl ${player.skillLevel} · ` : ''}{player.skillTier || player.skillLevel}
             </span>
-            {player.rating && (
-              <span className="px-2 py-0.5 bg-gray-100 text-gray-700 text-[11px] font-semibold rounded-full border border-gray-200">
-                {player.rating} ELO
-              </span>
-            )}
-            <span className="text-xs text-gray-500 flex-shrink-0">
+            <span className="text-xs text-gray-500">
               {getTimeAgo(player.joinedAt)}
             </span>
           </div>

@@ -53,7 +53,6 @@ interface Participant {
   playerName: string
   avatarUrl?: string
   skillLevel: number
-  rating?: number
   position: number
   joinedAt: Date
   gamesPlayed: number
@@ -241,12 +240,11 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
       console.log('📡 [loadSession] Fetching skill levels for', playerIds.length, 'players')
       const { data: players } = await supabase
         .from('players')
-        .select('user_id, skill_level, rating')
+        .select('user_id, skill_level')
         .in('user_id', playerIds)
 
       console.log('📥 [loadSession] Players skill data:', players)
       const playerSkillMap = new Map(players?.map((p: any) => [p.user_id, p.skill_level]) || [])
-      const playerRatingMap = new Map(players?.map((p: any) => [p.user_id, p.rating]) || [])
 
       // Format participants
       const formattedParticipants: Participant[] = (participants || []).map((p: any, index: number) => ({
@@ -255,7 +253,6 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         playerName: p.user?.display_name || `${p.user?.first_name || ''} ${p.user?.last_name || ''}`.trim() || 'Unknown Player',
         avatarUrl: p.user?.avatar_url,
         skillLevel: playerSkillMap.get(p.user_id) || 5,
-        rating: playerRatingMap.get(p.user_id),
         position: index + 1,
         joinedAt: new Date(p.joined_at),
         gamesPlayed: p.games_played || 0,
@@ -880,14 +877,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                           </div>
                         </div>
                         <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <div className="font-semibold text-gray-900">{player.playerName}</div>
-                            {player.rating && (
-                              <span className="px-2 py-0.5 bg-gray-100 text-gray-700 text-[10px] font-semibold rounded-full border border-gray-200">
-                                {player.rating} ELO
-                              </span>
-                            )}
-                          </div>
+                          <div className="font-semibold text-gray-900">{player.playerName}</div>
                           <div className="text-sm text-gray-600">
                             {player.gamesPlayed} played • ₱{player.amountOwed.toFixed(0)} owed
                           </div>
@@ -966,14 +956,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                           </div>
                         </div>
                         <div>
-                          <div className="flex items-center gap-2">
-                            <div className="font-semibold text-gray-900">{player.playerName}</div>
-                            {player.rating && (
-                              <span className="px-2 py-0.5 bg-gray-100 text-gray-700 text-[10px] font-semibold rounded-full border border-gray-200">
-                                {player.rating} ELO
-                              </span>
-                            )}
-                          </div>
+                          <div className="font-semibold text-gray-900">{player.playerName}</div>
                           <div className="text-sm text-gray-600">
                             Currently playing
                           </div>
@@ -1165,7 +1148,6 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
               playerName: p.playerName,
               avatarUrl: p.avatarUrl,
               skillLevel: p.skillLevel,
-              rating: p.rating,
               gamesPlayed: p.gamesPlayed,
               position: p.position,
             }))}
