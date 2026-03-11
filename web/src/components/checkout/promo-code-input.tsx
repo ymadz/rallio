@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { Tag, X, CheckCircle, Loader2 } from 'lucide-react'
 import { useCheckoutStore } from '@/stores/checkout-store'
 import { validatePromoCode } from '@/app/actions/promo-code-actions'
+import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
+import { format } from 'date-fns'
 
 export function PromoCodeInput() {
     const [code, setCode] = useState('')
@@ -17,12 +19,70 @@ export function PromoCodeInput() {
         promoCode,
         promoDiscountType,
         setPromoDiscount,
+        setDiscountDetails,
         removePromoDiscount,
-        discountAmount // Still needed to calculate the base subtotal correctly
+        discountAmount
     } = useCheckoutStore()
 
     // Wait for booking data
     if (!bookingData) return null
+
+    // Recalculate all discounts using the unified backend function
+    // Defined before early returns so it's available in all code paths
+    const recalculateDiscounts = async (promoCodeStr?: string) => {
+        if (!bookingData) return
+
+        // Compute the full base price (before any discounts)
+        const basePrice = getSubtotal() + discountAmount + promoDiscountAmount
+
+        const dateStr = format(new Date(bookingData.date), 'yyyy-MM-dd')
+        const startDateTime = `${dateStr}T${bookingData.startTime}:00+08:00`
+        const endDateTime = `${dateStr}T${bookingData.endTime}:00+08:00`
+
+        const recurrenceWeeks = bookingData.recurrenceWeeks || 1
+        const selectedDays = bookingData.selectedDays || []
+        const initialStartTime = new Date(bookingData.date)
+        const [startH] = bookingData.startTime.split(':')
+        initialStartTime.setHours(parseInt(startH), 0, 0, 0)
+        const startDayIndex = initialStartTime.getDay()
+        const uniqueSelectedDays = selectedDays.length > 0
+            ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
+            : [startDayIndex]
+        let actualSlotCount = 0
+        for (let i = 0; i < recurrenceWeeks; i++) {
+            for (const _dayIndex of uniqueSelectedDays) {
+                actualSlotCount++
+            }
+        }
+
+        const unifiedResult = await calculateApplicableDiscounts({
+            venueId: bookingData.venueId,
+            courtId: bookingData.courtId,
+            startDate: startDateTime,
+            endDate: endDateTime,
+            recurrenceWeeks,
+            targetDateCount: actualSlotCount,
+            basePrice,
+            promoCode: promoCodeStr
+        })
+
+        if (unifiedResult.success) {
+            // Split results into promo vs non-promo
+            const promoDiscounts = unifiedResult.discounts.filter(d => d.type === 'promo_code')
+            const venueDiscounts = unifiedResult.discounts.filter(d => d.type !== 'promo_code')
+            const venueTotal = venueDiscounts.reduce((sum, d) => d.isIncrease ? sum - d.amount : sum + d.amount, 0)
+
+            setDiscountDetails({
+                amount: venueTotal,
+                type: venueDiscounts[0]?.name,
+                reason: venueDiscounts.map(d => d.description).join(', '),
+                discounts: venueDiscounts
+            })
+
+            return { promoDiscounts, venueDiscounts }
+        }
+        return null
+    }
 
     // If a promotion is already applied, show success state
     if (promoCode && promoDiscountAmount > 0) {
@@ -43,9 +103,11 @@ export function PromoCodeInput() {
                         </div>
                     </div>
                     <button
-                        onClick={() => {
+                        onClick={async () => {
                             removePromoDiscount()
                             setCode('')
+                            // Recalculate venue discounts without promo (amounts may differ)
+                            await recalculateDiscounts()
                         }}
                         className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors"
                         title="Remove promo code"
@@ -65,26 +127,40 @@ export function PromoCodeInput() {
         setError(null)
 
         try {
-            // Calculate discount on the subtotal AFTER system discounts, but BEFORE any promo discounts
-            const baseSubtotal = getSubtotal() + promoDiscountAmount
-
+            // First validate the promo code (checks validity, dates, usage limits)
+            const basePrice = getSubtotal() + discountAmount + promoDiscountAmount
             const result = await validatePromoCode(
                 code,
                 bookingData.venueId,
-                baseSubtotal
+                basePrice
             )
 
-            if (result.valid && result.promoCode && result.discountAmount !== undefined) {
+            if (!result.valid || !result.promoCode) {
+                setError(result.error || 'Invalid promo code')
+                return
+            }
+
+            // Recalculate ALL discounts together (matching backend priority logic)
+            const recalcResult = await recalculateDiscounts(code)
+
+            if (recalcResult) {
+                const promoTotal = recalcResult.promoDiscounts.reduce((sum, d) => sum + d.amount, 0)
                 setPromoDiscount({
-                    amount: result.discountAmount,
+                    amount: promoTotal,
                     code: result.promoCode.code,
                     type: result.promoCode.discount_type,
                     reason: result.promoCode.description || undefined
                 })
-                setCode('')
             } else {
-                setError(result.error || 'Invalid promo code')
+                // Fallback: use the validation result amount
+                setPromoDiscount({
+                    amount: result.discountAmount!,
+                    code: result.promoCode.code,
+                    type: result.promoCode.discount_type,
+                    reason: result.promoCode.description || undefined
+                })
             }
+            setCode('')
         } catch (err) {
             setError('An error occurred. Please try again.')
         } finally {

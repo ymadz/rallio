@@ -177,10 +177,11 @@ export async function createReservation(
     const finalTotalAmount = discountResult.finalPrice
     const calculatedDiscountAmount = discountResult.totalDiscount
 
-    // We only log the primary discount name if one exists (for legacy discountType field)
+    // Store the primary discount name for the legacy discountType field
+    // and build a full list for metadata
     let primaryDiscountName = ''
     if (discountResult.discounts.length > 0) {
-        primaryDiscountName = discountResult.discounts[0].name
+        primaryDiscountName = discountResult.discounts.map(d => d.name).join(', ')
     }
 
     // 2.6 PLATFORM FEE CALCULATION (server-side to match what PayMongo charges)
@@ -288,6 +289,13 @@ export async function createReservation(
                     platform_fee_percentage: platformFeeEnabled ? platformFeePercentage : 0,
                     down_payment_percentage: data.paymentMethod === 'cash' ? downPaymentPercentage : undefined,
                     down_payment_amount: data.paymentMethod === 'cash' ? downPaymentAmount : undefined,
+                    is_custom_down_payment: data.paymentMethod === 'cash' && data.customDownPaymentAmount !== undefined && data.customDownPaymentAmount > 0 && downPaymentAmount !== defaultDownPaymentAmount,
+                    applied_discounts: discountResult.discounts.map(d => ({
+                        name: d.name,
+                        type: d.type,
+                        amount: d.amount / targetSlots.length,
+                        isIncrease: d.isIncrease
+                    })),
                     recurrence_index: i,
                     recurrence_total: targetSlots.length,
                     promo_code: data.promoCode,
