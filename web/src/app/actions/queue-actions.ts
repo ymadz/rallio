@@ -99,6 +99,25 @@ export async function getQueueDetails(courtId: string) {
       return { success: true, queue: null }
     }
 
+    // PRIVATE QUEUE AUTHORIZATION: Defense-in-depth check.
+    // RLS (migration 042) already enforces this at the DB level, but we verify
+    // explicitly to protect against misconfiguration or future service-client refactors.
+    if (!session.is_public) {
+      const isOrganizer = session.organizer_id === user.id
+      if (!isOrganizer) {
+        const { count: participantCount } = await supabase
+          .from('queue_participants')
+          .select('*', { count: 'exact', head: true })
+          .eq('queue_session_id', session.id)
+          .eq('user_id', user.id)
+          .neq('status', 'left')
+        if (!participantCount || participantCount === 0) {
+          console.log('[getQueueDetails] 🔒 Access denied to private queue:', session.id)
+          return { success: true, queue: null }
+        }
+      }
+    }
+
     // AUTO-CLOSE CHECK: If session is past end_time, close it automatically
     const now = await getServerNow()
     if (new Date(session.end_time) < now) {
@@ -2466,7 +2485,8 @@ export async function getQueueMasterStats(): Promise<{
         current_players,
         cost_per_game,
         queue_participants (
-          amount_owed
+          amount_owed,
+          payment_status
         )
       `)
       .eq('organizer_id', user.id)
@@ -2523,8 +2543,13 @@ export async function getQueueMasterStats(): Promise<{
         pendingCount++
       }
 
-      // Stats calculation
-      const sessionRevenue = session.queue_participants?.reduce((sum: number, p: any) => sum + (p.amount_owed || 0), 0) || 0
+      // Stats calculation — only count paid participants as revenue
+      const sessionRevenue = session.queue_participants?.reduce((sum: number, p: any) => {
+        if (p.payment_status === 'paid') {
+          return sum + parseFloat(p.amount_owed || '0')
+        }
+        return sum
+      }, 0) || 0
       totalRevenue += sessionRevenue
 
       if (['active', 'open', 'completed'].includes(effectiveStatus)) {
