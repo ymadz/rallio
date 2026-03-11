@@ -1,16 +1,21 @@
--- Migration 062: Make join_window_hours nullable
+-- Migration 062: Add join_window_hours to queue_sessions (nullable)
 -- NULL means no restriction — players can join the queue at any time.
+-- This migration is self-contained and replaces 061.
 
--- Drop existing check constraint
+-- Drop constraint if it exists (from 061 if already applied)
 ALTER TABLE queue_sessions
   DROP CONSTRAINT IF EXISTS queue_sessions_join_window_hours_check;
 
--- Allow NULL values and change default to NULL (no restriction)
+-- Add column as nullable if it doesn't exist yet
+ALTER TABLE queue_sessions
+  ADD COLUMN IF NOT EXISTS join_window_hours smallint DEFAULT NULL;
+
+-- If column was added by 061 as NOT NULL, relax it
 ALTER TABLE queue_sessions
   ALTER COLUMN join_window_hours DROP NOT NULL,
   ALTER COLUMN join_window_hours SET DEFAULT NULL;
 
--- Re-add check: when set, value must be >= 1
+-- Add check: when set, value must be >= 1
 ALTER TABLE queue_sessions
   ADD CONSTRAINT queue_sessions_join_window_hours_check
   CHECK (join_window_hours IS NULL OR join_window_hours >= 1);
