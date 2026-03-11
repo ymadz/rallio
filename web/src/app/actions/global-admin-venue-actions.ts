@@ -197,7 +197,7 @@ export async function getVenueDetails(venueId: string) {
 
   const stats = {
     totalBookings: bookingStats?.length || 0,
-    totalRevenue: bookingStats?.reduce((sum, b) => sum + Number(b.total_amount || 0), 0) || 0,
+    totalRevenue: (bookingStats?.reduce((sum, b) => sum + Number(b.total_amount || 0), 0) || 0) * 0.05,
     pendingBookings: bookingStats?.filter(b => b.status === 'pending').length || 0
   }
 

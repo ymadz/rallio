@@ -80,13 +80,25 @@ export async function getAnalyticsSummary() {
     const completedReservations = reservations?.filter(r => r.status === 'completed').length || 0
     const cancelledReservations = reservations?.filter(r => r.status === 'cancelled').length || 0
 
-    const totalRevenue = reservations
-      ?.filter(r => r.status === 'completed')
-      ?.reduce((sum, r) => sum + (Number(r.total_amount) || 0), 0) || 0
-
-    // User growth (last 30 days)
+    // Date for 30 days ago
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+    // Sync Total Revenue with Monthly Revenue using all payments
+    const { data: revenueData } = await supabase
+      .from('payments')
+      .select('amount')
+      .eq('status', 'completed')
+      .gte('created_at', thirtyDaysAgo.toISOString())
+
+    const totalTransactionAmount = revenueData?.reduce((sum, payment) =>
+      sum + parseFloat(payment.amount || '0'), 0
+    ) || 0
+      
+    // Global admin only collects 5% platform fee
+    const totalRevenue = totalTransactionAmount * 0.05
+
+    // User growth (last 30 days)
     const newUsers = users?.filter(u => new Date(u.created_at) >= thirtyDaysAgo).length || 0
 
     // Venue growth (last 30 days)
@@ -127,7 +139,7 @@ export async function getAnalyticsSummary() {
           completed: completedReservations,
           cancelled: cancelledReservations,
           recentBookings: recentReservations,
-          totalRevenue
+          totalRevenue: Math.round(totalRevenue)
         }
       }
     }

@@ -72,16 +72,18 @@ export async function getDashboardStats() {
       .select('*', { count: 'exact', head: true })
       .eq('is_verified', false)
 
-    // Get monthly revenue (last 30 days)
+    // Get monthly revenue (last 30 days) - Only 5% platform fee is counted as revenue
     const { data: revenueData } = await supabase
       .from('payments')
       .select('amount')
       .eq('status', 'completed')
       .gte('created_at', thirtyDaysAgo.toISOString())
 
-    const monthlyRevenue = revenueData?.reduce((sum, payment) =>
+    const totalTransactionAmount = revenueData?.reduce((sum, payment) =>
       sum + parseFloat(payment.amount || '0'), 0
     ) || 0
+    
+    const monthlyRevenue = totalTransactionAmount * 0.05
 
     // Get active queue sessions
     const { count: activeQueueSessions } = await supabase
@@ -269,7 +271,7 @@ export async function getGlobalQueueHistory(filters?: {
       status: s.status,
       maxPlayers: s.max_players,
       costPerGame: s.cost_per_game,
-      totalRevenue: s.settings?.summary?.totalRevenue || 0,
+      totalRevenue: (s.settings?.summary?.totalRevenue || 0) * 0.05,
       totalGames: s.settings?.summary?.totalGames || 0,
       closedBy: s.settings?.summary?.closedBy || 'unknown',
     }))
