@@ -14,6 +14,8 @@ import Link from 'next/link'
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { BookingCard, Booking } from './booking-card'
 import { BookingPreviewCard } from './booking-preview-card'
@@ -320,15 +322,57 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
           background: rgba(13,148,136,0.72);
           transform: scale(1.02);
         }
-      `}</style>
+          
+          /* QueueCard Glassmorphism Styles applied to Summary */
+          @keyframes qc-shimmer {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 1; }
+          }
+          .sqc-card {
+            position: relative;
+            overflow: hidden;
+            border-radius: 1.25rem;
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+          }
+          .sqc-header {
+            position: relative;
+            overflow: hidden;
+          }
+          .sqc-header .qc-noise {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 1;
+            opacity: 0.055;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='qc'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23qc)' opacity='1'/%3E%3C/svg%3E");
+            background-size: 150px 150px;
+            mix-blend-mode: overlay;
+          }
+          .sqc-header .qc-highlight {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 2;
+            background: linear-gradient(
+              135deg,
+              rgba(204,251,241,0.16) 0%,
+              rgba(153,246,228,0.06) 30%,
+              transparent 55%,
+              rgba(0,0,0,0.04) 100%
+            );
+          }
+        `}</style>
 
       {/* Main Tabs */}
       <Tabs defaultValue="upcoming" className="w-full" onValueChange={setActiveTab}>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-          <TabsList className="grid w-full sm:w-[500px] grid-cols-3">
+          <TabsList className="grid w-full sm:w-[600px] grid-cols-4">
             <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
             <TabsTrigger value="refunds">Refunds</TabsTrigger>
+            <TabsTrigger value="summary">Summary</TabsTrigger>
           </TabsList>
         </div>
 
@@ -521,6 +565,83 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
               ))}
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="summary">
+          <div className="space-y-4">
+            {bookings.length === 0 ? (
+              <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-gray-50 via-white to-gray-50 p-10 text-center">
+                <div className="max-w-sm mx-auto">
+                  <div className="w-16 h-16 bg-gradient-to-br from-primary/10 to-teal-100 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-sm">
+                    <svg className="w-7 h-7 text-primary/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">No booking summary</h3>
+                  <p className="text-sm text-gray-500 leading-relaxed">Your bookings will appear here.</p>
+                </div>
+              </div>
+            ) : (
+              <Card className="sqc-card">
+                <CardHeader className="sqc-header px-6 py-5 border-b border-primary/5 pb-5" style={{ background: 'linear-gradient(135deg, #14b8a6 0%, #0d9488 42%, #0f766e 100%)' }}>
+                  <div className="qc-noise" />
+                  <div className="qc-highlight" />
+                  <CardTitle className="relative z-10 text-xl font-bold text-white tracking-tight drop-shadow-sm">Booking Summary</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0 bg-white">
+                  <Table className="border-0">
+                    <TableHeader className="border-0">
+                      <TableRow className="bg-gray-50/50 hover:bg-gray-50/50 border-b border-gray-100">
+                        <TableHead className="font-semibold text-gray-600 pl-6 w-[40%] text-xs uppercase tracking-wider py-4">Venue & Court</TableHead>
+                        <TableHead className="font-semibold text-gray-600 text-xs uppercase tracking-wider py-4">Date & Time</TableHead>
+                        <TableHead className="font-semibold text-gray-600 text-right pr-6 text-xs uppercase tracking-wider py-4">Payment</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody className="border-0">
+                      {[...bookings]
+                        .sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime())
+                        .map((booking) => {
+                        const paymentMethod = booking.metadata?.intended_payment_method || booking.metadata?.payment_method || booking.payments?.[0]?.payment_method || 'N/A'
+                        const formattedMethod = paymentMethod === 'N/A' ? 'N/A' : paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1)
+                        
+                        return (
+                          <TableRow key={booking.id} className="border-b border-gray-100/50 last:border-0 hover:bg-teal-50/40 transition-all duration-300 cursor-pointer group" onClick={() => handleSelectBooking(booking)}>
+                            <TableCell className="pl-6 py-4">
+                              <div className="flex flex-col gap-1 border-l-2 border-transparent group-hover:border-teal-400 pl-3 transition-colors duration-300">
+                                <span className="text-[15px] font-bold text-gray-800 tracking-tight group-hover:text-teal-900 transition-colors">
+                                  {booking.courts.venues.name}
+                                </span>
+                                <span className="text-[13px] text-gray-500 font-medium">
+                                  {booking.courts.name}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="py-4">
+                              <div className="flex flex-col gap-1">
+                                <span className="text-[14px] font-semibold text-gray-800">
+                                  {format(new Date(booking.start_time), 'MMM d, yyyy')}
+                                </span>
+                                <span className="text-[12px] text-gray-500 font-medium bg-gray-100/60 px-2 py-0.5 rounded-md inline-block w-fit">
+                                  {format(new Date(booking.start_time), 'h:mm a')} - {format(new Date(booking.end_time), 'h:mm a')}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right pr-6 py-4">
+                              <div className="inline-flex items-center gap-2 text-[13px] font-bold text-teal-700 bg-white/60 px-3.5 py-1.5 rounded-xl ring-1 ring-teal-200/50 shadow-sm shadow-teal-900/5 whitespace-nowrap backdrop-blur-md">
+                                <span>₱{booking.total_amount.toFixed(2)}</span>
+                                <span className="w-1 h-1 rounded-full bg-teal-400/60"></span>
+                                <span>{formattedMethod}</span>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </TabsContent>
       </Tabs>
 

@@ -5,7 +5,6 @@ import { useQueueNotifications } from '@/hooks/use-queue-notifications'
 import { useMatchNotifications } from '@/hooks/use-match-notifications'
 import { QueueNotificationBanner } from '@/components/queue/queue-notification-banner'
 import { PlayerCard } from '@/components/queue/player-card'
-import { QueueStatusBadge } from '@/components/queue/queue-status-badge'
 import { QueuePositionTracker } from '@/components/queue/queue-position-tracker'
 import { MatchHistoryViewer } from '@/components/queue/match-history-viewer'
 import { SessionManagementClient } from '@/components/queue-master/session-management-client'
@@ -208,12 +207,8 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
 
   const isUserInQueue = queue.userPosition !== null
   const playersAhead = isUserInQueue ? queue.userPosition! - 1 : 0
-  // Estimate wait time based on game format: doubles/any = 4 players per game, singles = 2
-  const playersPerGame = queue.gameFormat === 'singles' ? 2 : 4
-  const estimatedWaitTime = Math.max(Math.ceil(playersAhead / playersPerGame) * 15, 0)
-  const now = serverDate || new Date()
-  const isLive = new Date(queue.startTime) <= now && new Date(queue.endTime) > now
-  const displayStatus = queue.status === 'completed' ? 'completed' : isLive ? 'live' : 'open'
+  const estimatedWaitTime = Math.max(playersAhead * 15, 0) // ~15 min per game ahead
+
 
   return (
     <>
@@ -249,62 +244,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
       <div className="space-y-6">
         {/* Event Details Card */}
         <QueueEventCard queue={queue} onBack={() => router.back()} />
-        {/* Court Info Header */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <h2 className="text-xl font-bold text-gray-900">
-                  {queue.courtName}
-                </h2>
-                <span className="text-xs font-mono text-gray-400 bg-gray-50 px-2 py-1 rounded">
-                  #{queue.id.slice(0, 8)}
-                </span>
-              </div>
-              <p className="text-gray-600 text-sm mb-2">{queue.venueName}</p>
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <Calendar className="w-4 h-4" />
-                <span>
-                  {format(new Date(queue.startTime), 'EEEE, MMM d')} • {format(new Date(queue.startTime), 'h:mm a')} - {queue.endTime ? format(new Date(queue.endTime), 'h:mm a') : '...'}
-                </span>
-              </div>
-            </div>
-            <QueueStatusBadge status={displayStatus} size="md" />
-          </div>
 
-          {/* Queue Stats */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="bg-gray-50 rounded-lg p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <Users className="w-4 h-4 text-gray-500" />
-                <span className="text-xs text-gray-600">Waiting</span>
-              </div>
-              <p className="text-lg font-bold text-gray-900">
-                {queue.players.filter(p => p.status === 'waiting').length}/{queue.maxPlayers}
-              </p>
-            </div>
-
-            <div className="bg-gray-50 rounded-lg p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <Clock className="w-4 h-4 text-gray-500" />
-                <span className="text-xs text-gray-600">Est. Wait</span>
-              </div>
-              <p className="text-lg font-bold text-gray-900">
-                ~{estimatedWaitTime}m
-              </p>
-            </div>
-
-            <div className="bg-gray-50 rounded-lg p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <Activity className="w-4 h-4 text-gray-500" />
-                <span className="text-xs text-gray-600">Playing</span>
-              </div>
-              <p className="text-lg font-bold text-gray-900">
-                {queue.players.filter(p => p.status === 'playing').length}
-              </p>
-            </div>
-          </div>
-        </div>
 
         {/* Queue Position Tracker (if in queue) */}
         {isUserInQueue && participant && (
