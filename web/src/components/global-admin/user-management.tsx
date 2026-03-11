@@ -14,6 +14,13 @@ import {
   AvatarImage,
 } from '@/components/ui/avatar'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   Search,
   Filter,
   ChevronLeft,
@@ -74,7 +81,6 @@ export default function UserManagement() {
   const [totalPages, setTotalPages] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const [selectedUser, setSelectedUser] = useState<string | null>(null)
-  const [openDropdown, setOpenDropdown] = useState<string | null>(null)
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set())
   const [showBatchActions, setShowBatchActions] = useState(false)
   const { toast } = useToast()
@@ -526,91 +532,57 @@ export default function UserManagement() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <div className="relative">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setOpenDropdown(openDropdown === user.id ? null : user.id)
-                          }}
-                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                        >
-                          <MoreVertical className="w-5 h-5 text-gray-600" />
-                        </button>
-
-                        {/* Dropdown Menu */}
-                        {openDropdown === user.id && (
-                          <>
-                            <div
-                              className="fixed inset-0 z-10"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setOpenDropdown(null)
-                              }}
-                            />
-                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setOpenDropdown(null)
-                                  setSelectedUser(user.id)
-                                }}
-                                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-                              >
-                                <Edit className="w-4 h-4" />
-                                View Details
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setOpenDropdown(null)
-                                  handleResetPassword(user.id)
-                                }}
-                                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-                              >
-                                <Key className="w-4 h-4" />
-                                Reset Password
-                              </button>
-                              <div className="border-t border-gray-100 my-1" />
-                              {user.is_banned ? (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setOpenDropdown(null)
-                                    handleUnbanUser(user.id)
-                                  }}
-                                  className="w-full px-4 py-2 text-left text-sm text-green-700 hover:bg-green-50 flex items-center gap-2"
-                                >
-                                  <CheckCircle className="w-4 h-4" />
-                                  Unban User
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setOpenDropdown(null)
-                                    handleBanUser(user.id)
-                                  }}
-                                  className="w-full px-4 py-2 text-left text-sm text-orange-700 hover:bg-orange-50 flex items-center gap-2"
-                                >
-                                  <Ban className="w-4 h-4" />
-                                  Ban User
-                                </button>
-                              )}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setOpenDropdown(null)
-                                  handleDeactivateUser(user.id)
-                                }}
-                                className="w-full px-4 py-2 text-left text-sm text-red-700 hover:bg-red-50 flex items-center gap-2"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                                Deactivate User
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            onClick={(e) => e.stopPropagation()}
+                            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                          >
+                            <MoreVertical className="w-5 h-5 text-gray-600" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48 bg-white" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenuItem
+                            onClick={() => setSelectedUser(user.id)}
+                            className="flex items-center gap-2 cursor-pointer"
+                          >
+                            <Edit className="w-4 h-4" />
+                            View Details
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleResetPassword(user.id)}
+                            className="flex items-center gap-2 cursor-pointer"
+                          >
+                            <Key className="w-4 h-4" />
+                            Reset Password
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          {user.is_banned ? (
+                            <DropdownMenuItem
+                              onClick={() => handleUnbanUser(user.id)}
+                              className="flex items-center gap-2 cursor-pointer text-green-700 focus:text-green-700 focus:bg-green-50"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                              Unban User
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem
+                              onClick={() => handleBanUser(user.id)}
+                              className="flex items-center gap-2 cursor-pointer text-orange-700 focus:text-orange-700 focus:bg-orange-50"
+                            >
+                              <Ban className="w-4 h-4" />
+                              Ban User
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem
+                            onClick={() => handleDeactivateUser(user.id)}
+                            className="flex items-center gap-2 cursor-pointer text-red-700 focus:text-red-700 focus:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Deactivate User
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </td>
                   </tr>
                 ))}

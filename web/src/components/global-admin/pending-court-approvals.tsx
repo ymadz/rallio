@@ -17,7 +17,7 @@ import {
     User,
     AlertTriangle,
     LayoutGrid,
-    DollarSign
+    PhilippinePeso
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatDistanceToNow } from 'date-fns'
@@ -194,7 +194,7 @@ export function PendingCourtApprovals({ onApprovalComplete }: Props) {
                                             <span className="text-gray-400">({court.venue?.city})</span>
                                         </div>
                                         <div className="flex items-center gap-2 text-sm text-gray-600">
-                                            <DollarSign className="w-4 h-4 text-gray-400" />
+                                            <PhilippinePeso className="w-4 h-4 text-gray-400" />
                                             ₱{court.hourly_rate}/hr
                                         </div>
                                         <div className="flex items-center gap-2 text-sm text-gray-600">

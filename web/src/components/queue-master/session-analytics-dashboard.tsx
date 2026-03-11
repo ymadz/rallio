@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { getMyQueueMasterSessions } from '@/app/actions/queue-actions'
-import { TrendingUp, DollarSign, Users, Calendar, BarChart3, PieChart, Activity } from 'lucide-react'
+import { TrendingUp, PhilippinePeso, Users, Calendar, BarChart3, PieChart, Activity } from 'lucide-react'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -215,7 +215,7 @@ export function SessionAnalyticsDashboard() {
 
         <div className="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-xl p-6 shadow-lg">
           <div className="flex items-center justify-between mb-2">
-            <DollarSign className="w-8 h-8 opacity-80" />
+            <PhilippinePeso className="w-8 h-8 opacity-80" />
           </div>
           <p className="text-green-100 text-sm font-medium mb-1">Total Revenue</p>
           <p className="text-3xl font-bold">₱{analytics.totalRevenue.toLocaleString()}</p>

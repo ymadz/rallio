@@ -8,7 +8,7 @@ import {
   Clock,
   Users,
   Trophy,
-  DollarSign,
+  PhilippinePeso,
   MapPin,
   Download,
   Printer,
@@ -248,7 +248,7 @@ export function QueueSessionSummaryClient({ sessionId }: Props) {
 
             <div className="flex items-start gap-3">
               <div className="p-2 bg-yellow-50 rounded-lg">
-                <DollarSign className="h-5 w-5 text-yellow-600" />
+                <PhilippinePeso className="h-5 w-5 text-yellow-600" />
               </div>
               <div>
                 <p className="text-sm text-gray-500">Cost Per Game</p>
@@ -295,7 +295,7 @@ export function QueueSessionSummaryClient({ sessionId }: Props) {
             subtitle={`${activeParticipants.length} active`}
           />
           <StatCard
-            icon={DollarSign}
+            icon={PhilippinePeso}
             iconColor="text-purple-600"
             iconBg="bg-purple-50"
             label="Total Revenue"
