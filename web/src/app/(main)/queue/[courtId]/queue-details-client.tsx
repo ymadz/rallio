@@ -41,7 +41,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
 
     const updateTimer = () => {
       const startTime = new Date(queue.startTime)
-      const openTime = subHours(startTime, queue.joinWindowHours ?? 2)
+      const openTime = queue.joinWindowHours != null ? subHours(startTime, queue.joinWindowHours) : new Date(0)
       const now = serverDate || new Date()
 
       if (isBefore(now, openTime)) {

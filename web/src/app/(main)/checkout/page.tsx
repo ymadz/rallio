@@ -345,7 +345,7 @@ export default function CheckoutPage() {
                                             <div className="flex justify-between py-3">
                                                 <span className="text-gray-600">Join Window:</span>
                                                 <span className="font-medium text-gray-900">
-                                                    {bookingData.queueSessionData.joinWindowHours}h before start
+                                                    {bookingData.queueSessionData.joinWindowHours != null ? `${bookingData.queueSessionData.joinWindowHours}h before start` : 'Anytime'}
                                                 </span>
                                             </div>
                                         </div>

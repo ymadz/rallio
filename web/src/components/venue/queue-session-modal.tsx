@@ -65,7 +65,7 @@ export function QueueSessionModal({
     const [maxPlayers, setMaxPlayers] = useState(8)
     const [costPerGame, setCostPerGame] = useState(50)
     const [isPublic, setIsPublic] = useState(true)
-    const [joinWindowHours, setJoinWindowHours] = useState(2)
+    const [joinWindowHours, setJoinWindowHours] = useState<number | null>(null)
 
     // UI step: 'schedule' or 'settings'
     const [step, setStep] = useState<'schedule' | 'settings'>('schedule')
@@ -810,19 +810,39 @@ export function QueueSessionModal({
                                     </div>
                                 </div>
 
-                                {/* Cost Per Game */}
-                                <div id="qm-tour-cost">
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Cost Per Game (₱) <span className="text-red-500">*</span>
-                                    </label>
-                                    <input
-                                        type="number"
-                                        value={costPerGame}
-                                        onChange={(e) => setCostPerGame(Number(e.target.value))}
-                                        min="0"
-                                        step="10"
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                                    />
+                                {/* Cost Per Game + Join Window */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div id="qm-tour-cost">
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Cost Per Game (₱) <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            type="number"
+                                            value={costPerGame}
+                                            onChange={(e) => setCostPerGame(Number(e.target.value))}
+                                            min="0"
+                                            step="10"
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Join Window
+                                        </label>
+                                        <p className="text-xs text-gray-500 mb-2">Hours before start. Empty = anytime.</p>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            step="1"
+                                            placeholder="No limit"
+                                            value={joinWindowHours === null ? '' : joinWindowHours}
+                                            onChange={(e) => {
+                                                const v = e.target.value
+                                                setJoinWindowHours(v === '' ? null : Math.max(1, Math.floor(Number(v))))
+                                            }}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                        />
+                                    </div>
                                 </div>
 
                                 {/* Visibility */}
@@ -840,25 +860,6 @@ export function QueueSessionModal({
                                         />
                                         <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                                     </label>
-                                </div>
-
-                                {/* Join Window */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Join Window
-                                    </label>
-                                    <p className="text-xs text-gray-500 mb-3">How many hours before start can players join the queue?</p>
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            step="1"
-                                            value={joinWindowHours}
-                                            onChange={(e) => setJoinWindowHours(Math.max(1, Math.floor(Number(e.target.value))))}
-                                            className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center font-bold text-primary focus:ring-2 focus:ring-primary focus:border-transparent"
-                                        />
-                                        <span className="text-sm text-gray-600">hours before start</span>
-                                    </div>
                                 </div>
                             </div>
                         )}

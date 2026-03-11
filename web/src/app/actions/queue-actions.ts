@@ -28,7 +28,7 @@ export interface QueueSessionData {
   createdAt: Date
   mode: 'casual' | 'competitive'
   gameFormat: 'singles' | 'doubles' | 'mixed'
-  joinWindowHours?: number
+  joinWindowHours?: number | null
   reservationId?: string
   totalCost?: number
   paymentStatus?: 'pending' | 'paid' | 'failed'
@@ -246,7 +246,7 @@ export async function getQueueDetails(courtId: string) {
       createdAt: new Date(session.created_at),
       mode: session.mode,
       gameFormat: session.game_format,
-      joinWindowHours: session.join_window_hours ?? 2,
+      joinWindowHours: session.join_window_hours ?? null,
       players: formattedParticipants,
       userPosition,
       organizerId: session.organizer_id,
@@ -880,7 +880,7 @@ export interface CreateQueueSessionParams {
   maxPlayers: number
   costPerGame: number
   isPublic?: boolean
-  joinWindowHours?: number
+  joinWindowHours?: number | null
   recurrenceWeeks?: number
   selectedDays?: number[]
   paymentMethod?: 'cash' | 'e-wallet'
@@ -1275,7 +1275,7 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
           end_time: sessionEnd.toISOString(),
           mode: data.mode,
           game_format: data.gameFormat,
-          join_window_hours: data.joinWindowHours ?? 2,
+          join_window_hours: data.joinWindowHours ?? null,
           max_players: data.maxPlayers,
           cost_per_game: data.costPerGame,
           is_public: data.isPublic,
@@ -1329,7 +1329,7 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
         createdAt: new Date(session.created_at),
         mode: session.mode,
         gameFormat: session.game_format,
-        joinWindowHours: session.join_window_hours ?? 2,
+        joinWindowHours: session.join_window_hours ?? null,
         participants: [],
         reservationId: reservation.id,
         paymentStatus: session.metadata?.payment_status || 'pending',

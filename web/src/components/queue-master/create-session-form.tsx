@@ -68,7 +68,7 @@ export function CreateSessionForm() {
   const [maxPlayers, setMaxPlayers] = useState(12)
   const [costPerGame, setCostPerGame] = useState(50)
   const [isPublic, setIsPublic] = useState(true)
-  const [joinWindowHours, setJoinWindowHours] = useState(2)
+  const [joinWindowHours, setJoinWindowHours] = useState<number | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'e-wallet'>('e-wallet')
   const [downPaymentPercentage, setDownPaymentPercentage] = useState<number | undefined>(undefined)
 
@@ -999,14 +999,18 @@ export function CreateSessionForm() {
             {/* Join Window */}
             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
               <h3 className="font-semibold text-gray-900 mb-1">Join Window</h3>
-              <p className="text-sm text-gray-600 mb-4">How many hours before the session start can players join?</p>
+              <p className="text-sm text-gray-600 mb-4">How many hours before the session start can players join? Leave empty to allow joining anytime.</p>
               <div className="flex items-center gap-3">
                 <input
                   type="number"
                   min="1"
                   step="1"
-                  value={joinWindowHours}
-                  onChange={(e) => setJoinWindowHours(Math.max(1, Math.floor(Number(e.target.value))))}
+                  placeholder="No limit"
+                  value={joinWindowHours === null ? '' : joinWindowHours}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setJoinWindowHours(v === '' ? null : Math.max(1, Math.floor(Number(v))))
+                  }}
                   className="w-24 px-3 py-3 border border-gray-300 rounded-lg text-center font-bold text-primary focus:ring-2 focus:ring-primary focus:border-transparent"
                 />
                 <span className="text-sm text-gray-600">hours before start</span>
