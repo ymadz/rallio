@@ -6,7 +6,6 @@ import { createReservationAction } from '@/app/actions/reservations'
 import { createQueueSession } from '@/app/actions/queue-actions'
 import { initiatePaymentAction } from '@/app/actions/payments'
 import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
-import { validatePromoCode } from '@/app/actions/promo-code-actions'
 import { createClient } from '@/lib/supabase/client'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -29,11 +28,8 @@ export function PaymentProcessing() {
     resetCheckout,
     reservationId: storeReservationId,
     discountAmount,
-    discountCode,
     discountType,
     discountReason,
-    promoCode,
-    promoDiscountAmount,
   } = useCheckoutStore()
 
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null)
@@ -144,9 +140,7 @@ export function PaymentProcessing() {
             isPublic: bookingData.queueSessionData.isPublic,
             recurrenceWeeks: bookingData.recurrenceWeeks,
             selectedDays: bookingData.selectedDays,
-            paymentMethod,
-            promoCode: promoCode || discountCode,
-            customDownPaymentAmount: paymentMethod === 'cash' ? getDownPaymentAmount() || undefined : undefined,
+            paymentMethod
           })
 
           if (!sessionResult.success) {
@@ -189,45 +183,19 @@ export function PaymentProcessing() {
           if (discountAmount !== 0) {
             try {
               const sessionPrice = bookingData.hourlyRate * Math.max(1, endHour - startHour)
-              const daysPerWeek = bookingData.selectedDays?.length || 1
-              const weeks = bookingData.recurrenceWeeks || 1
-              const totalSessions = daysPerWeek * weeks
-              const totalBasePrice = sessionPrice * totalSessions
+              const totalBasePrice = sessionPrice * (bookingData.recurrenceWeeks || 1)
 
               const discountResult = await calculateApplicableDiscounts({
                 venueId: bookingData.venueId,
                 courtId: bookingData.courtId,
                 startDate: startTimeISO,
                 endDate: endTimeISO,
-                recurrenceWeeks: weeks,
-                targetDateCount: totalSessions,
+                recurrenceWeeks: bookingData.recurrenceWeeks || 1,
                 basePrice: totalBasePrice,
-                promoCode: promoCode || discountCode,
               })
 
               if (discountResult.success) {
-                let serverTotalDiscount = discountResult.totalDiscount
-
-                // Add promo code discount if applicable
-                if (discountCode) {
-                  const promoResult = await validatePromoCode(discountCode, bookingData.venueId, totalBasePrice)
-                  if (promoResult.valid && promoResult.discountAmount !== undefined) {
-                    serverTotalDiscount += promoResult.discountAmount
-
-                    const ruleTypes = discountResult.discounts.map(d => d.type).join(', ')
-                    const ruleNames = discountResult.discounts.map(d => d.name).join(', ')
-
-                    verifiedDiscountType = ruleTypes ? `${ruleTypes}, promo` : 'promo'
-                    verifiedDiscountReason = ruleNames ? `${ruleNames}, ${discountCode}` : discountCode
-                  } else {
-                    console.warn('[Discount Verification] Promo code invalid during checkout verification:', promoResult.error)
-                  }
-                } else if (discountResult.discounts.length > 0) {
-                  // Use server-side discount details when no promo code
-                  verifiedDiscountType = discountResult.discounts.map(d => d.type).join(', ')
-                  verifiedDiscountReason = discountResult.discounts.map(d => d.name).join(', ')
-                }
-
+                const serverTotalDiscount = discountResult.totalDiscount
                 const clientTotalDiscount = Math.abs(discountAmount)
 
                 if (Math.abs(serverTotalDiscount - clientTotalDiscount) > 0.01) {
@@ -236,10 +204,12 @@ export function PaymentProcessing() {
                     server: serverTotalDiscount,
                   })
                   verifiedDiscountAmount = serverTotalDiscount
-                } else {
-                  // If client sent exact matching amount, keep client value 
-                  // but use verified types above
-                  verifiedDiscountAmount = clientTotalDiscount
+                }
+
+                // Use server-side discount details
+                if (discountResult.discounts.length > 0) {
+                  verifiedDiscountType = discountResult.discounts.map(d => d.type).join(', ')
+                  verifiedDiscountReason = discountResult.discounts.map(d => d.name).join(', ')
                 }
               }
             } catch (verifyErr) {
@@ -260,10 +230,8 @@ export function PaymentProcessing() {
             discountApplied: verifiedDiscountAmount,
             discountType: verifiedDiscountType,
             discountReason: verifiedDiscountReason,
-            promoCode: promoCode || discountCode || undefined,
             recurrenceWeeks: bookingData.recurrenceWeeks,
             selectedDays: bookingData.selectedDays,
-            customDownPaymentAmount: paymentMethod === 'cash' ? getDownPaymentAmount() || undefined : undefined,
           })
 
           if (!reservationResult.success || !reservationResult.reservationId) {

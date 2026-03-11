@@ -41,6 +41,7 @@ export interface QueueParticipantData {
   playerName: string
   avatarUrl?: string
   skillLevel: number
+  rating?: number
   position: number
   joinedAt: Date
   gamesPlayed: number
@@ -162,14 +163,15 @@ export async function getQueueDetails(courtId: string) {
       return { success: false, error: 'Failed to fetch participants' }
     }
 
-    // Get player skill levels separately (since we can't nested join)
+    // Get player skill levels & ratings separately (since we can't nested join)
     const playerIds = participants?.map((p: any) => p.user_id) || []
     const { data: players } = await supabase
       .from('players')
-      .select('user_id, skill_level')
+      .select('user_id, skill_level, rating')
       .in('user_id', playerIds)
 
     const playerSkillMap = new Map(players?.map((p: any) => [p.user_id, p.skill_level]) || [])
+    const playerRatingMap = new Map(players?.map((p: any) => [p.user_id, p.rating]) || [])
 
     // Calculate positions and user position
     const formattedParticipants: QueueParticipantData[] = (participants || []).map((p: any, index: number) => ({
@@ -178,6 +180,7 @@ export async function getQueueDetails(courtId: string) {
       playerName: p.user?.display_name || `${p.user?.first_name || ''} ${p.user?.last_name || ''}`.trim() || 'Unknown Player',
       avatarUrl: p.user?.avatar_url,
       skillLevel: playerSkillMap.get(p.user_id) || 5,
+      rating: playerRatingMap.get(p.user_id),
       position: index + 1,
       joinedAt: new Date(p.joined_at),
       gamesPlayed: p.games_played || 0,

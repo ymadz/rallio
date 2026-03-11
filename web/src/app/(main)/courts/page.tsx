@@ -13,7 +13,21 @@ import {
 import { useAuthStore } from '@/stores/auth-store';
 import { Sparkles } from 'lucide-react';
 
-
+// Filter options
+const amenityOptions = [
+  'Parking',
+  'Restroom',
+  'Shower',
+  'Lockers',
+  'Water',
+  'Air Conditioning',
+  'Lighting',
+  'Waiting Area',
+  'Equipment Rental',
+  'First Aid',
+  'WiFi',
+  'Canteen',
+];
 
 type SortOption = 'distance' | 'price_low' | 'price_high' | 'rating' | 'newest';
 
@@ -33,7 +47,7 @@ export default function CourtsPage() {
 
   // Filter states
   const [priceRange, setPriceRange] = useState<[number, number]>([100, 1000]);
-
+  const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
   const [courtType, setCourtType] = useState<'indoor' | 'outdoor' | null>(null);
   const [category, setCategory] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>('newest');
@@ -47,7 +61,7 @@ export default function CourtsPage() {
 
   useEffect(() => {
     fetchVenues(true);
-  }, [search, priceRange, courtType, category, sortBy, minRating, userLocation]);
+  }, [search, priceRange, selectedAmenities, courtType, category, sortBy, minRating, userLocation]);
 
   const fetchVenues = async (reset: boolean = false) => {
     if (reset) {
@@ -62,7 +76,7 @@ export default function CourtsPage() {
       searchQuery: search || undefined,
       minPrice: 0,
       maxPrice: priceRange[1],
-
+      amenities: selectedAmenities.length > 0 ? selectedAmenities : undefined,
       category: category || undefined,
       courtType: courtType || undefined,
       rating: minRating > 0 ? minRating : undefined,
@@ -81,7 +95,7 @@ export default function CourtsPage() {
         let finalVenues = result.venues;
 
         // Only inject recommendations on the default un-filtered feed!
-        const isDefaultFeed = !search && !category && !courtType && minRating === 0;
+        const isDefaultFeed = !search && !category && !courtType && minRating === 0 && selectedAmenities.length === 0;
 
         if (isDefaultFeed) {
           // Fetch ML Recommendations to inject at the top of the grid
@@ -128,7 +142,7 @@ export default function CourtsPage() {
                     maxPrice: court.hourly_rate || 0,
                     totalCourts: 1,
                     activeCourtCount: 1,
-
+                    amenities: court.amenities || [],
                     averageRating: court.average_rating,
                     totalReviews: court.review_count || 0,
                     category: 'Recommended for You',
@@ -187,6 +201,12 @@ export default function CourtsPage() {
     if (!loadingMore && hasMore) {
       fetchVenues(false);
     }
+  };
+
+  const toggleAmenity = (amenity: string) => {
+    setSelectedAmenities((prev) =>
+      prev.includes(amenity) ? prev.filter((a) => a !== amenity) : [...prev, amenity]
+    );
   };
 
 
@@ -281,7 +301,8 @@ export default function CourtsPage() {
                 {(courtType ||
                   category ||
                   minRating > 0 ||
-                  priceRange[1] < 1000) && (
+                  priceRange[1] < 1000 ||
+                  selectedAmenities.length > 0) && (
                     <span className="ml-1 bg-red-500 w-2 h-2 rounded-full" />
                   )}
               </button>
@@ -491,6 +512,23 @@ export default function CourtsPage() {
                 </div>
               </div>
 
+              <div>
+                <h3 className="font-semibold mb-3">Amenities</h3>
+                <div className="flex flex-wrap gap-2">
+                  {amenityOptions.map((amenity) => (
+                    <button
+                      key={amenity}
+                      onClick={() => toggleAmenity(amenity)}
+                      className={`px-2 py-1 rounded text-xs border ${selectedAmenities.includes(amenity)
+                        ? 'bg-primary/10 border-primary text-primary'
+                        : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                        }`}
+                    >
+                      {amenity}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
             </div>
           </div>
