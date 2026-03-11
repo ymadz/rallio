@@ -44,11 +44,8 @@ export default async function MatchesPage({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-
-
       {/* Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         {/* Stats Card */}
         {stats && stats.totalGames > 0 && (
           <div className="mb-8">
@@ -57,20 +54,20 @@ export default async function MatchesPage({
         )}
 
         {/* Match History */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-6">
+        <div>
+          <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Match History</h2>
             <MatchFilters currentFilter={filter} totalMatches={matches.length} />
           </div>
 
           {matches.length > 0 ? (
-            <div className="grid gap-4">
+            <div className="space-y-3">
               {matches.map((match) => (
                 <MatchCard key={match.id} match={match} />
               ))}
             </div>
           ) : (
-            <div className="text-center py-12">
+            <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
               <svg
                 className="w-16 h-16 text-gray-300 mx-auto mb-4"
                 fill="none"

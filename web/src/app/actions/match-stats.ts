@@ -2,6 +2,12 @@
 
 import { createClient } from '@/lib/supabase/server'
 
+export interface PlayerDetail {
+  id: string
+  name: string
+  avatarUrl: string | null
+}
+
 export interface MatchWithDetails {
   id: string
   matchNumber: number
@@ -25,9 +31,19 @@ export interface MatchWithDetails {
       }
     } | null
   } | null
+  court: {
+    id: string
+    name: string
+    venue: {
+      name: string
+    }
+  } | null
   // Computed fields
   userTeam: 'team_a' | 'team_b' | null
   userWon: boolean | null
+  userAvatarUrl: string | null
+  opponents: PlayerDetail[]
+  teammates: PlayerDetail[]
   opponentNames: string[]
   teammateNames: string[]
 }
@@ -104,20 +120,27 @@ export async function getPlayerMatchHistory(
       .map((m: any) => m.court_id)
       .filter((id: any) => id != null)
 
-    const [queueSessionsData, courtsData] = await Promise.all([
+    const [queueSessionsData] = await Promise.all([
       queueSessionIds.length > 0
         ? supabase
             .from('queue_sessions')
             .select('id, session_date, court_id')
             .in('id', queueSessionIds)
         : Promise.resolve({ data: [] }),
-      courtIds.length > 0
-        ? supabase
-            .from('courts')
-            .select('id, name, venue:venues(name)')
-            .in('id', courtIds)
-        : Promise.resolve({ data: [] }),
     ])
+    // Also collect court_ids from queue sessions that reference a different court
+    const queueCourtIds = (queueSessionsData.data || [])
+      .map((qs: any) => qs.court_id)
+      .filter((id: any) => id != null)
+    
+    const allCourtIds = [...new Set([...courtIds, ...queueCourtIds])]
+
+    const courtsData = allCourtIds.length > 0
+      ? await supabase
+          .from('courts')
+          .select('id, name, venue:venues(name)')
+          .in('id', allCourtIds)
+      : { data: [] }
 
     const queueSessionMap = new Map(
       queueSessionsData.data?.map((qs: any) => [qs.id, qs]) || []
@@ -136,10 +159,19 @@ export async function getPlayerMatchHistory(
     // Fetch all player profiles at once
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, full_name')
+      .select('id, display_name, first_name, last_name, avatar_url')
       .in('id', Array.from(allPlayerIds))
 
-    const profileMap = new Map(profiles?.map(p => [p.id, p.full_name]) || [])
+    const profileMap = new Map(
+      profiles?.map(p => [
+        p.id,
+        {
+          id: p.id,
+          name: p.display_name || [p.first_name, p.last_name].filter(Boolean).join(' ') || 'Unknown Player',
+          avatarUrl: p.avatar_url as string | null,
+        },
+      ]) || []
+    )
 
     // Transform matches to include computed fields
     const matchesWithDetails: MatchWithDetails[] = matches
@@ -166,8 +198,12 @@ export async function getPlayerMatchHistory(
           ? match.team_b_players || []
           : match.team_a_players || []
 
-        const teammateNames = teammates.map((id: string) => profileMap.get(id) || 'Unknown Player')
-        const opponentNames = opponents.map((id: string) => profileMap.get(id) || 'Unknown Player')
+        const defaultPlayer = (id: string): PlayerDetail => ({ id, name: 'Unknown Player', avatarUrl: null })
+        const teammateDetails = teammates.map((id: string) => profileMap.get(id) || defaultPlayer(id))
+        const opponentDetails = opponents.map((id: string) => profileMap.get(id) || defaultPlayer(id))
+        const userProfile = profileMap.get(userId)
+        const teammateNames = teammateDetails.map((p: PlayerDetail) => p.name)
+        const opponentNames = opponentDetails.map((p: PlayerDetail) => p.name)
 
         // Build queue session data from separate queries
         const queueSession = match.queue_session_id ? queueSessionMap.get(match.queue_session_id) : null
@@ -188,6 +224,14 @@ export async function getPlayerMatchHistory(
           } : null)
         } : null
 
+        // Resolve court from direct court_id, queue session court, or queue session's court_id
+        const resolvedCourt = court || queueSessionCourt || null
+        const courtData = resolvedCourt ? {
+          id: resolvedCourt.id,
+          name: resolvedCourt.name,
+          venue: resolvedCourt.venue,
+        } : null
+
         return {
           id: match.id,
           matchNumber: match.match_number,
@@ -201,8 +245,12 @@ export async function getPlayerMatchHistory(
           startedAt: match.started_at,
           completedAt: match.completed_at,
           queueSession: queueSessionData,
+          court: courtData,
           userTeam,
           userWon,
+          userAvatarUrl: userProfile?.avatarUrl ?? null,
+          opponents: opponentDetails,
+          teammates: teammateDetails,
           opponentNames,
           teammateNames,
         }
