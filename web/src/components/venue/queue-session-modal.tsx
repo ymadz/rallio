@@ -848,21 +848,16 @@ export function QueueSessionModal({
                                         Join Window
                                     </label>
                                     <p className="text-xs text-gray-500 mb-3">How many hours before start can players join the queue?</p>
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2">
                                         <input
-                                            type="range"
+                                            type="number"
                                             min="1"
-                                            max="24"
                                             step="1"
                                             value={joinWindowHours}
-                                            onChange={(e) => setJoinWindowHours(Number(e.target.value))}
-                                            className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                                            onChange={(e) => setJoinWindowHours(Math.max(1, Math.floor(Number(e.target.value))))}
+                                            className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center font-bold text-primary focus:ring-2 focus:ring-primary focus:border-transparent"
                                         />
-                                        <span className="text-lg font-bold text-primary w-20 text-right">{joinWindowHours}h before</span>
-                                    </div>
-                                    <div className="flex justify-between text-xs text-gray-400 mt-1">
-                                        <span>1 hour</span>
-                                        <span>24 hours</span>
+                                        <span className="text-sm text-gray-600">hours before start</span>
                                     </div>
                                 </div>
                             </div>

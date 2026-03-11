@@ -1000,21 +1000,16 @@ export function CreateSessionForm() {
             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
               <h3 className="font-semibold text-gray-900 mb-1">Join Window</h3>
               <p className="text-sm text-gray-600 mb-4">How many hours before the session start can players join?</p>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
                 <input
-                  type="range"
+                  type="number"
                   min="1"
-                  max="24"
                   step="1"
                   value={joinWindowHours}
-                  onChange={(e) => setJoinWindowHours(Number(e.target.value))}
-                  className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                  onChange={(e) => setJoinWindowHours(Math.max(1, Math.floor(Number(e.target.value))))}
+                  className="w-24 px-3 py-3 border border-gray-300 rounded-lg text-center font-bold text-primary focus:ring-2 focus:ring-primary focus:border-transparent"
                 />
-                <span className="text-xl font-bold text-primary w-24 text-right">{joinWindowHours}h before</span>
-              </div>
-              <div className="flex justify-between text-xs text-gray-400 mt-1">
-                <span>1 hour</span>
-                <span>24 hours</span>
+                <span className="text-sm text-gray-600">hours before start</span>
               </div>
             </div>
 
