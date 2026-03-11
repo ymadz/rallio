@@ -40,6 +40,8 @@ export interface QueueSession {
   startTime: Date  // Added startTime
   endTime: Date // Added endTime
   mode: 'casual' | 'competitive'
+  gameFormat?: 'singles' | 'doubles' | 'any'
+  joinWindowHours?: number | null
   organizerId?: string // Queue session organizer
   organizerName?: string // Queue session organizer display name
   costPerGame?: number // Cost per game in the queue
@@ -148,6 +150,8 @@ export function useQueue(courtId: string) {
         startTime: queueData.startTime,
         endTime: queueData.endTime,
         mode: queueData.mode as 'casual' | 'competitive',
+        gameFormat: queueData.gameFormat as 'singles' | 'doubles' | 'any' | undefined,
+        joinWindowHours: (queueData as any).joinWindowHours ?? null,
         organizerId: queueData.organizerId,
         organizerName: queueData.organizerName,
         costPerGame: queueData.costPerGame,
@@ -196,6 +200,7 @@ export function useQueue(courtId: string) {
           event: 'UPDATE',
           schema: 'public',
           table: 'queue_sessions',
+          filter: `court_id=eq.${courtId}`,
         },
         (payload) => {
           // Only trigger if no queue loaded yet (once queue is set, the session-specific sub takes over)
@@ -395,19 +400,11 @@ export function useMyQueues() {
   // We subscribe broadly to queue_participants changes for JOIN/LEAVE events that affect the user.
   // The server action already filters by user.id, so stale data from other sessions won't appear.
   useEffect(() => {
+    // Subscribe only to queue_sessions UPDATE, filtered to sessions the user is in.
+    // The update_queue_count DB trigger updates current_players on queue_sessions whenever
+    // a participant joins/leaves, so we don't need a separate queue_participants subscription.
     const channel = supabase
       .channel('my-queues-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'queue_participants',
-          // Supabase doesn't support user_id filter on postgres_changes without RLS broadcast;
-          // we debounce heavily to avoid flooding.
-        },
-        debouncedFetch
-      )
       .on(
         'postgres_changes',
         {
@@ -524,8 +521,9 @@ export function useNearbyQueues(latitude?: number, longitude?: number) {
     nearbyDebounceRef.current = setTimeout(fetchNearbyQueues, 600)
   }
 
-  // Real-time: subscribe only to queue_sessions INSERT/UPDATE (new sessions or status changes).
-  // Participant changes are debounced to avoid flooding when many players join at once.
+  // Real-time: subscribe to queue_sessions INSERT (new sessions) and UPDATE for active statuses.
+  // The update_queue_count DB trigger updates current_players on the session row when participants
+  // join/leave, so a queue_sessions UPDATE covers both status changes AND player count changes.
   useEffect(() => {
     const channel = supabase
       .channel('nearby-queues-realtime')
@@ -544,16 +542,6 @@ export function useNearbyQueues(latitude?: number, longitude?: number) {
           event: 'UPDATE',
           schema: 'public',
           table: 'queue_sessions',
-        },
-        debouncedNearbyFetch
-      )
-      // Participants: debounced refresh (counts change frequently)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'queue_participants',
         },
         debouncedNearbyFetch
       )

@@ -65,6 +65,7 @@ export function QueueSessionModal({
     const [maxPlayers, setMaxPlayers] = useState(8)
     const [costPerGame, setCostPerGame] = useState(50)
     const [isPublic, setIsPublic] = useState(true)
+    const [joinWindowHours, setJoinWindowHours] = useState<number | null>(null)
 
     // UI step: 'schedule' or 'settings'
     const [step, setStep] = useState<'schedule' | 'settings'>('schedule')
@@ -362,6 +363,7 @@ export function QueueSessionModal({
                     maxPlayers,
                     costPerGame,
                     isPublic,
+                    joinWindowHours,
                 },
             })
 
@@ -808,19 +810,39 @@ export function QueueSessionModal({
                                     </div>
                                 </div>
 
-                                {/* Cost Per Game */}
-                                <div id="qm-tour-cost">
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Cost Per Game (₱) <span className="text-red-500">*</span>
-                                    </label>
-                                    <input
-                                        type="number"
-                                        value={costPerGame}
-                                        onChange={(e) => setCostPerGame(Number(e.target.value))}
-                                        min="0"
-                                        step="10"
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                                    />
+                                {/* Cost Per Game + Join Window */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div id="qm-tour-cost">
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Cost Per Game (₱) <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            type="number"
+                                            value={costPerGame}
+                                            onChange={(e) => setCostPerGame(Number(e.target.value))}
+                                            min="0"
+                                            step="10"
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Join Window
+                                        </label>
+                                        <p className="text-xs text-gray-500 mb-2">Hours before start. Empty = anytime.</p>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            step="1"
+                                            placeholder="No limit"
+                                            value={joinWindowHours === null ? '' : joinWindowHours}
+                                            onChange={(e) => {
+                                                const v = e.target.value
+                                                setJoinWindowHours(v === '' ? null : Math.max(1, Math.floor(Number(v))))
+                                            }}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                        />
+                                    </div>
                                 </div>
 
                                 {/* Visibility */}
