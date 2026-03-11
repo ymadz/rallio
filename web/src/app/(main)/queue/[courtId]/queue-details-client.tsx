@@ -9,6 +9,7 @@ import { QueueStatusBadge } from '@/components/queue/queue-status-badge'
 import { QueuePositionTracker } from '@/components/queue/queue-position-tracker'
 import { MatchHistoryViewer } from '@/components/queue/match-history-viewer'
 import { SessionManagementClient } from '@/components/queue-master/session-management-client'
+import { QueueEventCard } from '@/components/queue/queue-event-card'
 
 import { Users, Clock, Activity, Loader2, AlertCircle, Trophy, Calendar, X, CreditCard } from 'lucide-react'
 import { useState, useEffect } from 'react'
@@ -228,70 +229,8 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
   return (
     <>
       <div className="space-y-6">
-        {/* Court Info Header */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <h2 className="text-xl font-bold text-gray-900">
-                  {queue.courtName}
-                </h2>
-                <span className="text-xs font-mono text-gray-400 bg-gray-50 px-2 py-1 rounded">
-                  #{queue.id.slice(0, 8)}
-                </span>
-              </div>
-              <p className="text-gray-600 text-sm mb-2">{queue.venueName}</p>
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <Calendar className="w-4 h-4" />
-                <span>
-                  {format(new Date(queue.startTime), 'EEEE, MMM d')} • {format(new Date(queue.startTime), 'h:mm a')} - {queue.endTime ? format(new Date(queue.endTime), 'h:mm a') : '...'}
-                </span>
-              </div>
-            </div>
-            <div className="flex flex-col items-end gap-2">
-              <QueueStatusBadge status={displayStatus} size="md" />
-              <span className={`px-2.5 py-1 text-xs font-bold rounded-full border ${queue.mode === 'competitive'
-                ? 'bg-purple-50 text-purple-700 border-purple-200'
-                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                }`}>
-                {queue.mode === 'competitive' ? 'Competitive' : 'Casual'}
-              </span>
-            </div>
-          </div>
-
-          {/* Queue Stats */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="bg-gray-50 rounded-lg p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <Users className="w-4 h-4 text-gray-500" />
-                <span className="text-xs text-gray-600">Waiting</span>
-              </div>
-              <p className="text-lg font-bold text-gray-900">
-                {queue.players.filter(p => p.status === 'waiting').length}/{queue.maxPlayers}
-              </p>
-            </div>
-
-            <div className="bg-gray-50 rounded-lg p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <Users className="w-4 h-4 text-gray-500" />
-                <span className="text-xs text-gray-600">Max Players</span>
-              </div>
-              <p className="text-lg font-bold text-gray-900">
-                {queue.maxPlayers}
-              </p>
-            </div>
-
-            <div className="bg-gray-50 rounded-lg p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <Activity className="w-4 h-4 text-gray-500" />
-                <span className="text-xs text-gray-600">Playing</span>
-              </div>
-              <p className="text-lg font-bold text-gray-900">
-                {queue.players.filter(p => p.status === 'playing').length}
-              </p>
-            </div>
-          </div>
-        </div>
+        {/* Event Details Card */}
+        <QueueEventCard queue={queue} onBack={() => router.back()} />
 
         {/* Queue Position Tracker (if in queue) */}
         {isUserInQueue && participant && (

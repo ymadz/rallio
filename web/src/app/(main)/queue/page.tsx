@@ -8,12 +8,12 @@ export const metadata = {
 
 export default function QueueDashboardPage() {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
 
 
       {/* Content */}
-      <div className="p-6 max-w-4xl mx-auto">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         <Suspense fallback={<LoadingSkeleton />}>
           <QueueDashboardClient />
         </Suspense>

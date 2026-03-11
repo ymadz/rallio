@@ -22,7 +22,7 @@ export default async function QueuePage({ params }: QueuePageProps) {
 
 
       {/* Content */}
-      <div className="container mx-auto px-4 py-6 max-w-4xl pb-24 md:pb-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 pb-24 md:pb-8">
         <Suspense fallback={<LoadingSkeleton />}>
           <QueueDetailsClient courtId={courtId} />
         </Suspense>
