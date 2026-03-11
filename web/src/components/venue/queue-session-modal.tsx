@@ -65,6 +65,7 @@ export function QueueSessionModal({
     const [maxPlayers, setMaxPlayers] = useState(8)
     const [costPerGame, setCostPerGame] = useState(50)
     const [isPublic, setIsPublic] = useState(true)
+    const [joinWindowHours, setJoinWindowHours] = useState(2)
 
     // UI step: 'schedule' or 'settings'
     const [step, setStep] = useState<'schedule' | 'settings'>('schedule')
@@ -362,6 +363,7 @@ export function QueueSessionModal({
                     maxPlayers,
                     costPerGame,
                     isPublic,
+                    joinWindowHours,
                 },
             })
 
@@ -838,6 +840,30 @@ export function QueueSessionModal({
                                         />
                                         <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                                     </label>
+                                </div>
+
+                                {/* Join Window */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Join Window
+                                    </label>
+                                    <p className="text-xs text-gray-500 mb-3">How many hours before start can players join the queue?</p>
+                                    <div className="flex items-center gap-3">
+                                        <input
+                                            type="range"
+                                            min="1"
+                                            max="24"
+                                            step="1"
+                                            value={joinWindowHours}
+                                            onChange={(e) => setJoinWindowHours(Number(e.target.value))}
+                                            className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                                        />
+                                        <span className="text-lg font-bold text-primary w-20 text-right">{joinWindowHours}h before</span>
+                                    </div>
+                                    <div className="flex justify-between text-xs text-gray-400 mt-1">
+                                        <span>1 hour</span>
+                                        <span>24 hours</span>
+                                    </div>
                                 </div>
                             </div>
                         )}

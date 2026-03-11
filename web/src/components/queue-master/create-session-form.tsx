@@ -68,6 +68,7 @@ export function CreateSessionForm() {
   const [maxPlayers, setMaxPlayers] = useState(12)
   const [costPerGame, setCostPerGame] = useState(50)
   const [isPublic, setIsPublic] = useState(true)
+  const [joinWindowHours, setJoinWindowHours] = useState(2)
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'e-wallet'>('e-wallet')
   const [downPaymentPercentage, setDownPaymentPercentage] = useState<number | undefined>(undefined)
 
@@ -443,6 +444,7 @@ export function CreateSessionForm() {
         maxPlayers,
         costPerGame,
         isPublic,
+        joinWindowHours,
         recurrenceWeeks,
         selectedDays: selectedDays.length > 0 ? selectedDays : undefined,
         paymentMethod
@@ -992,6 +994,28 @@ export function CreateSessionForm() {
                   <div className="text-sm text-gray-600">Allow anyone to join this queue</div>
                 </div>
               </label>
+            </div>
+
+            {/* Join Window */}
+            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+              <h3 className="font-semibold text-gray-900 mb-1">Join Window</h3>
+              <p className="text-sm text-gray-600 mb-4">How many hours before the session start can players join?</p>
+              <div className="flex items-center gap-4">
+                <input
+                  type="range"
+                  min="1"
+                  max="24"
+                  step="1"
+                  value={joinWindowHours}
+                  onChange={(e) => setJoinWindowHours(Number(e.target.value))}
+                  className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                />
+                <span className="text-xl font-bold text-primary w-24 text-right">{joinWindowHours}h before</span>
+              </div>
+              <div className="flex justify-between text-xs text-gray-400 mt-1">
+                <span>1 hour</span>
+                <span>24 hours</span>
+              </div>
             </div>
 
 

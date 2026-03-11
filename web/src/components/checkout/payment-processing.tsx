@@ -138,6 +138,7 @@ export function PaymentProcessing() {
             maxPlayers: bookingData.queueSessionData.maxPlayers,
             costPerGame: bookingData.queueSessionData.costPerGame,
             isPublic: bookingData.queueSessionData.isPublic,
+            joinWindowHours: bookingData.queueSessionData.joinWindowHours,
             recurrenceWeeks: bookingData.recurrenceWeeks,
             selectedDays: bookingData.selectedDays,
             paymentMethod

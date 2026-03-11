@@ -23,6 +23,7 @@ export interface BookingData {
     maxPlayers: number
     costPerGame: number
     isPublic: boolean
+    joinWindowHours: number
   }
 }
 
