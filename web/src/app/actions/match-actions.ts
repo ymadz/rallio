@@ -66,6 +66,36 @@ export async function assignMatchFromQueue(
       }
     }
 
+    // Validate numPlayers is a positive even number (required for equal team split)
+    if (!Number.isInteger(numPlayers) || numPlayers < 2 || numPlayers % 2 !== 0) {
+      return {
+        success: false,
+        error: `numPlayers must be a positive even number (got ${numPlayers}). Teams must be equal size.`,
+      }
+    }
+
+    // If manual team assignments provided, validate them before any DB work
+    if (teamAssignments) {
+      const { teamA, teamB } = teamAssignments
+      const expectedTeamSize = numPlayers / 2
+
+      if (teamA.length !== expectedTeamSize || teamB.length !== expectedTeamSize) {
+        return {
+          success: false,
+          error: `Each team must have exactly ${expectedTeamSize} player(s). Got Team A: ${teamA.length}, Team B: ${teamB.length}.`,
+        }
+      }
+
+      // Check for players duplicated across teams
+      const duplicates = teamA.filter(id => teamB.includes(id))
+      if (duplicates.length > 0) {
+        return {
+          success: false,
+          error: `${duplicates.length} player(s) appear in both teams. A player cannot be on both sides.`,
+        }
+      }
+    }
+
     // Get session and verify user is organizer
     const { data: session, error: sessionError } = await supabase
       .from('queue_sessions')
@@ -85,6 +115,14 @@ export async function assignMatchFromQueue(
 
     // If specific players are selected, use those; otherwise get top N waiting
     if (selectedPlayers && selectedPlayers.length > 0) {
+      // Validate selectedPlayers count matches numPlayers
+      if (selectedPlayers.length !== numPlayers) {
+        return {
+          success: false,
+          error: `Selected ${selectedPlayers.length} player(s) but numPlayers is ${numPlayers}. These must match.`,
+        }
+      }
+
       // Get the selected participants
       const { data: selectedParticipants, error: selectedError } = await supabase
         .from('queue_participants')
@@ -516,7 +554,8 @@ export async function recordMatchScore(
             games_played: newGamesPlayed,
             games_won: isWinner ? (current.games_won || 0) + 1 : (current.games_won || 0),
             amount_owed: newAmountOwed,
-            joined_at: new Date().toISOString(),
+            // NOTE: Do NOT reset joined_at here — it is used for queue ordering.
+            // Resetting it would push players to the back of the queue after every match.
           })
           .eq('queue_session_id', match.queue_session_id)
           .eq('user_id', playerId)
@@ -530,12 +569,14 @@ export async function recordMatchScore(
     } // end rpcFailed fallback
 
     // GUARANTEED STATUS RESET via service client (catches any edge case where RPC skipped the status)
+    // Only reset status to 'waiting' — do NOT reset joined_at because that is used for queue
+    // ordering and resetting it would push players who have waited longest to the back.
     const allMatchPlayers = [...(match.team_a_players || []), ...(match.team_b_players || [])]
     const { error: statusResetError } = await serviceDb
       .from('queue_participants')
       .update({
         status: 'waiting',
-        joined_at: new Date().toISOString(),
+        // joined_at intentionally NOT reset — preserves queue ordering
       })
       .eq('queue_session_id', match.queue_session_id)
       .in('user_id', allMatchPlayers)

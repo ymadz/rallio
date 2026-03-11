@@ -380,7 +380,10 @@ export async function leaveQueue(sessionId: string) {
       }
     }
 
-    // Mark as left
+    // Mark as left.
+    // NOTE: The DB trigger update_queue_count (migration 009) fires on this UPDATE
+    // and decrements current_players automatically. Do NOT call decrement_queue_players
+    // RPC here — that would cause a double-decrement.
     const now = await getServerNow()
     const { error: updateError } = await supabase
       .from('queue_participants')
@@ -393,14 +396,6 @@ export async function leaveQueue(sessionId: string) {
     if (updateError) {
       console.error('[leaveQueue] ❌ Failed to leave queue:', updateError)
       return { success: false, error: 'Failed to leave queue' }
-    }
-
-    // Decrement current_players count
-    const { error: decrementError } = await supabase.rpc('decrement_queue_players', {
-      session_id: sessionId,
-    })
-    if (decrementError) {
-      console.warn('[leaveQueue] ⚠️ Failed to decrement player count:', decrementError)
     }
 
     console.log('[leaveQueue] ✅ Successfully left queue')
@@ -1077,7 +1072,7 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
         }
       }
 
-      // Check conflicts
+      // Check conflicts with existing reservations
       const { data: conflicts } = await supabase
         .from('reservations')
         .select('id')
@@ -1098,6 +1093,30 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
         const endTimeStr = `${eh % 12 || 12}:${em.toString().padStart(2, '0')} ${eh >= 12 ? 'PM' : 'AM'}`
 
         return { success: false, error: `Conflict detected for ${formattedDate}: Queue session overlaps with existing reservation (${startTimeStr} - ${endTimeStr}). Court already booked during this time.` }
+      }
+
+      // Also check for overlapping queue sessions on the same court.
+      // A court can only host one queue session at a time — two QMs must not double-book.
+      const { data: queueConflicts } = await supabase
+        .from('queue_sessions')
+        .select('id')
+        .eq('court_id', data.courtId)
+        .in('status', ['pending_payment', 'open', 'active', 'paused'])
+        .lt('start_time', sessionEnd.toISOString())
+        .gt('end_time', sessionStart.toISOString())
+
+      if (queueConflicts && queueConflicts.length > 0) {
+        const formattedDate = `${manilaStart.getUTCMonth() + 1}/${manilaStart.getUTCDate()}/${manilaStart.getUTCFullYear()}`
+
+        const sh = manilaStart.getUTCHours()
+        const sm = manilaStart.getUTCMinutes()
+        const startTimeStr = `${sh % 12 || 12}:${sm.toString().padStart(2, '0')} ${sh >= 12 ? 'PM' : 'AM'}`
+
+        const eh = manilaEnd.getUTCHours()
+        const em = manilaEnd.getUTCMinutes()
+        const endTimeStr = `${eh % 12 || 12}:${em.toString().padStart(2, '0')} ${eh >= 12 ? 'PM' : 'AM'}`
+
+        return { success: false, error: `Conflict detected for ${formattedDate}: Another queue session is already scheduled on this court during (${startTimeStr} - ${endTimeStr}). Choose a different time slot.` }
       }
     }
 
@@ -2092,15 +2111,9 @@ export async function removeParticipant(
       return { success: false, error: 'Failed to remove participant' }
     }
 
-    // 7. Decrement current_players count
-    const { error: decrementError } = await supabase.rpc('decrement_queue_players', {
-      session_id: sessionId,
-    })
-
-    if (decrementError) {
-      console.warn('[removeParticipant] ⚠️ Failed to decrement player count:', decrementError)
-      // Not critical - continue
-    }
+    // NOTE: The DB trigger update_queue_count (migration 009) fires on the UPDATE above
+    // and decrements current_players automatically when status → 'left'.
+    // Do NOT call decrement_queue_players RPC here — that would cause a double-decrement.
 
     console.log('[removeParticipant] ✅ Participant removed successfully:', {
       amountOwed,
