@@ -1,0 +1,39 @@
+{
+  "profiles": [
+    "id",
+    "email",
+    "display_name",
+    "first_name",
+    "middle_initial",
+    "last_name",
+    "phone",
+    "avatar_url",
+    "is_active",
+    "profile_completed",
+    "preferred_locale",
+    "metadata",
+    "created_at",
+    "updated_at",
+    "is_banned",
+    "banned_reason",
+    "banned_until",
+    "banned_by",
+    "banned_at"
+  ],
+  "roles": [
+    {
+      "id": "8cf81bf7-3dbc-48db-b304-e76dba404953",
+      "name": "global_admin",
+      "description": "Platform administrator with full access",
+      "created_at": "2026-02-04T07:47:22.196315+00:00"
+    }
+  ],
+  "user_roles": [
+    {
+      "user_id": "9078b559-84fa-4d3a-8fc4-27d937faa874",
+      "role_id": "da870c18-85d1-4d63-986c-10eed191d950",
+      "assigned_at": "2026-03-02T02:46:25.308952+00:00",
+      "assigned_by": null
+    }
+  ]
+}
