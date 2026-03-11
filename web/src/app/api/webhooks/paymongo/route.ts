@@ -333,7 +333,7 @@ async function markReservationPaidAndConfirmed({
     console.log('[markReservationPaidAndConfirmed] 🔍 Fetching reservation from database')
     const { data, error } = await supabase
       .from('reservations')
-      .select('id, status, amount_paid, metadata, user_id')
+      .select('id, status, amount_paid, metadata')
       .eq('id', reservationId)
       .single()
 
@@ -436,7 +436,7 @@ async function markReservationPaidAndConfirmed({
     // 1. Fetch ALL pending reservations in this group
     const { data: groupReservations, error: groupFetchError } = await supabase
       .from('reservations')
-      .select('id, status, total_amount, metadata, user_id')
+      .select('id, status, total_amount, metadata')
       .eq('recurrence_group_id', recurrenceGroupId)
       .in('status', ['pending_payment', 'paid']) // Include 'paid' just in case
 
@@ -498,87 +498,6 @@ async function markReservationPaidAndConfirmed({
         }
       }
 
-      // Update linked queue sessions for each reservation in the group
-      for (const update of updates) {
-        try {
-          // Try finding queue session linked to this reservation via metadata
-          let linkedQueueSession = null
-
-          const { data: qsData, error: qsError } = await supabase
-            .from('queue_sessions')
-            .select('id, status, metadata, start_time, end_time')
-            .filter('metadata->>reservation_id', 'eq', update.id)
-            .single()
-
-          if (qsError) {
-            console.warn(`[markReservationPaidAndConfirmed] ⚠️ metadata->> filter failed for reservation ${update.id}:`, qsError.message)
-            // Fallback: try text cast filter
-            const { data: qsFallback } = await supabase
-              .from('queue_sessions')
-              .select('id, status, metadata, start_time, end_time')
-              .filter('metadata->>reservation_id', 'eq', String(update.id))
-              .maybeSingle()
-            linkedQueueSession = qsFallback
-          } else {
-            linkedQueueSession = qsData
-          }
-
-          if (!linkedQueueSession) {
-            console.log(`[markReservationPaidAndConfirmed] ℹ️ No queue session found for reservation ${update.id}`)
-            continue
-          }
-
-          if (['pending_payment', 'pending_approval'].includes(linkedQueueSession.status)) {
-            const qsUpdateData: any = {
-              metadata: {
-                ...linkedQueueSession.metadata,
-                payment_status: isDownPayment ? 'partially_paid' : 'paid',
-                payment_confirmed_at: nowISO
-              }
-            }
-
-            // Only transition to open/active when fully paid
-            if (!isDownPayment) {
-              const now = new Date()
-              const startTime = new Date(linkedQueueSession.start_time)
-              const endTime = new Date(linkedQueueSession.end_time)
-
-              if (now >= endTime) {
-                qsUpdateData.status = 'completed'
-              } else if (now >= startTime) {
-                qsUpdateData.status = 'active'
-              } else {
-                qsUpdateData.status = 'open'
-              }
-              console.log(`[markReservationPaidAndConfirmed] 🔓 Queue session ${linkedQueueSession.id} → ${qsUpdateData.status}`)
-            } else {
-              console.log(`[markReservationPaidAndConfirmed] 💰 Queue session ${linkedQueueSession.id} stays pending_payment (down payment)`)
-            }
-
-            const { error: qsUpdateError } = await supabase
-              .from('queue_sessions')
-              .update(qsUpdateData)
-              .eq('id', linkedQueueSession.id)
-
-            if (qsUpdateError) {
-              console.error(`[markReservationPaidAndConfirmed] ❌ Failed to update queue session ${linkedQueueSession.id}:`, qsUpdateError)
-            } else {
-              console.log(`[markReservationPaidAndConfirmed] ✅ Queue session ${linkedQueueSession.id} updated successfully`)
-            }
-          }
-        } catch (qErr) {
-          console.error(`[markReservationPaidAndConfirmed] Error updating queue session for reservation ${update.id}:`, qErr)
-        }
-      }
-
-      // Process deferred promo code consumption for the bulk group
-      const promoCodeStr = reservationRecord.metadata?.promo_code
-      if (promoCodeStr && reservationRecord.status === 'pending_payment') { // original status
-        const { consumeDeferredPromoCode } = await import('@/app/actions/promo-code-actions')
-        const allPendingIds = groupReservations.map(r => r.id)
-        await consumeDeferredPromoCode(promoCodeStr, reservationRecord.user_id, allPendingIds)
-      }
-
       // Update the main reservationRecord reference for notifications
       reservationRecord.status = targetStatus
       return // Exit here as we handled everything
@@ -586,13 +505,6 @@ async function markReservationPaidAndConfirmed({
   }
 
   // STANDARD SINGLE CONFIRMATION FALLBACK
-
-  // Process deferred promo code consumption for single reservation
-  const promoCodeStr = reservationRecord.metadata?.promo_code
-  if (promoCodeStr && reservationRecord.status === 'pending_payment') {
-    const { consumeDeferredPromoCode } = await import('@/app/actions/promo-code-actions')
-    await consumeDeferredPromoCode(promoCodeStr, reservationRecord.user_id, [reservationId])
-  }
 
   const { data: confirmedReservation, error: confirmError } = await supabase
     .from('reservations')
@@ -712,15 +624,16 @@ async function markReservationPaidAndConfirmed({
       const updateData: any = {
         metadata: {
           ...queueSession.metadata,
-          payment_status: isDownPayment ? 'partially_paid' : 'paid',
+          payment_status: 'paid',
           payment_confirmed_at: nowISO
         }
       }
 
-      // Only transition queue session to open/active when FULLY paid.
-      // Down payments (partially_paid) keep the session in pending_payment
-      // so it stays hidden from public until the queue master pays in full.
-      if (!isDownPayment && ['pending_payment', 'pending_approval'].includes(queueSession.status)) {
+
+
+      // Calculate correct status based on time lifecycle
+      // pending_payment → open (if within 12h before start) or open (default after payment)
+      if (['pending_payment', 'pending_approval'].includes(queueSession.status)) {
         const now = new Date()
         const startTime = new Date(queueSession.start_time)
         const endTime = new Date(queueSession.end_time)
@@ -734,12 +647,10 @@ async function markReservationPaidAndConfirmed({
           console.log('[markReservationPaidAndConfirmed] 🚀 Session already started → active')
         } else {
           newStatus = 'open'
-          console.log('[markReservationPaidAndConfirmed] 🔓 Session fully paid → open')
+          console.log('[markReservationPaidAndConfirmed] 🔓 Session paid → open')
         }
 
         updateData.status = newStatus
-      } else if (isDownPayment) {
-        console.log('[markReservationPaidAndConfirmed] 💰 Down payment only — keeping queue session as pending_payment (not public)')
       }
 
       const { error: qError } = await supabase
@@ -762,53 +673,6 @@ async function markReservationPaidAndConfirmed({
     }
   } catch (qErr) {
     console.error('[markReservationPaidAndConfirmed] Error checking/updating queue session:', qErr)
-  }
-}
-
-async function markQueueParticipantPaidAndLeft({
-  supabase,
-  payment,
-  eventId,
-  eventType,
-}: {
-  supabase: ReturnType<typeof createServiceClient>
-  payment: any
-  eventId?: string | null
-  eventType: string
-}) {
-  console.log(`[markQueueParticipantPaidAndLeft] 🎯 Starting participant confirmation for event ${eventId}`)
-
-  const participantId = payment.metadata?.participant_id
-  if (!participantId) {
-    console.error('[markQueueParticipantPaidAndLeft] ❌ Missing participant_id in payment metadata')
-    return
-  }
-
-  const { error: updateError } = await supabase
-    .from('queue_participants')
-    .update({
-      payment_status: 'paid',
-      status: 'left',
-      left_at: new Date().toISOString(),
-    })
-    .eq('id', participantId)
-
-  if (updateError) {
-    console.error('[markQueueParticipantPaidAndLeft] ❌ Failed to mark queue participant as paid:', updateError)
-    throw updateError
-  }
-
-  console.log(`[markQueueParticipantPaidAndLeft] ✅ Successfully marked participant ${participantId} as paid and left the queue`)
-
-  if (payment.metadata?.queue_session_id) {
-    const queueSessionId = payment.metadata.queue_session_id
-    // Instead of directly querying the court_id from the queue_sessions table (which we don't need strictly for just clearing the cache),
-    // we just use the global queue paths since Next.js cache can be broadly targeted
-    try {
-      revalidatePath('/queue')
-      revalidatePath('/queue-master')
-      revalidatePath(`/queue-master/sessions/${queueSessionId}`)
-    } catch (e) { }
   }
 }
 
@@ -900,23 +764,14 @@ async function handleSourceChargeable(data: any, eventId?: string) {
     }
 
     try {
-      if (payment.metadata?.payment_type === 'queue_session') {
-        await markQueueParticipantPaidAndLeft({
-          supabase,
-          payment,
-          eventId,
-          eventType: 'source.chargeable:duplicate',
-        })
-      } else {
-        await markReservationPaidAndConfirmed({
-          supabase,
-          payment,
-          eventId,
-          eventType: 'source.chargeable:duplicate',
-        })
-      }
+      await markReservationPaidAndConfirmed({
+        supabase,
+        payment,
+        eventId,
+        eventType: 'source.chargeable:duplicate',
+      })
     } catch (verifyError) {
-      console.error('Failed to verify entity for already completed payment:', verifyError)
+      console.error('Failed to verify reservation for already completed payment:', verifyError)
     }
     return
   }
@@ -1003,25 +858,14 @@ async function handleSourceChargeable(data: any, eventId?: string) {
       })
       .eq('id', payment.id)
 
-      .eq('id', payment.id)
+    await markReservationPaidAndConfirmed({
+      supabase,
+      payment,
+      eventId,
+      eventType: 'source.chargeable',
+    })
 
-    if (payment.metadata?.payment_type === 'queue_session') {
-      await markQueueParticipantPaidAndLeft({
-        supabase,
-        payment,
-        eventId,
-        eventType: 'source.chargeable',
-      })
-      console.log('✅ Webhook: Queue Participant paid:', payment.metadata.participant_id)
-    } else {
-      await markReservationPaidAndConfirmed({
-        supabase,
-        payment,
-        eventId,
-        eventType: 'source.chargeable',
-      })
-      console.log('✅ Webhook: Payment completed and reservation confirmed:', payment.reservation_id)
-    }
+    console.log('✅ Webhook: Payment completed and reservation confirmed:', payment.reservation_id)
 
     try {
       revalidatePath('/reservations')
@@ -1147,23 +991,14 @@ async function handlePaymentPaid(data: any, eventId?: string) {
   if (eventId && processedEvents.includes(eventId)) {
     console.log('payment.paid webhook already processed for event:', eventId)
     try {
-      if (payment.metadata?.payment_type === 'queue_session') {
-        await markQueueParticipantPaidAndLeft({
-          supabase,
-          payment,
-          eventId,
-          eventType: 'payment.paid:duplicate',
-        })
-      } else {
-        await markReservationPaidAndConfirmed({
-          supabase,
-          payment,
-          eventId,
-          eventType: 'payment.paid:duplicate',
-        })
-      }
+      await markReservationPaidAndConfirmed({
+        supabase,
+        payment,
+        eventId,
+        eventType: 'payment.paid:duplicate',
+      })
     } catch (verifyError) {
-      console.error('Failed to verify entity on duplicate payment.paid event:', verifyError)
+      console.error('Failed to verify reservation on duplicate payment.paid event:', verifyError)
     }
     return
   }
@@ -1223,23 +1058,14 @@ async function handlePaymentPaid(data: any, eventId?: string) {
     }
   }
 
-  if (payment.metadata?.payment_type === 'queue_session') {
-    await markQueueParticipantPaidAndLeft({
-      supabase,
-      payment,
-      eventId,
-      eventType: 'payment.paid',
-    })
-    console.log('✅ payment.paid webhook: Queue Participant paid:', payment.metadata.participant_id)
-  } else {
-    await markReservationPaidAndConfirmed({
-      supabase,
-      payment,
-      eventId,
-      eventType: 'payment.paid',
-    })
-    console.log('✅ payment.paid webhook: Reservation confirmed:', payment.reservation_id)
-  }
+  await markReservationPaidAndConfirmed({
+    supabase,
+    payment,
+    eventId,
+    eventType: 'payment.paid',
+  })
+
+  console.log('✅ payment.paid webhook: Reservation confirmed:', payment.reservation_id)
 
   try {
     revalidatePath('/reservations')

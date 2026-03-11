@@ -1,8 +1,6 @@
 'use client'
 
-import { Users, Clock, CalendarClock } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { differenceInSeconds, format } from 'date-fns'
+import { Users, Clock } from 'lucide-react'
 
 /* ── Glassmorphism progress bar styles ── */
 const qptStyles = `
@@ -50,45 +48,22 @@ const qptStyles = `
 interface QueuePositionTrackerProps {
   position: number
   totalPlayers: number
+  estimatedWaitTime: number // in minutes
   gamesPlayed: number
   status: 'waiting' | 'playing' | 'completed'
-  sessionStartTime?: Date | string
-  isSessionLive?: boolean
-}
-
-function useCountdown(targetDate?: Date | string) {
-  const [seconds, setSeconds] = useState(0)
-
-  useEffect(() => {
-    if (!targetDate) return
-
-    const update = () => {
-      const diff = differenceInSeconds(new Date(targetDate), new Date())
-      setSeconds(Math.max(0, diff))
-    }
-
-    update()
-    const id = setInterval(update, 1000)
-    return () => clearInterval(id)
-  }, [targetDate])
-
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  const s = seconds % 60
-  return { seconds, h, m, s }
 }
 
 export function QueuePositionTracker({
   position,
   totalPlayers,
+  estimatedWaitTime,
   gamesPlayed,
   status,
-  sessionStartTime,
-  isSessionLive = true,
 }: QueuePositionTrackerProps) {
+  // Calculate progress percentage
   const progressPercentage = totalPlayers > 0 ? ((totalPlayers - position + 1) / totalPlayers) * 100 : 0
-  const countdown = useCountdown(!isSessionLive ? sessionStartTime : undefined)
 
+  // Status colors
   const statusColors = {
     waiting: 'bg-teal-500/10 text-teal-700 border-teal-400/30 shadow-[0_0_8px_rgba(20,184,166,0.12)]',
     playing: 'bg-emerald-500/10 text-emerald-700 border-emerald-400/30 shadow-[0_0_8px_rgba(16,185,129,0.12)]',
@@ -108,6 +83,11 @@ export function QueuePositionTracker({
     : status === 'playing'
       ? 'Currently Playing'
       : 'Session Complete'
+  const statusLabels = {
+    waiting: 'Waiting in Queue',
+    playing: 'Currently Playing',
+    completed: 'Session Complete',
+  }
 
   const badgeIcon = isPreSession
     ? <CalendarClock className="w-3.5 h-3.5" />
@@ -131,48 +111,13 @@ export function QueuePositionTracker({
           </span>
         )}
         <span className="font-semibold text-xs uppercase tracking-wider">{badgeLabel}</span>
+      <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border mb-4 ${statusColors[status]}`}>
+        <span className="font-semibold text-sm">{statusLabels[status]}</span>
       </div>
 
-      {/* Pre-session countdown block */}
-      {isPreSession && sessionStartTime && (
-        <div className="mb-6 p-4 bg-sky-50 border border-sky-100 rounded-xl">
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 bg-sky-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-              <Clock className="w-5 h-5 text-sky-600" />
-            </div>
-            <div>
-              <p className="font-semibold text-sky-900 mb-0.5">Queue session hasn't started yet</p>
-              <p className="text-sm text-sky-700">
-                Starts at <span className="font-semibold">{format(new Date(sessionStartTime), 'h:mm a')}</span>
-                {' '}on{' '}
-                <span className="font-semibold">{format(new Date(sessionStartTime), 'EEEE, MMM d')}</span>
-              </p>
-
-              {countdown.seconds > 0 && (
-                <div className="mt-3 flex items-center gap-2">
-                  <span className="text-xs text-sky-600 font-medium uppercase tracking-wider">Starts in</span>
-                  <div className="flex items-center gap-1">
-                    {countdown.h > 0 && (
-                      <>
-                        <span className="text-lg font-bold text-sky-800 tabular-nums">{String(countdown.h).padStart(2, '0')}</span>
-                        <span className="text-sky-500 font-medium">h</span>
-                      </>
-                    )}
-                    <span className="text-lg font-bold text-sky-800 tabular-nums">{String(countdown.m).padStart(2, '0')}</span>
-                    <span className="text-sky-500 font-medium">m</span>
-                    <span className="text-lg font-bold text-sky-800 tabular-nums">{String(countdown.s).padStart(2, '0')}</span>
-                    <span className="text-sky-500 font-medium">s</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Position display — shown whether pre-session or live, as long as waiting */}
       {status === 'waiting' && (
         <>
+          {/* Position Display */}
           <div className="mb-6">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 text-gray-700">
@@ -181,7 +126,7 @@ export function QueuePositionTracker({
               </div>
               <div className="text-right">
                 <div className="text-3xl font-bold text-primary">#{position}</div>
-                <div className="text-xs text-gray-500">of {totalPlayers} {totalPlayers === 1 ? 'player' : 'players'}</div>
+                <div className="text-xs text-gray-500">of {totalPlayers} players</div>
               </div>
             </div>
 
@@ -199,16 +144,33 @@ export function QueuePositionTracker({
                 className="qpt-progress-fill"
                 style={{ width: `${Math.min(progressPercentage, 100)}%` }}
               />
+              {/* Position Marker */}
+              <div
+                className="absolute top-1/2 -translate-y-1/2 w-5 h-5 bg-white border-2 border-primary rounded-full shadow-md transition-all duration-500"
+                style={{ left: `calc(${Math.min(progressPercentage, 100)}% - 10px)` }}
+              />
             </div>
           </div>
 
-          {/* Tip — different message depending on session state */}
+          {/* Estimated Wait Time */}
+          <div className="pt-4 border-t border-gray-100">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Clock className="w-5 h-5 text-orange-600" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Est. Wait Time</p>
+                <p className="font-semibold text-gray-900">
+                  {estimatedWaitTime > 0 ? `~${estimatedWaitTime} min` : 'Soon'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Queue Tips */}
           <div className="mt-4 pt-4 border-t border-gray-100">
             <p className="text-xs text-gray-600">
-              <span className="font-semibold text-gray-700">💡 Tip:</span>{' '}
-              {isPreSession
-                ? "Your spot is secured! Show up before the session starts so you're ready to play."
-                : "Stay ready! You'll be notified when it's your turn to play."}
+              <span className="font-semibold text-gray-700">💡 Tip:</span> Stay ready! You'll be notified when it's your turn to play.
             </p>
           </div>
         </>
