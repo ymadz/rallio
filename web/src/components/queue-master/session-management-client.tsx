@@ -1,13 +1,10 @@
-'use client'
+'use client';
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
-import { getQueueDetails } from '@/app/actions/queue-actions'
-import {
-  closeQueueSession,
-  removeParticipant,
-} from '@/app/actions/queue-actions'
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
+import { getQueueDetails } from '@/app/actions/queue-actions';
+import { closeQueueSession, removeParticipant } from '@/app/actions/queue-actions';
 import {
   assignMatchFromQueue,
   recordMatchScore,
@@ -15,10 +12,12 @@ import {
   startMatch,
   resetPlayerToWaiting,
   resetAllPlayersToWaiting,
-} from '@/app/actions/match-actions'
-import { PayMongoError } from '@/lib/paymongo/client'
-import { initiatePaymentAction } from '@/app/actions/payments'
-import { StatusBadge } from '@/components/shared/status-badge'
+} from '@/app/actions/match-actions';
+import { PayMongoError } from '@/lib/paymongo/client';
+import { initiatePaymentAction } from '@/app/actions/payments';
+import { StatusBadge } from '@/components/shared/status-badge';
+import { QueueEventCard } from '@/components/queue/queue-event-card';
+import type { QueueSession as QueueSessionHook } from '@/hooks/use-queue';
 import {
   Users,
   Clock,
@@ -34,94 +33,96 @@ import {
   XCircle,
   Trophy,
   Play,
-  X
-} from 'lucide-react'
-import Link from 'next/link'
-import { ScoreRecordingModal } from './score-recording-modal'
-import { PaymentManagementModal } from './payment-management-modal'
-import { MatchAssignmentModal } from './match-assignment-modal'
-import { MatchTimer } from './match-timer'
-import { MatchStatusBadge } from './match-status-badge'
-import { useServerTime } from '@/hooks/use-server-time'
+  X,
+} from 'lucide-react';
+import Link from 'next/link';
+import { ScoreRecordingModal } from './score-recording-modal';
+import { PaymentManagementModal } from './payment-management-modal';
+import { MatchAssignmentModal } from './match-assignment-modal';
+import { MatchTimer } from './match-timer';
+import { MatchStatusBadge } from './match-status-badge';
+import { useServerTime } from '@/hooks/use-server-time';
 
 interface SessionManagementClientProps {
-  sessionId: string
+  sessionId: string;
 }
 
 interface Participant {
-  id: string
-  userId: string
-  playerName: string
-  avatarUrl?: string
-  skillLevel: number
-  rating?: number
-  position: number
-  joinedAt: Date
-  gamesPlayed: number
-  gamesWon: number
-  status: 'waiting' | 'playing' | 'completed' | 'left'
-  amountOwed: number
-  paymentStatus: 'unpaid' | 'partial' | 'paid'
+  id: string;
+  userId: string;
+  playerName: string;
+  avatarUrl?: string;
+  skillLevel: number;
+  rating?: number;
+  position: number;
+  joinedAt: Date;
+  gamesPlayed: number;
+  gamesWon: number;
+  status: 'waiting' | 'playing' | 'completed' | 'left';
+  amountOwed: number;
+  paymentStatus: 'unpaid' | 'partial' | 'paid';
 }
 
 interface QueueSession {
-  id: string
-  courtName: string
-  venueName: string
-  status: string
-  currentPlayers: number
-  maxPlayers: number
-  costPerGame: number
-  startTime: Date
-  endTime: Date
-  mode: string
-  gameFormat: string
-  players: Participant[]
-  requiresApproval?: boolean
-  approvalStatus?: string
-  metadata?: any
+  id: string;
+  courtName: string;
+  venueName: string;
+  status: string;
+  currentPlayers: number;
+  maxPlayers: number;
+  costPerGame: number;
+  startTime: Date;
+  endTime: Date;
+  mode: string;
+  gameFormat: string;
+  players: Participant[];
+  requiresApproval?: boolean;
+  approvalStatus?: string;
+  metadata?: any;
 }
 
 export function SessionManagementClient({ sessionId }: SessionManagementClientProps) {
-  const router = useRouter()
-  const { date: serverDate } = useServerTime()
-  const supabase = createClient()
+  const router = useRouter();
+  const { date: serverDate } = useServerTime();
+  const supabase = createClient();
 
-  const [session, setSession] = useState<QueueSession | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [session, setSession] = useState<QueueSession | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // Modal states
-  const [showMatchAssignModal, setShowMatchAssignModal] = useState(false)
-  const [showScoreModal, setShowScoreModal] = useState(false)
-  const [selectedMatch, setSelectedMatch] = useState<any>(null)
-  const [showPaymentModal, setShowPaymentModal] = useState(false)
-  const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null)
-  const [activeMatches, setActiveMatches] = useState<any[]>([])
+  const [showMatchAssignModal, setShowMatchAssignModal] = useState(false);
+  const [showScoreModal, setShowScoreModal] = useState(false);
+  const [selectedMatch, setSelectedMatch] = useState<any>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
+  const [activeMatches, setActiveMatches] = useState<any[]>([]);
 
   // Close session confirmation modal state
-  const [showCloseConfirmModal, setShowCloseConfirmModal] = useState(false)
-  const [closeError, setCloseError] = useState<string | null>(null)
+  const [showCloseConfirmModal, setShowCloseConfirmModal] = useState(false);
+  const [closeError, setCloseError] = useState<string | null>(null);
 
   // Session summary modal state
-  const [showSummaryModal, setShowSummaryModal] = useState(false)
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [sessionSummary, setSessionSummary] = useState<{
-    totalGames: number
-    totalRevenue: number
-    totalParticipants: number
-    unpaidBalances: number
-  } | null>(null)
+    totalGames: number;
+    totalRevenue: number;
+    totalParticipants: number;
+    unpaidBalances: number;
+  } | null>(null);
 
   // Action feedback (replaces browser alert/confirm/prompt)
-  const [actionError, setActionError] = useState<string | null>(null)
-  const [showResetConfirm, setShowResetConfirm] = useState(false)
-  const [showRemoveModal, setShowRemoveModal] = useState(false)
-  const [removeTarget, setRemoveTarget] = useState<{ userId: string; playerName: string } | null>(null)
-  const [removeReason, setRemoveReason] = useState('')
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showRemoveModal, setShowRemoveModal] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<{ userId: string; playerName: string } | null>(
+    null
+  );
+  const [removeReason, setRemoveReason] = useState('');
 
   useEffect(() => {
-    loadSession()
+    loadSession();
 
     const channel = supabase
       .channel(`queue-session-${sessionId}`)
@@ -131,7 +132,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
           event: '*',
           schema: 'public',
           table: 'queue_participants',
-          filter: `queue_session_id=eq.${sessionId}`
+          filter: `queue_session_id=eq.${sessionId}`,
         },
         () => loadSession()
       )
@@ -141,7 +142,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
           event: '*',
           schema: 'public',
           table: 'queue_sessions',
-          filter: `id=eq.${sessionId}`
+          filter: `id=eq.${sessionId}`,
         },
         () => loadSession()
       )
@@ -151,24 +152,25 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
           event: '*',
           schema: 'public',
           table: 'matches',
-          filter: `queue_session_id=eq.${sessionId}`
+          filter: `queue_session_id=eq.${sessionId}`,
         },
         () => loadSession()
       )
-      .subscribe()
+      .subscribe();
 
     return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [sessionId])
+      supabase.removeChannel(channel);
+    };
+  }, [sessionId]);
 
   const loadSession = async () => {
-    setIsLoading(true)
-    setError(null)
+    setIsLoading(true);
+    setError(null);
     try {
       const { data: sessionData, error: sessionError } = await supabase
         .from('queue_sessions')
-        .select(`
+        .select(
+          `
           *,
           courts (
             name,
@@ -177,17 +179,19 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
               name
             )
           )
-        `)
+        `
+        )
         .eq('id', sessionId)
-        .single()
+        .single();
 
       if (sessionError || !sessionData) {
-        throw new Error('Session not found')
+        throw new Error('Session not found');
       }
 
       const { data: participants, error: participantsError } = await supabase
         .from('queue_participants')
-        .select(`
+        .select(
+          `
           *,
           user:user_id!inner (
             id,
@@ -196,40 +200,46 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
             last_name,
             avatar_url
           )
-        `)
+        `
+        )
         .eq('queue_session_id', sessionId)
         .is('left_at', null)
-        .order('joined_at', { ascending: true })
+        .order('joined_at', { ascending: true });
 
       if (participantsError) {
-        throw new Error('Failed to fetch participants')
+        throw new Error('Failed to fetch participants');
       }
 
-      const playerIds = participants?.map((p: any) => p.user_id) || []
+      const playerIds = participants?.map((p: any) => p.user_id) || [];
       const { data: players } = await supabase
         .from('players')
         .select('user_id, skill_level, rating')
-        .in('user_id', playerIds)
+        .in('user_id', playerIds);
 
-      const playerSkillMap = new Map(players?.map((p: any) => [p.user_id, p.skill_level]) || [])
-      const playerRatingMap = new Map(players?.map((p: any) => [p.user_id, p.rating]) || [])
+      const playerSkillMap = new Map(players?.map((p: any) => [p.user_id, p.skill_level]) || []);
+      const playerRatingMap = new Map(players?.map((p: any) => [p.user_id, p.rating]) || []);
 
       // Format participants
-      const formattedParticipants: Participant[] = (participants || []).map((p: any, index: number) => ({
-        id: p.id,
-        userId: p.user_id,
-        playerName: p.user?.display_name || `${p.user?.first_name || ''} ${p.user?.last_name || ''}`.trim() || 'Unknown Player',
-        avatarUrl: p.user?.avatar_url,
-        skillLevel: playerSkillMap.get(p.user_id) || 5,
-        rating: playerRatingMap.get(p.user_id),
-        position: index + 1,
-        joinedAt: new Date(p.joined_at),
-        gamesPlayed: p.games_played || 0,
-        gamesWon: p.games_won || 0,
-        status: p.status,
-        amountOwed: parseFloat(p.amount_owed || '0'),
-        paymentStatus: p.payment_status,
-      }))
+      const formattedParticipants: Participant[] = (participants || []).map(
+        (p: any, index: number) => ({
+          id: p.id,
+          userId: p.user_id,
+          playerName:
+            p.user?.display_name ||
+            `${p.user?.first_name || ''} ${p.user?.last_name || ''}`.trim() ||
+            'Unknown Player',
+          avatarUrl: p.user?.avatar_url,
+          skillLevel: playerSkillMap.get(p.user_id) || 5,
+          rating: playerRatingMap.get(p.user_id),
+          position: index + 1,
+          joinedAt: new Date(p.joined_at),
+          gamesPlayed: p.games_played || 0,
+          gamesWon: p.games_won || 0,
+          status: p.status,
+          amountOwed: parseFloat(p.amount_owed || '0'),
+          paymentStatus: p.payment_status,
+        })
+      );
 
       // Format session data
       const formattedSession: QueueSession = {
@@ -245,11 +255,11 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         mode: sessionData.mode,
         gameFormat: sessionData.game_format,
         players: formattedParticipants,
-        metadata: sessionData.metadata
-      }
+        metadata: sessionData.metadata,
+      };
 
       // Call centralized status auto-advancement to handle upcoming->open->active->completed
-      await supabase.rpc('auto_advance_session_statuses')
+      await supabase.rpc('auto_advance_session_statuses');
 
       // Self-healing: if queue session is stuck in pending_payment but the linked reservation
       // is already confirmed/partially_paid, auto-fix the queue session status.
@@ -258,21 +268,25 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
           .from('reservations')
           .select('status')
           .eq('id', sessionData.metadata.reservation_id)
-          .single()
+          .single();
 
         if (linkedRes && ['confirmed', 'partially_paid', 'ongoing'].includes(linkedRes.status)) {
-          console.log('[loadSession] 🔧 Self-healing: reservation is', linkedRes.status, 'but queue session stuck at pending_payment. Fixing...')
-          const now = new Date()
-          const startTime = new Date(sessionData.start_time)
-          const endTime = new Date(sessionData.end_time)
+          console.log(
+            '[loadSession] 🔧 Self-healing: reservation is',
+            linkedRes.status,
+            'but queue session stuck at pending_payment. Fixing...'
+          );
+          const now = new Date();
+          const startTime = new Date(sessionData.start_time);
+          const endTime = new Date(sessionData.end_time);
 
-          let correctedStatus: string
+          let correctedStatus: string;
           if (now >= endTime) {
-            correctedStatus = 'completed'
+            correctedStatus = 'completed';
           } else if (now >= startTime) {
-            correctedStatus = 'active'
+            correctedStatus = 'active';
           } else {
-            correctedStatus = 'open'
+            correctedStatus = 'open';
           }
 
           await supabase
@@ -283,12 +297,12 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                 ...sessionData.metadata,
                 payment_status: linkedRes.status === 'confirmed' ? 'paid' : 'partially_paid',
                 self_healed_at: now.toISOString(),
-              }
+              },
             })
-            .eq('id', sessionData.id)
+            .eq('id', sessionData.id);
 
-          formattedSession.status = correctedStatus
-          console.log('[loadSession] ✅ Queue session status corrected to:', correctedStatus)
+          formattedSession.status = correctedStatus;
+          console.log('[loadSession] ✅ Queue session status corrected to:', correctedStatus);
         }
       }
 
@@ -297,178 +311,182 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         .from('queue_sessions')
         .select('status')
         .eq('id', sessionData.id)
-        .single()
+        .single();
 
       if (updatedSession) {
-        formattedSession.status = updatedSession.status
+        formattedSession.status = updatedSession.status;
       }
 
-      setSession(formattedSession)
+      setSession(formattedSession);
 
-      await loadActiveMatches()
+      await loadActiveMatches();
     } catch (err: any) {
-      console.error('[loadSession] Error:', err.message)
-      setError(err.message || 'Failed to load session')
+      console.error('[loadSession] Error:', err.message);
+      setError(err.message || 'Failed to load session');
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const loadActiveMatches = async () => {
     try {
       const { data: matches, error: matchError } = await supabase
         .from('matches')
-        .select(`
+        .select(
+          `
           *,
           queue_sessions!inner(court_id, courts(name))
-        `)
+        `
+        )
         .eq('queue_session_id', sessionId)
         .in('status', ['scheduled', 'in_progress'])
-        .order('created_at', { ascending: false })
+        .order('created_at', { ascending: false });
 
       if (matches) {
         // Batch fetch all player profiles in one query instead of N separate queries
-        const allPlayerIds = [...new Set(
-          matches.flatMap((m: any) => [...(m.team_a_players || []), ...(m.team_b_players || [])])
-        )]
-        const { data: allProfiles } = allPlayerIds.length > 0
-          ? await supabase
-              .from('profiles')
-              .select('id, display_name, first_name, last_name, avatar_url')
-              .in('id', allPlayerIds)
-          : { data: [] }
-        const profileMap = new Map((allProfiles || []).map((p: any) => [p.id, p]))
+        const allPlayerIds = [
+          ...new Set(
+            matches.flatMap((m: any) => [...(m.team_a_players || []), ...(m.team_b_players || [])])
+          ),
+        ];
+        const { data: allProfiles } =
+          allPlayerIds.length > 0
+            ? await supabase
+                .from('profiles')
+                .select('id, display_name, first_name, last_name, avatar_url')
+                .in('id', allPlayerIds)
+            : { data: [] };
+        const profileMap = new Map((allProfiles || []).map((p: any) => [p.id, p]));
         const getPlayerInfo = (id: string) => {
-          const player = profileMap.get(id) as any
+          const player = profileMap.get(id) as any;
           return {
             id,
             name: player?.display_name || `${player?.first_name} ${player?.last_name}` || 'Unknown',
             avatarUrl: player?.avatar_url,
-          }
-        }
+          };
+        };
         const formattedMatches = matches.map((match: any) => ({
           ...match,
           teamAPlayers: (match.team_a_players || []).map(getPlayerInfo),
           teamBPlayers: (match.team_b_players || []).map(getPlayerInfo),
-        }))
-        setActiveMatches(formattedMatches)
+        }));
+        setActiveMatches(formattedMatches);
       }
     } catch (err) {
-      console.error('[loadActiveMatches] Error:', err)
+      console.error('[loadActiveMatches] Error:', err);
     }
-  }
+  };
 
   const handleClose = () => {
-    setCloseError(null)
-    setShowCloseConfirmModal(true)
-  }
+    setCloseError(null);
+    setShowCloseConfirmModal(true);
+  };
 
   const handleConfirmClose = async () => {
-    setActionLoading('close')
-    setCloseError(null)
+    setActionLoading('close');
+    setCloseError(null);
     try {
-      const result = await closeQueueSession(sessionId)
-      if (!result.success) throw new Error(result.error)
+      const result = await closeQueueSession(sessionId);
+      if (!result.success) throw new Error(result.error);
 
-      setShowCloseConfirmModal(false)
+      setShowCloseConfirmModal(false);
       // Show summary modal instead of redirecting immediately
       if (result.summary) {
-        setSessionSummary(result.summary)
-        setShowSummaryModal(true)
+        setSessionSummary(result.summary);
+        setShowSummaryModal(true);
       } else {
-        router.push('/bookings')
+        router.push('/bookings');
       }
     } catch (err: any) {
-      setCloseError(err.message || 'Failed to close session')
+      setCloseError(err.message || 'Failed to close session');
     } finally {
-      setActionLoading(null)
+      setActionLoading(null);
     }
-  }
+  };
 
   const handleRemovePlayer = (userId: string, playerName: string) => {
-    setRemoveTarget({ userId, playerName })
-    setRemoveReason('')
-    setShowRemoveModal(true)
-  }
+    setRemoveTarget({ userId, playerName });
+    setRemoveReason('');
+    setShowRemoveModal(true);
+  };
 
   const handleConfirmRemove = async () => {
-    if (!removeTarget || !removeReason.trim()) return
-    setShowRemoveModal(false)
-    setActionLoading(`remove-${removeTarget.userId}`)
+    if (!removeTarget || !removeReason.trim()) return;
+    setShowRemoveModal(false);
+    setActionLoading(`remove-${removeTarget.userId}`);
     try {
-      const result = await removeParticipant(sessionId, removeTarget.userId, removeReason.trim())
-      if (!result.success) throw new Error(result.error)
-      setRemoveTarget(null)
-      setRemoveReason('')
-      await loadSession()
+      const result = await removeParticipant(sessionId, removeTarget.userId, removeReason.trim());
+      if (!result.success) throw new Error(result.error);
+      setRemoveTarget(null);
+      setRemoveReason('');
+      await loadSession();
     } catch (err: any) {
-      setActionError(err.message || 'Failed to remove player')
+      setActionError(err.message || 'Failed to remove player');
     } finally {
-      setActionLoading(null)
+      setActionLoading(null);
     }
-  }
+  };
 
   const handleAssignMatch = () => {
-    setShowMatchAssignModal(true)
-  }
+    setShowMatchAssignModal(true);
+  };
 
   const handleOpenScoreModal = (match: any) => {
-    setSelectedMatch(match)
-    setShowScoreModal(true)
-  }
+    setSelectedMatch(match);
+    setShowScoreModal(true);
+  };
 
   const handleOpenPaymentModal = (participant: Participant) => {
-    setSelectedParticipant(participant)
-    setShowPaymentModal(true)
-  }
+    setSelectedParticipant(participant);
+    setShowPaymentModal(true);
+  };
 
   const handleModalSuccess = async () => {
     // Brief delay to ensure DB transaction from RPC is fully committed
-    await new Promise(resolve => setTimeout(resolve, 500))
-    await loadSession()
-  }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await loadSession();
+  };
 
   const handleStartMatch = async (matchId: string) => {
-    setActionLoading(`start-${matchId}`)
+    setActionLoading(`start-${matchId}`);
     try {
-      const result = await startMatch(matchId)
-      if (!result.success) throw new Error(result.error)
-      await loadSession()
+      const result = await startMatch(matchId);
+      if (!result.success) throw new Error(result.error);
+      await loadSession();
     } catch (err: any) {
-      setActionError(err.message || 'Failed to start match')
+      setActionError(err.message || 'Failed to start match');
     } finally {
-      setActionLoading(null)
+      setActionLoading(null);
     }
-  }
-
+  };
 
   const handlePayNow = async () => {
     if (!session?.metadata?.reservation_id) {
-      setActionError('Payment information not found. Please contact support.')
-      return
+      setActionError('Payment information not found. Please contact support.');
+      return;
     }
 
-    setActionLoading('pay')
+    setActionLoading('pay');
     try {
-      const paymentMethod = session.metadata?.payment_method === 'paymaya' ? 'paymaya' : 'gcash'
-      const result = await initiatePaymentAction(session.metadata.reservation_id, paymentMethod)
+      const paymentMethod = session.metadata?.payment_method === 'paymaya' ? 'paymaya' : 'gcash';
+      const result = await initiatePaymentAction(session.metadata.reservation_id, paymentMethod);
       if (!result.success || !result.checkoutUrl) {
-        throw new Error(result.error || 'Failed to initiate payment')
+        throw new Error(result.error || 'Failed to initiate payment');
       }
-      window.location.href = result.checkoutUrl
+      window.location.href = result.checkoutUrl;
     } catch (err: any) {
-      setActionError(err.message || 'Payment initiation failed')
+      setActionError(err.message || 'Payment initiation failed');
     } finally {
-      setActionLoading(null)
+      setActionLoading(null);
     }
-  }
+  };
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
       </div>
-    )
+    );
   }
 
   if (error || !session) {
@@ -487,34 +505,36 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
           </Link>
         </div>
       </div>
-    )
+    );
   }
 
-  const waitingPlayers = session.players.filter(p => p.status === 'waiting')
-  const playingPlayers = session.players.filter(p => p.status === 'playing')
-  const totalRevenue = session.players.reduce((sum, p) => sum + p.amountOwed, 0)
-  const totalGamesPlayed = session.players.reduce((sum, p) => sum + p.gamesPlayed, 0)
+  const waitingPlayers = session.players.filter((p) => p.status === 'waiting');
+  const playingPlayers = session.players.filter((p) => p.status === 'playing');
+  const totalRevenue = session.players.reduce((sum, p) => sum + p.amountOwed, 0);
+  const totalGamesPlayed = session.players.reduce((sum, p) => sum + p.gamesPlayed, 0);
 
   // getStatusColor removed in favor of StatusBadge
   const getDisplayStatus = () => {
-    const now = serverDate || new Date()
-    const status = session.status
+    const now = serverDate || new Date();
+    const status = session.status;
     if (status === 'open' || status === 'active') {
-      const isLive = new Date(session.startTime) <= now && new Date(session.endTime) > now
-      return isLive ? 'Live Now' : 'Open'
+      const isLive = new Date(session.startTime) <= now && new Date(session.endTime) > now;
+      return isLive ? 'Live Now' : 'Open';
     }
-    if (status === 'pending_payment') return 'Pending Payment'
-    return status.charAt(0).toUpperCase() + status.slice(1)
-  }
+    if (status === 'pending_payment') return 'Pending Payment';
+    return status.charAt(0).toUpperCase() + status.slice(1);
+  };
 
   const getDisplayStatusKey = () => {
-    const now = serverDate || new Date()
-    const status = session.status
+    const now = serverDate || new Date();
+    const status = session.status;
     if (status === 'open' || status === 'active') {
-      return new Date(session.startTime) <= now && new Date(session.endTime) > now ? 'live' : 'upcoming'
+      return new Date(session.startTime) <= now && new Date(session.endTime) > now
+        ? 'live'
+        : 'upcoming';
     }
-    return status
-  }
+    return status;
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -529,19 +549,69 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
           </button>
         </div>
       )}
-      {/* Header */}
-      <div className="mb-6">
-        <Link
-          href="/bookings"
-          className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
+      {/* Header — reuse the same glass-gradient event card as the player view */}
+      <div className="mb-6 space-y-4">
+        <QueueEventCard
+          queue={{
+            id: session.id,
+            courtId: '',
+            courtName: session.courtName,
+            venueName: session.venueName,
+            venueId: '',
+            status: session.status as QueueSessionHook['status'],
+            players: [],
+            userPosition: null,
+            maxPlayers: session.maxPlayers,
+            currentPlayers: session.currentPlayers,
+            startTime: session.startTime,
+            endTime: session.endTime,
+            mode: session.mode as 'casual' | 'competitive',
+            costPerGame: session.costPerGame,
+            organizerName: 'You',
+          }}
+          onBack={() => router.push('/bookings')}
+          actionSlot={
+            <>
+              {session.status !== 'completed' && session.status !== 'cancelled' && (
+                <button
+                  onClick={handleClose}
+                  disabled={actionLoading === 'close'}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-50 bg-red-500/60 text-white/90 hover:bg-red-500/40 hover:text-white backdrop-blur-sm"
+                >
+                  {actionLoading === 'close' ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <StopCircle className="w-3.5 h-3.5" />
+                  )}
+                  Close Session
+                </button>
+              )}
+              {(session.status === 'completed' || session.status === 'cancelled') && (
+                <Link
+                  href="/bookings"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-white/15 text-white hover:bg-white/25 backdrop-blur-sm transition-all"
+                >
+                  <Trophy className="w-3.5 h-3.5" />
+                  View Summary
+                </Link>
+              )}
+            </>
+          }
         >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back to Bookings</span>
-        </Link>
+          {/* Queue Master Controls inside the header */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono text-white/60 bg-white/10 backdrop-blur-sm px-2.5 py-1 rounded-lg">
+              #{session.id.slice(0, 8)}
+            </span>
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-white/15 backdrop-blur-sm text-white border border-white/20">
+              {getDisplayStatus()}
+            </span>
+          </div>
+        </QueueEventCard>
 
         {/* Payment Required Alert */}
         {session.status === 'pending_payment' && (
-          <div className="bg-orange-50 border-l-4 border-orange-400 p-4 mb-6 rounded-r-lg">
+          <div className="bg-orange-50 border-l-4 border-orange-400 p-4 rounded-r-lg">
             <div className="flex items-start justify-between">
               <div className="flex items-start">
                 <PhilippinePeso className="h-5 w-5 text-orange-400 mt-0.5 mr-3 flex-shrink-0" />
@@ -550,17 +620,19 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                     Payment Required — Session Not Public
                   </h3>
                   <p className="mt-1 text-sm text-orange-700">
-                    Your session is hidden from players until payment is completed. Pay the remaining balance to make it public and allow players to join.
-                    {session.metadata?.payment_required && ` Amount due: ₱${parseFloat(session.metadata.payment_required).toFixed(2)}`}
+                    Your session is hidden from players until payment is completed. Pay the
+                    remaining balance to make it public and allow players to join.
+                    {session.metadata?.payment_required &&
+                      ` Amount due: ₱${parseFloat(session.metadata.payment_required).toFixed(2)}`}
                   </p>
                   {session.metadata?.payment_method === 'cash' && (
                     <p className="mt-1 text-xs text-orange-600">
-                      Cash payment — pay at the venue. The venue will activate your session once payment is confirmed.
+                      Cash payment — pay at the venue. The venue will activate your session once
+                      payment is confirmed.
                     </p>
                   )}
                 </div>
               </div>
-              {/* Only show electronic Pay Now for e-wallet sessions */}
               {session.metadata?.payment_method !== 'cash' && (
                 <button
                   onClick={handlePayNow}
@@ -574,86 +646,48 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
             </div>
           </div>
         )}
-
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-3xl font-bold text-gray-900">{session.courtName}</h1>
-              <span className="text-sm font-mono text-gray-400 bg-gray-100 px-3 py-1 rounded-lg">
-                #{session.id.slice(0, 8)}
-              </span>
-            </div>
-            <p className="text-gray-600">{session.venueName}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <StatusBadge status={getDisplayStatusKey()} label={getDisplayStatus()} />
-            <span className={`px-2.5 py-1 text-xs font-bold rounded-full border ${session.mode === 'competitive'
-              ? 'bg-purple-50 text-purple-700 border-purple-200'
-              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-              }`}>
-              {session.mode === 'competitive' ? 'Competitive' : 'Casual'}
-            </span>
-            {session.status !== 'completed' && session.status !== 'cancelled' && (
-              <button
-                onClick={handleClose}
-                disabled={actionLoading === 'close'}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-all text-sm font-medium disabled:opacity-50"
-              >
-                {actionLoading === 'close' ? <Loader2 className="w-4 h-4 animate-spin" /> : <StopCircle className="w-4 h-4" />}
-                Close Session
-              </button>
-            )}
-            {(session.status === 'completed' || session.status === 'cancelled') && (
-              <Link
-                href="/bookings"
-                className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium"
-              >
-                <Trophy className="w-4 h-4" />
-                View Summary
-              </Link>
-            )}
-          </div>
-        </div>
       </div>
 
-      {/* Stats Grid — white card tiles matching user view */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm mb-6">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div className="bg-gray-50 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <Users className="w-4 h-4 text-gray-500" />
-              <span className="text-xs text-gray-600">Total Players</span>
-            </div>
-            <p className="text-lg font-bold text-gray-900">{session.currentPlayers}/{session.maxPlayers}</p>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <Clock className="w-4 h-4 text-amber-500" />
-              <span className="text-xs text-gray-600">Waiting</span>
-            </div>
-            <p className="text-lg font-bold text-amber-600">{session.players.filter(p => p.status === 'waiting').length}</p>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <PlayCircle className="w-4 h-4 text-green-500" />
-              <span className="text-xs text-gray-600">Playing</span>
-            </div>
-            <p className="text-lg font-bold text-green-600">{session.players.filter(p => p.status === 'playing').length}</p>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <Trophy className="w-4 h-4 text-gray-500" />
-              <span className="text-xs text-gray-600">Total Games</span>
-            </div>
-            <p className="text-lg font-bold text-gray-900">{totalGamesPlayed}</p>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <PhilippinePeso className="w-4 h-4 text-emerald-500" />
-              <span className="text-xs text-gray-600">Revenue</span>
-            </div>
-            <p className="text-lg font-bold text-emerald-700">₱{totalRevenue.toFixed(0)}</p>
-          </div>
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-6">
+        <div className="relative overflow-hidden rounded-xl bg-white border border-gray-100 p-4 shadow-sm">
+          <div className="absolute -top-3 -right-3 w-12 h-12 rounded-full bg-blue-50" />
+          <Users className="w-5 h-5 text-blue-500 mb-2 relative z-[1]" />
+          <p className="text-2xl font-bold text-gray-900 leading-none mb-0.5">
+            {session.currentPlayers}
+            <span className="text-sm font-medium text-gray-400">/{session.maxPlayers}</span>
+          </p>
+          <p className="text-xs text-gray-500">Players</p>
+        </div>
+        <div className="relative overflow-hidden rounded-xl bg-white border border-gray-100 p-4 shadow-sm">
+          <div className="absolute -top-3 -right-3 w-12 h-12 rounded-full bg-amber-50" />
+          <Clock className="w-5 h-5 text-amber-500 mb-2 relative z-[1]" />
+          <p className="text-2xl font-bold text-amber-600 leading-none mb-0.5">
+            {session.players.filter((p) => p.status === 'waiting').length}
+          </p>
+          <p className="text-xs text-gray-500">Waiting</p>
+        </div>
+        <div className="relative overflow-hidden rounded-xl bg-white border border-gray-100 p-4 shadow-sm">
+          <div className="absolute -top-3 -right-3 w-12 h-12 rounded-full bg-green-50" />
+          <PlayCircle className="w-5 h-5 text-green-500 mb-2 relative z-[1]" />
+          <p className="text-2xl font-bold text-green-600 leading-none mb-0.5">
+            {session.players.filter((p) => p.status === 'playing').length}
+          </p>
+          <p className="text-xs text-gray-500">Playing</p>
+        </div>
+        <div className="relative overflow-hidden rounded-xl bg-white border border-gray-100 p-4 shadow-sm">
+          <div className="absolute -top-3 -right-3 w-12 h-12 rounded-full bg-purple-50" />
+          <Trophy className="w-5 h-5 text-purple-500 mb-2 relative z-[1]" />
+          <p className="text-2xl font-bold text-gray-900 leading-none mb-0.5">{totalGamesPlayed}</p>
+          <p className="text-xs text-gray-500">Games</p>
+        </div>
+        <div className="relative overflow-hidden rounded-xl bg-white border border-gray-100 p-4 shadow-sm">
+          <div className="absolute -top-3 -right-3 w-12 h-12 rounded-full bg-emerald-50" />
+          <PhilippinePeso className="w-5 h-5 text-emerald-500 mb-2 relative z-[1]" />
+          <p className="text-2xl font-bold text-emerald-700 leading-none mb-0.5">
+            ₱{totalRevenue.toFixed(0)}
+          </p>
+          <p className="text-xs text-gray-500">Revenue</p>
         </div>
       </div>
 
@@ -671,25 +705,31 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                 {activeMatches.map((match) => (
                   <div
                     key={match.id}
-                    className={`border-2 rounded-lg p-4 ${match.status === 'scheduled'
-                      ? 'border-gray-200 bg-gray-50'
-                      : match.status === 'in_progress'
-                        ? 'border-green-200 bg-green-50'
-                        : 'border-blue-200 bg-blue-50'
-                      }`}
+                    className={`border-2 rounded-lg p-4 ${
+                      match.status === 'scheduled'
+                        ? 'border-gray-200 bg-gray-50'
+                        : match.status === 'in_progress'
+                          ? 'border-green-200 bg-green-50'
+                          : 'border-blue-200 bg-blue-50'
+                    }`}
                   >
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${match.status === 'scheduled'
-                          ? 'bg-gray-600'
-                          : match.status === 'in_progress'
-                            ? 'bg-green-600'
-                            : 'bg-blue-600'
-                          }`}>
+                        <div
+                          className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                            match.status === 'scheduled'
+                              ? 'bg-gray-600'
+                              : match.status === 'in_progress'
+                                ? 'bg-green-600'
+                                : 'bg-blue-600'
+                          }`}
+                        >
                           <Trophy className="w-4 h-4 text-white" />
                         </div>
                         <div>
-                          <div className="font-semibold text-gray-900">Match #{match.match_number}</div>
+                          <div className="font-semibold text-gray-900">
+                            Match #{match.match_number}
+                          </div>
                           <MatchStatusBadge status={match.status} size="sm" />
                         </div>
                         {(match.status === 'in_progress' || match.status === 'completed') && (
@@ -730,7 +770,9 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                         <div className="text-xs text-gray-600 mb-1">Team A</div>
                         <div className="space-y-1">
                           {match.teamAPlayers?.map((p: any) => (
-                            <div key={p.id} className="text-sm text-gray-900">{p.name}</div>
+                            <div key={p.id} className="text-sm text-gray-900">
+                              {p.name}
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -738,7 +780,9 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                         <div className="text-xs text-gray-600 mb-1">Team B</div>
                         <div className="space-y-1">
                           {match.teamBPlayers?.map((p: any) => (
-                            <div key={p.id} className="text-sm text-gray-900">{p.name}</div>
+                            <div key={p.id} className="text-sm text-gray-900">
+                              {p.name}
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -755,26 +799,29 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                 Participants ({session.players.length})
               </h2>
               {(() => {
-                const now = serverDate || new Date()
-                const isStarted = new Date(session.startTime) <= now
+                const now = serverDate || new Date();
+                const isStarted = new Date(session.startTime) <= now;
                 return (
                   <button
                     onClick={handleAssignMatch}
-                    disabled={!isStarted || waitingPlayers.length < (session.gameFormat === 'doubles' ? 4 : 2)}
+                    disabled={
+                      !isStarted ||
+                      waitingPlayers.length < (session.gameFormat === 'doubles' ? 4 : 2)
+                    }
                     title={!isStarted ? 'Session has not started yet' : undefined}
                     className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Assign Match</span>
                   </button>
-                )
+                );
               })()}
             </div>
 
             {/* Pre-start reminder */}
             {(() => {
-              const now = serverDate || new Date()
-              const sessionStart = new Date(session.startTime)
+              const now = serverDate || new Date();
+              const sessionStart = new Date(session.startTime);
               if (sessionStart > now) {
                 return (
                   <div className="mb-4 flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
@@ -782,13 +829,18 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                     <p>
                       Match assignments will be available once the session starts at{' '}
                       <span className="font-semibold">
-                        {sessionStart.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
-                      </span>. Players can join the queue in the meantime.
+                        {sessionStart.toLocaleTimeString('en-US', {
+                          hour: 'numeric',
+                          minute: '2-digit',
+                          hour12: true,
+                        })}
+                      </span>
+                      . Players can join the queue in the meantime.
                     </p>
                   </div>
-                )
+                );
               }
-              return null
+              return null;
             })()}
 
             {/* Doubles minimum-player notice */}
@@ -798,8 +850,9 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                 <div>
                   <p className="font-semibold">Doubles — Minimum Players Required</p>
                   <p className="text-blue-700 mt-0.5">
-                    A match cannot start until at least <span className="font-semibold">4 players</span> are in the waiting queue
-                    ({waitingPlayers.length} of 4 players joined).
+                    A match cannot start until at least{' '}
+                    <span className="font-semibold">4 players</span> are in the waiting queue (
+                    {waitingPlayers.length} of 4 players joined).
                   </p>
                 </div>
               </div>
@@ -849,12 +902,13 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                         </div>
                         <button
                           onClick={() => handleOpenPaymentModal(player)}
-                          className={`px-3 py-1 text-xs font-medium rounded-full border ${player.paymentStatus === 'paid'
-                            ? 'bg-green-100 text-green-700 border-green-200'
-                            : player.paymentStatus === 'partial'
-                              ? 'bg-yellow-100 text-yellow-700 border-yellow-200'
-                              : 'bg-red-100 text-red-700 border-red-200 hover:bg-red-200'
-                            }`}
+                          className={`px-3 py-1 text-xs font-medium rounded-full border ${
+                            player.paymentStatus === 'paid'
+                              ? 'bg-green-100 text-green-700 border-green-200'
+                              : player.paymentStatus === 'partial'
+                                ? 'bg-yellow-100 text-yellow-700 border-yellow-200'
+                                : 'bg-red-100 text-red-700 border-red-200 hover:bg-red-200'
+                          }`}
                           title="Manage payment"
                         >
                           <PhilippinePeso className="w-3 h-3 inline mr-0.5" />
@@ -921,18 +975,16 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                               </span>
                             )}
                           </div>
-                          <div className="text-sm text-gray-600">
-                            Currently playing
-                          </div>
+                          <div className="text-sm text-gray-600">Currently playing</div>
                         </div>
                       </div>
                       <button
                         onClick={async () => {
-                          const result = await resetPlayerToWaiting(player.id, session.id)
+                          const result = await resetPlayerToWaiting(player.id, session.id);
                           if (result.success) {
-                            loadSession()
+                            loadSession();
                           } else {
-                            setActionError('Reset failed: ' + result.error)
+                            setActionError('Reset failed: ' + result.error);
                           }
                         }}
                         title="Return this player to the waiting queue"
@@ -946,16 +998,13 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
               </div>
             )}
 
-
             {session.players.length === 0 && (
               <div className="text-center py-12">
                 <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Users className="w-8 h-8 text-gray-400" />
                 </div>
                 <h3 className="font-semibold text-gray-900 mb-2">No Participants Yet</h3>
-                <p className="text-sm text-gray-500">
-                  Waiting for players to join this session
-                </p>
+                <p className="text-sm text-gray-500">Waiting for players to join this session</p>
               </div>
             )}
           </div>
@@ -972,10 +1021,13 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
             <div className="space-y-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-500">Mode</span>
-                <span className={`px-2.5 py-1 text-xs font-bold rounded-full border ${session.mode === 'competitive'
-                  ? 'bg-purple-50 text-purple-700 border-purple-200'
-                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  }`}>
+                <span
+                  className={`px-2.5 py-1 text-xs font-bold rounded-full border ${
+                    session.mode === 'competitive'
+                      ? 'bg-purple-50 text-purple-700 border-purple-200'
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  }`}
+                >
                   {session.mode === 'competitive' ? 'Competitive' : 'Casual'}
                 </span>
               </div>
@@ -993,18 +1045,32 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                   Session Time
                 </div>
                 <div className="text-sm text-gray-900 font-medium">
-                  {new Date(session.startTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                  {new Date(session.startTime).toLocaleTimeString('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true,
+                  })}
                   {' – '}
-                  {new Date(session.endTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                  {new Date(session.endTime).toLocaleTimeString('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true,
+                  })}
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">
-                  {new Date(session.startTime).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                  {new Date(session.startTime).toLocaleDateString('en-US', {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric',
+                  })}
                 </div>
               </div>
               <div className="border-t border-gray-100 pt-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-500 uppercase tracking-wider">Revenue</span>
-                  <span className="text-base font-bold text-emerald-700">₱{totalRevenue.toFixed(0)}</span>
+                  <span className="text-base font-bold text-emerald-700">
+                    ₱{totalRevenue.toFixed(0)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -1027,7 +1093,9 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                     </div>
                     <div>
                       <h2 className="text-xl font-bold">Close Session?</h2>
-                      <p className="text-white/80 text-sm">{session.courtName} · {session.venueName}</p>
+                      <p className="text-white/80 text-sm">
+                        {session.courtName} · {session.venueName}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1036,18 +1104,18 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                 <div className="p-6 space-y-4">
                   <div className="bg-red-50 border border-red-200 rounded-xl p-4">
                     <p className="text-sm text-gray-700">
-                      You are about to <strong>permanently close</strong> this queue session.
-                      This will end all active matches and prevent new players from joining.
+                      You are about to <strong>permanently close</strong> this queue session. This
+                      will end all active matches and prevent new players from joining.
                     </p>
-                    <p className="text-xs text-gray-500 mt-2">
-                      ⚠️ This action cannot be undone.
-                    </p>
+                    <p className="text-xs text-gray-500 mt-2">⚠️ This action cannot be undone.</p>
                   </div>
 
                   {/* Session quick stats */}
                   <div className="grid grid-cols-3 gap-3">
                     <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-center">
-                      <div className="text-xl font-bold text-gray-900">{session.players.length}</div>
+                      <div className="text-xl font-bold text-gray-900">
+                        {session.players.length}
+                      </div>
                       <div className="text-xs text-gray-500 mt-0.5">Players</div>
                     </div>
                     <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-center">
@@ -1055,7 +1123,9 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                       <div className="text-xs text-gray-500 mt-0.5">Games</div>
                     </div>
                     <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-center">
-                      <div className="text-xl font-bold text-gray-900">₱{totalRevenue.toFixed(0)}</div>
+                      <div className="text-xl font-bold text-gray-900">
+                        ₱{totalRevenue.toFixed(0)}
+                      </div>
                       <div className="text-xs text-gray-500 mt-0.5">Revenue</div>
                     </div>
                   </div>
@@ -1072,8 +1142,8 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                   <div className="flex items-center gap-3 pt-2">
                     <button
                       onClick={() => {
-                        setShowCloseConfirmModal(false)
-                        setCloseError(null)
+                        setShowCloseConfirmModal(false);
+                        setCloseError(null);
                       }}
                       disabled={actionLoading === 'close'}
                       className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium disabled:opacity-50"
@@ -1106,7 +1176,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
             isOpen={showMatchAssignModal}
             onClose={() => setShowMatchAssignModal(false)}
             sessionId={sessionId}
-            waitingPlayers={waitingPlayers.map(p => ({
+            waitingPlayers={waitingPlayers.map((p) => ({
               id: p.id,
               userId: p.userId,
               playerName: p.playerName,
@@ -1124,8 +1194,8 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
             <ScoreRecordingModal
               isOpen={showScoreModal}
               onClose={() => {
-                setShowScoreModal(false)
-                setSelectedMatch(null)
+                setShowScoreModal(false);
+                setSelectedMatch(null);
               }}
               match={{
                 id: selectedMatch.id,
@@ -1143,8 +1213,8 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
             <PaymentManagementModal
               isOpen={showPaymentModal}
               onClose={() => {
-                setShowPaymentModal(false)
-                setSelectedParticipant(null)
+                setShowPaymentModal(false);
+                setSelectedParticipant(null);
               }}
               participant={selectedParticipant}
               sessionId={sessionId}
@@ -1174,28 +1244,38 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                 <div className="p-6 space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-gray-50 rounded-xl p-4 text-center">
-                      <div className="text-3xl font-bold text-gray-900">{sessionSummary.totalParticipants}</div>
+                      <div className="text-3xl font-bold text-gray-900">
+                        {sessionSummary.totalParticipants}
+                      </div>
                       <div className="text-sm text-gray-600 flex items-center justify-center gap-1 mt-1">
                         <Users className="w-4 h-4" />
                         Total Players
                       </div>
                     </div>
                     <div className="bg-gray-50 rounded-xl p-4 text-center">
-                      <div className="text-3xl font-bold text-gray-900">{sessionSummary.totalGames}</div>
+                      <div className="text-3xl font-bold text-gray-900">
+                        {sessionSummary.totalGames}
+                      </div>
                       <div className="text-sm text-gray-600 flex items-center justify-center gap-1 mt-1">
                         <Trophy className="w-4 h-4" />
                         Games Played
                       </div>
                     </div>
                     <div className="bg-green-50 rounded-xl p-4 text-center">
-                      <div className="text-3xl font-bold text-green-600">₱{sessionSummary.totalRevenue.toFixed(2)}</div>
+                      <div className="text-3xl font-bold text-green-600">
+                        ₱{sessionSummary.totalRevenue.toFixed(2)}
+                      </div>
                       <div className="text-sm text-gray-600 flex items-center justify-center gap-1 mt-1">
                         <PhilippinePeso className="w-4 h-4" />
                         Total Revenue
                       </div>
                     </div>
-                    <div className={`rounded-xl p-4 text-center ${sessionSummary.unpaidBalances > 0 ? 'bg-yellow-50' : 'bg-gray-50'}`}>
-                      <div className={`text-3xl font-bold ${sessionSummary.unpaidBalances > 0 ? 'text-yellow-600' : 'text-gray-900'}`}>
+                    <div
+                      className={`rounded-xl p-4 text-center ${sessionSummary.unpaidBalances > 0 ? 'bg-yellow-50' : 'bg-gray-50'}`}
+                    >
+                      <div
+                        className={`text-3xl font-bold ${sessionSummary.unpaidBalances > 0 ? 'text-yellow-600' : 'text-gray-900'}`}
+                      >
                         {sessionSummary.unpaidBalances}
                       </div>
                       <div className="text-sm text-gray-600 flex items-center justify-center gap-1 mt-1">
@@ -1228,7 +1308,8 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
               <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Remove Player</h3>
                 <p className="text-sm text-gray-600 mb-4">
-                  Why are you removing <span className="font-medium">{removeTarget.playerName}</span>?
+                  Why are you removing{' '}
+                  <span className="font-medium">{removeTarget.playerName}</span>?
                 </p>
                 <textarea
                   value={removeReason}
@@ -1239,7 +1320,10 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                 />
                 <div className="flex gap-3">
                   <button
-                    onClick={() => { setShowRemoveModal(false); setRemoveTarget(null) }}
+                    onClick={() => {
+                      setShowRemoveModal(false);
+                      setRemoveTarget(null);
+                    }}
                     className="flex-1 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                   >
                     Cancel
@@ -1260,9 +1344,12 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
           {showResetConfirm && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
               <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Reset All Playing Players?</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Reset All Playing Players?
+                </h3>
                 <p className="text-sm text-gray-600 mb-6">
-                  Move all {playingPlayers.length} currently playing player(s) back to the waiting queue?
+                  Move all {playingPlayers.length} currently playing player(s) back to the waiting
+                  queue?
                 </p>
                 <div className="flex gap-3">
                   <button
@@ -1273,12 +1360,12 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                   </button>
                   <button
                     onClick={async () => {
-                      setShowResetConfirm(false)
-                      const result = await resetAllPlayersToWaiting(session.id)
+                      setShowResetConfirm(false);
+                      const result = await resetAllPlayersToWaiting(session.id);
                       if (result.success) {
-                        loadSession()
+                        loadSession();
                       } else {
-                        setActionError('Reset failed: ' + result.error)
+                        setActionError('Reset failed: ' + result.error);
                       }
                     }}
                     className="flex-1 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 transition-colors"
@@ -1292,5 +1379,5 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         </>
       )}
     </div>
-  )
+  );
 }

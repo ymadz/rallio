@@ -1,5 +1,6 @@
 'use client'
 
+import { type ReactNode } from 'react'
 import Link from 'next/link'
 import { QueueSession } from '@/hooks/use-queue'
 import { ArrowLeft, MapPin, Calendar, Clock, Users } from 'lucide-react'
@@ -9,6 +10,9 @@ import { useState, useEffect } from 'react'
 interface QueueEventCardProps {
   queue: QueueSession
   onBack?: () => void
+  children?: ReactNode
+  /** Rendered on the right side of the details row (date/time/spots) */
+  actionSlot?: ReactNode
 }
 
 const modeLabel = (mode: string) =>
@@ -132,7 +136,7 @@ const headerBg = [
   'linear-gradient(135deg, #14b8a6 0%, #0d9488 42%, #0f766e 100%)',
 ].join(', ')
 
-export function QueueEventCard({ queue, onBack }: QueueEventCardProps) {
+export function QueueEventCard({ queue, onBack, children, actionSlot }: QueueEventCardProps) {
   const startTime = queue.startTime ? new Date(queue.startTime) : new Date()
   const endTime = queue.endTime
     ? new Date(queue.endTime)
@@ -209,6 +213,9 @@ export function QueueEventCard({ queue, onBack }: QueueEventCardProps) {
               )}
             </div>
 
+            {/* Optional extra content (e.g. queue-master controls) */}
+            {children}
+
             {/* Eyebrow */}
             <p className="text-xs font-medium uppercase tracking-wider text-white/60">
               {modeLabel(mode)}
@@ -253,19 +260,26 @@ export function QueueEventCard({ queue, onBack }: QueueEventCardProps) {
             </div>
 
             {/* Details Row */}
-            <div className="flex items-center gap-5 flex-wrap text-sm text-white/80">
-              <span className="inline-flex items-center gap-1.5">
-                <Calendar className="w-4 h-4 text-white/50" />
-                {format(startTime, 'MMM d, yyyy')}
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-white/50" />
-                {format(startTime, 'h:mm a')} – {format(endTime, 'h:mm a')}
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <Users className="w-4 h-4 text-white/50" />
-                {spotsLeft} {spotsLeft === 1 ? 'spot' : 'spots'} left
-              </span>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-5 flex-wrap text-sm text-white/80">
+                <span className="inline-flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 text-white/50" />
+                  {format(startTime, 'MMM d, yyyy')}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-white/50" />
+                  {format(startTime, 'h:mm a')} – {format(endTime, 'h:mm a')}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Users className="w-4 h-4 text-white/50" />
+                  {spotsLeft} {spotsLeft === 1 ? 'spot' : 'spots'} left
+                </span>
+              </div>
+              {actionSlot && (
+                <div className="flex-shrink-0">
+                  {actionSlot}
+                </div>
+              )}
             </div>
           </div>
         </div>

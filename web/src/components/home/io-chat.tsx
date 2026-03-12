@@ -204,7 +204,7 @@ export function IOChat() {
       role: 'assistant',
       content: GREETING,
       suggestions: [
-        'Any open plays today?',
+        'Any active queues?',
         'Show available courts',
         'My bookings',
         'How do I book a court?',
@@ -527,15 +527,18 @@ export function IOChat() {
         {messages.map((msg, i) => (
           <div key={i}>
             <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div
-                className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
-                  msg.role === 'user'
-                    ? 'bg-teal-600 text-white rounded-br-md'
-                    : 'bg-white text-gray-800 border border-gray-200 rounded-bl-md shadow-sm'
-                }`}
-              >
-                {msg.content}
-              </div>
+              {msg.role === 'assistant' ? (
+                <div
+                  className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap bg-white text-gray-800 border border-gray-200 rounded-bl-md shadow-sm`}
+                  dangerouslySetInnerHTML={{ __html: msg.content }}
+                />
+              ) : (
+                <div
+                  className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap bg-teal-600 text-white rounded-br-md`}
+                >
+                  {msg.content}
+                </div>
+              )}
             </div>
 
             {/* Rich cards */}
