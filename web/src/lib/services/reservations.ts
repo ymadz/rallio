@@ -21,6 +21,7 @@ export async function createReservation(
         discountReason?: string
         recurrenceWeeks?: number
         selectedDays?: number[] // Array of day indices (0-6)
+        customDownPaymentAmount?: number
     }) {
     const recurrenceWeeks = data.recurrenceWeeks || 1
     const selectedDays = data.selectedDays || []
@@ -273,7 +274,7 @@ export async function createReservation(
                     platform_fee_percentage: platformFeeEnabled ? platformFeePercentage : 0,
                     down_payment_percentage: data.paymentMethod === 'cash' ? downPaymentPercentage : undefined,
                     down_payment_amount: data.paymentMethod === 'cash' ? downPaymentAmount : undefined,
-                    is_custom_down_payment: data.paymentMethod === 'cash' && data.customDownPaymentAmount !== undefined && data.customDownPaymentAmount > 0 && downPaymentAmount !== defaultDownPaymentAmount,
+                    is_custom_down_payment: data.paymentMethod === 'cash' && data.customDownPaymentAmount !== undefined && data.customDownPaymentAmount > 0 && downPaymentAmount !== data.customDownPaymentAmount,
                     applied_discounts: discountResult.discounts.map(d => ({
                         name: d.name,
                         type: d.type,
