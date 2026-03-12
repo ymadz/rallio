@@ -8,7 +8,11 @@ import { useState, useEffect } from 'react'
 
 interface QueueEventCardProps {
   queue: QueueSession
+  variant?: 'active' | 'available'
   onBack?: () => void
+  actionRight?: React.ReactNode
+  hideFooter?: boolean
+  noLink?: boolean
 }
 
 const modeLabel = (mode: string) =>
@@ -132,7 +136,13 @@ const headerBg = [
   'linear-gradient(135deg, #14b8a6 0%, #0d9488 42%, #0f766e 100%)',
 ].join(', ')
 
-export function QueueEventCard({ queue, onBack }: QueueEventCardProps) {
+export function QueueEventCard({
+  queue,
+  onBack,
+  actionRight,
+  hideFooter = false,
+  noLink = false,
+}: QueueEventCardProps) {
   const startTime = queue.startTime ? new Date(queue.startTime) : new Date()
   const endTime = queue.endTime
     ? new Date(queue.endTime)
@@ -170,10 +180,13 @@ export function QueueEventCard({ queue, onBack }: QueueEventCardProps) {
     return () => clearInterval(id)
   }, [startTimeMs])
 
+  const CardContainer = noLink ? 'div' : Link
+  const cardProps = noLink ? {} : { href: `/queue/${queue.courtId || ''}` }
+
   return (
     <>
       <style>{qecStyles}</style>
-      <div className="qec-card">
+      <CardContainer {...cardProps as any} className="qec-card group block">
         {/* ── Glass gradient header ── */}
         <div className="qec-header px-6 pt-5 pb-6" style={{ background: headerBg }}>
           <div className="qec-noise" />
@@ -185,7 +198,7 @@ export function QueueEventCard({ queue, onBack }: QueueEventCardProps) {
             <div className="flex items-center justify-between">
               {onBack ? (
                 <button
-                  onClick={onBack}
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onBack(); }}
                   className="inline-flex items-center gap-1.5 text-sm font-medium text-white/70 hover:text-white transition-colors"
                 >
                   <ArrowLeft className="w-4 h-4" />
@@ -200,13 +213,16 @@ export function QueueEventCard({ queue, onBack }: QueueEventCardProps) {
                   Back
                 </Link>
               )}
-              {!hasStarted && (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-white/15 backdrop-blur-sm text-white border border-white/20 tabular-nums">
-                  <Clock className="w-3.5 h-3.5" />
-                  {countdown.days > 0 && `${countdown.days}d `}
-                  {countdown.hrs}h {countdown.min}m
-                </span>
-              )}
+              <div className="flex items-center gap-3">
+                {!hasStarted && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-white/15 backdrop-blur-sm text-white border border-white/20 tabular-nums">
+                    <Clock className="w-3.5 h-3.5" />
+                    {countdown.days > 0 && `${countdown.days}d `}
+                    {countdown.hrs}h {countdown.min}m
+                  </span>
+                )}
+                {actionRight}
+              </div>
             </div>
 
             {/* Eyebrow */}
@@ -271,23 +287,25 @@ export function QueueEventCard({ queue, onBack }: QueueEventCardProps) {
         </div>
 
         {/* ── White footer: Registration Progress ── */}
-        <div className="px-6 py-4 bg-white">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-medium text-gray-600">
-              {currentPlayers}/{queue.maxPlayers} registered
-            </p>
-            <p className="text-xs font-semibold text-teal-600">
-              {Math.round(fillPercent)}%
-            </p>
+        {!hideFooter && (
+          <div className="px-6 py-4 bg-white">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-gray-600">
+                {currentPlayers}/{queue.maxPlayers} registered
+              </p>
+              <p className="text-xs font-semibold text-teal-600">
+                {Math.round(fillPercent)}%
+              </p>
+            </div>
+            <div className="qec-progress-track">
+              <div
+                className="qec-progress-fill"
+                style={{ width: `${Math.min(fillPercent, 100)}%` }}
+              />
+            </div>
           </div>
-          <div className="qec-progress-track">
-            <div
-              className="qec-progress-fill"
-              style={{ width: `${Math.min(fillPercent, 100)}%` }}
-            />
-          </div>
-        </div>
-      </div>
+        )}
+      </CardContainer>
     </>
   )
 }

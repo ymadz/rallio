@@ -36,6 +36,7 @@ import {
   Play
 } from 'lucide-react'
 import Link from 'next/link'
+import { QueueEventCard } from '@/components/queue/queue-event-card'
 import { ScoreRecordingModal } from './score-recording-modal'
 import { PaymentManagementModal } from './payment-management-modal'
 import { MatchAssignmentModal } from './match-assignment-modal'
@@ -576,14 +577,6 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
       <div className="mb-6">
-        <Link
-          href="/bookings"
-          className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back to Bookings</span>
-        </Link>
-
         {/* Payment Required Alert */}
         {session.status === 'pending_payment' && (
           <div className="bg-orange-50 border-l-4 border-orange-400 p-4 mb-6 rounded-r-lg">
@@ -620,84 +613,118 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
           </div>
         )}
 
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-3xl font-bold text-gray-900">{session.courtName}</h1>
-              <span className="text-sm font-mono text-gray-400 bg-gray-100 px-3 py-1 rounded-lg">
-                #{session.id.slice(0, 8)}
-              </span>
+        <QueueEventCard
+          queue={{
+            ...session,
+            courtId: '',
+            venueId: '',
+            userPosition: null,
+            organizerName: 'You'
+          } as any}
+          onBack={() => router.push('/bookings')}
+          noLink
+          hideFooter
+          actionRight={
+            <div className="flex items-center gap-2">
+              <StatusBadge status={getDisplayStatusKey()} label={getDisplayStatus()} />
+              {session.status !== 'completed' && session.status !== 'cancelled' && (
+                <button
+                  onClick={handleClose}
+                  title="Close Session"
+                  disabled={actionLoading === 'close'}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all text-sm font-medium backdrop-blur-sm border border-white/20 disabled:opacity-50"
+                >
+                  {actionLoading === 'close' ? <Loader2 className="w-4 h-4 animate-spin" /> : <StopCircle className="w-4 h-4" />}
+                  <span className="hidden sm:inline">Close Session</span>
+                </button>
+              )}
+              {(session.status === 'completed' || session.status === 'cancelled') && (
+                <Link
+                  href="/bookings"
+                  title="View Summary"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-teal-700 rounded-lg hover:bg-white/90 transition-colors text-sm font-semibold shadow-sm"
+                >
+                  <Trophy className="w-4 h-4" />
+                  <span className="hidden sm:inline">View Summary</span>
+                </Link>
+              )}
             </div>
-            <p className="text-gray-600">{session.venueName}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <StatusBadge status={getDisplayStatusKey()} label={getDisplayStatus()} />
-            <span className={`px-2.5 py-1 text-xs font-bold rounded-full border ${session.mode === 'competitive'
-              ? 'bg-purple-50 text-purple-700 border-purple-200'
-              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-              }`}>
-              {session.mode === 'competitive' ? 'Competitive' : 'Casual'}
-            </span>
-            {session.status !== 'completed' && session.status !== 'cancelled' && (
-              <button
-                onClick={handleClose}
-                disabled={actionLoading === 'close'}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-all text-sm font-medium disabled:opacity-50"
-              >
-                {actionLoading === 'close' ? <Loader2 className="w-4 h-4 animate-spin" /> : <StopCircle className="w-4 h-4" />}
-                Close Session
-              </button>
-            )}
-            {(session.status === 'completed' || session.status === 'cancelled') && (
-              <Link
-                href="/bookings"
-                className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium"
-              >
-                <Trophy className="w-4 h-4" />
-                View Summary
-              </Link>
-            )}
-          </div>
-        </div>
+          }
+        />
       </div>
 
-      {/* Stats Grid — white card tiles matching user view */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm mb-6">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div className="bg-gray-50 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <Users className="w-4 h-4 text-gray-500" />
-              <span className="text-xs text-gray-600">Total Players</span>
+      {/* Stats Grid — Refined premium design to match header vibe */}
+      <div className="relative mb-8 group">
+        <div className="absolute inset-0 bg-gradient-to-r from-teal-500/5 via-cyan-500/5 to-teal-500/5 rounded-[1.25rem] blur-xl opacity-50 group-hover:opacity-100 transition-opacity duration-500" />
+        <div className="relative bg-white/70 backdrop-blur-xl border border-gray-200/60 rounded-[1.25rem] p-3 sm:p-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 lg:gap-4">
+            
+            {/* Stat Item 1 */}
+            <div className="flex flex-col gap-3 p-4 rounded-xl bg-white/60 border border-white hover:bg-white shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-all">
+              <div className="flex items-center gap-2.5">
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-teal-50 text-teal-600 ring-1 ring-teal-600/10 shadow-sm">
+                  <Users className="w-4 h-4" />
+                </div>
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Total Players</span>
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-3xl font-extrabold text-gray-900 tracking-tight">{session.currentPlayers}</span>
+                <span className="text-lg font-medium text-gray-400">/{session.maxPlayers}</span>
+              </div>
             </div>
-            <p className="text-lg font-bold text-gray-900">{session.currentPlayers}/{session.maxPlayers}</p>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <Clock className="w-4 h-4 text-amber-500" />
-              <span className="text-xs text-gray-600">Waiting</span>
+
+            {/* Stat Item 2 */}
+            <div className="flex flex-col gap-3 p-4 rounded-xl bg-white/60 border border-white hover:bg-white shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-all">
+              <div className="flex items-center gap-2.5">
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-amber-50 text-amber-600 ring-1 ring-amber-600/10 shadow-sm">
+                  <Clock className="w-4 h-4" />
+                </div>
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Waiting</span>
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-3xl font-extrabold text-gray-900 tracking-tight">{session.players.filter(p => p.status === 'waiting').length}</span>
+              </div>
             </div>
-            <p className="text-lg font-bold text-amber-600">{session.players.filter(p => p.status === 'waiting').length}</p>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <PlayCircle className="w-4 h-4 text-green-500" />
-              <span className="text-xs text-gray-600">Playing</span>
+
+            {/* Stat Item 3 */}
+            <div className="flex flex-col gap-3 p-4 rounded-xl bg-white/60 border border-white hover:bg-white shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-all">
+              <div className="flex items-center gap-2.5">
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 ring-1 ring-emerald-600/10 shadow-sm">
+                  <PlayCircle className="w-4 h-4" />
+                </div>
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Playing</span>
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-3xl font-extrabold text-gray-900 tracking-tight">{session.players.filter(p => p.status === 'playing').length}</span>
+              </div>
             </div>
-            <p className="text-lg font-bold text-green-600">{session.players.filter(p => p.status === 'playing').length}</p>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <Trophy className="w-4 h-4 text-gray-500" />
-              <span className="text-xs text-gray-600">Total Games</span>
+
+            {/* Stat Item 4 */}
+            <div className="flex flex-col gap-3 p-4 rounded-xl bg-white/60 border border-white hover:bg-white shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-all">
+              <div className="flex items-center gap-2.5">
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-50 text-blue-600 ring-1 ring-blue-600/10 shadow-sm">
+                  <Trophy className="w-4 h-4" />
+                </div>
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Total Games</span>
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-3xl font-extrabold text-gray-900 tracking-tight">{totalGamesPlayed}</span>
+              </div>
             </div>
-            <p className="text-lg font-bold text-gray-900">{totalGamesPlayed}</p>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <PhilippinePeso className="w-4 h-4 text-emerald-500" />
-              <span className="text-xs text-gray-600">Revenue</span>
+
+            {/* Stat Item 5 */}
+            <div className="flex flex-col gap-3 p-4 rounded-xl bg-white/60 border border-white hover:bg-white shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-all lg:col-span-1 md:col-span-2 col-span-2">
+              <div className="flex items-center gap-2.5">
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 ring-1 ring-emerald-600/10 shadow-sm">
+                  <PhilippinePeso className="w-4 h-4" />
+                </div>
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Revenue</span>
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-teal-500 tracking-tight">₱{totalRevenue.toFixed(0)}</span>
+              </div>
             </div>
-            <p className="text-lg font-bold text-emerald-700">₱{totalRevenue.toFixed(0)}</p>
+
           </div>
         </div>
       </div>
