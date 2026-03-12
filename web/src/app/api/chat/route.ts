@@ -3,7 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API;
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const MODEL = 'z-ai/glm-4.5-air:free';
+// Use a widely supported model for OpenRouter plain chat completion
+const MODEL = 'openai/gpt-3.5-turbo';
 
 // ── Tool definitions for function calling ──────────────────────────────
 const tools = [
@@ -381,11 +382,10 @@ function openRouterHeaders() {
 }
 
 function openRouterBody(messages: any[], stream = false) {
+  // Only include tool calling fields if tools are needed
   return JSON.stringify({
     model: MODEL,
     messages,
-    tools,
-    tool_choice: 'auto',
     max_tokens: 1024,
     temperature: 0.7,
     ...(stream ? { stream: true } : {}),
@@ -587,7 +587,6 @@ async function handleLocalIntent(intent: Intent): Promise<LocalResponse | null> 
 
   const supabase = await createClient();
 
-
   if (intent === 'open_plays' || intent === 'open_plays_tonight') {
     const now = new Date();
     let query = supabase
@@ -706,7 +705,6 @@ async function handleLocalIntent(intent: Intent): Promise<LocalResponse | null> 
       },
     }));
 
-
     const timeLabel = intent === 'open_plays_tonight' ? 'tonight' : 'available now';
     let msg = `${greeting}${name ? `, ${name}` : ''}! 🏸\n\n<span class=\"font-bold\">I found ${queues.length} active queue session${queues.length > 1 ? 's' : ''}</span> ${timeLabel}! Here's what's happening:`;
 
@@ -714,7 +712,12 @@ async function handleLocalIntent(intent: Intent): Promise<LocalResponse | null> 
     queues.forEach((q: any, i: number) => {
       const venue = q.courts?.venues?.name || 'Unknown Venue';
       const court = q.courts?.name || '';
-      const format = q.game_format === 'singles' ? 'Singles' : q.game_format === 'mixed' ? 'Mixed Doubles' : 'Doubles';
+      const format =
+        q.game_format === 'singles'
+          ? 'Singles'
+          : q.game_format === 'mixed'
+            ? 'Mixed Doubles'
+            : 'Doubles';
       const mode = q.mode === 'competitive' ? 'Competitive' : 'All Levels';
       const players = q.current_players || 0;
       const spotsLeft = q.max_players - players;
@@ -889,7 +892,8 @@ export async function POST(request: NextRequest) {
 
     const fullMessages = [{ role: 'system', content: SYSTEM_PROMPT }, ...trimmedMessages];
 
-    // ── Phase 1: non-streaming call to handle tool calls ────────────
+    // Only use tool calling if a tool is actually needed (handled by local intent)
+    // If localResult is null, just call OpenRouter as a plain chat completion (no tool fields)
     let response = await fetch(OPENROUTER_URL, {
       method: 'POST',
       headers: openRouterHeaders(),
@@ -898,130 +902,29 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error('❌ [IO Chat] OpenRouter error:', response.status, errText);
-      // Return a friendly message instead of an error status so the client doesn't crash
-      return NextResponse.json({
-        role: 'assistant',
-        content: "I'm having trouble connecting to my brain right now 🏸 Try again in a moment!",
-      });
-    }
-
-    let data = await response.json();
-    let assistantMessage = data.choices?.[0]?.message;
-
-    // Handle tool calls (up to 3 rounds)
-    let rounds = 0;
-    while (assistantMessage?.tool_calls && rounds < 3) {
-      rounds++;
-
-      const toolResults = await Promise.all(
-        assistantMessage.tool_calls.map(async (tc: any) => {
-          const args =
-            typeof tc.function.arguments === 'string'
-              ? JSON.parse(tc.function.arguments)
-              : tc.function.arguments;
-          const result = await executeTool(tc.function.name, args);
-          return {
-            role: 'tool' as const,
-            tool_call_id: tc.id,
-            content: JSON.stringify(result),
-          };
-        })
-      );
-
-      fullMessages.push(assistantMessage);
-      fullMessages.push(...toolResults);
-
-      response = await fetch(OPENROUTER_URL, {
-        method: 'POST',
-        headers: openRouterHeaders(),
-        body: openRouterBody(fullMessages, false),
-      });
-
-      if (!response.ok) {
-        console.error('❌ [IO Chat] OpenRouter follow-up error:', response.status);
-        break;
-      }
-
-      data = await response.json();
-      assistantMessage = data.choices?.[0]?.message;
-    }
-
-    // If after tool calls the model already gave a final text reply, return it
-    // But if no tool calls were made at all, re-call with streaming for speed
-    if (rounds > 0 || !assistantMessage?.content) {
-      // Had tool calls — return the final answer directly
-      const content =
-        assistantMessage?.content || "Sorry, I couldn't process that. Try asking again!";
-      return NextResponse.json({ role: 'assistant', content });
-    }
-
-    // ── Phase 2: pure text answer — stream it for speed ─────────────
-    const streamRes = await fetch(OPENROUTER_URL, {
-      method: 'POST',
-      headers: openRouterHeaders(),
-      body: JSON.stringify({
+      // Log more context for debugging
+      console.error('❌ [IO Chat] OpenRouter error:', {
+        status: response.status,
+        statusText: response.statusText,
+        url: OPENROUTER_URL,
         model: MODEL,
-        messages: fullMessages,
-        max_tokens: 1024,
-        temperature: 0.7,
-        stream: true,
-      }),
-    });
-
-    if (!streamRes.ok || !streamRes.body) {
-      // Fallback to the non-streamed answer we already have
+        error: errText,
+      });
+      // Show error details in development for easier debugging
+      const isDev = process.env.NODE_ENV !== 'production';
       return NextResponse.json({
         role: 'assistant',
-        content: assistantMessage.content,
+        content: isDev
+          ? `OpenRouter error (${response.status}): ${errText}`
+          : "I'm having trouble connecting to my brain right now 🏸 Try again in a moment!",
       });
     }
 
-    // Pipe SSE from OpenRouter → client
-    const encoder = new TextEncoder();
-    const reader = streamRes.body.getReader();
-    const decoder = new TextDecoder();
-
-    const readable = new ReadableStream({
-      async start(controller) {
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split('\n').filter((l) => l.startsWith('data: '));
-
-            for (const line of lines) {
-              const payload = line.slice(6).trim();
-              if (payload === '[DONE]') {
-                controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-                continue;
-              }
-              try {
-                const parsed = JSON.parse(payload);
-                const token = parsed.choices?.[0]?.delta?.content;
-                if (token) {
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token })}\n\n`));
-                }
-              } catch {
-                // skip malformed
-              }
-            }
-          }
-        } finally {
-          controller.close();
-        }
-      },
-    });
-
-    return new Response(readable, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-      },
-    });
+    const data = await response.json();
+    const assistantMessage = data.choices?.[0]?.message;
+    const content =
+      assistantMessage?.content || "Sorry, I couldn't process that. Try asking again!";
+    return NextResponse.json({ role: 'assistant', content });
   } catch (err: any) {
     console.error('❌ [IO Chat] Server error:', err.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
