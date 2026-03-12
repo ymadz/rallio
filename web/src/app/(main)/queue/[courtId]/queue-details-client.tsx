@@ -40,7 +40,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
 
     const updateTimer = () => {
       const startTime = new Date(queue.startTime)
-      const openTime = subHours(startTime, 12)
+      const openTime = queue.joinWindowHours != null ? subHours(startTime, queue.joinWindowHours) : new Date(0)
       const now = serverDate || new Date()
 
       if (isBefore(now, openTime)) {
@@ -64,6 +64,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
   }
 
   const [showMatchHistory, setShowMatchHistory] = useState(false)
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
   const [paymentRequiredInfo, setPaymentRequiredInfo] = useState<{
     show: boolean
     amountOwed: number
@@ -146,7 +147,12 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
   }
 
   const handleLeaveQueue = async () => {
+    if (!showLeaveConfirm) {
+      setShowLeaveConfirm(true)
+      return
+    }
     setIsLeaving(true)
+    setShowLeaveConfirm(false)
     const result = await leaveQueue()
 
     if (result?.requiresPayment) {
@@ -201,12 +207,9 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
 
   const isUserInQueue = queue.userPosition !== null
   const playersAhead = isUserInQueue ? queue.userPosition! - 1 : 0
-  
   // Estimate wait time based on game format: doubles/any = 4 players per game, singles = 2
   const playersPerGame = queue.gameFormat === 'singles' ? 2 : 4
   const estimatedWaitTime = Math.max(Math.ceil(playersAhead / playersPerGame) * 15, 0)
-
-  // Determine display status correctly
   const now = serverDate || new Date()
   const isLive = new Date(queue.startTime) <= now && new Date(queue.endTime) > now
   const displayStatus = queue.status === 'completed' ? 'completed' : isLive ? 'live' : 'open'
@@ -351,7 +354,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                   <Clock className="w-8 h-8 text-blue-500 mx-auto mb-2" />
                   <h4 className="font-semibold text-blue-900 mb-1">Queue Opens Soon</h4>
                   <p className="text-sm text-blue-700 mb-3">
-                    Joining opens 12 hours before the session starts.
+                    Joining opens {queue.joinWindowHours ?? 2} hour{(queue.joinWindowHours ?? 2) === 1 ? '' : 's'} before the session starts.
                   </p>
                   <div className="text-2xl font-bold text-blue-600 font-mono">
                     {formatTime(timeUntilOpen)}
@@ -359,7 +362,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                 </div>
                 <div className="flex items-start gap-2 text-sm text-gray-500">
                   <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                  <span>You can join this queue starting at {format(subHours(new Date(queue.startTime), 12), 'h:mm a')}</span>
+                  <span>You can join this queue starting at {format(subHours(new Date(queue.startTime), queue.joinWindowHours ?? 2), 'h:mm a')}</span>
                 </div>
               </div>
             ) : (
@@ -387,6 +390,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                 <button
                   onClick={handleJoinQueue}
                   disabled={isJoining || queue.players.length >= queue.maxPlayers}
+                  title={queue.players.length >= queue.maxPlayers ? 'Queue is full' : undefined}
                   className="w-full bg-primary text-white py-3.5 rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {isJoining ? (
@@ -426,25 +430,51 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
               </p>
             )}
 
-            <button
-              onClick={handleLeaveQueue}
-              disabled={isLeaving}
-              className="w-full border-2 border-red-300 text-red-600 py-3.5 rounded-lg font-semibold hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {isLeaving ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Leaving...</span>
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                  <span>Leave Queue</span>
-                </>
-              )}
-            </button>
+            {showLeaveConfirm ? (
+              <div className="space-y-3">
+                <div className="flex items-start gap-2 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-yellow-800">You&apos;ll lose your position in the queue. Are you sure?</p>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowLeaveConfirm(false)}
+                    className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleLeaveQueue}
+                    disabled={isLeaving}
+                    className="flex-1 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isLeaving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    Yes, Leave
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={handleLeaveQueue}
+                disabled={isLeaving}
+                title="Leave this queue and lose your position"
+                className="w-full border-2 border-red-300 text-red-600 py-3.5 rounded-lg font-semibold hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isLeaving ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Leaving...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    <span>Leave Queue</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         )}
 

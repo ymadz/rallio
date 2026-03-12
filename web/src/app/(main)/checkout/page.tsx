@@ -336,10 +336,16 @@ export default function CheckoutPage() {
                                                 <span className="text-gray-600">Cost Per Game:</span>
                                                 <span className="font-medium text-gray-900">₱{bookingData.queueSessionData.costPerGame}</span>
                                             </div>
-                                            <div className="flex justify-between py-3">
+                                            <div className="flex justify-between py-3 border-b border-gray-100">
                                                 <span className="text-gray-600">Visibility:</span>
                                                 <span className={`font-medium ${bookingData.queueSessionData.isPublic ? 'text-green-600' : 'text-gray-600'}`}>
                                                     {bookingData.queueSessionData.isPublic ? 'Public' : 'Private'}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between py-3">
+                                                <span className="text-gray-600">Join Window:</span>
+                                                <span className="font-medium text-gray-900">
+                                                    {bookingData.queueSessionData.joinWindowHours != null ? `${bookingData.queueSessionData.joinWindowHours}h before start` : 'Anytime'}
                                                 </span>
                                             </div>
                                         </div>

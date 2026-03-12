@@ -33,7 +33,8 @@ import {
   CheckCircle,
   XCircle,
   Trophy,
-  Play
+  Play,
+  X
 } from 'lucide-react'
 import Link from 'next/link'
 import { QueueEventCard } from '@/components/queue/queue-event-card'
@@ -113,11 +114,15 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
     unpaidBalances: number
   } | null>(null)
 
+  // Action feedback (replaces browser alert/confirm/prompt)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const [showRemoveModal, setShowRemoveModal] = useState(false)
+  const [removeTarget, setRemoveTarget] = useState<{ userId: string; playerName: string } | null>(null)
+  const [removeReason, setRemoveReason] = useState('')
+
   useEffect(() => {
     loadSession()
-
-    // Subscribe to real-time updates
-    console.log('🔔 [useEffect] Setting up real-time subscriptions for session:', sessionId)
 
     const channel = supabase
       .channel(`queue-session-${sessionId}`)
@@ -129,10 +134,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
           table: 'queue_participants',
           filter: `queue_session_id=eq.${sessionId}`
         },
-        (payload) => {
-          console.log('🔔 [Realtime] Participant change detected:', payload.eventType, payload.new)
-          loadSession()
-        }
+        () => loadSession()
       )
       .on(
         'postgres_changes',
@@ -142,10 +144,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
           table: 'queue_sessions',
           filter: `id=eq.${sessionId}`
         },
-        (payload) => {
-          console.log('🔔 [Realtime] Session change detected:', payload.eventType)
-          loadSession()
-        }
+        () => loadSession()
       )
       .on(
         'postgres_changes',
@@ -155,30 +154,19 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
           table: 'matches',
           filter: `queue_session_id=eq.${sessionId}`
         },
-        (payload) => {
-          console.log('🔔 [Realtime] Match change detected:', payload.eventType)
-          loadSession()
-        }
+        () => loadSession()
       )
-      .subscribe((status) => {
-        console.log('🔔 [Realtime] Subscription status:', status)
-      })
+      .subscribe()
 
     return () => {
-      console.log('🔔 [useEffect] Cleaning up real-time subscriptions')
       supabase.removeChannel(channel)
     }
   }, [sessionId])
 
   const loadSession = async () => {
-    console.log('🚨🚨🚨 [loadSession] Starting session load')
-    console.log('🔍 [loadSession] Session ID:', sessionId)
-
     setIsLoading(true)
     setError(null)
     try {
-      // Fetch session details directly
-      console.log('📡 [loadSession] Fetching session from database...')
       const { data: sessionData, error: sessionError } = await supabase
         .from('queue_sessions')
         .select(`
@@ -194,23 +182,10 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         .eq('id', sessionId)
         .single()
 
-      console.log('📥 [loadSession] Session query result:', { sessionData, sessionError })
-
       if (sessionError || !sessionData) {
-        console.log('❌ [loadSession] Session not found or error occurred')
-        console.log('❌ [loadSession] Error details:', sessionError)
         throw new Error('Session not found')
       }
 
-      console.log('✅ [loadSession] Session found:', {
-        id: sessionData.id,
-        status: sessionData.status,
-        courtName: sessionData.courts?.name,
-        venueName: sessionData.courts?.venues?.name
-      })
-
-      // Fetch participants
-      console.log('📡 [loadSession] Fetching participants...')
       const { data: participants, error: participantsError } = await supabase
         .from('queue_participants')
         .select(`
@@ -227,25 +202,16 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         .is('left_at', null)
         .order('joined_at', { ascending: true })
 
-      console.log('📥 [loadSession] Participants query result:', {
-        count: participants?.length || 0,
-        error: participantsError
-      })
-
       if (participantsError) {
-        console.log('❌ [loadSession] Failed to fetch participants:', participantsError)
         throw new Error('Failed to fetch participants')
       }
 
-      // Get player skill levels
       const playerIds = participants?.map((p: any) => p.user_id) || []
-      console.log('📡 [loadSession] Fetching skill levels for', playerIds.length, 'players')
       const { data: players } = await supabase
         .from('players')
         .select('user_id, skill_level, rating')
         .in('user_id', playerIds)
 
-      console.log('📥 [loadSession] Players skill data:', players)
       const playerSkillMap = new Map(players?.map((p: any) => [p.user_id, p.skill_level]) || [])
       const playerRatingMap = new Map(players?.map((p: any) => [p.user_id, p.rating]) || [])
 
@@ -338,25 +304,11 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         formattedSession.status = updatedSession.status
       }
 
-      console.log('✅ [loadSession] Session formatted successfully:', {
-        id: formattedSession.id,
-        courtName: formattedSession.courtName,
-        venueName: formattedSession.venueName,
-        status: formattedSession.status,
-        participantCount: formattedSession.players.length
-      })
-
       setSession(formattedSession)
 
-      // Load active matches
-      console.log('📡 [loadSession] Loading active matches...')
       await loadActiveMatches()
-
-      console.log('✅✅✅ [loadSession] Session load complete!')
     } catch (err: any) {
-      console.log('❌❌❌ [loadSession] Error occurred:', err)
-      console.log('❌ [loadSession] Error message:', err.message)
-      console.log('❌ [loadSession] Error stack:', err.stack)
+      console.error('[loadSession] Error:', err.message)
       setError(err.message || 'Failed to load session')
     } finally {
       setIsLoading(false)
@@ -364,11 +316,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
   }
 
   const loadActiveMatches = async () => {
-    console.log('🏸 [loadActiveMatches] Starting to load active matches')
-    console.log('🔍 [loadActiveMatches] Session ID:', sessionId)
-
     try {
-      console.log('📡 [loadActiveMatches] Querying matches table...')
       const { data: matches, error: matchError } = await supabase
         .from('matches')
         .select(`
@@ -379,46 +327,35 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         .in('status', ['scheduled', 'in_progress'])
         .order('created_at', { ascending: false })
 
-      console.log('📥 [loadActiveMatches] Matches query result:', {
-        count: matches?.length || 0,
-        error: matchError
-      })
-
       if (matches) {
-        console.log('🔄 [loadActiveMatches] Formatting matches with player details...')
-        // Format matches with player details
-        const formattedMatches = await Promise.all(
-          matches.map(async (match) => {
-            const allPlayerIds = [...(match.team_a_players || []), ...(match.team_b_players || [])]
-            console.log('📡 [loadActiveMatches] Fetching players for match:', match.id, 'PlayerIds:', allPlayerIds)
-            const { data: players } = await supabase
+        // Batch fetch all player profiles in one query instead of N separate queries
+        const allPlayerIds = [...new Set(
+          matches.flatMap((m: any) => [...(m.team_a_players || []), ...(m.team_b_players || [])])
+        )]
+        const { data: allProfiles } = allPlayerIds.length > 0
+          ? await supabase
               .from('profiles')
               .select('id, display_name, first_name, last_name, avatar_url')
               .in('id', allPlayerIds)
-
-            const getPlayerInfo = (id: string) => {
-              const player = players?.find(p => p.id === id)
-              return {
-                id,
-                name: player?.display_name || `${player?.first_name} ${player?.last_name}` || 'Unknown',
-                avatarUrl: player?.avatar_url,
-              }
-            }
-
-            return {
-              ...match,
-              teamAPlayers: (match.team_a_players || []).map(getPlayerInfo),
-              teamBPlayers: (match.team_b_players || []).map(getPlayerInfo),
-            }
-          })
-        )
-        console.log('✅ [loadActiveMatches] Matches formatted:', formattedMatches.length)
+          : { data: [] }
+        const profileMap = new Map((allProfiles || []).map((p: any) => [p.id, p]))
+        const getPlayerInfo = (id: string) => {
+          const player = profileMap.get(id) as any
+          return {
+            id,
+            name: player?.display_name || `${player?.first_name} ${player?.last_name}` || 'Unknown',
+            avatarUrl: player?.avatar_url,
+          }
+        }
+        const formattedMatches = matches.map((match: any) => ({
+          ...match,
+          teamAPlayers: (match.team_a_players || []).map(getPlayerInfo),
+          teamBPlayers: (match.team_b_players || []).map(getPlayerInfo),
+        }))
         setActiveMatches(formattedMatches)
-      } else {
-        console.log('📭 [loadActiveMatches] No active matches found')
       }
     } catch (err) {
-      console.error('❌ [loadActiveMatches] Error:', err)
+      console.error('[loadActiveMatches] Error:', err)
     }
   }
 
@@ -449,17 +386,24 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
     }
   }
 
-  const handleRemovePlayer = async (userId: string, playerName: string) => {
-    const reason = prompt(`Why are you removing ${playerName}?`)
-    if (!reason) return
+  const handleRemovePlayer = (userId: string, playerName: string) => {
+    setRemoveTarget({ userId, playerName })
+    setRemoveReason('')
+    setShowRemoveModal(true)
+  }
 
-    setActionLoading(`remove-${userId}`)
+  const handleConfirmRemove = async () => {
+    if (!removeTarget || !removeReason.trim()) return
+    setShowRemoveModal(false)
+    setActionLoading(`remove-${removeTarget.userId}`)
     try {
-      const result = await removeParticipant(sessionId, userId, reason)
+      const result = await removeParticipant(sessionId, removeTarget.userId, removeReason.trim())
       if (!result.success) throw new Error(result.error)
+      setRemoveTarget(null)
+      setRemoveReason('')
       await loadSession()
     } catch (err: any) {
-      alert(err.message || 'Failed to remove player')
+      setActionError(err.message || 'Failed to remove player')
     } finally {
       setActionLoading(null)
     }
@@ -492,7 +436,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
       if (!result.success) throw new Error(result.error)
       await loadSession()
     } catch (err: any) {
-      alert(err.message || 'Failed to start match')
+      setActionError(err.message || 'Failed to start match')
     } finally {
       setActionLoading(null)
     }
@@ -501,7 +445,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
 
   const handlePayNow = async () => {
     if (!session?.metadata?.reservation_id) {
-      alert('Payment information not found. Please contact support.')
+      setActionError('Payment information not found. Please contact support.')
       return
     }
 
@@ -514,7 +458,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
       }
       window.location.href = result.checkoutUrl
     } catch (err: any) {
-      alert(err.message || 'Payment initiation failed')
+      setActionError(err.message || 'Payment initiation failed')
     } finally {
       setActionLoading(null)
     }
@@ -575,6 +519,17 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {actionError && (
+        <div className="flex items-center justify-between bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span className="text-sm">{actionError}</span>
+          </div>
+          <button onClick={() => setActionError(null)} className="p-1 hover:bg-red-100 rounded">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
       {/* Header */}
       <div className="mb-6">
         {/* Payment Required Alert */}
@@ -955,15 +910,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                     Playing ({playingPlayers.length})
                   </h3>
                   <button
-                    onClick={async () => {
-                      if (!confirm(`Reset all ${playingPlayers.length} playing player(s) back to the waiting queue?`)) return
-                      const result = await resetAllPlayersToWaiting(session.id)
-                      if (result.success) {
-                        loadSession()
-                      } else {
-                        alert('Reset failed: ' + result.error)
-                      }
-                    }}
+                    onClick={() => setShowResetConfirm(true)}
                     className="text-xs px-2.5 py-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors font-medium"
                   >
                     Reset All to Queue
@@ -1012,7 +959,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                           if (result.success) {
                             loadSession()
                           } else {
-                            alert('Reset failed: ' + result.error)
+                            setActionError('Reset failed: ' + result.error)
                           }
                         }}
                         title="Return this player to the waiting queue"
@@ -1296,6 +1243,74 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                     className="w-full py-3 bg-primary text-white font-medium rounded-xl hover:bg-primary/90 transition-colors"
                   >
                     Back to Bookings
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Remove Player Modal */}
+          {showRemoveModal && removeTarget && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Remove Player</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Why are you removing <span className="font-medium">{removeTarget.playerName}</span>?
+                </p>
+                <textarea
+                  value={removeReason}
+                  onChange={(e) => setRemoveReason(e.target.value)}
+                  placeholder="Enter reason..."
+                  rows={3}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary mb-4"
+                />
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => { setShowRemoveModal(false); setRemoveTarget(null) }}
+                    className="flex-1 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleConfirmRemove}
+                    disabled={!removeReason.trim()}
+                    className="flex-1 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Reset All Confirm Modal */}
+          {showResetConfirm && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Reset All Playing Players?</h3>
+                <p className="text-sm text-gray-600 mb-6">
+                  Move all {playingPlayers.length} currently playing player(s) back to the waiting queue?
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowResetConfirm(false)}
+                    className="flex-1 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setShowResetConfirm(false)
+                      const result = await resetAllPlayersToWaiting(session.id)
+                      if (result.success) {
+                        loadSession()
+                      } else {
+                        setActionError('Reset failed: ' + result.error)
+                      }
+                    }}
+                    className="flex-1 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 transition-colors"
+                  >
+                    Reset All
                   </button>
                 </div>
               </div>
