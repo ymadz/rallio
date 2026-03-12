@@ -201,8 +201,15 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
 
   const isUserInQueue = queue.userPosition !== null
   const playersAhead = isUserInQueue ? queue.userPosition! - 1 : 0
-  const estimatedWaitTime = Math.max(playersAhead * 15, 0) // ~15 min per game ahead
+  
+  // Estimate wait time based on game format: doubles/any = 4 players per game, singles = 2
+  const playersPerGame = queue.gameFormat === 'singles' ? 2 : 4
+  const estimatedWaitTime = Math.max(Math.ceil(playersAhead / playersPerGame) * 15, 0)
 
+  // Determine display status correctly
+  const now = serverDate || new Date()
+  const isLive = new Date(queue.startTime) <= now && new Date(queue.endTime) > now
+  const displayStatus = queue.status === 'completed' ? 'completed' : isLive ? 'live' : 'open'
 
   return (
     <>

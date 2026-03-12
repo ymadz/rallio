@@ -40,6 +40,7 @@ export interface QueueSession {
   startTime: Date  // Added startTime
   endTime: Date // Added endTime
   mode: 'casual' | 'competitive'
+  gameFormat?: 'singles' | 'doubles' | 'mixed' | 'any'
   organizerId?: string // Queue session organizer
   organizerName?: string // Queue session organizer display name
   costPerGame?: number // Cost per game in the queue
@@ -148,6 +149,7 @@ export function useQueue(courtId: string) {
         startTime: queueData.startTime,
         endTime: queueData.endTime,
         mode: queueData.mode as 'casual' | 'competitive',
+        gameFormat: queueData.gameFormat,
         organizerId: queueData.organizerId,
         organizerName: queueData.organizerName,
         costPerGame: queueData.costPerGame,
