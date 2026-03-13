@@ -693,10 +693,12 @@ async function markReservationPaidAndConfirmed({
     if (queueSession) {
       console.log('[markReservationPaidAndConfirmed] 🔄 Linked Queue Session found:', queueSession.id)
 
+      const reservationFullyPaid = targetStatus === 'confirmed'
+
       const updateData: any = {
         metadata: {
           ...queueSession.metadata,
-          payment_status: 'paid',
+          payment_status: reservationFullyPaid ? 'paid' : 'partial',
           payment_confirmed_at: nowISO
         }
       }
@@ -705,7 +707,7 @@ async function markReservationPaidAndConfirmed({
 
       // Calculate correct status based on time lifecycle
       // pending_payment → open (if within 12h before start) or open (default after payment)
-      if (['pending_payment', 'pending_approval'].includes(queueSession.status)) {
+      if (reservationFullyPaid && ['pending_payment', 'pending_approval'].includes(queueSession.status)) {
         const now = new Date()
         const startTime = new Date(queueSession.start_time)
         const endTime = new Date(queueSession.end_time)
@@ -723,6 +725,9 @@ async function markReservationPaidAndConfirmed({
         }
 
         updateData.status = newStatus
+      } else if (!reservationFullyPaid) {
+        // Keep session hidden from players until full payment is completed.
+        updateData.status = 'pending_payment'
       }
 
       const { error: qError } = await supabase

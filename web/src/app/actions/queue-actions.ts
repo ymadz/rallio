@@ -71,7 +71,7 @@ export async function getQueueDetails(courtId: string) {
       return { success: false, error: 'User not authenticated' }
     }
 
-    // Find active or open queue session for this court
+    // Find active/open queue session for this court
     const { data: session, error: sessionError } = await supabase
       .from('queue_sessions')
       .select(`
@@ -85,7 +85,7 @@ export async function getQueueDetails(courtId: string) {
         )
       `)
       .eq('court_id', courtId)
-      .in('status', ['open', 'active', 'pending_payment'])
+      .in('status', ['open', 'active'])
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
@@ -98,6 +98,24 @@ export async function getQueueDetails(courtId: string) {
     if (!session) {
       console.log('[getQueueDetails] ℹ️ No active queue found for court')
       return { success: true, queue: null }
+    }
+
+    // SAFETY: ensure linked reservation is fully paid/confirmed before exposing to players.
+    const linkedReservationId = session.metadata?.reservation_id
+    if (linkedReservationId) {
+      const { data: linkedReservation } = await supabase
+        .from('reservations')
+        .select('status')
+        .eq('id', linkedReservationId)
+        .single()
+
+      if (!linkedReservation || !['confirmed', 'ongoing', 'completed'].includes(linkedReservation.status)) {
+        console.log('[getQueueDetails] 🔒 Queue hidden: linked reservation not fully paid yet', {
+          sessionId: session.id,
+          reservationStatus: linkedReservation?.status,
+        })
+        return { success: true, queue: null }
+      }
     }
 
     // PRIVATE QUEUE AUTHORIZATION: Defense-in-depth check.
@@ -708,7 +726,32 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
       }
     }
 
-    const queues = (sessions || []).map((session: any) => {
+    const reservationIds = (sessions || [])
+      .map((session: any) => session.metadata?.reservation_id)
+      .filter(Boolean)
+
+    const fullyPaidReservationIds = new Set<string>()
+    if (reservationIds.length > 0) {
+      const { data: reservations } = await supabase
+        .from('reservations')
+        .select('id, status')
+        .in('id', reservationIds)
+
+      ;(reservations || []).forEach((reservation: any) => {
+        if (['confirmed', 'ongoing', 'completed'].includes(reservation.status)) {
+          fullyPaidReservationIds.add(reservation.id)
+        }
+      })
+    }
+
+    const queues = (sessions || [])
+      .filter((session: any) => {
+        const reservationId = session.metadata?.reservation_id
+        // If no linked reservation metadata, keep legacy behavior.
+        if (!reservationId) return true
+        return fullyPaidReservationIds.has(reservationId)
+      })
+      .map((session: any) => {
       // Use actual participant count, falling back to current_players column
       const currentPlayers = participantCounts[session.id] || session.current_players || 0
 
@@ -731,7 +774,7 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
         costPerGame: parseFloat(session.cost_per_game || '0'),
         organizerName: organizerNames[session.organizer_id] || 'Unknown Host',
       }
-    })
+      })
 
     console.log('[getNearbyQueues] ✅ Fetched queues:', queues.length)
 

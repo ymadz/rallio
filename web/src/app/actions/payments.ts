@@ -763,6 +763,15 @@ async function updateQueueSessionStatus(reservationId: string, supabaseParam: an
     // Use service client for fulfillment to bypass RLS and ensure success
     const supabase = createServiceClient()
 
+    // Check linked reservation payment status
+    const { data: reservationRecord } = await supabase
+      .from('reservations')
+      .select('status')
+      .eq('id', reservationId)
+      .single()
+
+    const reservationFullyPaid = reservationRecord?.status === 'confirmed'
+
     // Check if this reservation is for a queue session
     // Using a more robust JSON search
     const { data: queueSession, error: fetchError } = await supabase
@@ -780,7 +789,7 @@ async function updateQueueSessionStatus(reservationId: string, supabaseParam: an
       console.log('[updateQueueSessionStatus] 🔄 Found linked Queue Session:', queueSession.id, 'Current status:', queueSession.status)
 
       // Activate and approve when payment is confirmed
-      if (['pending_payment', 'pending_approval'].includes(queueSession.status)) {
+      if (reservationFullyPaid && ['pending_payment', 'pending_approval'].includes(queueSession.status)) {
         // Only set 'active' if the session has already started;
         // otherwise set 'open' (paid & ready, but scheduled for later)
         const now = await getServerNow()
@@ -811,13 +820,15 @@ async function updateQueueSessionStatus(reservationId: string, supabaseParam: an
         }
       } else {
         console.log('[updateQueueSessionStatus] ℹ️ Queue Session status is not pending_payment, just updating payment flags')
-        // Just update payment status if already active (or other status)
+        // Keep unpaid/partially-paid sessions hidden from player join flow
+        const metadataPaymentStatus = reservationFullyPaid ? 'paid' : 'partial'
         const { error: updateError } = await supabase
           .from('queue_sessions')
           .update({
+            ...(reservationFullyPaid ? {} : { status: 'pending_payment' }),
             metadata: {
               ...queueSession.metadata,
-              payment_status: 'paid',
+              payment_status: metadataPaymentStatus,
               payment_confirmed_at: new Date().toISOString()
             }
           })
