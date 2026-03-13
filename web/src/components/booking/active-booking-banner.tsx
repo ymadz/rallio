@@ -92,7 +92,6 @@ export async function ActiveBookingBanner() {
 
                 <div className="flex items-center gap-4">
                     <BookingTimer endTime={activeItem.end_time} />
-                    {/* activeItem could be a reservation (with 'courts') or queue session (with 'court') depending on the query shape */}
                     <Link href={isQueueSession ? `/queue-master/sessions/${(activeItem as any).id}` : '/bookings'}>
                         <Button size="sm" variant="default" className={`gap-2 ${isQueueSession ? 'bg-indigo-600 hover:bg-indigo-700' : ''}`}>
                             {isQueueSession ? 'Manage Queue' : 'View Details'}
