@@ -1,9 +1,6 @@
 'use client'
 
 import { useQueue } from '@/hooks/use-queue'
-import { useQueueNotifications } from '@/hooks/use-queue-notifications'
-import { useMatchNotifications } from '@/hooks/use-match-notifications'
-import { QueueNotificationBanner } from '@/components/queue/queue-notification-banner'
 import { PlayerCard } from '@/components/queue/player-card'
 import { QueuePositionTracker } from '@/components/queue/queue-position-tracker'
 import { MatchHistoryViewer } from '@/components/queue/match-history-viewer'
@@ -14,7 +11,6 @@ import { Users, Clock, Activity, Loader2, AlertCircle, Trophy, Calendar, X, Cred
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { initiateQueuePaymentAction } from '@/app/actions/payments'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { differenceInSeconds, subHours, isBefore, format } from 'date-fns'
 import { useServerTime } from '@/hooks/use-server-time'
@@ -83,12 +79,6 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
     }
     getCurrentUser()
   }, [])
-
-  // Initialize notification system
-  const { notifications, dismissNotification } = useQueueNotifications(queue, currentUserId)
-
-  // Enable match assignment notifications
-  const { activeMatch } = useMatchNotifications(currentUserId || undefined)
 
   // Fetch participant details when queue loads
   useEffect(() => {
@@ -212,35 +202,6 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
 
   return (
     <>
-      {/* Notification Banner */}
-      <QueueNotificationBanner
-        notifications={notifications}
-        onDismiss={dismissNotification}
-      />
-
-      {/* Active Match Alert */}
-      {activeMatch && (
-        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-5 shadow-lg">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center animate-pulse">
-                <Activity className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h3 className="font-bold text-green-900 text-lg">You Have an Active Match!</h3>
-                <p className="text-sm text-green-700">Match #{activeMatch.match_number} is ready</p>
-              </div>
-            </div>
-            <Link
-              href={`/queue/${courtId}/match/${activeMatch.id}`}
-              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold shadow-md"
-            >
-              View Match
-            </Link>
-          </div>
-        </div>
-      )}
-
       <div className="space-y-6">
         {/* Event Details Card */}
         <QueueEventCard queue={queue} onBack={() => router.back()} />
