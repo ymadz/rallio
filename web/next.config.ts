@@ -16,6 +16,16 @@ const nextConfig = {
         hostname: '*.supabase.co',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'secure-authentication.paymongo.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'paymongo.com',
+        pathname: '/**',
+      },
     ],
   },
 };

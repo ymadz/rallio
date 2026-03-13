@@ -14,7 +14,7 @@ export function SplitPaymentControls() {
   if (!bookingData) return null
 
   const capacity = bookingData.capacity
-  const isDisabled = true // Split payment feature temporarily disabled
+  const isDisabled = false // Split payment feature enabled
 
   const handleToggle = () => {
     // Feature disabled - do nothing
@@ -35,7 +35,7 @@ export function SplitPaymentControls() {
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-6 opacity-60 relative">
+    <div className="bg-white border border-gray-200 rounded-xl p-6 relative">
       <div className="flex items-start justify-between gap-4 mb-4">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
@@ -48,11 +48,8 @@ export function SplitPaymentControls() {
           </div>
         </div>
         
-        {/* Coming Soon Badge & Toggle */}
+        {/* Toggle */}
         <div className="flex items-center gap-3 flex-shrink-0">
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
-            Coming Soon
-          </span>
           <button
           onClick={handleToggle}
           disabled={isDisabled}
@@ -80,9 +77,6 @@ export function SplitPaymentControls() {
       <div>
         <p className="text-sm text-gray-600 mb-2">
           Divide the total fee among your group — fair and simple.
-        </p>
-        <p className="text-xs text-gray-500 italic">
-          This feature is under development. For now, the booking creator pays the full amount.
         </p>
       </div>
 

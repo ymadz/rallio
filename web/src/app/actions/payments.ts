@@ -42,7 +42,8 @@ export interface InitiatePaymentResult {
  */
 export async function initiatePaymentAction(
   reservationId: string,
-  paymentMethod: PaymentMethod
+  paymentMethod: PaymentMethod,
+  splitId?: string
 ): Promise<InitiatePaymentResult> {
   console.log('[initiatePaymentAction] 🚀 Starting payment initiation')
   console.log('[initiatePaymentAction] Input:', {
@@ -89,10 +90,29 @@ export async function initiatePaymentAction(
       return { success: false, error: 'Reservation not found' }
     }
 
-    // Verify user owns this reservation
+    // Verify user owns this reservation OR is a participant in a split
+    let isParticipant = false
+    let autoSplitId = splitId
+
     if (reservation.user_id !== user.id) {
-      return { success: false, error: 'Unauthorized' }
+        // Check if user is a participant
+        const { data: split } = await supabase
+            .from('payment_splits')
+            .select('id')
+            .eq('reservation_id', reservationId)
+            .eq('user_id', user.id)
+            .single()
+        
+        if (split) {
+            isParticipant = true
+            autoSplitId = split.id
+        } else {
+            return { success: false, error: 'Unauthorized' }
+        }
     }
+
+    // Use the resolved splitId
+    const activeSplitId = autoSplitId || splitId
 
     // Check if fully paid
     if (reservation.status === 'completed' || reservation.status === 'confirmed' || reservation.amount_paid >= reservation.total_amount) {
@@ -122,23 +142,39 @@ export async function initiatePaymentAction(
     const courtName = reservation.courts?.name ?? 'Court'
     let description = `${venueName} - ${courtName}`
 
-    // Check for recurrence group to handle bulk payment
     let amountToCharge = reservation.total_amount
-    let recurrenceGroupId = reservation.recurrence_group_id
     let isDownPayment = false
 
-    // If reservation is already partially paid, we are charging the remaining balance
-    if (reservation.status === 'partially_paid' && reservation.amount_paid > 0) {
+    // Logic Priority:
+    // 1. Split Payment (if splitId is provided OR user is a known participant)
+    // 2. Remaining Balance (if reservation is partially paid)
+    // 3. Down Payment (if it's a cash booking)
+    // 4. Full Payment (default)
+
+    if (activeSplitId) {
+      const { data: split, error: splitError } = await supabase
+        .from('payment_splits')
+        .select('amount, status')
+        .eq('id', activeSplitId)
+        .single()
+      
+      if (splitError || !split) {
+         return { success: false, error: 'Split payment record not found' }
+      }
+      if (split.status === 'paid') {
+         return { success: false, error: 'This share has already been paid' }
+      }
+      amountToCharge = Number(split.amount)
+      description += ` (Split Payment)`
+    } else if (reservation.status === 'partially_paid' && reservation.amount_paid > 0) {
       amountToCharge = reservation.total_amount - reservation.amount_paid
       description += ' (Remaining Balance)'
     } else {
-      // Check intent: is this meant to be a cash booking (with a down payment)?
-      const isIntendedCash = reservation.metadata?.intended_payment_method === 'cash' ||
-        reservation.payment_type === 'cash' ||
-        reservation.payment_method === 'cash' ||
-        paymentMethod === 'cash'
-
-      // If it's a cash booking but requires a down payment, charge the down payment amount online.
+      const isIntendedCash = reservation.metadata?.intended_payment_method === 'cash' || 
+                             reservation.metadata?.payment_method === 'cash' ||
+                             reservation.payment_method === 'cash' ||
+                             paymentMethod === 'cash'
+      
       if (isIntendedCash && reservation.metadata?.down_payment_amount && reservation.status === 'pending_payment') {
         amountToCharge = Number(reservation.metadata.down_payment_amount)
         isDownPayment = true
@@ -146,9 +182,13 @@ export async function initiatePaymentAction(
       }
     }
 
-    console.log('[initiatePaymentAction] 🔍 Down payment debug:', {
+    // Capture group ID for bulk payment logic
+    let recurrenceGroupId = reservation.recurrence_group_id
+
+    console.log('[initiatePaymentAction] 🔍 Down payment/Split debug:', {
       recurrenceGroupId,
       isDownPayment,
+      splitId,
       amountToCharge,
       reservationStatus: reservation.status,
       paymentMethod,
@@ -227,6 +267,7 @@ export async function initiatePaymentAction(
             payment_type: reservation.payment_type || 'full',
             player_count: reservation.num_players?.toString() || '1',
             is_down_payment: isDownPayment ? 'true' : 'false',
+            split_id: activeSplitId || undefined,
             recurrence_group_id: recurrenceGroupId || undefined
           },
         })
@@ -250,6 +291,7 @@ export async function initiatePaymentAction(
             payment_type: reservation.payment_type || 'full',
             player_count: reservation.num_players?.toString() || '1',
             is_down_payment: isDownPayment ? 'true' : 'false',
+            split_id: activeSplitId || undefined,
             recurrence_group_id: recurrenceGroupId || undefined
           },
         })
@@ -308,7 +350,8 @@ export async function initiatePaymentAction(
         payment_reference: paymentReference,
         payment_type: reservation.payment_type || 'full',
         player_count: reservation.num_players || 1,
-        is_split_payment: reservation.payment_type === 'split',
+        is_split_payment: reservation.payment_type === 'split' || !!activeSplitId,
+        split_id: activeSplitId,
         recurrence_group_id: recurrenceGroupId,
         is_down_payment: isDownPayment,
       },
@@ -439,7 +482,15 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
     }
 
     const isDownPayment = payment.metadata?.is_down_payment === true || payment.metadata?.is_down_payment === 'true'
-    const newReservationStatus = isDownPayment ? 'partially_paid' : 'confirmed'
+    const isSplitPayment = payment.metadata?.is_split_payment === true || payment.metadata?.is_split_payment === 'true'
+    const splitId = payment.metadata?.split_id
+    
+    let newReservationStatus = isDownPayment ? 'partially_paid' : 'confirmed'
+
+    // If it's a split payment, we start with partially_paid unless all splits are done
+    if (isSplitPayment) {
+        newReservationStatus = 'partially_paid'
+    }
 
     // Idempotency check: If payment is already completed
     if (payment.status === 'completed') {
@@ -576,6 +627,35 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
       // Continue anyway - payment was created in PayMongo
     }
 
+    // SPLIT PAYMENT HANDLING
+    if (isSplitPayment && splitId) {
+      console.log(`[processChargeableSourceAction] 🔄 Updating split payment record ${splitId}`)
+      await supabase
+        .from('payment_splits')
+        .update({
+          status: 'paid',
+          paid_at: new Date().toISOString(),
+          payment_id: payment.id
+        })
+        .eq('id', splitId)
+
+      // Check if all splits for this reservation are now paid
+      const { data: allSplits } = await supabase
+        .from('payment_splits')
+        .select('status')
+        .eq('reservation_id', payment.reservation_id)
+
+      const allPaid = allSplits && allSplits.length > 0 && allSplits.every(s => s.status === 'paid')
+      if (allPaid) {
+        console.log(`[processChargeableSourceAction] ✅ All splits paid for reservation ${payment.reservation_id}`)
+        // If it was a split down payment, final status is still partially_paid
+        newReservationStatus = isDownPayment ? 'partially_paid' : 'confirmed'
+      } else {
+        console.log(`[processChargeableSourceAction] ℹ️ Reservation ${payment.reservation_id} is still partially paid`)
+        newReservationStatus = 'partially_paid'
+      }
+    }
+
     // Update reservation with comprehensive error handling
     console.log(`Updating reservation to ${newReservationStatus}:`, payment.reservation_id)
     // Fetch latest reservation first to get current amount_paid
@@ -587,8 +667,12 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
 
     // For recurring down payments, use per-reservation share, not total payment
     let newAmountPaid: number
-    if (isDownPayment) {
-      // Get the reservation metadata for this specific reservation's down payment share
+    // For split payments, we MUST accumulate based on the local record to support multiple payers
+    // For single-player down payments, we can use the metadata check to ensure accuracy for recurring bookings
+    if (isSplitPayment) {
+        newAmountPaid = (currentRes?.amount_paid || 0) + payment.amount
+    } else if (isDownPayment) {
+      // Get the reservation metadata for this specific reservation's down payment share (used in recurring/bulk payments)
       const { data: firstResForMeta } = await supabase
         .from('reservations')
         .select('metadata')
@@ -1289,5 +1373,70 @@ export async function initiateQueuePaymentAction(
   } catch (error: any) {
     console.error('[initiateQueuePaymentAction] ❌ Error:', error)
     return { success: false, error: error.message || 'Failed to initiate payment' }
+  }
+}
+
+/**
+ * Server Action: Get all split payments for a reservation
+ */
+export async function getSplitPaymentsAction(reservationId: string) {
+  const supabase = createServiceClient()
+  const { data: splits, error } = await supabase
+    .from('payment_splits')
+    .select('*')
+    .eq('reservation_id', reservationId)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching splits:', error)
+    return { success: false, error: error.message }
+  }
+
+  return { success: true, splits: splits || [] }
+}
+
+/**
+ * Server Action: Generate PayMongo links for all splits that don't have one
+ */
+export async function generateSplitPaymentLinksAction(reservationId: string, paymentMethod: 'gcash' | 'paymaya' = 'gcash') {
+  console.log('[generateSplitPaymentLinksAction] 🚀 Generating links for reservation:', reservationId)
+  
+  try {
+    const { success, splits, error } = await getSplitPaymentsAction(reservationId)
+    if (!success || !splits) throw new Error(error || 'Failed to fetch splits')
+
+    const updatedSplits = []
+    
+    for (const split of splits) {
+      if (split.payment_link && split.status !== 'failed') {
+        updatedSplits.push(split)
+        continue
+      }
+
+      console.log(`[generateSplitPaymentLinksAction] 🔗 Generating link for split ${split.id} (${split.amount} PHP)`)
+      
+      const result = await initiatePaymentAction(reservationId, paymentMethod, split.id)
+      
+      if (result.success && result.checkoutUrl) {
+        // Update split with link
+        const supabase = createServiceClient()
+        const { data: updatedSplit } = await supabase
+          .from('payment_splits')
+          .update({ payment_link: result.checkoutUrl })
+          .eq('id', split.id)
+          .select()
+          .single()
+          
+        updatedSplits.push(updatedSplit || { ...split, payment_link: result.checkoutUrl })
+      } else {
+        console.error(`[generateSplitPaymentLinksAction] ❌ Failed for split ${split.id}:`, result.error)
+        updatedSplits.push(split)
+      }
+    }
+
+    return { success: true, splits: updatedSplits }
+  } catch (err: any) {
+    console.error('[generateSplitPaymentLinksAction] 🧨 Exception:', err)
+    return { success: false, error: err.message }
   }
 }

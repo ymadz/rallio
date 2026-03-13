@@ -12,7 +12,15 @@ export const dynamic = 'force-dynamic'
 async function getUserBookings(userId: string) {
   const supabase = await createClient()
 
-  const { data, error } = await supabase
+  // First, get all reservation IDs where the user has a split payment record
+  const { data: userSplits } = await supabase
+      .from('payment_splits')
+      .select('reservation_id')
+      .eq('user_id', userId)
+  
+  const participantResIds = (userSplits || []).map(s => s.reservation_id)
+
+  let query = supabase
     .from('reservations')
     .select(`
       id,
@@ -28,6 +36,7 @@ async function getUserBookings(userId: string) {
       recurrence_group_id,
       metadata,
       cancellation_reason,
+      user_id,
       courts (
         id,
         name,
@@ -50,10 +59,27 @@ async function getUserBookings(userId: string) {
         status,
         payment_method,
         amount
+      ),
+      payment_splits (
+        id,
+        user_id,
+        email,
+        amount,
+        status,
+        payment_link
       )
     `)
-    .eq('user_id', userId)
-    .order('start_time', { ascending: false })
+
+  // OR query: Where I am the owner OR where I am a participant
+  if (participantResIds.length > 0) {
+      // PostgREST or filter doesn't support easy multi-table OR on subqueries
+      // So we use .or with ID in list
+      query = query.or(`user_id.eq.${userId},id.in.(${participantResIds.join(',')})`)
+  } else {
+      query = query.eq('user_id', userId)
+  }
+
+  const { data, error } = await query.order('start_time', { ascending: false })
 
   if (error) {
     console.error('Error fetching bookings:', error)
@@ -66,6 +92,11 @@ async function getUserBookings(userId: string) {
     ...r,
     type: r.metadata?.is_queue_session_reservation ? 'queue_session' : ('reservation' as const),
     queue_session_id: r.metadata?.queue_session_id || null, // fallback if needed
+    metadata: {
+      ...r.metadata,
+      current_user_id: userId,
+      current_user_email: r.payment_splits?.find((s: any) => s.user_id === userId)?.email || null
+    }
   }))
 
   return reservations
@@ -129,6 +160,10 @@ async function getUserQueueSessions(userId: string) {
     (linkedReservations || []).map((r: any) => [r.id, r])
   )
 
+  // Get current user email once for metadata
+  const { data: { user } } = await supabase.auth.getUser()
+  const userEmail = user?.email || null
+
   // Normalize queue sessions into the Booking shape
   const queueSessions = (data || []).map((qs: any) => {
     const reservationId = qs.metadata?.reservation_id || null
@@ -161,6 +196,8 @@ async function getUserQueueSessions(userId: string) {
         queue_is_public: qs.is_public,
         intended_payment_method: linkedReservation?.payment_method || qs.metadata?.payment_method || 'cash',
         is_queue_session_reservation: true,
+        current_user_id: userId,
+        current_user_email: userEmail
       },
       // Queue session specific fields
       type: 'queue_session' as const,

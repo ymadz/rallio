@@ -335,6 +335,44 @@ export async function createReservation(
 
         if (i === 0) primaryReservationId = newRes.id
         createdReservationIds.push(newRes.id)
+
+        // CREATE PAYMENT SPLITS IF APPLICABLE
+        if (data.paymentType === 'split' && data.numPlayers && data.numPlayers > 1) {
+            console.log(`[createReservation] 🔄 Creating ${data.numPlayers} payment splits for reservation ${newRes.id}`)
+            
+            // CRITICAL FIX: If cash payment, we only split the down payment (paid online via GCash/Maya)
+            // The remaining balance is paid at the court.
+            const totalToSplit = (data.paymentMethod === 'cash' && downPaymentAmount !== undefined)
+                ? downPaymentAmount
+                : perInstanceAmount
+
+            const perPlayerAmount = Math.round((totalToSplit / data.numPlayers) * 100) / 100
+            
+            // Get current user email for the creator split
+            const { data: { user } } = await supabase.auth.getUser()
+            const creatorEmail = user?.email || 'creator@rallio.test'
+
+            const splitRecords = Array.from({ length: data.numPlayers }, (_, idx) => ({
+                reservation_id: newRes.id,
+                user_id: idx === 0 ? data.userId : null, // Creator is the first player
+                email: idx === 0 ? creatorEmail : `player${idx + 1}@group.test`, // Creator email + placeholders
+                amount: perPlayerAmount,
+                status: 'pending',
+                created_at: new Date().toISOString()
+            }))
+
+            const { error: splitError } = await adminDb
+                .from('payment_splits')
+                .insert(splitRecords)
+
+            if (splitError) {
+                console.error(`[createReservation] ❌ Failed to create payment splits for reservation ${newRes.id}:`, splitError)
+                // We don't necessarily roll back the whole reservation if splits fail, 
+                // but it's a critical failure for the split feature.
+            } else {
+                console.log(`[createReservation] ✅ ${data.numPlayers} payment splits created successfully for amount: ${totalToSplit}`)
+            }
+        }
     }
 
     return {

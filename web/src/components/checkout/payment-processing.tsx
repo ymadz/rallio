@@ -4,11 +4,11 @@ import { useEffect, useState, useRef } from 'react'
 import { useCheckoutStore } from '@/stores/checkout-store'
 import { createReservationAction } from '@/app/actions/reservations'
 import { createQueueSession } from '@/app/actions/queue-actions'
-import { initiatePaymentAction } from '@/app/actions/payments'
+import { initiatePaymentAction, generateSplitPaymentLinksAction } from '@/app/actions/payments'
 import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
 import { createClient } from '@/lib/supabase/client'
-import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import { QRCodeSVG } from 'qrcode.react'
 
 export function PaymentProcessing() {
   const router = useRouter()
@@ -32,11 +32,13 @@ export function PaymentProcessing() {
     discountReason,
     promoCode,
     customDownPaymentAmount,
+    updatePlayerPayment,
   } = useCheckoutStore()
 
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'processing' | 'success'>('pending')
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reservationId, setReservationId] = useState<string | null>(storeReservationId || null)
   const [isRetrying, setIsRetrying] = useState(false)
@@ -268,6 +270,32 @@ export function PaymentProcessing() {
         setReservationId(confirmedReservationId)
         console.log('Reservation created successfully:', confirmedReservationId)
 
+        // HANDLE SPLIT PAYMENT LINKS
+        if (isSplitPayment) {
+          console.log('[PaymentProcessing] Generating split payment links...')
+          const splitResult = await generateSplitPaymentLinksAction(confirmedReservationId, 'gcash')
+          
+          if (splitResult.success && splitResult.splits) {
+            console.log('[PaymentProcessing] Successfully generated split links')
+            // Match splits to player slots by index
+            splitResult.splits.forEach((split: any, idx: number) => {
+              updatePlayerPayment(idx + 1, {
+                qrCodeUrl: split.payment_link,
+                status: split.status as any,
+                amountDue: Number(split.amount),
+              })
+            })
+            
+            setLoading(false)
+            setPaymentStatus('processing')
+            setBookingReference(confirmedReservationId.slice(0, 8), confirmedReservationId)
+            return // Stop here, no redirect for split payments
+          } else {
+            console.error('[PaymentProcessing] Failed to generate split links:', splitResult.error)
+            throw new Error(splitResult.error || 'Failed to generate split payment links')
+          }
+        }
+
         // For cash payments, skip payment initiation and redirect to receipt ONLY IF no down payment is required
         if (paymentMethod === 'cash' && !requiresDownPayment) {
           setLoading(false)
@@ -340,7 +368,155 @@ export function PaymentProcessing() {
     // Note: getTotalAmount and setBookingReference are stable Zustand store functions
     // They don't need to be in the dependency array
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookingData, paymentMethod])
+  }, [bookingData, paymentMethod, isSplitPayment, playerCount, discountAmount, discountType, discountReason, promoCode, customDownPaymentAmount])
+
+  // REALTIME SPLIT TRACKING
+  useEffect(() => {
+    if (!reservationId || !isSplitPayment) return
+
+    console.log('[PaymentProcessing] 📡 Starting realtime listener for splits')
+    const supabase = createClient()
+    
+    // Function to refresh statuses
+    const refreshSplits = async () => {
+      console.log('[PaymentProcessing] 🔄 Refreshing split data...')
+      const { data: splits, error: splitErr } = await supabase
+        .from('payment_splits')
+        .select('*')
+        .eq('reservation_id', reservationId)
+        .order('created_at', { ascending: true })
+
+      if (!splitErr && splits) {
+        splits.forEach((split: any, idx: number) => {
+          updatePlayerPayment(idx + 1, {
+            status: split.status as any,
+            paidAt: split.paid_at ? new Date(split.paid_at) : undefined,
+            qrCodeUrl: split.payment_link
+          })
+        })
+      }
+    }
+
+    const channel = supabase
+      .channel(`splits-${reservationId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen for all changes
+          schema: 'public',
+          table: 'payment_splits',
+          filter: `reservation_id=eq.${reservationId}`
+        },
+        (payload) => {
+          console.log('[Split Realtime] Received update:', payload)
+          refreshSplits()
+        }
+      )
+      .subscribe((status) => {
+        console.log('[Split Realtime] Subscription status:', status)
+      })
+
+    // Initial refresh to make sure we're in sync
+    refreshSplits()
+
+    return () => {
+      console.log('[PaymentProcessing] 🛑 Stopping realtime listener')
+      supabase.removeChannel(channel)
+    }
+  }, [reservationId, isSplitPayment, updatePlayerPayment])
+
+  // REALTIME RESERVATION TRACKING (For single payments or final confirmation)
+  useEffect(() => {
+    if (!reservationId) return
+
+    console.log('[PaymentProcessing] 📡 Starting realtime listener for reservation:', reservationId)
+    const supabase = createClient()
+
+    const channel = supabase
+      .channel(`reservation-${reservationId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'reservations',
+          filter: `id=eq.${reservationId}`
+        },
+        (payload: any) => {
+          console.log('[Reservation Realtime] Received update:', payload)
+          const newStatus = payload.new.status
+          if (newStatus === 'confirmed' || newStatus === 'partially_paid') {
+            setPaymentStatus('success')
+            // If it's a split payment, also refresh splits to show who paid
+            if (isSplitPayment) {
+              handleRefresh()
+            }
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [reservationId, isSplitPayment])
+
+  // Initial reservation status check
+  useEffect(() => {
+    if (!reservationId) return
+
+    const checkStatus = async () => {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('reservations')
+        .select('status')
+        .eq('id', reservationId)
+        .single()
+
+      if (!error && data) {
+        if (data.status === 'confirmed' || data.status === 'partially_paid') {
+          setPaymentStatus('success')
+        }
+      }
+    }
+
+    checkStatus()
+  }, [reservationId])
+
+  // Manual refresh function
+  const handleRefresh = async () => {
+    if (!reservationId || !isSplitPayment) return
+    setIsRefreshing(true)
+    try {
+      const supabase = createClient()
+      const { data: splits, error: splitErr } = await supabase
+        .from('payment_splits')
+        .select('*')
+        .eq('reservation_id', reservationId)
+        .order('created_at', { ascending: true })
+
+      if (!splitErr && splits) {
+        splits.forEach((split: any, idx: number) => {
+          updatePlayerPayment(idx + 1, {
+            status: split.status as any,
+            paidAt: split.paid_at ? new Date(split.paid_at) : undefined,
+            qrCodeUrl: split.payment_link
+          })
+        })
+      }
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 1000)
+    }
+  }
+
+  // Check if all players have paid and update state
+  useEffect(() => {
+    if (isSplitPayment && playerPayments.length > 0 && playerPayments.every(p => p.status === 'paid')) {
+      if (paymentStatus !== 'success') {
+        setPaymentStatus('success')
+      }
+    }
+  }, [playerPayments, isSplitPayment, paymentStatus])
 
   // Manual retry function
   const handleRetry = () => {
@@ -556,12 +732,12 @@ export function PaymentProcessing() {
                   {/* QR Code */}
                   <div className="bg-white border-4 border-gray-200 rounded-xl p-4 mb-4">
                     {qrCodeUrl ? (
-                      <div className="relative w-[300px] h-[300px]">
-                        <Image
-                          src={qrCodeUrl}
-                          alt="Payment QR Code"
-                          fill
-                          className="object-contain"
+                      <div className="w-[300px] h-[300px]">
+                        <QRCodeSVG
+                          value={qrCodeUrl}
+                          size={300}
+                          level="H"
+                          includeMargin={false}
                         />
                       </div>
                     ) : (
@@ -603,6 +779,21 @@ export function PaymentProcessing() {
                         <div className="animate-spin rounded-full h-5 w-5 border-2 border-yellow-600 border-t-transparent" />
                         <p className="text-sm text-yellow-800">
                           Waiting for payment confirmation...
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {paymentStatus === 'success' && (
+                    <div className="w-full mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="h-5 w-5 bg-green-100 rounded-full flex items-center justify-center">
+                          <svg className="w-3 h-3 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <p className="text-sm text-green-800 font-medium">
+                          Payment confirmed! You're good to go.
                         </p>
                       </div>
                     </div>
@@ -718,8 +909,20 @@ export function PaymentProcessing() {
       {/* Split Payment Header */}
       <div className="bg-white border border-gray-200 rounded-xl p-6">
         <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="font-semibold text-gray-900 text-lg">Split Payment Progress</h3>
+          <div className="flex-1">
+            <div className="flex items-center gap-3">
+              <h3 className="font-semibold text-gray-900 text-lg">Split Payment Progress</h3>
+              <button
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className={`p-1.5 rounded-full hover:bg-gray-100 transition-all ${isRefreshing ? 'animate-spin text-primary' : 'text-gray-400'}`}
+                title="Refresh payment status"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+            </div>
             <p className="text-sm text-gray-600 mt-1">
               Each player needs to complete their payment
             </p>
@@ -797,12 +1000,12 @@ export function PaymentProcessing() {
                 {paymentMethod === 'e-wallet' && payment.qrCodeUrl ? (
                   <div className="flex gap-4">
                     <div className="bg-white border border-gray-200 rounded-lg p-2 flex-shrink-0">
-                      <div className="relative w-32 h-32">
-                        <Image
-                          src={payment.qrCodeUrl}
-                          alt={`QR Code for Player ${payment.playerNumber}`}
-                          fill
-                          className="object-contain"
+                      <div className="w-32 h-32">
+                        <QRCodeSVG
+                          value={payment.qrCodeUrl}
+                          size={128}
+                          level="H"
+                          includeMargin={false}
                         />
                       </div>
                     </div>
@@ -814,6 +1017,22 @@ export function PaymentProcessing() {
                         <div className="animate-spin rounded-full h-4 w-4 border-2 border-yellow-600 border-t-transparent" />
                         <span className="text-xs font-medium">Waiting for payment...</span>
                       </div>
+                      
+                      {/* SHARE LINK BUTTON */}
+                      <button
+                        onClick={() => {
+                          if (payment.qrCodeUrl) {
+                            navigator.clipboard.writeText(payment.qrCodeUrl)
+                            alert(`Split payment link for Player ${payment.playerNumber} copied to clipboard!`)
+                          }
+                        }}
+                        className="mt-3 w-fit px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded flex items-center gap-2 transition-colors text-gray-700"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                        </svg>
+                        Copy Shareable Link
+                      </button>
                     </div>
                   </div>
                 ) : (
@@ -860,10 +1079,10 @@ export function PaymentProcessing() {
               router.push(`/bookings`)
             }
           }}
-          disabled={playerPayments.some(p => p.status !== 'paid')}
+          disabled={paymentStatus !== 'success'}
           className="px-8 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {playerPayments.every(p => p.status === 'paid') ? 'Complete Booking' : 'Waiting for All Payments'}
+          {paymentStatus === 'success' ? 'Complete Booking' : 'Waiting for All Payments'}
         </button>
       </div>
     </div>

@@ -24,6 +24,7 @@ export type NotificationType =
   | 'reschedule_approved'
   | 'reschedule_rejected'
   | 'system_announcement'
+  | 'payment_due'
 
 interface NotificationData {
   userId: string
@@ -264,5 +265,27 @@ export const NotificationTemplates = {
     message: `Your reschedule request for ${courtName} was not approved. Reason: ${reason}`,
     actionUrl: `/bookings/${bookingId}`,
     metadata: { court_name: courtName, reason, booking_id: bookingId },
+  }),
+  
+  /**
+   * Split payment deadline reminder
+   */
+  splitPaymentReminder: (bookingId: string): Omit<NotificationData, 'userId'> => ({
+    type: 'payment_due',
+    title: '⚠️ Group Payment Reminder',
+    message: 'Your group booking is still pending payments. Ensure all players pay soon to avoid cancellation.',
+    actionUrl: `/bookings/${bookingId}`,
+    metadata: { booking_id: bookingId },
+  }),
+
+  /**
+   * Golden Hour notification (25h before)
+   */
+  splitPaymentGoldenHour: (bookingId: string): Omit<NotificationData, 'userId'> => ({
+    type: 'payment_due',
+    title: '⏳ Golden Hour: Save Your Booking!',
+    message: 'Your split-payment booking starts in 25 hours but is not yet fully paid. As the creator, you can pay the remaining balance now to secure the court.',
+    actionUrl: `/bookings/${bookingId}`,
+    metadata: { booking_id: bookingId, is_golden_hour: true },
   }),
 }

@@ -42,6 +42,14 @@ export interface Booking {
     payment_method: string;
     amount: number;
   }>;
+  payment_splits?: Array<{
+    id: string;
+    user_id: string | null;
+    email: string;
+    amount: number;
+    status: string;
+    payment_link?: string;
+  }>;
   recurrence_group_id?: string | null;
   cancellation_reason?: string | null;
   metadata?: {
@@ -388,7 +396,7 @@ export function BookingCard({
               </div>
 
               {/* Partial Payment Breakdown Card */}
-              {booking.status === 'partially_paid' && booking.amount_paid > 0 ? (
+              {booking.status === 'partially_paid' && booking.amount_paid > 0 && (
                 <div
                   className="col-span-2 rounded-xl p-4 mt-1 border border-primary/10"
                   style={{
@@ -404,7 +412,7 @@ export function BookingCard({
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-500">Down Payment Paid</span>
+                      <span className="text-gray-500">Amount Paid Online</span>
                       <span className="font-medium text-gray-600">
                         − ₱{booking.amount_paid.toFixed(2)}
                       </span>
@@ -420,7 +428,10 @@ export function BookingCard({
                     </div>
                   </div>
                 </div>
-              ) : ['pending_refund', 'refunded'].includes(booking.status) ? (
+              )}
+
+              {/* Refund Breakdown */}
+              {['pending_refund', 'refunded'].includes(booking.status) && (
                 <div
                   className="col-span-2 rounded-xl p-4 mt-1 border border-primary/10"
                   style={{
@@ -446,12 +457,12 @@ export function BookingCard({
                     </div>
                   </div>
                 </div>
-              ) : (
+              )}
+
+              {/* Simple amount display for standard bookings */}
+              {booking.status !== 'partially_paid' && !['pending_refund', 'refunded'].includes(booking.status) && (
                 <>
-                  {/* Simple amount display for non-partial, non-refund bookings - skip if already in col-span-2 */}
-                  {!(
-                    booking.metadata?.recurrence_total && booking.metadata.recurrence_total > 1
-                  ) ? (
+                  {!(booking.metadata?.recurrence_total && booking.metadata.recurrence_total > 1) ? (
                     <div
                       className="col-span-2 rounded-xl p-4 mt-1 border border-primary/10"
                       style={{
@@ -486,6 +497,63 @@ export function BookingCard({
                     </div>
                   )}
                 </>
+              )}
+
+              {/* Split Payment Progress (shown additionally) */}
+              {booking.payment_type === 'split' && booking.payment_splits && (
+                <div className="col-span-2 bg-primary/5 border border-primary/10 rounded-xl p-4 mt-1">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                       <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      <p className="text-xs font-bold text-primary uppercase tracking-tight">Split Progress</p>
+                    </div>
+                    <p className="text-xs font-bold text-primary">
+                      {booking.payment_splits.filter(s => s.status === 'paid').length} / {booking.num_players} Paid
+                    </p>
+                  </div>
+                  
+                  {/* Progress Bar */}
+                  <div className="w-full bg-primary/10 rounded-full h-2 mb-4">
+                    <div 
+                      className="bg-primary h-2 rounded-full transition-all duration-500"
+                      style={{ width: `${(booking.payment_splits.filter(s => s.status === 'paid').length / (booking.num_players || 1)) * 100}%` }}
+                    />
+                  </div>
+
+                  {/* Individual Split Statuses */}
+                  <div className="space-y-2">
+                    {booking.payment_splits.map((split, idx) => {
+                      const isCurrentUser = split.user_id === booking.metadata?.current_user_id || split.email === booking.metadata?.current_user_email;
+                      const isPaid = split.status === 'paid';
+                      
+                      return (
+                        <div key={idx} className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <div className={`h-1.5 w-1.5 rounded-full ${isPaid ? 'bg-green-500' : 'bg-yellow-500'}`} />
+                            <span className={isPaid ? 'text-green-700' : 'text-gray-600'}>
+                              {split.email.includes('@group.test') ? `Player ${idx + 1}` : split.email}
+                              {isCurrentUser && <span className="ml-1 font-bold text-primary">(You)</span>}
+                            </span>
+                          </div>
+                          {!isPaid && split.payment_link && (
+                            <button 
+                              onClick={() => {
+                                navigator.clipboard.writeText(split.payment_link!);
+                                alert('Payment link copied to clipboard!');
+                              }}
+                              className="text-[10px] text-primary hover:underline font-medium"
+                            >
+                              Copy Link
+                            </button>
+                          )}
+                          {isPaid && <span className="text-[10px] text-green-600 font-bold">PAID</span>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
               )}
             </>
           )}

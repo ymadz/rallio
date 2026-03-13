@@ -426,25 +426,70 @@ async function markReservationPaidAndConfirmed({
   // The 'paid' intermediate state is recorded in metadata for audit trail,
   // but we skip it as a DB status to avoid stuck-in-paid edge cases.
 
-  // Detect if this payment was a down payment
+  // Detect if this payment was a down payment or split payment
   const isDownPayment = payment.metadata?.is_down_payment === true || payment.metadata?.is_down_payment === 'true'
-  const targetStatus = isDownPayment ? 'partially_paid' : 'confirmed'
-  console.log('[markReservationPaidAndConfirmed] 🔍 Payment type:', { isDownPayment, targetStatus })
+  const isSplitPayment = payment.metadata?.is_split_payment === true || payment.metadata?.is_split_payment === 'true'
+  const splitId = payment.metadata?.split_id
+
+  let targetStatus = isDownPayment ? 'partially_paid' : 'confirmed'
+  let amountPaidToSet = payment.amount
+
+  if (isSplitPayment && splitId) {
+    console.log('[markReservationPaidAndConfirmed] 🖇️ Handling Split Payment fulfillment for split:', splitId)
+    
+    // 1. Mark the specific split as paid
+    const { error: splitUpdateError } = await supabase
+      .from('payment_splits')
+      .update({
+        status: 'paid',
+        paid_at: nowISO,
+        payment_id: payment.id
+      })
+      .eq('id', splitId)
+
+    if (splitUpdateError) {
+      console.error('[markReservationPaidAndConfirmed] ❌ Failed to update split status:', splitUpdateError)
+    }
+
+    // 2. Check all splits for this reservation to see if we're done
+    const { data: allSplits, error: splitsError } = await supabase
+      .from('payment_splits')
+      .select('status, amount')
+      .eq('reservation_id', reservationId)
+
+    if (splitsError) {
+      console.error('[markReservationPaidAndConfirmed] ❌ Failed to fetch all splits:', splitsError)
+    } else {
+      const allPaid = allSplits?.every((s: any) => s.status === 'paid')
+      const totalPaidAmount = allSplits
+        ?.filter((s: any) => s.status === 'paid')
+        .reduce((sum: number, s: any) => sum + Number(s.amount), 0) || 0
+
+      // If it's a down payment, even if all splits are paid, it's still only partially_paid
+      targetStatus = allPaid 
+        ? (isDownPayment ? 'partially_paid' : 'confirmed') 
+        : 'partially_paid'
+
+      amountPaidToSet = totalPaidAmount
+    }
+  }
+
+  console.log('[markReservationPaidAndConfirmed] 🔍 Final decision:', { isDownPayment, isSplitPayment, targetStatus, amountPaidToSet })
 
   // Check if already in final state
   console.log('[markReservationPaidAndConfirmed] 🔍 Checking current reservation status')
   if (reservationRecord.status === 'confirmed' || reservationRecord.status === 'partially_paid') {
     console.log('[markReservationPaidAndConfirmed] ℹ️ Reservation already confirmed')
     // Already confirmed - just ensure amount_paid is synced
-    if ((reservationRecord.amount_paid ?? 0) < payment.amount) {
+    if ((reservationRecord.amount_paid ?? 0) < amountPaidToSet) {
       console.log('[markReservationPaidAndConfirmed] 💰 Syncing amount_paid:', {
         current: reservationRecord.amount_paid,
-        new: payment.amount
+        new: amountPaidToSet
       })
       const { error: amountError } = await supabase
         .from('reservations')
         .update({
-          amount_paid: payment.amount,
+          amount_paid: amountPaidToSet,
           updated_at: nowISO,
         })
         .eq('id', reservationId)
@@ -490,7 +535,7 @@ async function markReservationPaidAndConfirmed({
     reservationId,
     currentStatus: reservationRecord.status,
     targetStatus,
-    amount: payment.amount,
+    amount: amountPaidToSet,
   })
 
   // Check for recurrence group (Bulk Payment Confirmation)
@@ -579,7 +624,7 @@ async function markReservationPaidAndConfirmed({
     .from('reservations')
     .update({
       status: targetStatus,
-      amount_paid: payment.amount,
+      amount_paid: amountPaidToSet,
       updated_at: nowISO,
       metadata: {
         ...confirmationMetadata,

@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { cancelReservationAction } from '@/app/actions/reservations'
@@ -41,6 +42,42 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
   // We will keep `activeTab` and sync it with Tabs onValueChange to keep logic simple without rewriting everything right away.
   const [activeTab, setActiveTab] = useState('upcoming')
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
+
+  // Sync state with server-provided initialBookings when it changes (e.g. via router.refresh())
+  useEffect(() => {
+    setBookings(initialBookings)
+  }, [initialBookings])
+
+  // Real-time listener to refresh data when reservations or splits change
+  useEffect(() => {
+    const supabase = createClient()
+    console.log('[BookingsList] 📡 Setting up realtime listeners')
+    
+    const channel = supabase
+      .channel('bookings-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'reservations' },
+        (payload) => {
+          console.log('[BookingsList] 🔔 Reservation change detected:', payload)
+          router.refresh()
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'payment_splits' },
+        (payload) => {
+          console.log('[BookingsList] 🔔 Payment split change detected:', payload)
+          router.refresh()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      console.log('[BookingsList] 🔌 Cleaning up realtime listeners')
+      supabase.removeChannel(channel)
+    }
+  }, [router])
   const [outOfOrderWarning, setOutOfOrderWarning] = useState<{
     booking: Booking
     paymentMethod: 'gcash' | 'paymaya'

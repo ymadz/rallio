@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getServerNow } from '@/lib/time-server'
 import { OPEN_BEFORE_START_HOURS } from '@/lib/queue-status'
+import { createNotification, NotificationTemplates } from '@/lib/notifications'
 
 export const dynamic = 'force-dynamic'
 
@@ -167,6 +168,8 @@ export async function GET(req: NextRequest) {
                 ...(completedConfirmedResult.data?.map(r => r.id) || []),
             ],
             revertedIds: revertResult.data.map(r => r.id),
+            // Split Payments
+            splitDeadlinesProcessed: await handleSplitPaymentDeadlines(supabase, nowIso)
         })
 
     } catch (error: any) {
@@ -175,5 +178,80 @@ export async function GET(req: NextRequest) {
             { success: false, error: error.message },
             { status: 500 }
         )
+    }
+}
+
+/**
+ * Handle split payment deadlines (24h cutoff and 25h Golden Hour)
+ */
+async function handleSplitPaymentDeadlines(supabase: any, nowIso: string) {
+    try {
+        const now = new Date(nowIso)
+        
+        // 1. Cancellation: Cancel split bookings if not confirmed 24h before start
+        const twentyFourHoursAfterNow = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString()
+        
+        const { data: toCancel } = await supabase
+            .from('reservations')
+            .update({ 
+                status: 'cancelled',
+                metadata: {
+                    cancellation_reason: 'Split payment deadline passed (24h before start)',
+                    cancelled_at: nowIso
+                }
+            })
+            .eq('status', 'partially_paid')
+            .eq('payment_type', 'split')
+            .lte('start_time', twentyFourHoursAfterNow)
+            .select('id')
+
+        // 2. Golden Hour: Identify those 25h before start to notify creator
+        const twentyFiveHoursAfterNow = new Date(now.getTime() + 25 * 60 * 60 * 1000).toISOString()
+        const { data: goldenHourCandidates } = await supabase
+            .from('reservations')
+            .select('id, user_id, metadata')
+            .eq('status', 'partially_paid')
+            .eq('payment_type', 'split')
+            .lte('start_time', twentyFiveHoursAfterNow)
+            .gt('start_time', twentyFourHoursAfterNow)
+
+        // 3. Send Golden Hour Notifications (to creators)
+        if (goldenHourCandidates && goldenHourCandidates.length > 0) {
+            console.log(`[SplitDeadlines] 🔔 Checking Golden Hour notifications for ${goldenHourCandidates.length} potential candidates`)
+            for (const res of goldenHourCandidates) {
+                const meta = res.metadata || {}
+                // Only send if not already notified
+                if (!meta.golden_hour_notified) {
+                    await createNotification({
+                        userId: res.user_id,
+                        ...NotificationTemplates.splitPaymentGoldenHour(res.id)
+                    })
+                    
+                    // Mark as notified in DB
+                    await supabase
+                        .from('reservations')
+                        .update({
+                            metadata: {
+                                ...meta,
+                                golden_hour_notified: true,
+                                golden_hour_notified_at: nowIso
+                            }
+                        })
+                        .eq('id', res.id)
+                    
+                    console.log(`[SplitDeadlines] ✅ Notified creator of booking ${res.id} about Golden Hour`)
+                }
+            }
+        }
+
+        // 4. Provide feedback
+        return {
+            cancelledCount: toCancel?.length || 0,
+            goldenHourCount: goldenHourCandidates?.length || 0
+        }
+
+    } catch (err) {
+        console.error('[SplitDeadlines] Error:', err)
+        return { error: 'Failed to process split deadlines' }
     }
 }
