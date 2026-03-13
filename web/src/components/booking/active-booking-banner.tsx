@@ -39,6 +39,7 @@ export async function ActiveBookingBanner() {
         .from('queue_sessions')
         .select(`
             id,
+            court_id,
             start_time,
             end_time,
             courts (
@@ -92,7 +93,7 @@ export async function ActiveBookingBanner() {
 
                 <div className="flex items-center gap-4">
                     <BookingTimer endTime={activeItem.end_time} />
-                    <Link href={isQueueSession ? `/queue-master/sessions/${(activeItem as any).id}` : '/bookings'}>
+                    <Link href={isQueueSession ? `/queue/${(activeItem as any).court_id}` : '/bookings'}>
                         <Button size="sm" variant="default" className={`gap-2 ${isQueueSession ? 'bg-indigo-600 hover:bg-indigo-700' : ''}`}>
                             {isQueueSession ? 'Manage Queue' : 'View Details'}
                         </Button>

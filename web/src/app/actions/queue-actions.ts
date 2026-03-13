@@ -71,7 +71,9 @@ export async function getQueueDetails(courtId: string) {
       return { success: false, error: 'User not authenticated' }
     }
 
-    // Find active/open queue session for this court
+    // Find queue session for this court.
+    // Include pending_payment so organizers can still access management controls,
+    // while player visibility remains gated below.
     const { data: session, error: sessionError } = await supabase
       .from('queue_sessions')
       .select(`
@@ -85,7 +87,7 @@ export async function getQueueDetails(courtId: string) {
         )
       `)
       .eq('court_id', courtId)
-      .in('status', ['open', 'active'])
+      .in('status', ['pending_payment', 'open', 'active'])
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
@@ -100,6 +102,8 @@ export async function getQueueDetails(courtId: string) {
       return { success: true, queue: null }
     }
 
+    const isOrganizer = session.organizer_id === user.id
+
     // SAFETY: ensure linked reservation is fully paid/confirmed before exposing to players.
     const linkedReservationId = session.metadata?.reservation_id
     if (linkedReservationId) {
@@ -109,7 +113,7 @@ export async function getQueueDetails(courtId: string) {
         .eq('id', linkedReservationId)
         .single()
 
-      if (!linkedReservation || !['confirmed', 'ongoing', 'completed'].includes(linkedReservation.status)) {
+      if (!isOrganizer && (!linkedReservation || !['confirmed', 'ongoing', 'completed'].includes(linkedReservation.status))) {
         console.log('[getQueueDetails] 🔒 Queue hidden: linked reservation not fully paid yet', {
           sessionId: session.id,
           reservationStatus: linkedReservation?.status,
@@ -122,7 +126,6 @@ export async function getQueueDetails(courtId: string) {
     // RLS (migration 042) already enforces this at the DB level, but we verify
     // explicitly to protect against misconfiguration or future service-client refactors.
     if (!session.is_public) {
-      const isOrganizer = session.organizer_id === user.id
       if (!isOrganizer) {
         const { count: participantCount } = await supabase
           .from('queue_participants')
