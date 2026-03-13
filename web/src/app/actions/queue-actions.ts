@@ -60,6 +60,7 @@ export async function getQueueDetails(courtId: string) {
 
   try {
     const supabase = await createClient()
+    const adminDb = createServiceClient()
 
     // Get the current user
     const {
@@ -114,7 +115,7 @@ export async function getQueueDetails(courtId: string) {
     }
 
     if (linkedReservationId) {
-      const { data: linkedReservation } = await supabase
+      const { data: linkedReservation } = await adminDb
         .from('reservations')
         .select('status, total_amount, amount_paid')
         .eq('id', linkedReservationId)
@@ -674,6 +675,7 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
 
   try {
     const supabase = await createClient()
+    const adminDb = createServiceClient()
 
     // Get active queue sessions - ONLY approved sessions
     const { data: sessions, error: sessionsError } = await supabase
@@ -748,7 +750,7 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
 
     const fullyPaidReservationIds = new Set<string>()
     if (reservationIds.length > 0) {
-      const { data: reservations } = await supabase
+      const { data: reservations } = await adminDb
         .from('reservations')
         .select('id, status, total_amount, amount_paid')
         .in('id', reservationIds)
