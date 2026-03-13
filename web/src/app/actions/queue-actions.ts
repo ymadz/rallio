@@ -106,6 +106,13 @@ export async function getQueueDetails(courtId: string) {
 
     // SAFETY: ensure linked reservation is fully paid/confirmed before exposing to players.
     const linkedReservationId = session.metadata?.reservation_id
+    if (!isOrganizer && !linkedReservationId) {
+      console.log('[getQueueDetails] 🔒 Queue hidden: missing linked reservation metadata for non-organizer', {
+        sessionId: session.id,
+      })
+      return { success: true, queue: null }
+    }
+
     if (linkedReservationId) {
       const { data: linkedReservation } = await supabase
         .from('reservations')
@@ -750,9 +757,22 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
     const queues = (sessions || [])
       .filter((session: any) => {
         const reservationId = session.metadata?.reservation_id
-        // If no linked reservation metadata, keep legacy behavior.
-        if (!reservationId) return true
-        return fullyPaidReservationIds.has(reservationId)
+        // Player discovery should only show sessions with a linked, fully-paid reservation.
+        if (!reservationId) {
+          console.log('[getNearbyQueues] 🔒 Hidden session without reservation link:', session.id)
+          return false
+        }
+
+        const isFullyPaid = fullyPaidReservationIds.has(reservationId)
+        if (!isFullyPaid) {
+          console.log('[getNearbyQueues] 🔒 Hidden unpaid session:', {
+            sessionId: session.id,
+            reservationId,
+            queueStatus: session.status,
+          })
+        }
+
+        return isFullyPaid
       })
       .map((session: any) => {
       // Use actual participant count, falling back to current_players column
