@@ -128,11 +128,11 @@ export function PromoCodeInput() {
 
         try {
             // First validate the promo code (checks validity, dates, usage limits)
-            const basePrice = getSubtotal() + discountAmount + promoDiscountAmount
+            const discountedSubtotal = getSubtotal() + promoDiscountAmount
             const result = await validatePromoCode(
                 code,
                 bookingData.venueId,
-                basePrice
+                discountedSubtotal
             )
 
             if (!result.valid || !result.promoCode) {
@@ -145,14 +145,25 @@ export function PromoCodeInput() {
 
             if (recalcResult) {
                 const promoTotal = recalcResult.promoDiscounts.reduce((sum, d) => sum + d.amount, 0)
+                const effectivePromoAmount = promoTotal > 0 ? promoTotal : (result.discountAmount || 0)
+
+                if (effectivePromoAmount <= 0) {
+                    setError('Promo code is valid but does not affect this booking total.')
+                    return
+                }
+
                 setPromoDiscount({
-                    amount: promoTotal,
+                    amount: effectivePromoAmount,
                     code: result.promoCode.code,
                     type: result.promoCode.discount_type,
                     reason: result.promoCode.description || undefined
                 })
             } else {
                 // Fallback: use the validation result amount
+                if (!result.discountAmount || result.discountAmount <= 0) {
+                    setError('Promo code is valid but does not affect this booking total.')
+                    return
+                }
                 setPromoDiscount({
                     amount: result.discountAmount!,
                     code: result.promoCode.code,

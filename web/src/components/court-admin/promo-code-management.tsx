@@ -32,7 +32,6 @@ export function PromoCodeManagement({ venueId }: PromoCodeManagementProps) {
         discount_value: '',
         max_discount_amount: '',
         max_uses: '',
-        max_uses_per_user: '',
         valid_from: '',
         valid_until: '',
         is_active: true
@@ -68,7 +67,6 @@ export function PromoCodeManagement({ venueId }: PromoCodeManagementProps) {
                 discount_value: code.discount_value.toString(),
                 max_discount_amount: code.max_discount_amount ? code.max_discount_amount.toString() : '',
                 max_uses: code.max_uses ? code.max_uses.toString() : '',
-                max_uses_per_user: code.max_uses_per_user ? code.max_uses_per_user.toString() : '',
                 valid_from: code.valid_from && !code.valid_from.startsWith('2000-01-01') ? new Date(code.valid_from).toISOString().slice(0, 10) : '',
                 valid_until: code.valid_until && !code.valid_until.startsWith('2100-01-01') ? new Date(code.valid_until).toISOString().slice(0, 10) : '',
                 is_active: code.is_active
@@ -83,7 +81,6 @@ export function PromoCodeManagement({ venueId }: PromoCodeManagementProps) {
                 discount_value: '',
                 max_discount_amount: '',
                 max_uses: '',
-                max_uses_per_user: '',
                 valid_from: '',
                 valid_until: '',
                 is_active: true
@@ -111,7 +108,7 @@ export function PromoCodeManagement({ venueId }: PromoCodeManagementProps) {
                 discount_value: Number(formData.discount_value),
                 max_discount_amount: formData.max_discount_amount ? Number(formData.max_discount_amount) : null,
                 max_uses: formData.max_uses ? Number(formData.max_uses) : null,
-                max_uses_per_user: formData.max_uses_per_user ? Number(formData.max_uses_per_user) : null,
+                max_uses_per_user: null,
                 valid_from: formData.valid_from ? new Date(formData.valid_from).toISOString() : null,
                 valid_until: formData.valid_until ? new Date(formData.valid_until).toISOString() : null,
                 is_active: formData.is_active
@@ -252,11 +249,6 @@ export function PromoCodeManagement({ venueId }: PromoCodeManagementProps) {
                                                 <div className="text-sm text-gray-900">
                                                     {promo.current_uses} {promo.max_uses ? `/ ${promo.max_uses}` : '(Unlimited)'}
                                                 </div>
-                                                {promo.max_uses_per_user && (
-                                                    <div className="text-xs text-gray-500 mt-0.5">
-                                                        Max {promo.max_uses_per_user}/user
-                                                    </div>
-                                                )}
                                             </td>
                                             <td className="px-6 py-4 hidden sm:table-cell">
                                                 {hasValidUntil ? (
@@ -440,33 +432,18 @@ export function PromoCodeManagement({ venueId }: PromoCodeManagementProps) {
                                     </div>
                                 )}
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Max Uses (Global)
-                                        </label>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            value={formData.max_uses}
-                                            onChange={(e) => setFormData({ ...formData, max_uses: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                                            placeholder="Unlimited if empty"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Max Uses Per User
-                                        </label>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            value={formData.max_uses_per_user}
-                                            onChange={(e) => setFormData({ ...formData, max_uses_per_user: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                                            placeholder="Unlimited if empty"
-                                        />
-                                    </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Max Uses (Global)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        value={formData.max_uses}
+                                        onChange={(e) => setFormData({ ...formData, max_uses: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                                        placeholder="Unlimited if empty"
+                                    />
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">

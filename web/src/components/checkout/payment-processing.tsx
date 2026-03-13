@@ -30,6 +30,8 @@ export function PaymentProcessing() {
     discountAmount,
     discountType,
     discountReason,
+    promoCode,
+    customDownPaymentAmount,
   } = useCheckoutStore()
 
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null)
@@ -141,7 +143,9 @@ export function PaymentProcessing() {
             joinWindowHours: bookingData.queueSessionData.joinWindowHours,
             recurrenceWeeks: bookingData.recurrenceWeeks,
             selectedDays: bookingData.selectedDays,
-            paymentMethod
+            paymentMethod,
+            promoCode,
+            customDownPaymentAmount,
           })
 
           if (!sessionResult.success) {
@@ -193,6 +197,7 @@ export function PaymentProcessing() {
                 endDate: endTimeISO,
                 recurrenceWeeks: bookingData.recurrenceWeeks || 1,
                 basePrice: totalBasePrice,
+                promoCode,
               })
 
               if (discountResult.success) {
@@ -233,6 +238,8 @@ export function PaymentProcessing() {
             discountReason: verifiedDiscountReason,
             recurrenceWeeks: bookingData.recurrenceWeeks,
             selectedDays: bookingData.selectedDays,
+            customDownPaymentAmount,
+            promoCode,
           })
 
           if (!reservationResult.success || !reservationResult.reservationId) {

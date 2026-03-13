@@ -86,7 +86,7 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
     <>
       <style>{qcStyles}</style>
       <Link
-        href={`/queue/${queue.courtId}`}
+        href={`/queue/${queue.id}`}
         className="qc-card group block"
       >
         <div className="flex flex-col h-full">

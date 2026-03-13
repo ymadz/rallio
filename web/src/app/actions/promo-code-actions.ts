@@ -78,6 +78,8 @@ export async function createPromoCode(
 
         const payload = {
             ...promoData,
+            // Product decision: promo usage is global-only.
+            max_uses_per_user: null,
             venue_id: venueId,
             valid_from: promoData.valid_from || new Date('2000-01-01').toISOString(),
             valid_until: promoData.valid_until || new Date('2100-01-01').toISOString(),
@@ -137,6 +139,9 @@ export async function updatePromoCode(
         }
 
         const payload = { ...updates }
+
+        // Product decision: promo usage is global-only.
+        payload.max_uses_per_user = null
 
         // Handle explicit nulls being sent when dates are cleared/empty
         if (payload.valid_from === null) payload.valid_from = new Date('2000-01-01').toISOString()
@@ -264,22 +269,7 @@ export async function validatePromoCode(
             return { valid: false, error: 'This promo code has reached its usage limit' }
         }
 
-        // 4. Check Max Uses (Per User)
-        if (promoCode.max_uses_per_user) {
-            const { count: userUses, error: usageError } = await supabase
-                .from('promo_code_usage')
-                .select('*', { count: 'exact', head: true })
-                .eq('promo_code_id', promoCode.id)
-                .eq('user_id', user.id)
-
-            if (usageError) throw usageError
-
-            if (userUses !== null && userUses >= promoCode.max_uses_per_user) {
-                return { valid: false, error: `You have reached the usage limit for this code (${promoCode.max_uses_per_user} uses max)` }
-            }
-        }
-
-        // 5. Calculate Discount Amount
+        // 4. Calculate Discount Amount
         let discountAmount = 0
         if (promoCode.discount_type === 'percent') {
             discountAmount = (totalAmountDue * promoCode.discount_value) / 100
@@ -313,7 +303,8 @@ export async function validatePromoCode(
 export async function consumeDeferredPromoCode(
     promoCodeStr: string,
     userId: string,
-    reservationIds: string[]
+    reservationIds: string[],
+    venueId?: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
         if (!promoCodeStr || !userId || reservationIds.length === 0) return { success: true }
@@ -322,18 +313,24 @@ export async function consumeDeferredPromoCode(
         const { createServiceClient } = await import('@/lib/supabase/service')
         const adminDb = createServiceClient()
 
-        // Find the promo code
-        const { data: promoData, error: fetchError } = await adminDb
+        // Find promo code candidates (same code may exist as venue-specific + platform-wide)
+        const { data: promoCandidates, error: fetchError } = await adminDb
             .from('promo_codes')
-            .select('id, current_uses')
+            .select('id, current_uses, venue_id')
             .eq('code', promoCodeStr.toUpperCase())
-            .order('venue_id', { ascending: false })
-            .limit(1)
-            .single()
+            .eq('is_active', true)
 
-        if (fetchError || !promoData) {
+        if (fetchError || !promoCandidates || promoCandidates.length === 0) {
             console.error('[consumeDeferredPromoCode] Promo code not found for consumption:', promoCodeStr)
             return { success: false, error: 'Promo code not found' }
+        }
+
+        let promoData = venueId
+            ? promoCandidates.find((p: any) => p.venue_id === venueId)
+            : undefined
+
+        if (!promoData) {
+            promoData = promoCandidates.find((p: any) => p.venue_id === null) || promoCandidates[0]
         }
 
         // Ensure we haven't already inserted for these reservations to prevent double consumption

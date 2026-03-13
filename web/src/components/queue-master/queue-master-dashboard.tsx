@@ -315,6 +315,14 @@ export function QueueMasterDashboard() {
                     </p>
                   </div>
 
+                  {session.status === 'pending_payment' && (
+                    <div className="col-span-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
+                      <p className="text-xs font-medium text-orange-700">
+                        Hidden from players until fully paid.
+                      </p>
+                    </div>
+                  )}
+
                   <div className="bg-gray-50 rounded-lg p-3 col-span-2 flex items-center justify-between">
                     <div>
                       <div className="flex items-center gap-2 mb-1">

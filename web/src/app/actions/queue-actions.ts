@@ -60,6 +60,7 @@ export async function getQueueDetails(courtId: string) {
 
   try {
     const supabase = await createClient()
+    const adminDb = createServiceClient()
 
     // Get the current user
     const {
@@ -71,24 +72,39 @@ export async function getQueueDetails(courtId: string) {
       return { success: false, error: 'User not authenticated' }
     }
 
-    // Find active or open queue session for this court
-    const { data: session, error: sessionError } = await supabase
-      .from('queue_sessions')
-      .select(`
-        *,
-        courts (
-          name,
-          venues (
-            id,
-            name
-          )
+    // Resolve by queue session ID first (for legacy links/notifications),
+    // then fall back to the latest session by court ID.
+    const baseSessionSelect = `
+      *,
+      courts (
+        name,
+        venues (
+          id,
+          name
         )
-      `)
-      .eq('court_id', courtId)
-      .in('status', ['open', 'active', 'pending_payment'])
-      .order('created_at', { ascending: false })
-      .limit(1)
+      )
+    `
+
+    let { data: session, error: sessionError } = await supabase
+      .from('queue_sessions')
+      .select(baseSessionSelect)
+      .eq('id', courtId)
+      .in('status', ['pending_payment', 'open', 'active'])
       .maybeSingle()
+
+    if (!session && !sessionError) {
+      const fallback = await supabase
+        .from('queue_sessions')
+        .select(baseSessionSelect)
+        .eq('court_id', courtId)
+        .in('status', ['pending_payment', 'open', 'active'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      session = fallback.data as any
+      sessionError = fallback.error
+    }
 
     if (sessionError) {
       console.error('[getQueueDetails] ❌ Database error:', sessionError)
@@ -100,11 +116,43 @@ export async function getQueueDetails(courtId: string) {
       return { success: true, queue: null }
     }
 
+    const isOrganizer = session.organizer_id === user.id
+
+    // SAFETY: ensure linked reservation is fully paid/confirmed before exposing to players.
+    const linkedReservationId = session.metadata?.reservation_id
+    if (!isOrganizer && !linkedReservationId) {
+      console.log('[getQueueDetails] 🔒 Queue hidden: missing linked reservation metadata for non-organizer', {
+        sessionId: session.id,
+      })
+      return { success: true, queue: null }
+    }
+
+    if (linkedReservationId) {
+      const { data: linkedReservation } = await adminDb
+        .from('reservations')
+        .select('status, total_amount, amount_paid')
+        .eq('id', linkedReservationId)
+        .single()
+
+      const hasPaidInFull = !!linkedReservation
+        && ['confirmed', 'ongoing', 'completed'].includes(linkedReservation.status)
+        && Number(linkedReservation.amount_paid || 0) + 0.01 >= Number(linkedReservation.total_amount || 0)
+
+      if (!isOrganizer && !hasPaidInFull) {
+        console.log('[getQueueDetails] 🔒 Queue hidden: linked reservation not fully paid yet', {
+          sessionId: session.id,
+          reservationStatus: linkedReservation?.status,
+          amountPaid: linkedReservation?.amount_paid,
+          totalAmount: linkedReservation?.total_amount,
+        })
+        return { success: true, queue: null }
+      }
+    }
+
     // PRIVATE QUEUE AUTHORIZATION: Defense-in-depth check.
     // RLS (migration 042) already enforces this at the DB level, but we verify
     // explicitly to protect against misconfiguration or future service-client refactors.
     if (!session.is_public) {
-      const isOrganizer = session.organizer_id === user.id
       if (!isOrganizer) {
         const { count: participantCount } = await supabase
           .from('queue_participants')
@@ -134,7 +182,7 @@ export async function getQueueDetails(courtId: string) {
         console.error('[getQueueDetails] ❌ Failed to auto-close session:', closeError)
       } else {
         // Revalidate to ensure UI updates immediately
-        revalidatePath(`/queue/${courtId}`)
+        revalidatePath(`/queue/${session.court_id}`)
         revalidatePath('/queue')
       }
 
@@ -640,6 +688,7 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
 
   try {
     const supabase = await createClient()
+    const adminDb = createServiceClient()
 
     // Get active queue sessions - ONLY approved sessions
     const { data: sessions, error: sessionsError } = await supabase
@@ -708,7 +757,49 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
       }
     }
 
-    const queues = (sessions || []).map((session: any) => {
+    const reservationIds = (sessions || [])
+      .map((session: any) => session.metadata?.reservation_id)
+      .filter(Boolean)
+
+    const fullyPaidReservationIds = new Set<string>()
+    if (reservationIds.length > 0) {
+      const { data: reservations } = await adminDb
+        .from('reservations')
+        .select('id, status, total_amount, amount_paid')
+        .in('id', reservationIds)
+
+      ;(reservations || []).forEach((reservation: any) => {
+        const hasPaidInFull =
+          ['confirmed', 'ongoing', 'completed'].includes(reservation.status)
+          && Number(reservation.amount_paid || 0) + 0.01 >= Number(reservation.total_amount || 0)
+
+        if (hasPaidInFull) {
+          fullyPaidReservationIds.add(reservation.id)
+        }
+      })
+    }
+
+    const queues = (sessions || [])
+      .filter((session: any) => {
+        const reservationId = session.metadata?.reservation_id
+        // Player discovery should only show sessions with a linked, fully-paid reservation.
+        if (!reservationId) {
+          console.log('[getNearbyQueues] 🔒 Hidden session without reservation link:', session.id)
+          return false
+        }
+
+        const isFullyPaid = fullyPaidReservationIds.has(reservationId)
+        if (!isFullyPaid) {
+          console.log('[getNearbyQueues] 🔒 Hidden unpaid session:', {
+            sessionId: session.id,
+            reservationId,
+            queueStatus: session.status,
+          })
+        }
+
+        return isFullyPaid
+      })
+      .map((session: any) => {
       // Use actual participant count, falling back to current_players column
       const currentPlayers = participantCounts[session.id] || session.current_players || 0
 
@@ -731,7 +822,7 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
         costPerGame: parseFloat(session.cost_per_game || '0'),
         organizerName: organizerNames[session.organizer_id] || 'Unknown Host',
       }
-    })
+      })
 
     console.log('[getNearbyQueues] ✅ Fetched queues:', queues.length)
 
@@ -1253,7 +1344,8 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
             total_with_fee: totalAmountPerSlot,
             intended_payment_method: data.paymentMethod,
             down_payment_percentage: data.paymentMethod === 'cash' ? downPaymentPercentage : undefined,
-            down_payment_amount: downPaymentAmount
+            down_payment_amount: downPaymentAmount,
+            promo_code: data.promoCode || undefined
           },
           notes: `Queue Session (${data.mode}) - ${sessionStart.toLocaleDateString()}${data.paymentMethod === 'cash' ? ' (Cash Payment)' : ''}`,
         })
@@ -1366,42 +1458,8 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
       console.error('[createQueueSession] ⚠️ Failed to send notifications (non-critical):', notificationError)
     }
 
-    // 8.5 APPLY PROMO CODE USAGE
-    if (data.promoCode && createdSessions.length > 0) {
-      try {
-        const adminDb = createServiceClient()
-        // Get the promo code ID from the code string
-        const { data: promoData } = await adminDb
-          .from('promo_codes')
-          .select('id, current_uses')
-          .eq('code', data.promoCode.toUpperCase())
-          .single()
-
-        if (promoData) {
-          // Add usage records for each created reservation
-          const usageRecords = createdSessions.map(session => ({
-            promo_code_id: promoData.id,
-            user_id: user.id,
-            reservation_id: session.reservationId,
-          }))
-
-          const { error: usageError } = await adminDb.from('promo_code_usage').insert(usageRecords)
-          if (usageError) console.error('Error inserting usage records:', usageError)
-
-          // Increment current_uses
-          const { error: updateError } = await adminDb
-            .from('promo_codes')
-            .update({ current_uses: promoData.current_uses + createdSessions.length })
-            .eq('id', promoData.id)
-          if (updateError) console.error('Error updating promo code uses:', updateError)
-
-          console.log(`✅ Applied promo code ${data.promoCode} to ${createdSessions.length} queue sessions`)
-        }
-      } catch (error) {
-        console.error('❌ Failed to record promo code usage:', error)
-        // Don't fail the whole booking if just the tracking fails
-      }
-    }
+    // Promo usage is consumed after successful payment webhook.
+    // We only persist promo_code in reservation metadata here.
 
     // 9. Revalidate paths
     revalidatePath('/queue')

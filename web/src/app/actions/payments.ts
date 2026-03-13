@@ -763,6 +763,15 @@ async function updateQueueSessionStatus(reservationId: string, supabaseParam: an
     // Use service client for fulfillment to bypass RLS and ensure success
     const supabase = createServiceClient()
 
+    // Check linked reservation payment status
+    const { data: reservationRecord } = await supabase
+      .from('reservations')
+      .select('status')
+      .eq('id', reservationId)
+      .single()
+
+    const reservationFullyPaid = reservationRecord?.status === 'confirmed'
+
     // Check if this reservation is for a queue session
     // Using a more robust JSON search
     const { data: queueSession, error: fetchError } = await supabase
@@ -780,7 +789,7 @@ async function updateQueueSessionStatus(reservationId: string, supabaseParam: an
       console.log('[updateQueueSessionStatus] 🔄 Found linked Queue Session:', queueSession.id, 'Current status:', queueSession.status)
 
       // Activate and approve when payment is confirmed
-      if (['pending_payment', 'pending_approval'].includes(queueSession.status)) {
+      if (reservationFullyPaid && ['pending_payment', 'pending_approval'].includes(queueSession.status)) {
         // Only set 'active' if the session has already started;
         // otherwise set 'open' (paid & ready, but scheduled for later)
         const now = await getServerNow()
@@ -811,13 +820,15 @@ async function updateQueueSessionStatus(reservationId: string, supabaseParam: an
         }
       } else {
         console.log('[updateQueueSessionStatus] ℹ️ Queue Session status is not pending_payment, just updating payment flags')
-        // Just update payment status if already active (or other status)
+        // Keep unpaid/partially-paid sessions hidden from player join flow
+        const metadataPaymentStatus = reservationFullyPaid ? 'paid' : 'partial'
         const { error: updateError } = await supabase
           .from('queue_sessions')
           .update({
+            ...(reservationFullyPaid ? {} : { status: 'pending_payment' }),
             metadata: {
               ...queueSession.metadata,
-              payment_status: 'paid',
+              payment_status: metadataPaymentStatus,
               payment_confirmed_at: new Date().toISOString()
             }
           })
@@ -853,6 +864,48 @@ export async function processPaymentByReservationAction(reservationId: string): 
   try {
     // Use service client to bypass RLS for payment fulfillment
     const supabase = createServiceClient()
+
+    const consumePromoForReservations = async (reservationIds: string[]) => {
+      if (!reservationIds.length) return
+
+      try {
+        const { data: reservations, error: reservationsError } = await supabase
+          .from('reservations')
+          .select('id, user_id, metadata, court_id')
+          .in('id', reservationIds)
+
+        if (reservationsError || !reservations) {
+          console.warn('[processPaymentByReservationAction] Failed to fetch reservations for promo consumption:', reservationsError)
+          return
+        }
+
+        const courtIds = Array.from(new Set(reservations.map((r: any) => r.court_id).filter(Boolean)))
+        const courtVenueMap = new Map<string, string>()
+
+        if (courtIds.length > 0) {
+          const { data: courts } = await supabase
+            .from('courts')
+            .select('id, venue_id')
+            .in('id', courtIds)
+
+          courts?.forEach((court: any) => {
+            if (court.id && court.venue_id) courtVenueMap.set(court.id, court.venue_id)
+          })
+        }
+
+        const { consumeDeferredPromoCode } = await import('@/app/actions/promo-code-actions')
+
+        for (const reservation of reservations) {
+          const promoCodeStr = reservation.metadata?.promo_code
+          if (!promoCodeStr || !reservation.user_id) continue
+
+          const venueId = reservation.court_id ? courtVenueMap.get(reservation.court_id) : undefined
+          await consumeDeferredPromoCode(promoCodeStr, reservation.user_id, [reservation.id], venueId)
+        }
+      } catch (promoError) {
+        console.warn('[processPaymentByReservationAction] Promo consumption failed (non-critical):', promoError)
+      }
+    }
 
     // Get the most recent payment record for this reservation
     const { data: payment, error: paymentError } = await supabase
@@ -935,6 +988,8 @@ export async function processPaymentByReservationAction(reservationId: string): 
 
             if (updateError) console.error(`Failed to update bulk instance ${update.id}:`, updateError)
           }
+
+          await consumePromoForReservations(updates.map(update => update.id))
         }
       } else {
         const { error: updateError } = await supabase
@@ -951,6 +1006,8 @@ export async function processPaymentByReservationAction(reservationId: string): 
           console.error('[processPaymentByReservationAction] Failed to confirm reservation:', updateError)
           return { success: false, error: 'Failed to confirm reservation' }
         }
+
+        await consumePromoForReservations([reservationId])
       }
 
       revalidatePath('/reservations')

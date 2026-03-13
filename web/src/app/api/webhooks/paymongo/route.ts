@@ -321,6 +321,68 @@ async function markReservationPaidAndConfirmed({
   const nowISO = new Date().toISOString()
   console.log('[markReservationPaidAndConfirmed] Timestamp:', nowISO)
 
+  const consumePromoForReservations = async (reservationIds: string[]) => {
+    try {
+      if (!reservationIds.length) return
+
+      const { data: reservationsWithPromo, error } = await supabase
+        .from('reservations')
+        .select('id, user_id, metadata, court_id')
+        .in('id', reservationIds)
+
+      if (error || !reservationsWithPromo) {
+        console.warn('[markReservationPaidAndConfirmed] ⚠️ Failed to fetch reservations for promo consumption:', error)
+        return
+      }
+
+      const courtIds = Array.from(new Set(reservationsWithPromo.map((r: any) => r.court_id).filter(Boolean)))
+      const courtVenueMap = new Map<string, string>()
+
+      if (courtIds.length > 0) {
+        const { data: courts } = await supabase
+          .from('courts')
+          .select('id, venue_id')
+          .in('id', courtIds)
+
+        courts?.forEach((court: any) => {
+          if (court.id && court.venue_id) courtVenueMap.set(court.id, court.venue_id)
+        })
+      }
+
+      const promoGroups = new Map<string, { userId: string; reservationIds: string[]; venueId?: string }>()
+
+      for (const reservation of reservationsWithPromo) {
+        const promoCodeStr = reservation.metadata?.promo_code
+        if (!promoCodeStr || !reservation.user_id) continue
+
+        const venueId = reservation.court_id ? courtVenueMap.get(reservation.court_id) : undefined
+        const groupKey = `${promoCodeStr}::${venueId || 'platform'}`
+
+        if (!promoGroups.has(groupKey)) {
+          promoGroups.set(groupKey, { userId: reservation.user_id, reservationIds: [], venueId })
+        }
+
+        promoGroups.get(groupKey)!.reservationIds.push(reservation.id)
+      }
+
+      if (promoGroups.size === 0) return
+
+      const { consumeDeferredPromoCode } = await import('@/app/actions/promo-code-actions')
+
+      for (const [groupKey, group] of promoGroups.entries()) {
+        const promoCodeStr = groupKey.split('::')[0]
+        await consumeDeferredPromoCode(promoCodeStr, group.userId, group.reservationIds, group.venueId)
+      }
+
+      console.log('[markReservationPaidAndConfirmed] ✅ Promo usage consumed:', {
+        promoCodes: Array.from(promoGroups.keys()),
+        reservationCount: reservationIds.length,
+      })
+    } catch (promoErr) {
+      console.error('[markReservationPaidAndConfirmed] ⚠️ Promo usage consume failed (non-critical):', promoErr)
+    }
+  }
+
   // Fetch current reservation state
   let reservationRecord = normalizeReservation(payment.reservations)
   console.log('[markReservationPaidAndConfirmed] Initial reservation record from payment:', {
@@ -396,6 +458,10 @@ async function markReservationPaidAndConfirmed({
         console.log('[markReservationPaidAndConfirmed] ✅ Amount synced successfully')
       }
     }
+
+    // Ensure promo usage is consumed even if reservation was already confirmed by another path
+    await consumePromoForReservations([reservationId])
+
     console.log('[markReservationPaidAndConfirmed] ✅ Reservation already confirmed:', reservationId)
     return
   }
@@ -498,6 +564,9 @@ async function markReservationPaidAndConfirmed({
         }
       }
 
+      // Consume promo code usage once payment confirms (idempotent in helper)
+      await consumePromoForReservations(updates.map(update => update.id))
+
       // Update the main reservationRecord reference for notifications
       reservationRecord.status = targetStatus
       return // Exit here as we handled everything
@@ -557,6 +626,9 @@ async function markReservationPaidAndConfirmed({
     status: confirmedReservation.status,
     amountPaid: confirmedReservation.amount_paid,
   })
+
+  // Consume promo code usage once payment confirms (idempotent inside helper)
+  await consumePromoForReservations([confirmedReservation.id])
 
   // 🔔 Send notifications to user
   try {
@@ -621,10 +693,12 @@ async function markReservationPaidAndConfirmed({
     if (queueSession) {
       console.log('[markReservationPaidAndConfirmed] 🔄 Linked Queue Session found:', queueSession.id)
 
+      const reservationFullyPaid = targetStatus === 'confirmed'
+
       const updateData: any = {
         metadata: {
           ...queueSession.metadata,
-          payment_status: 'paid',
+          payment_status: reservationFullyPaid ? 'paid' : 'partial',
           payment_confirmed_at: nowISO
         }
       }
@@ -633,7 +707,7 @@ async function markReservationPaidAndConfirmed({
 
       // Calculate correct status based on time lifecycle
       // pending_payment → open (if within 12h before start) or open (default after payment)
-      if (['pending_payment', 'pending_approval'].includes(queueSession.status)) {
+      if (reservationFullyPaid && ['pending_payment', 'pending_approval'].includes(queueSession.status)) {
         const now = new Date()
         const startTime = new Date(queueSession.start_time)
         const endTime = new Date(queueSession.end_time)
@@ -651,6 +725,9 @@ async function markReservationPaidAndConfirmed({
         }
 
         updateData.status = newStatus
+      } else if (!reservationFullyPaid) {
+        // Keep session hidden from players until full payment is completed.
+        updateData.status = 'pending_payment'
       }
 
       const { error: qError } = await supabase

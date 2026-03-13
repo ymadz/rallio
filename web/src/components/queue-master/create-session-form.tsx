@@ -71,6 +71,8 @@ export function CreateSessionForm() {
   const [joinWindowHours, setJoinWindowHours] = useState<number | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'e-wallet'>('e-wallet')
   const [downPaymentPercentage, setDownPaymentPercentage] = useState<number | undefined>(undefined)
+  const [promoCode, setPromoCode] = useState('')
+  const [customDownPaymentAmount, setCustomDownPaymentAmount] = useState('')
 
   // Validation state
   const [validationState, setValidationState] = useState<{
@@ -189,7 +191,8 @@ export function CreateSessionForm() {
           endDate: endDateTimeStr,
           recurrenceWeeks,
           targetDateCount,
-          basePrice
+          basePrice,
+          promoCode: promoCode.trim() || undefined,
         })
         if (result.success) {
           setCalculatedPrice({
@@ -222,7 +225,7 @@ export function CreateSessionForm() {
     // Debounce pricing
     timeoutId = setTimeout(calculatePrice, 500)
     return () => clearTimeout(timeoutId)
-  }, [startTime, duration, recurrenceWeeks, selectedDays, startDate, courtId, selectedCourt, selectedVenue])
+  }, [startTime, duration, recurrenceWeeks, selectedDays, startDate, courtId, selectedCourt, selectedVenue, promoCode])
 
   const handleTimeSelect = (clickedSlot: TimeSlot) => {
     if (!clickedSlot.available) return
@@ -428,11 +431,9 @@ export function CreateSessionForm() {
         throw new Error(availability.error || 'Selected time is not available')
       }
 
-      // Calculate checkout values
-      const startH = parseInt(startTime.split(':')[0])
-      const startM = parseInt(startTime.split(':')[1])
-      const endH = startH + duration
-      const endTimeString = `${endH.toString().padStart(2, '0')}:${startM.toString().padStart(2, '0')}`
+      const parsedCustomDownPayment = customDownPaymentAmount.trim()
+        ? parseFloat(customDownPaymentAmount)
+        : undefined
 
       // Create Session Directly
       const result = await createQueueSession({
@@ -447,7 +448,9 @@ export function CreateSessionForm() {
         joinWindowHours,
         recurrenceWeeks,
         selectedDays: selectedDays.length > 0 ? selectedDays : undefined,
-        paymentMethod
+        paymentMethod,
+        promoCode: promoCode.trim() || undefined,
+        customDownPaymentAmount: parsedCustomDownPayment
       })
 
       if (!result.success || !result.session) {
@@ -503,6 +506,19 @@ export function CreateSessionForm() {
   const totalAmount = useMemo(() => {
     return courtRental + platformFee
   }, [courtRental, platformFee])
+
+  const minimumDownPayment = useMemo(() => {
+    if (paymentMethod !== 'cash') return 0
+    const percentage = downPaymentPercentage ?? 20
+    return Math.round((totalAmount * (percentage / 100)) * 100) / 100
+  }, [paymentMethod, downPaymentPercentage, totalAmount])
+
+  const effectiveDownPayment = useMemo(() => {
+    if (paymentMethod !== 'cash') return 0
+    const parsed = parseFloat(customDownPaymentAmount)
+    if (!Number.isFinite(parsed) || parsed <= 0) return minimumDownPayment
+    return Math.round(Math.min(Math.max(parsed, minimumDownPayment), totalAmount) * 100) / 100
+  }, [paymentMethod, customDownPaymentAmount, minimumDownPayment, totalAmount])
 
 
   // Calculate all session dates for display
@@ -1210,11 +1226,41 @@ export function CreateSessionForm() {
                       ) : (
                         <p>
                           {downPaymentPercentage && downPaymentPercentage > 0
-                            ? `Pay a ${downPaymentPercentage}% down payment (₱${((totalAmount * downPaymentPercentage) / 100).toFixed(2)}) online. Pay the rest at the venue.`
+                            ? `Pay a minimum ${downPaymentPercentage}% down payment (₱${minimumDownPayment.toFixed(2)}) online. Pay the rest at the venue.`
                             : 'Pay at venue. Session pending until paid.'}
                         </p>
                       )}
                     </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-gray-700">Promo Code (optional)</label>
+                      <input
+                        type="text"
+                        value={promoCode}
+                        onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                        placeholder="Enter promo code"
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+
+                    {paymentMethod === 'cash' && (
+                      <div className="space-y-2 mt-2">
+                        <label className="text-xs font-medium text-gray-700">Down Payment Amount (optional)</label>
+                        <input
+                          type="number"
+                          min={minimumDownPayment}
+                          max={totalAmount}
+                          step="0.01"
+                          value={customDownPaymentAmount}
+                          onChange={(e) => setCustomDownPaymentAmount(e.target.value)}
+                          placeholder={`Minimum ₱${minimumDownPayment.toFixed(2)}`}
+                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                        />
+                        <p className="text-xs text-gray-500">
+                          You pay now: ₱{effectiveDownPayment.toFixed(2)} • Remaining at venue: ₱{Math.max(0, totalAmount - effectiveDownPayment).toFixed(2)}
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Checking Availability & Validation Errors */}
