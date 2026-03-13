@@ -339,3 +339,167 @@ export async function updateCourtPricing(courtId: string, hourlyRate: number) {
   }
 }
 
+/**
+ * Add an image to a court
+ */
+export async function addCourtImage(
+  courtId: string,
+  url: string,
+  altText?: string,
+  isPrimary?: boolean,
+  displayOrder?: number
+) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { success: false, error: 'Not authenticated' }
+  }
+
+  try {
+    // Verify court ownership through venue
+    const { data: court } = await supabase
+      .from('courts')
+      .select('id, venue:venues!inner(owner_id)')
+      .eq('id', courtId)
+      .single()
+
+    if (!court || (court.venue as any).owner_id !== user.id) {
+      return { success: false, error: 'Unauthorized - You do not own this court' }
+    }
+
+    // If this is primary, unset existing primary images
+    if (isPrimary) {
+      await supabase
+        .from('court_images')
+        .update({ is_primary: false })
+        .eq('court_id', courtId)
+    }
+
+    const { data: image, error } = await supabase
+      .from('court_images')
+      .insert({
+        court_id: courtId,
+        url,
+        alt_text: altText || '',
+        is_primary: isPrimary ?? false,
+        display_order: displayOrder ?? 0,
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+
+    revalidatePath('/courts')
+    return { success: true, image }
+  } catch (error: any) {
+    console.error('Error adding court image:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
+ * Add multiple images to a court in one request
+ */
+export async function addCourtImages(
+  courtId: string,
+  images: Array<{
+    url: string
+    altText?: string
+    isPrimary?: boolean
+    displayOrder?: number
+  }>
+) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { success: false, error: 'Not authenticated' }
+  }
+
+  if (!images || images.length === 0) {
+    return { success: false, error: 'No images provided' }
+  }
+
+  try {
+    // Verify court ownership through venue
+    const { data: court } = await supabase
+      .from('courts')
+      .select('id, venue:venues!inner(owner_id)')
+      .eq('id', courtId)
+      .single()
+
+    if (!court || (court.venue as any).owner_id !== user.id) {
+      return { success: false, error: 'Unauthorized - You do not own this court' }
+    }
+
+    // If any incoming image is set to primary, unset existing primary flags first.
+    if (images.some((image) => image.isPrimary)) {
+      await supabase
+        .from('court_images')
+        .update({ is_primary: false })
+        .eq('court_id', courtId)
+    }
+
+    const payload = images.map((image, index) => ({
+      court_id: courtId,
+      url: image.url,
+      alt_text: image.altText || '',
+      is_primary: image.isPrimary ?? false,
+      display_order: image.displayOrder ?? index,
+    }))
+
+    const { data, error } = await supabase
+      .from('court_images')
+      .insert(payload)
+      .select('id, url, alt_text, is_primary, display_order')
+
+    if (error) throw error
+
+    revalidatePath('/courts')
+    return { success: true, images: data }
+  } catch (error: any) {
+    console.error('Error adding court images:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
+ * Delete a court image
+ */
+export async function deleteCourtImage(imageId: string, courtId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { success: false, error: 'Not authenticated' }
+  }
+
+  try {
+    // Verify court ownership through venue
+    const { data: court } = await supabase
+      .from('courts')
+      .select('id, venue:venues!inner(owner_id)')
+      .eq('id', courtId)
+      .single()
+
+    if (!court || (court.venue as any).owner_id !== user.id) {
+      return { success: false, error: 'Unauthorized - You do not own this court' }
+    }
+
+    const { error } = await supabase
+      .from('court_images')
+      .delete()
+      .eq('id', imageId)
+      .eq('court_id', courtId)
+
+    if (error) throw error
+
+    revalidatePath('/courts')
+    return { success: true }
+  } catch (error: any) {
+    console.error('Error deleting court image:', error)
+    return { success: false, error: error.message }
+  }
+}
+

@@ -18,11 +18,13 @@ import {
   Loader2,
   AlertCircle,
   X,
-  Globe
+  Globe,
+  Image as ImageIcon
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { getMyVenues, createVenue } from '@/app/actions/court-admin-actions'
 import { createClient } from '@/lib/supabase/client'
+import Image from 'next/image'
 
 const LocationPicker = dynamic(
   () => import('@/components/map/location-picker'),
@@ -71,6 +73,8 @@ export function VenueList() {
     image_url: ''
   })
   const [showMapPicker, setShowMapPicker] = useState(false)
+  const [galleryImages, setGalleryImages] = useState<string[]>([])
+  const [isGalleryUploading, setIsGalleryUploading] = useState(false)
 
 
   useEffect(() => {
@@ -128,7 +132,10 @@ export function VenueList() {
         phone: formData.phone || undefined,
         email: formData.email || undefined,
         website: formData.website || undefined,
-        image_url: formData.image_url || undefined
+        image_url: formData.image_url || undefined,
+        metadata: {
+          gallery_images: galleryImages,
+        },
       }
 
       // Add coordinates if provided
@@ -163,6 +170,7 @@ export function VenueList() {
         longitude: '',
         image_url: ''
       })
+      setGalleryImages([])
       setShowCreateModal(false)
       // Reload venues
       await loadVenues()
@@ -171,6 +179,58 @@ export function VenueList() {
     } finally {
       setIsCreating(false)
     }
+  }
+
+  const handleCreateGalleryFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    e.target.value = ''
+    if (files.length === 0) return
+
+    setIsGalleryUploading(true)
+    try {
+      const supabase = createClient()
+      const uploadedUrls: string[] = []
+
+      for (let index = 0; index < files.length; index++) {
+        const file = files[index]
+        if (!file.type.startsWith('image/')) {
+          continue
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          continue
+        }
+
+        const fileExt = file.name.split('.').pop() || 'jpg'
+        const unique = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${index}`
+        const fileName = `venues/new-${unique}.${fileExt}`
+
+        const { error: uploadError } = await supabase.storage
+          .from('venue-images')
+          .upload(fileName, file)
+
+        if (uploadError) {
+          throw uploadError
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('venue-images')
+          .getPublicUrl(fileName)
+
+        uploadedUrls.push(publicUrl)
+      }
+
+      if (uploadedUrls.length > 0) {
+        setGalleryImages((prev) => [...prev, ...uploadedUrls])
+      }
+    } catch (uploadError: any) {
+      alert(uploadError.message || 'Failed to upload gallery images')
+    } finally {
+      setIsGalleryUploading(false)
+    }
+  }
+
+  const handleRemoveCreateGalleryImage = (index: number) => {
+    setGalleryImages((prev) => prev.filter((_, imageIndex) => imageIndex !== index))
   }
 
   const totalCourts = venues.reduce((acc, v) => (v.courts?.[0]?.count || 0) + acc, 0)
@@ -448,6 +508,47 @@ export function VenueList() {
                 onImageChange={(url) => setFormData({ ...formData, image_url: url || '' })}
               />
 
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-sm font-semibold text-gray-700">Carousel Images</label>
+                  {isGalleryUploading && (
+                    <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Uploading...
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {galleryImages.map((imageUrl, index) => (
+                    <div key={`${imageUrl}-${index}`} className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200 group">
+                      <Image src={imageUrl} alt="Venue gallery" fill className="object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveCreateGalleryImage(index)}
+                        className="absolute top-0.5 right-0.5 bg-red-600 text-white p-0.5 rounded-full hover:bg-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                        aria-label="Remove image"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+
+                  <label className={`w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center transition-colors ${isGalleryUploading ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50'}`}>
+                    <ImageIcon className="w-5 h-5 text-gray-400 mb-0.5" />
+                    <span className="text-xs text-gray-500">Add</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={handleCreateGalleryFileSelect}
+                      disabled={isGalleryUploading}
+                    />
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500">Add multiple images for the public carousel. Max 5MB each.</p>
+              </div>
+
               {/* Venue Name */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -589,7 +690,10 @@ export function VenueList() {
               <div className="flex items-center justify-end gap-3 pt-6 mt-2 border-t border-gray-100">
                 <button
                   type="button"
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={() => {
+                    setShowCreateModal(false)
+                    setGalleryImages([])
+                  }}
                   disabled={isCreating}
                   className="px-6 py-2.5 text-gray-700 font-medium hover:bg-gray-100 rounded-xl transition-all"
                 >

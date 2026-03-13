@@ -9,10 +9,21 @@ import {
   XCircle,
   Loader2,
   AlertCircle,
-  X
+  X,
+  Image as ImageIcon
 } from 'lucide-react'
+import NextImage from 'next/image'
+import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { getVenueCourts, createCourt, updateCourt } from '@/app/actions/court-admin-court-actions'
+import { getVenueCourts, createCourt, updateCourt, addCourtImages, deleteCourtImage } from '@/app/actions/court-admin-court-actions'
+
+interface CourtImage {
+  id: string
+  url: string
+  alt_text?: string
+  is_primary: boolean
+  display_order: number
+}
 
 interface Court {
   id: string
@@ -24,6 +35,7 @@ interface Court {
   hourly_rate: number
   is_active: boolean
   is_verified: boolean
+  court_images?: CourtImage[]
 }
 
 interface VenueCourtsProps {
@@ -47,6 +59,10 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
     capacity: 4,
     hourly_rate: 500
   })
+  const [editImages, setEditImages] = useState<CourtImage[]>([])
+  const [pendingImageFiles, setPendingImageFiles] = useState<File[]>([])
+  const [pendingImagePreviews, setPendingImagePreviews] = useState<string[]>([])
+  const [isImageUploading, setIsImageUploading] = useState(false)
 
   useEffect(() => {
     loadCourts()
@@ -75,6 +91,82 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
   }
 
 
+  const handleAddPendingImage = (file: File) => {
+    if (!file.type.startsWith('image/')) { alert('Please upload image files only'); return }
+    if (file.size > 5 * 1024 * 1024) { alert('File size must be less than 5MB'); return }
+    const preview = URL.createObjectURL(file)
+    setPendingImageFiles(prev => [...prev, file])
+    setPendingImagePreviews(prev => [...prev, preview])
+  }
+
+  const handleRemovePendingImage = (index: number) => {
+    URL.revokeObjectURL(pendingImagePreviews[index])
+    setPendingImageFiles(prev => prev.filter((_, i) => i !== index))
+    setPendingImagePreviews(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const uploadCourtImages = async (courtId: string, files: File[], existingImageCount = 0) => {
+    if (files.length === 0) {
+      return { success: true, createdImages: [] as CourtImage[] }
+    }
+
+    const supabase = createClient()
+    const uploaded: Array<{ url: string; displayOrder: number; isPrimary: boolean }> = []
+
+    for (let index = 0; index < files.length; index++) {
+      const file = files[index]
+      if (!file.type.startsWith('image/')) {
+        continue
+      }
+
+      const fileExt = file.name.split('.').pop() || 'jpg'
+      const unique = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${index}`
+      const fileName = `courts/${courtId}-${unique}.${fileExt}`
+
+      const { error: uploadError } = await supabase.storage.from('venue-images').upload(fileName, file)
+      if (uploadError) {
+        throw new Error(uploadError.message)
+      }
+
+      const { data: { publicUrl } } = supabase.storage.from('venue-images').getPublicUrl(fileName)
+      uploaded.push({
+        url: publicUrl,
+        displayOrder: existingImageCount + index,
+        isPrimary: existingImageCount === 0 && index === 0,
+      })
+    }
+
+    if (uploaded.length === 0) {
+      return { success: true, createdImages: [] as CourtImage[] }
+    }
+
+    const saveResult = await addCourtImages(
+      courtId,
+      uploaded.map((image) => ({
+        url: image.url,
+        displayOrder: image.displayOrder,
+        isPrimary: image.isPrimary,
+      }))
+    )
+
+    if (!saveResult.success) {
+      throw new Error(saveResult.error)
+    }
+
+    return { success: true, createdImages: (saveResult.images || []) as CourtImage[] }
+  }
+
+  const handleDeleteEditImage = async (image: CourtImage) => {
+    if (!editingCourt || !confirm('Remove this photo?')) return
+    try {
+      const result = await deleteCourtImage(image.id, editingCourt.id)
+      if (!result.success) throw new Error(result.error)
+      setEditImages(prev => prev.filter(img => img.id !== image.id))
+    } catch (err: any) {
+      alert('Failed to remove image: ' + err.message)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
@@ -82,6 +174,13 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
       const result = await createCourt(venueId, formData)
       if (!result.success) {
         throw new Error(result.error)
+      }
+      // Upload any pending images for the new court
+      if (pendingImageFiles.length > 0 && result.court) {
+        await uploadCourtImages(result.court.id, pendingImageFiles)
+        pendingImagePreviews.forEach(url => URL.revokeObjectURL(url))
+        setPendingImageFiles([])
+        setPendingImagePreviews([])
       }
       await loadCourts()
       onCourtChange?.()
@@ -103,6 +202,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
 
   const handleEditClick = (court: Court) => {
     setEditingCourt(court)
+    setEditImages(court.court_images || [])
     setFormData({
       name: court.name,
       description: court.description || '',
@@ -311,7 +411,12 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold text-gray-900">Add New Court</h3>
               <button
-                onClick={() => setShowAddModal(false)}
+                onClick={() => {
+                  setShowAddModal(false)
+                  pendingImagePreviews.forEach(url => URL.revokeObjectURL(url))
+                  setPendingImageFiles([])
+                  setPendingImagePreviews([])
+                }}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <X className="w-5 h-5 text-gray-500" />
@@ -399,10 +504,51 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                 </div>
               </div>
 
+              {/* Court Photos */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Court Photos <span className="text-xs text-gray-400 font-normal">(optional)</span>
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {pendingImagePreviews.map((preview, index) => (
+                    <div key={index} className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0">
+                      <NextImage src={preview} alt="" fill className="object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePendingImage(index)}
+                        className="absolute top-0.5 right-0.5 bg-red-600 text-white p-0.5 rounded-full hover:bg-red-700"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                  <label className="w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 flex-shrink-0 transition-colors">
+                    <ImageIcon className="w-5 h-5 text-gray-400 mb-0.5" />
+                    <span className="text-xs text-gray-500">Add</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        Array.from(e.target.files || []).forEach(handleAddPendingImage)
+                        e.target.value = ''
+                      }}
+                    />
+                  </label>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Max 5MB per image. First image becomes the primary photo.</p>
+              </div>
+
               <div className="flex gap-2 pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => {
+                    setShowAddModal(false)
+                    pendingImagePreviews.forEach(url => URL.revokeObjectURL(url))
+                    setPendingImageFiles([])
+                    setPendingImagePreviews([])
+                  }}
                   className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                   disabled={isSubmitting}
                 >
@@ -436,6 +582,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                 onClick={() => {
                   setShowEditModal(false)
                   setEditingCourt(null)
+                  setEditImages([])
                 }}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
@@ -524,7 +671,61 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                 </div>
               </div>
 
-              {/* Court Photos removed */}
+              {/* Court Photos */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Court Photos</label>
+                <div className="flex flex-wrap gap-2">
+                  {editImages.map((image) => (
+                    <div key={image.id} className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0 group">
+                      <NextImage src={image.url} alt={image.alt_text || ''} fill className="object-cover" />
+                      {image.is_primary && (
+                        <div className="absolute bottom-0 left-0 right-0 bg-primary/80 text-white text-center text-xs py-0.5">
+                          Primary
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteEditImage(image)}
+                        className="absolute top-0.5 right-0.5 bg-red-600 text-white p-0.5 rounded-full hover:bg-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                  <label className={`w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center flex-shrink-0 transition-colors ${isImageUploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50'}`}>
+                    {isImageUploading ? (
+                      <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+                    ) : (
+                      <>
+                        <ImageIcon className="w-5 h-5 text-gray-400 mb-0.5" />
+                        <span className="text-xs text-gray-500">Add</span>
+                      </>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      disabled={isImageUploading}
+                      onChange={async (e) => {
+                        const files = Array.from(e.target.files || [])
+                        e.target.value = ''
+                        if (!editingCourt || files.length === 0) return
+                        setIsImageUploading(true)
+                        try {
+                          const result = await uploadCourtImages(editingCourt.id, files, editImages.length)
+                          setEditImages(prev => [...prev, ...result.createdImages])
+                        } catch (err: any) {
+                          alert('Failed to upload image(s): ' + err.message)
+                        } finally {
+                          setIsImageUploading(false)
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Max 5MB per image. Hover thumbnail to remove. First image is primary.</p>
+              </div>
 
               <div className="flex gap-2 pt-4">
                 <button
@@ -532,6 +733,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                   onClick={() => {
                     setShowEditModal(false)
                     setEditingCourt(null)
+                    setEditImages([])
                   }}
                   className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                   disabled={isSubmitting}
