@@ -453,6 +453,13 @@ function detectIntent(text: string): Intent {
   if (/^(hi|hello|hey|yo|sup|kumusta|musta|good\s*(morning|afternoon|evening))[\s!?.]*$/i.test(t))
     return 'greeting';
 
+  // How to book
+  if (/how\s*(to|do\s*i|can\s*i)\s*(book|reserve|make.{0,20}reservation)/i.test(t))
+    return 'how_to_book';
+
+  // How do I join a queue
+  if (/how\s*(to|do\s*i|can\s*i)\s*(join|queue|open\s*play)/i.test(t)) return 'how_to_queue';
+
   // Open plays / queues tonight
   if (
     /(tonight|this evening).{0,50}(open\s*play|queue|session|game)/i.test(t) ||
@@ -486,13 +493,6 @@ function detectIntent(text: string): Intent {
     /find.{0,30}(court|venue)/i.test(t)
   )
     return 'available_courts';
-
-  // How to book
-  if (/how\s*(to|do\s*i|can\s*i)\s*(book|reserve|make.{0,20}reservation)/i.test(t))
-    return 'how_to_book';
-
-  // How to join queue
-  if (/how\s*(to|do\s*i|can\s*i)\s*(join|queue|open\s*play)/i.test(t)) return 'how_to_queue';
 
   return null;
 }
@@ -575,9 +575,9 @@ async function handleLocalIntent(intent: Intent): Promise<LocalResponse | null> 
     return {
       content:
         "Here's how to join a queue session:\n\n" +
-        '1. Go to the **Queue** section from the home page\n' +
+        '1. Go to the <span class="font-bold">Queue</span> section from the home page\n' +
         '2. Browse active queue sessions near you\n' +
-        '3. Tap **Join Queue** on a session\n' +
+        '3. Tap <span class="font-bold">Join Queue</span> on a session\n' +
         "4. You'll be auto-matched into games based on skill level\n" +
         '5. Pay per game at the rate set by the Queue Master\n\n' +
         'Easy as a drop shot! 🏓',
