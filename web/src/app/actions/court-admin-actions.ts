@@ -634,9 +634,10 @@ export async function markReservationAsPaid(reservationId: string) {
       )
     })
 
-    // Consume promo code usage if this was the first payment (not just balance payment)
+    // Consume promo code usage on successful payment completion.
+    // Helper is idempotent per reservation_id, so calling this on both partial/full flows is safe.
     const promoCodeStr = reservation.metadata?.promo_code
-    if (promoCodeStr && !isPartiallyPaid) {
+    if (promoCodeStr) {
       const { consumeDeferredPromoCode } = await import('@/app/actions/promo-code-actions')
       await consumeDeferredPromoCode(promoCodeStr, reservation.user_id, [reservationId])
     }

@@ -78,6 +78,8 @@ export async function createPromoCode(
 
         const payload = {
             ...promoData,
+            // Product decision: promo usage is global-only.
+            max_uses_per_user: null,
             venue_id: venueId,
             valid_from: promoData.valid_from || new Date('2000-01-01').toISOString(),
             valid_until: promoData.valid_until || new Date('2100-01-01').toISOString(),
@@ -137,6 +139,9 @@ export async function updatePromoCode(
         }
 
         const payload = { ...updates }
+
+        // Product decision: promo usage is global-only.
+        payload.max_uses_per_user = null
 
         // Handle explicit nulls being sent when dates are cleared/empty
         if (payload.valid_from === null) payload.valid_from = new Date('2000-01-01').toISOString()
@@ -264,22 +269,7 @@ export async function validatePromoCode(
             return { valid: false, error: 'This promo code has reached its usage limit' }
         }
 
-        // 4. Check Max Uses (Per User)
-        if (promoCode.max_uses_per_user) {
-            const { count: userUses, error: usageError } = await supabase
-                .from('promo_code_usage')
-                .select('*', { count: 'exact', head: true })
-                .eq('promo_code_id', promoCode.id)
-                .eq('user_id', user.id)
-
-            if (usageError) throw usageError
-
-            if (userUses !== null && userUses >= promoCode.max_uses_per_user) {
-                return { valid: false, error: `You have reached the usage limit for this code (${promoCode.max_uses_per_user} uses max)` }
-            }
-        }
-
-        // 5. Calculate Discount Amount
+        // 4. Calculate Discount Amount
         let discountAmount = 0
         if (promoCode.discount_type === 'percent') {
             discountAmount = (totalAmountDue * promoCode.discount_value) / 100

@@ -865,6 +865,48 @@ export async function processPaymentByReservationAction(reservationId: string): 
     // Use service client to bypass RLS for payment fulfillment
     const supabase = createServiceClient()
 
+    const consumePromoForReservations = async (reservationIds: string[]) => {
+      if (!reservationIds.length) return
+
+      try {
+        const { data: reservations, error: reservationsError } = await supabase
+          .from('reservations')
+          .select('id, user_id, metadata, court_id')
+          .in('id', reservationIds)
+
+        if (reservationsError || !reservations) {
+          console.warn('[processPaymentByReservationAction] Failed to fetch reservations for promo consumption:', reservationsError)
+          return
+        }
+
+        const courtIds = Array.from(new Set(reservations.map((r: any) => r.court_id).filter(Boolean)))
+        const courtVenueMap = new Map<string, string>()
+
+        if (courtIds.length > 0) {
+          const { data: courts } = await supabase
+            .from('courts')
+            .select('id, venue_id')
+            .in('id', courtIds)
+
+          courts?.forEach((court: any) => {
+            if (court.id && court.venue_id) courtVenueMap.set(court.id, court.venue_id)
+          })
+        }
+
+        const { consumeDeferredPromoCode } = await import('@/app/actions/promo-code-actions')
+
+        for (const reservation of reservations) {
+          const promoCodeStr = reservation.metadata?.promo_code
+          if (!promoCodeStr || !reservation.user_id) continue
+
+          const venueId = reservation.court_id ? courtVenueMap.get(reservation.court_id) : undefined
+          await consumeDeferredPromoCode(promoCodeStr, reservation.user_id, [reservation.id], venueId)
+        }
+      } catch (promoError) {
+        console.warn('[processPaymentByReservationAction] Promo consumption failed (non-critical):', promoError)
+      }
+    }
+
     // Get the most recent payment record for this reservation
     const { data: payment, error: paymentError } = await supabase
       .from('payments')
@@ -946,6 +988,8 @@ export async function processPaymentByReservationAction(reservationId: string): 
 
             if (updateError) console.error(`Failed to update bulk instance ${update.id}:`, updateError)
           }
+
+          await consumePromoForReservations(updates.map(update => update.id))
         }
       } else {
         const { error: updateError } = await supabase
@@ -962,6 +1006,8 @@ export async function processPaymentByReservationAction(reservationId: string): 
           console.error('[processPaymentByReservationAction] Failed to confirm reservation:', updateError)
           return { success: false, error: 'Failed to confirm reservation' }
         }
+
+        await consumePromoForReservations([reservationId])
       }
 
       revalidatePath('/reservations')
