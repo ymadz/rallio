@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Loader2, Phone, Mail, Globe, MapPin } from 'lucide-react'
+import { X, Loader2, Phone, Mail, Globe, MapPin, Image as ImageIcon } from 'lucide-react'
 import { updateVenue } from '@/app/actions/court-admin-actions'
 import { useRouter } from 'next/navigation'
 import { AddressAutocomplete } from '@/components/ui/address-autocomplete'
 import { VenuePhotoUpload } from './venue-photo-upload'
+import { createClient } from '@/lib/supabase/client'
+import Image from 'next/image'
 import dynamic from 'next/dynamic'
 
 const LocationPicker = dynamic(
@@ -33,6 +35,7 @@ interface VenueEditModalProps {
     latitude?: number
     longitude?: number
     image_url?: string
+    metadata?: any
   }
   isOpen: boolean
   onClose: () => void
@@ -44,6 +47,8 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showMapPicker, setShowMapPicker] = useState(false)
+  const [galleryImages, setGalleryImages] = useState<string[]>([])
+  const [isGalleryUploading, setIsGalleryUploading] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -72,8 +77,63 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
         longitude: venue.longitude?.toString() || '',
         image_url: venue.image_url || ''
       })
+      setGalleryImages(Array.isArray(venue.metadata?.gallery_images)
+        ? venue.metadata.gallery_images.filter((image: unknown): image is string => typeof image === 'string' && image.length > 0)
+        : [])
     }
   }, [venue])
+
+  const handleGalleryFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    e.target.value = ''
+    if (files.length === 0) return
+
+    setIsGalleryUploading(true)
+    try {
+      const supabase = createClient()
+      const uploadedUrls: string[] = []
+
+      for (let index = 0; index < files.length; index++) {
+        const file = files[index]
+        if (!file.type.startsWith('image/')) {
+          continue
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          continue
+        }
+
+        const fileExt = file.name.split('.').pop() || 'jpg'
+        const unique = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${index}`
+        const fileName = `venues/${venue.id}-${unique}.${fileExt}`
+
+        const { error: uploadError } = await supabase.storage
+          .from('venue-images')
+          .upload(fileName, file)
+
+        if (uploadError) {
+          throw uploadError
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('venue-images')
+          .getPublicUrl(fileName)
+
+        uploadedUrls.push(publicUrl)
+      }
+
+      if (uploadedUrls.length > 0) {
+        setGalleryImages((prev) => [...prev, ...uploadedUrls])
+      }
+    } catch (uploadError: any) {
+      setError(uploadError.message || 'Failed to upload gallery images')
+    } finally {
+      setIsGalleryUploading(false)
+    }
+  }
+
+  const handleRemoveGalleryImage = (index: number) => {
+    setGalleryImages((prev) => prev.filter((_, imageIndex) => imageIndex !== index))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -89,7 +149,11 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
         phone: formData.phone || null,
         email: formData.email || null,
         website: formData.website || null,
-        image_url: formData.image_url || null
+        image_url: formData.image_url || null,
+        metadata: {
+          ...(venue.metadata || {}),
+          gallery_images: galleryImages,
+        },
       }
 
       // Only add coordinates if provided
@@ -153,6 +217,48 @@ export function VenueEditModal({ venue, isOpen, onClose, onSuccess }: VenueEditM
             currentImage={formData.image_url}
             onImageChange={(url) => setFormData(prev => ({ ...prev, image_url: url || '' }))}
           />
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-sm font-medium text-gray-700">Carousel Images</label>
+              {isGalleryUploading && (
+                <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Uploading...
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {galleryImages.map((imageUrl, index) => (
+                <div key={`${imageUrl}-${index}`} className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200 group">
+                  <Image src={imageUrl} alt="Venue gallery" fill className="object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveGalleryImage(index)}
+                    className="absolute top-0.5 right-0.5 bg-red-600 text-white p-0.5 rounded-full hover:bg-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label="Remove image"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+
+              <label className={`w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center transition-colors ${isGalleryUploading ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50'}`}>
+                <ImageIcon className="w-5 h-5 text-gray-400 mb-0.5" />
+                <span className="text-xs text-gray-500">Add</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleGalleryFileSelect}
+                  disabled={isGalleryUploading}
+                />
+              </label>
+            </div>
+            <p className="text-xs text-gray-500">You can add multiple images for the venue carousel. Max 5MB each.</p>
+          </div>
 
           {/* Venue Name */}
           <div>

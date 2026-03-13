@@ -77,7 +77,7 @@ export function ImageGallery({ images, venueName }: ImageGalleryProps) {
           <>
             <button
               onClick={() => setSelectedIndex(selectedIndex === 0 ? images.length - 1 : selectedIndex - 1)}
-              className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-900 p-3 rounded-full shadow-lg transition-all opacity-0 group-hover:opacity-100"
+              className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-900 p-3 rounded-full shadow-lg transition-all"
               aria-label="Previous image"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -86,7 +86,7 @@ export function ImageGallery({ images, venueName }: ImageGalleryProps) {
             </button>
             <button
               onClick={() => setSelectedIndex(selectedIndex === images.length - 1 ? 0 : selectedIndex + 1)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-900 p-3 rounded-full shadow-lg transition-all opacity-0 group-hover:opacity-100"
+              className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-900 p-3 rounded-full shadow-lg transition-all"
               aria-label="Next image"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -95,31 +95,25 @@ export function ImageGallery({ images, venueName }: ImageGalleryProps) {
             </button>
           </>
         )}
-      </div>
 
-      {/* Thumbnail Strip */}
-      {images.length > 1 && (
-        <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
-          {images.map((image, index) => (
-            <button
-              key={index}
-              onClick={() => setSelectedIndex(index)}
-              className={`relative flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${
-                selectedIndex === index
-                  ? 'border-primary ring-2 ring-primary/20'
-                  : 'border-transparent hover:border-gray-300'
-              }`}
-            >
-              <Image
-                src={image}
-                alt={`Thumbnail ${index + 1}`}
-                fill
-                className="object-cover"
+        {/* Dot Indicators */}
+        {images.length > 1 && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5">
+            {images.map((_, index) => (
+              <button
+                key={index}
+                onClick={() => setSelectedIndex(index)}
+                className={`rounded-full transition-all duration-200 ${
+                  selectedIndex === index
+                    ? 'bg-white w-4 h-2'
+                    : 'bg-white/60 w-2 h-2 hover:bg-white/80'
+                }`}
+                aria-label={`Go to image ${index + 1}`}
               />
-            </button>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Lightbox Modal */}
       {showLightbox && (

@@ -178,6 +178,10 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
   if (venue.image_url) {
     venueImages.push(venue.image_url)
   }
+  const galleryImages = Array.isArray(venue.metadata?.gallery_images)
+    ? venue.metadata.gallery_images.filter((image: unknown): image is string => typeof image === 'string' && image.length > 0)
+    : []
+  venueImages.push(...galleryImages)
   venueImages.push(...allCourtImages)
 
   // The ImageGallery component handles the empty state directly with a placeholder
