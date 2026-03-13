@@ -311,7 +311,7 @@ export function NearbyQueues() {
 
                   {/* Glass CTA button - full width */}
                   <Link
-                    href={`/queue/${queue.courtId}`}
+                    href={`/queue/${queue.id}`}
                     className="flex items-center justify-center gap-1 w-full py-1.5 rounded-full text-[11px] font-bold text-white border border-white/20 backdrop-blur-md transition-all duration-200 hover:border-white/30 hover:shadow-lg hover:shadow-teal-700/20"
                     style={{
                       background: isUpcoming && !isOpen
