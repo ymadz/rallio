@@ -72,26 +72,39 @@ export async function getQueueDetails(courtId: string) {
       return { success: false, error: 'User not authenticated' }
     }
 
-    // Find queue session for this court.
-    // Include pending_payment so organizers can still access management controls,
-    // while player visibility remains gated below.
-    const { data: session, error: sessionError } = await supabase
-      .from('queue_sessions')
-      .select(`
-        *,
-        courts (
-          name,
-          venues (
-            id,
-            name
-          )
+    // Resolve by queue session ID first (for legacy links/notifications),
+    // then fall back to the latest session by court ID.
+    const baseSessionSelect = `
+      *,
+      courts (
+        name,
+        venues (
+          id,
+          name
         )
-      `)
-      .eq('court_id', courtId)
+      )
+    `
+
+    let { data: session, error: sessionError } = await supabase
+      .from('queue_sessions')
+      .select(baseSessionSelect)
+      .eq('id', courtId)
       .in('status', ['pending_payment', 'open', 'active'])
-      .order('created_at', { ascending: false })
-      .limit(1)
       .maybeSingle()
+
+    if (!session && !sessionError) {
+      const fallback = await supabase
+        .from('queue_sessions')
+        .select(baseSessionSelect)
+        .eq('court_id', courtId)
+        .in('status', ['pending_payment', 'open', 'active'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      session = fallback.data as any
+      sessionError = fallback.error
+    }
 
     if (sessionError) {
       console.error('[getQueueDetails] ❌ Database error:', sessionError)
@@ -169,7 +182,7 @@ export async function getQueueDetails(courtId: string) {
         console.error('[getQueueDetails] ❌ Failed to auto-close session:', closeError)
       } else {
         // Revalidate to ensure UI updates immediately
-        revalidatePath(`/queue/${courtId}`)
+        revalidatePath(`/queue/${session.court_id}`)
         revalidatePath('/queue')
       }
 
