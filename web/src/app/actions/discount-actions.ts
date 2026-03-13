@@ -441,19 +441,21 @@ export async function calculateApplicableDiscounts(
 
     // 3. Check for Promo Code
     if (input.promoCode) {
-      // Use service client for checking promo codes since anonymous users might be checking out
-      // or to ensure we can check usages properly without RLS blocking edge cases
-      // although RLS "Active promo codes are viewable by everyone" should suffice.
-      const { data: promoData } = await supabase
+      const { data: promoCodes } = await supabase
         .from('promo_codes')
         .select('*')
         .eq('code', input.promoCode.toUpperCase())
         .eq('is_active', true)
-        .single();
+        .or(`venue_id.eq.${input.venueId},venue_id.is.null`);
+
+      const promoData = promoCodes?.find((p) => p.venue_id === input.venueId)
+        || promoCodes?.find((p) => p.venue_id === null);
 
       if (promoData) {
-        const nowStr = new Date().toISOString();
-        const isValidDate = promoData.valid_from <= nowStr && promoData.valid_until >= nowStr;
+        const now = new Date();
+        const validFrom = promoData.valid_from ? new Date(promoData.valid_from) : null;
+        const validUntil = promoData.valid_until ? new Date(promoData.valid_until) : null;
+        const isValidDate = (!validFrom || now >= validFrom) && (!validUntil || now <= validUntil);
         const isValidVenue = !promoData.venue_id || promoData.venue_id === input.venueId;
         const hasUsesLeft = promoData.max_uses === null || promoData.current_uses < promoData.max_uses;
 
@@ -466,7 +468,7 @@ export async function calculateApplicableDiscounts(
             value: Number(promoData.discount_value),
             maxAmount: promoData.max_discount_amount ? Number(promoData.max_discount_amount) : undefined,
             isIncrease: false,
-            priority: 200, // Promo codes apply first or with highest priority (customizable)
+            priority: -100, // Promo codes apply after venue discounts/surcharges
           });
         }
       }

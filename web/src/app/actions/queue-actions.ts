@@ -1253,7 +1253,8 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
             total_with_fee: totalAmountPerSlot,
             intended_payment_method: data.paymentMethod,
             down_payment_percentage: data.paymentMethod === 'cash' ? downPaymentPercentage : undefined,
-            down_payment_amount: downPaymentAmount
+            down_payment_amount: downPaymentAmount,
+            promo_code: data.promoCode || undefined
           },
           notes: `Queue Session (${data.mode}) - ${sessionStart.toLocaleDateString()}${data.paymentMethod === 'cash' ? ' (Cash Payment)' : ''}`,
         })
@@ -1366,42 +1367,8 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
       console.error('[createQueueSession] ⚠️ Failed to send notifications (non-critical):', notificationError)
     }
 
-    // 8.5 APPLY PROMO CODE USAGE
-    if (data.promoCode && createdSessions.length > 0) {
-      try {
-        const adminDb = createServiceClient()
-        // Get the promo code ID from the code string
-        const { data: promoData } = await adminDb
-          .from('promo_codes')
-          .select('id, current_uses')
-          .eq('code', data.promoCode.toUpperCase())
-          .single()
-
-        if (promoData) {
-          // Add usage records for each created reservation
-          const usageRecords = createdSessions.map(session => ({
-            promo_code_id: promoData.id,
-            user_id: user.id,
-            reservation_id: session.reservationId,
-          }))
-
-          const { error: usageError } = await adminDb.from('promo_code_usage').insert(usageRecords)
-          if (usageError) console.error('Error inserting usage records:', usageError)
-
-          // Increment current_uses
-          const { error: updateError } = await adminDb
-            .from('promo_codes')
-            .update({ current_uses: promoData.current_uses + createdSessions.length })
-            .eq('id', promoData.id)
-          if (updateError) console.error('Error updating promo code uses:', updateError)
-
-          console.log(`✅ Applied promo code ${data.promoCode} to ${createdSessions.length} queue sessions`)
-        }
-      } catch (error) {
-        console.error('❌ Failed to record promo code usage:', error)
-        // Don't fail the whole booking if just the tracking fails
-      }
-    }
+    // Promo usage is consumed after successful payment webhook.
+    // We only persist promo_code in reservation metadata here.
 
     // 9. Revalidate paths
     revalidatePath('/queue')

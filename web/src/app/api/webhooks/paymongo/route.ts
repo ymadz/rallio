@@ -321,6 +321,50 @@ async function markReservationPaidAndConfirmed({
   const nowISO = new Date().toISOString()
   console.log('[markReservationPaidAndConfirmed] Timestamp:', nowISO)
 
+  const consumePromoForReservations = async (reservationIds: string[]) => {
+    try {
+      if (!reservationIds.length) return
+
+      const { data: reservationsWithPromo, error } = await supabase
+        .from('reservations')
+        .select('id, user_id, metadata')
+        .in('id', reservationIds)
+
+      if (error || !reservationsWithPromo) {
+        console.warn('[markReservationPaidAndConfirmed] ⚠️ Failed to fetch reservations for promo consumption:', error)
+        return
+      }
+
+      const promoGroups = new Map<string, { userId: string; reservationIds: string[] }>()
+
+      for (const reservation of reservationsWithPromo) {
+        const promoCodeStr = reservation.metadata?.promo_code
+        if (!promoCodeStr || !reservation.user_id) continue
+
+        if (!promoGroups.has(promoCodeStr)) {
+          promoGroups.set(promoCodeStr, { userId: reservation.user_id, reservationIds: [] })
+        }
+
+        promoGroups.get(promoCodeStr)!.reservationIds.push(reservation.id)
+      }
+
+      if (promoGroups.size === 0) return
+
+      const { consumeDeferredPromoCode } = await import('@/app/actions/promo-code-actions')
+
+      for (const [promoCodeStr, group] of promoGroups.entries()) {
+        await consumeDeferredPromoCode(promoCodeStr, group.userId, group.reservationIds)
+      }
+
+      console.log('[markReservationPaidAndConfirmed] ✅ Promo usage consumed:', {
+        promoCodes: Array.from(promoGroups.keys()),
+        reservationCount: reservationIds.length,
+      })
+    } catch (promoErr) {
+      console.error('[markReservationPaidAndConfirmed] ⚠️ Promo usage consume failed (non-critical):', promoErr)
+    }
+  }
+
   // Fetch current reservation state
   let reservationRecord = normalizeReservation(payment.reservations)
   console.log('[markReservationPaidAndConfirmed] Initial reservation record from payment:', {
@@ -498,6 +542,9 @@ async function markReservationPaidAndConfirmed({
         }
       }
 
+      // Consume promo code usage once payment confirms (idempotent in helper)
+      await consumePromoForReservations(updates.map(update => update.id))
+
       // Update the main reservationRecord reference for notifications
       reservationRecord.status = targetStatus
       return // Exit here as we handled everything
@@ -557,6 +604,9 @@ async function markReservationPaidAndConfirmed({
     status: confirmedReservation.status,
     amountPaid: confirmedReservation.amount_paid,
   })
+
+  // Consume promo code usage once payment confirms (idempotent inside helper)
+  await consumePromoForReservations([confirmedReservation.id])
 
   // 🔔 Send notifications to user
   try {

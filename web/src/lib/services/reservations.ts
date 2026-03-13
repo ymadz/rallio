@@ -22,6 +22,7 @@ export async function createReservation(
         recurrenceWeeks?: number
         selectedDays?: number[] // Array of day indices (0-6)
         customDownPaymentAmount?: number
+        promoCode?: string
     }) {
     const recurrenceWeeks = data.recurrenceWeeks || 1
     const selectedDays = data.selectedDays || []
@@ -168,7 +169,8 @@ export async function createReservation(
         startDate: targetSlots[0].start.toISOString(),
         endDate: targetSlots[targetSlots.length - 1].end.toISOString(),
         recurrenceWeeks: recurrenceWeeks,
-        basePrice: totalBasePrice
+        basePrice: totalBasePrice,
+        promoCode: data.promoCode,
     })
 
     const finalTotalAmount = discountResult.finalPrice
@@ -224,7 +226,19 @@ export async function createReservation(
     const venueData = court.venues as any;
     const venueMetadata = venueData ? (Array.isArray(venueData) ? venueData[0]?.metadata : venueData.metadata) : null;
     const downPaymentPercentage = parseFloat(venueMetadata?.down_payment_percentage || '20')
-    const downPaymentAmount = data.paymentMethod === 'cash' ? Math.round((perInstanceAmount * downPaymentPercentage / 100) * 100) / 100 : undefined;
+    const minimumDownPaymentPerSlot = Math.round((perInstanceAmount * downPaymentPercentage / 100) * 100) / 100
+    const hasCustomDownPayment = data.customDownPaymentAmount !== undefined && data.customDownPaymentAmount > 0
+    const customDownPaymentPerSlot = hasCustomDownPayment
+        ? data.customDownPaymentAmount! / targetSlots.length
+        : undefined
+
+    const downPaymentAmount = data.paymentMethod === 'cash'
+        ? Math.round((hasCustomDownPayment
+            ? Math.min(Math.max(customDownPaymentPerSlot!, minimumDownPaymentPerSlot), perInstanceAmount)
+            : minimumDownPaymentPerSlot) * 100) / 100
+        : undefined
+
+    const isCustomDownPayment = data.paymentMethod === 'cash' && hasCustomDownPayment && downPaymentAmount !== minimumDownPaymentPerSlot
 
     for (let i = 0; i < targetSlots.length; i++) {
         const slot = targetSlots[i]
@@ -274,7 +288,8 @@ export async function createReservation(
                     platform_fee_percentage: platformFeeEnabled ? platformFeePercentage : 0,
                     down_payment_percentage: data.paymentMethod === 'cash' ? downPaymentPercentage : undefined,
                     down_payment_amount: data.paymentMethod === 'cash' ? downPaymentAmount : undefined,
-                    is_custom_down_payment: data.paymentMethod === 'cash' && data.customDownPaymentAmount !== undefined && data.customDownPaymentAmount > 0 && downPaymentAmount !== data.customDownPaymentAmount,
+                    is_custom_down_payment: isCustomDownPayment,
+                    promo_code: data.promoCode || undefined,
                     applied_discounts: discountResult.discounts.map(d => ({
                         name: d.name,
                         type: d.type,
