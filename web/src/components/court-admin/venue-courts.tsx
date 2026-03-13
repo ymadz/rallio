@@ -505,40 +505,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
               </div>
 
               {/* Court Photos */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Court Photos <span className="text-xs text-gray-400 font-normal">(optional)</span>
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {pendingImagePreviews.map((preview, index) => (
-                    <div key={index} className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0">
-                      <NextImage src={preview} alt="" fill className="object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => handleRemovePendingImage(index)}
-                        className="absolute top-0.5 right-0.5 bg-red-600 text-white p-0.5 rounded-full hover:bg-red-700"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
-                  <label className="w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 flex-shrink-0 transition-colors">
-                    <ImageIcon className="w-5 h-5 text-gray-400 mb-0.5" />
-                    <span className="text-xs text-gray-500">Add</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => {
-                        Array.from(e.target.files || []).forEach(handleAddPendingImage)
-                        e.target.value = ''
-                      }}
-                    />
-                  </label>
-                </div>
-                <p className="text-xs text-gray-400 mt-1">Max 5MB per image. First image becomes the primary photo.</p>
-              </div>
+              
 
               <div className="flex gap-2 pt-4">
                 <button
@@ -672,60 +639,7 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
               </div>
 
               {/* Court Photos */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Court Photos</label>
-                <div className="flex flex-wrap gap-2">
-                  {editImages.map((image) => (
-                    <div key={image.id} className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0 group">
-                      <NextImage src={image.url} alt={image.alt_text || ''} fill className="object-cover" />
-                      {image.is_primary && (
-                        <div className="absolute bottom-0 left-0 right-0 bg-primary/80 text-white text-center text-xs py-0.5">
-                          Primary
-                        </div>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteEditImage(image)}
-                        className="absolute top-0.5 right-0.5 bg-red-600 text-white p-0.5 rounded-full hover:bg-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
-                  <label className={`w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center flex-shrink-0 transition-colors ${isImageUploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50'}`}>
-                    {isImageUploading ? (
-                      <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
-                    ) : (
-                      <>
-                        <ImageIcon className="w-5 h-5 text-gray-400 mb-0.5" />
-                        <span className="text-xs text-gray-500">Add</span>
-                      </>
-                    )}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      disabled={isImageUploading}
-                      onChange={async (e) => {
-                        const files = Array.from(e.target.files || [])
-                        e.target.value = ''
-                        if (!editingCourt || files.length === 0) return
-                        setIsImageUploading(true)
-                        try {
-                          const result = await uploadCourtImages(editingCourt.id, files, editImages.length)
-                          setEditImages(prev => [...prev, ...result.createdImages])
-                        } catch (err: any) {
-                          alert('Failed to upload image(s): ' + err.message)
-                        } finally {
-                          setIsImageUploading(false)
-                        }
-                      }}
-                    />
-                  </label>
-                </div>
-                <p className="text-xs text-gray-400 mt-1">Max 5MB per image. Hover thumbnail to remove. First image is primary.</p>
-              </div>
+              
 
               <div className="flex gap-2 pt-4">
                 <button
