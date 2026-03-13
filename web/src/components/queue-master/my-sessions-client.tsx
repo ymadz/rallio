@@ -164,6 +164,12 @@ export function MySessionsClient({ initialSessions, initialHistory }: MySessions
                                                     <span>₱{session.costPerGame} / game</span>
                                                 </div>
                                             </div>
+
+                                            {session.status === 'pending_payment' && (
+                                                <p className="mt-2 text-sm text-orange-700 font-medium">
+                                                    Hidden from players until fully paid.
+                                                </p>
+                                            )}
                                         </div>
 
                                         {/* Right Section: Action */}
