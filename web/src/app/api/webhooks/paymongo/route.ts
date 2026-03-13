@@ -292,6 +292,75 @@ function buildStatusHistory(metadata: any, nextStatus: string) {
   return [...existing, nextStatus]
 }
 
+async function markQueueParticipantPaidIfApplicable({
+  supabase,
+  payment,
+}: {
+  supabase: ReturnType<typeof createServiceClient>
+  payment: any
+}) {
+  const paymentType = payment?.metadata?.payment_type
+  const participantId = payment?.metadata?.participant_id
+  const queueSessionId = payment?.metadata?.queue_session_id
+
+  if (paymentType !== 'queue_session' && !participantId) {
+    return
+  }
+
+  if (!participantId) {
+    console.warn('[markQueueParticipantPaidIfApplicable] Missing participant_id for queue payment:', payment?.id)
+    return
+  }
+
+  const { data: participant, error: participantError } = await supabase
+    .from('queue_participants')
+    .select('id, queue_session_id, user_id, amount_owed, payment_status')
+    .eq('id', participantId)
+    .single()
+
+  if (participantError || !participant) {
+    console.warn('[markQueueParticipantPaidIfApplicable] Participant not found:', {
+      participantId,
+      error: participantError,
+    })
+    return
+  }
+
+  if (participant.payment_status === 'paid' && Number(participant.amount_owed || 0) <= 0) {
+    return
+  }
+
+  const { error: updateError } = await supabase
+    .from('queue_participants')
+    .update({
+      payment_status: 'paid',
+      amount_owed: 0,
+    })
+    .eq('id', participant.id)
+
+  if (updateError) {
+    console.error('[markQueueParticipantPaidIfApplicable] Failed to mark participant paid:', updateError)
+    return
+  }
+
+  const effectiveSessionId = participant.queue_session_id || queueSessionId
+  if (!effectiveSessionId) {
+    revalidatePath('/queue')
+    return
+  }
+
+  const { data: queueSession } = await supabase
+    .from('queue_sessions')
+    .select('court_id')
+    .eq('id', effectiveSessionId)
+    .single()
+
+  revalidatePath('/queue')
+  if (queueSession?.court_id) {
+    revalidatePath(`/queue/${queueSession.court_id}`)
+  }
+}
+
 async function markReservationPaidAndConfirmed({
   supabase,
   payment,
@@ -935,6 +1004,11 @@ async function handleSourceChargeable(data: any, eventId?: string) {
       })
       .eq('id', payment.id)
 
+    await markQueueParticipantPaidIfApplicable({
+      supabase,
+      payment,
+    })
+
     await markReservationPaidAndConfirmed({
       supabase,
       payment,
@@ -1140,6 +1214,11 @@ async function handlePaymentPaid(data: any, eventId?: string) {
     payment,
     eventId,
     eventType: 'payment.paid',
+  })
+
+  await markQueueParticipantPaidIfApplicable({
+    supabase,
+    payment,
   })
 
   console.log('✅ payment.paid webhook: Reservation confirmed:', payment.reservation_id)

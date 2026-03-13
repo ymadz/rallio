@@ -80,11 +80,11 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
     getCurrentUser()
   }, [])
 
-  // Fetch participant details when queue loads
+  // Fetch participant details and keep in sync with realtime updates
   useEffect(() => {
-    const fetchParticipant = async () => {
-      if (!queue?.id || !currentUserId) return
+    if (!queue?.id || !currentUserId) return
 
+    const fetchParticipant = async () => {
       try {
         const { data, error } = await supabase
           .from('queue_participants')
@@ -92,17 +92,40 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
           .eq('queue_session_id', queue.id)
           .eq('user_id', currentUserId)
           .is('left_at', null)
-          .single()
+          .maybeSingle()
 
-        if (!error && data) {
-          setParticipant(data)
+        if (error) {
+          console.error('Error fetching participant:', error)
+          return
         }
+
+        setParticipant(data || null)
       } catch (err) {
         console.error('Error fetching participant:', err)
       }
     }
 
     fetchParticipant()
+
+    const participantChannel = supabase
+      .channel(`queue-participant-${queue.id}-${currentUserId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'queue_participants',
+          filter: `queue_session_id=eq.${queue.id}`,
+        },
+        () => {
+          fetchParticipant()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(participantChannel)
+    }
   }, [queue?.id, currentUserId])
 
 
@@ -114,13 +137,13 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
   }
 
   const handleQueuePayment = async (method: 'gcash' | 'paymaya') => {
-    if (!participant) return
+    if (!participant || !queue) return
     setIsInitiatingPayment(true)
     setSelectedPaymentMethod(method)
     setPaymentError(null)
 
     try {
-      const result = await initiateQueuePaymentAction(participant.id, method)
+      const result = await initiateQueuePaymentAction(queue.id, method)
       if (!result.success) {
         setPaymentError(result.error || 'Failed to initiate payment')
         return

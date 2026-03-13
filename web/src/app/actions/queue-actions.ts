@@ -2297,13 +2297,12 @@ export async function markAsPaid(
       return { success: true } // Idempotent - already paid is success
     }
 
-    // 6. Update participant to mark as paid and remove them from the session
+    // 6. Update participant to mark as paid and clear outstanding balance
     const { error: updateError } = await serviceClient
       .from('queue_participants')
       .update({
         payment_status: 'paid',
-        status: 'left',
-        left_at: new Date().toISOString(),
+        amount_owed: 0,
       })
       .eq('id', participantId)
 

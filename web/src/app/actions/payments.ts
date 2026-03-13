@@ -1059,13 +1059,13 @@ export async function processPaymentByReservationAction(reservationId: string): 
  * Creates a payment record for games played in a queue
  */
 export async function initiateQueuePaymentAction(
-  sessionId: string,
+  sessionIdOrParticipantId: string,
   paymentMethod: PaymentMethod,
   userId?: string // Optional: for Queue Masters generating payment for others
 ): Promise<InitiatePaymentResult> {
   console.log('[initiateQueuePaymentAction] 🚀 Starting queue payment initiation')
   console.log('[initiateQueuePaymentAction] Input:', {
-    sessionId,
+    sessionIdOrParticipantId,
     paymentMethod,
     userId,
   })
@@ -1087,24 +1087,43 @@ export async function initiateQueuePaymentAction(
     const targetUserId = userId || user.id
 
     console.log('[initiateQueuePaymentAction] 🔍 Looking for participant:', {
-      sessionId,
+      sessionIdOrParticipantId,
       targetUserId,
       isQueueMaster: userId !== undefined,
     })
 
     // Get participant details (use service client to bypass RLS - Queue Master is not the participant)
     const serviceClient = createServiceClient()
-    const { data: participant, error: participantError } = await serviceClient
+    let participant: any = null
+
+    const { data: participantBySession } = await serviceClient
       .from('queue_participants')
       .select('*')
-      .eq('queue_session_id', sessionId)
+      .eq('queue_session_id', sessionIdOrParticipantId)
       .eq('user_id', targetUserId)
       .single()
 
-    if (participantError || !participant) {
-      console.error('[initiateQueuePaymentAction] ❌ Participant not found:', participantError)
+    if (participantBySession) {
+      participant = participantBySession
+    } else {
+      const { data: participantById } = await serviceClient
+        .from('queue_participants')
+        .select('*')
+        .eq('id', sessionIdOrParticipantId)
+        .eq('user_id', targetUserId)
+        .single()
+
+      if (participantById) {
+        participant = participantById
+      }
+    }
+
+    if (!participant) {
+      console.error('[initiateQueuePaymentAction] ❌ Participant not found for identifier:', sessionIdOrParticipantId)
       return { success: false, error: 'Participant not found in this session' }
     }
+
+    const sessionId = participant.queue_session_id
 
     // Get queue session details with court and venue info (use service client to bypass RLS)
     const { data: queueSession, error: sessionError } = await serviceClient
@@ -1162,7 +1181,7 @@ export async function initiateQueuePaymentAction(
 
     // Generate success/failed URLs
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    const successUrl = `${baseUrl}/queue/payment/success?session=${sessionId}`
+    const successUrl = `${baseUrl}/queue/payment/success?session=${sessionId}&participant=${participant.id}`
     const failedUrl = `${baseUrl}/queue/payment/failed?session=${sessionId}`
 
     let checkoutUrl: string
