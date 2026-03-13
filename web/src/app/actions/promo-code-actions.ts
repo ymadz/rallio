@@ -313,7 +313,8 @@ export async function validatePromoCode(
 export async function consumeDeferredPromoCode(
     promoCodeStr: string,
     userId: string,
-    reservationIds: string[]
+    reservationIds: string[],
+    venueId?: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
         if (!promoCodeStr || !userId || reservationIds.length === 0) return { success: true }
@@ -322,18 +323,24 @@ export async function consumeDeferredPromoCode(
         const { createServiceClient } = await import('@/lib/supabase/service')
         const adminDb = createServiceClient()
 
-        // Find the promo code
-        const { data: promoData, error: fetchError } = await adminDb
+        // Find promo code candidates (same code may exist as venue-specific + platform-wide)
+        const { data: promoCandidates, error: fetchError } = await adminDb
             .from('promo_codes')
-            .select('id, current_uses')
+            .select('id, current_uses, venue_id')
             .eq('code', promoCodeStr.toUpperCase())
-            .order('venue_id', { ascending: false })
-            .limit(1)
-            .single()
+            .eq('is_active', true)
 
-        if (fetchError || !promoData) {
+        if (fetchError || !promoCandidates || promoCandidates.length === 0) {
             console.error('[consumeDeferredPromoCode] Promo code not found for consumption:', promoCodeStr)
             return { success: false, error: 'Promo code not found' }
+        }
+
+        let promoData = venueId
+            ? promoCandidates.find((p: any) => p.venue_id === venueId)
+            : undefined
+
+        if (!promoData) {
+            promoData = promoCandidates.find((p: any) => p.venue_id === null) || promoCandidates[0]
         }
 
         // Ensure we haven't already inserted for these reservations to prevent double consumption

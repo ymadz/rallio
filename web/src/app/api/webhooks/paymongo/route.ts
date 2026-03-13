@@ -327,7 +327,7 @@ async function markReservationPaidAndConfirmed({
 
       const { data: reservationsWithPromo, error } = await supabase
         .from('reservations')
-        .select('id, user_id, metadata')
+        .select('id, user_id, metadata, court_id')
         .in('id', reservationIds)
 
       if (error || !reservationsWithPromo) {
@@ -335,25 +335,43 @@ async function markReservationPaidAndConfirmed({
         return
       }
 
-      const promoGroups = new Map<string, { userId: string; reservationIds: string[] }>()
+      const courtIds = Array.from(new Set(reservationsWithPromo.map((r: any) => r.court_id).filter(Boolean)))
+      const courtVenueMap = new Map<string, string>()
+
+      if (courtIds.length > 0) {
+        const { data: courts } = await supabase
+          .from('courts')
+          .select('id, venue_id')
+          .in('id', courtIds)
+
+        courts?.forEach((court: any) => {
+          if (court.id && court.venue_id) courtVenueMap.set(court.id, court.venue_id)
+        })
+      }
+
+      const promoGroups = new Map<string, { userId: string; reservationIds: string[]; venueId?: string }>()
 
       for (const reservation of reservationsWithPromo) {
         const promoCodeStr = reservation.metadata?.promo_code
         if (!promoCodeStr || !reservation.user_id) continue
 
-        if (!promoGroups.has(promoCodeStr)) {
-          promoGroups.set(promoCodeStr, { userId: reservation.user_id, reservationIds: [] })
+        const venueId = reservation.court_id ? courtVenueMap.get(reservation.court_id) : undefined
+        const groupKey = `${promoCodeStr}::${venueId || 'platform'}`
+
+        if (!promoGroups.has(groupKey)) {
+          promoGroups.set(groupKey, { userId: reservation.user_id, reservationIds: [], venueId })
         }
 
-        promoGroups.get(promoCodeStr)!.reservationIds.push(reservation.id)
+        promoGroups.get(groupKey)!.reservationIds.push(reservation.id)
       }
 
       if (promoGroups.size === 0) return
 
       const { consumeDeferredPromoCode } = await import('@/app/actions/promo-code-actions')
 
-      for (const [promoCodeStr, group] of promoGroups.entries()) {
-        await consumeDeferredPromoCode(promoCodeStr, group.userId, group.reservationIds)
+      for (const [groupKey, group] of promoGroups.entries()) {
+        const promoCodeStr = groupKey.split('::')[0]
+        await consumeDeferredPromoCode(promoCodeStr, group.userId, group.reservationIds, group.venueId)
       }
 
       console.log('[markReservationPaidAndConfirmed] ✅ Promo usage consumed:', {
@@ -440,6 +458,10 @@ async function markReservationPaidAndConfirmed({
         console.log('[markReservationPaidAndConfirmed] ✅ Amount synced successfully')
       }
     }
+
+    // Ensure promo usage is consumed even if reservation was already confirmed by another path
+    await consumePromoForReservations([reservationId])
+
     console.log('[markReservationPaidAndConfirmed] ✅ Reservation already confirmed:', reservationId)
     return
   }
