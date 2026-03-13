@@ -47,228 +47,374 @@ export default async function ProfilePage() {
   // Format member since date
   const memberSince = profile?.created_at ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Unknown'
 
+  // Get recent completed matches where user was a participant
+  const { data: recentMatches } = await supabase
+    .from('matches')
+    .select('id, score_a, score_b, winner, completed_at, game_format, team_a_players, team_b_players, courts(name, venues(name))')
+    .or(`team_a_players.cs.{${user?.id}},team_b_players.cs.{${user?.id}}`)
+    .eq('status', 'completed')
+    .order('completed_at', { ascending: false })
+    .limit(5)
+
   return (
-    <div className="min-h-screen bg-white">
-      {/* Header */}
+    <div className="min-h-screen bg-gray-50">
+      <style>{`
+        @keyframes pb-shimmer {
+          0%, 100% { opacity: 0; }
+          50% { opacity: 1; }
+        }
+        .pb-banner { position: relative; overflow: hidden; }
+        .pb-noise {
+          position: absolute; inset: 0; pointer-events: none; z-index: 1;
+          opacity: 0.055;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+          background-size: 150px 150px;
+          mix-blend-mode: overlay;
+        }
+        .pb-highlight {
+          position: absolute; inset: 0; pointer-events: none; z-index: 2;
+          background: linear-gradient(135deg, rgba(204,251,241,0.16) 0%, rgba(153,246,228,0.06) 30%, transparent 55%, rgba(0,0,0,0.06) 100%);
+        }
+        .pb-shimmer {
+          position: absolute; top: -20%; left: -30%; width: 80%; height: 160%;
+          pointer-events: none; z-index: 3;
+          background: linear-gradient(125deg, transparent 30%, rgba(255,255,255,0.05) 48%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.05) 52%, transparent 70%);
+          transform: rotate(-15deg);
+          animation: pb-shimmer 5s ease-in-out infinite;
+        }
+        /* Stats card — same glass system as MatchStatsCard */
+        .pf-stats-card {
+          position: relative; overflow: hidden;
+          border-radius: 1.25rem;
+          border: 1px solid #e5e7eb;
+          
+        }
+        .pf-stats-header { position: relative; overflow: hidden; border-radius: 1.25rem; }
+        .pf-stats-noise {
+          position: absolute; inset: 0; pointer-events: none; z-index: 1; opacity: 0.055;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='pf'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23pf)' opacity='1'/%3E%3C/svg%3E");
+          background-size: 150px 150px; mix-blend-mode: overlay;
+        }
+        .pf-stats-highlight {
+          position: absolute; inset: 0; pointer-events: none; z-index: 2;
+          background: linear-gradient(135deg, rgba(204,251,241,0.18) 0%, rgba(153,246,228,0.06) 30%, transparent 55%, rgba(0,0,0,0.04) 100%);
+        }
+        .pf-stats-shimmer {
+          position: absolute; top: -20%; left: -60%; width: 80%; height: 140%;
+          pointer-events: none; z-index: 3;
+          background: linear-gradient(125deg, transparent 30%, rgba(255,255,255,0.05) 48%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.05) 52%, transparent 70%);
+          transform: rotate(-15deg);
+          animation: pf-stats-shimmer 4s ease-in-out infinite;
+        }
+        @keyframes pf-stats-shimmer {
+          0%, 100% { opacity: 0; left: -60%; }
+          50% { opacity: 1; left: 60%; }
+        }
+      `}</style>
 
+      {/* Hero Banner */}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-4">
+        <div
+          className="pb-banner h-48 rounded-2xl"
+          style={{ background: [
+            'radial-gradient(ellipse 90% 80% at 50% 4%, rgba(153,246,228,0.50) 0%, transparent 55%)',
+            'radial-gradient(ellipse 68% 80% at 5% 80%, rgba(13,148,136,0.26) 0%, transparent 56%)',
+            'radial-gradient(ellipse 68% 80% at 95% 78%, rgba(13,148,136,0.22) 0%, transparent 56%)',
+            'linear-gradient(180deg, #14b8a6 0%, #0d9488 40%, #0f766e 100%)',
+          ].join(', ') }}
+        >
+          <div className="pb-noise" />
+          <div className="pb-highlight" />
+          <div className="pb-shimmer" />
+        </div>
+      </div>
 
-      {/* Profile Content */}
-      <div className="max-w-7xl mx-auto p-6 bg-gray-50 min-h-screen">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Column - User Info & Stats */}
-          <div className="lg:col-span-4 space-y-6">
-            {/* User Info Card */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <div className="flex flex-col items-center text-center mb-6">
-                <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4 overflow-hidden">
-                  {profile?.avatar_url ? (
-                    <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-3xl font-medium text-gray-400">
-                      {fullName.charAt(0)}
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <h2 className="text-xl font-bold text-gray-900">{fullName}</h2>
-                    {player?.verified_player && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                        </svg>
-                        Verified
-                      </span>
-                    )}
-                  </div>
-                  {profile?.display_name && profile.display_name !== fullName && (
-                    <p className="text-sm text-gray-500 mb-1">@{profile.display_name}</p>
-                  )}
-                  <p className="text-sm text-gray-500">Plays in Zamboanga City, Philippines</p>
-                  <p className="text-xs text-gray-400 mt-1">Member since {memberSince}</p>
-                </div>
-                <div className="flex gap-2 mt-4 w-full">
-                  <Link
-                    href="/profile/edit"
-                    className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 font-medium text-center"
-                  >
-                    Edit Profile
-                  </Link>
-                  <Link
-                    href="/settings"
-                    className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 font-medium text-center"
-                  >
-                    Settings
-                  </Link>
-                </div>
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-12">
+        {/* Avatar + Name Row */}
+        <div className="relative z-10 -mt-14 mb-6 flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-5">
+          <div className="w-32 h-32 rounded-full ring-4 ring-white bg-white flex items-center justify-center overflow-hidden flex-shrink-0 sm:translate-x-[15%]">
+            {profile?.avatar_url ? (
+              <img src={profile.avatar_url} alt={fullName} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-5xl font-bold text-gray-300 select-none">{fullName.charAt(0)}</span>
+            )}
+          </div>
+          <div className="pb-1 flex flex-1 items-end justify-between gap-4 flex-wrap">
+            <div className="sm:translate-x-[5%]">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-2xl font-bold text-gray-900">{fullName}</h1>
+                {player?.verified_player && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-200">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    Verified
+                  </span>
+                )}
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold tracking-wide border ${
+                  !player?.skill_level
+                    ? 'bg-gray-100 text-gray-500 border-gray-200'
+                    : player.skill_level <= 3
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : player.skill_level <= 6
+                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                    : player.skill_level <= 8
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : 'bg-purple-50 text-purple-700 border-purple-200'
+                }`}>
+                  {getSkillTier(player?.skill_level || null)}
+                </span>
               </div>
+              {profile?.display_name && profile.display_name !== fullName && (
+                <p className="text-sm text-gray-500 mt-0.5">@{profile.display_name}</p>
+              )}
+              <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+                <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Zamboanga City · Member since {memberSince}
+              </p>
             </div>
-
-            {/* Statistics Card */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h3 className="font-semibold text-gray-900 mb-4">Statistics</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-50 rounded-lg p-4 text-center">
-                  <p className="text-2xl font-bold text-gray-900">{totalGames}</p>
-                  <p className="text-xs text-gray-500 mt-1">Games Played</p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4 text-center">
-                  <p className="text-2xl font-bold text-green-600">{wins}</p>
-                  <p className="text-xs text-gray-500 mt-1">Wins</p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4 text-center">
-                  <p className="text-2xl font-bold text-red-600">{losses}</p>
-                  <p className="text-xs text-gray-500 mt-1">Losses</p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4 text-center">
-                  <p className="text-2xl font-bold text-primary">{winRate}%</p>
-                  <p className="text-xs text-gray-500 mt-1">Win Rate</p>
-                </div>
-              </div>
+            <div className="flex gap-2">
+              <Link
+                href="/profile/edit"
+                className="px-4 py-2 text-sm border border-gray-300 bg-white rounded-lg hover:bg-gray-50 text-gray-700 font-medium"
+              >
+                Edit Profile
+              </Link>
+              <Link
+                href="/settings"
+                className="px-4 py-2 text-sm border border-gray-300 bg-white rounded-lg hover:bg-gray-50 text-gray-700 font-medium"
+              >
+                Settings
+              </Link>
             </div>
+          </div>
+        </div>
 
-            {/* Skill & Rating Card */}
+        {/* Stats Strip */}
+        <div className="bg-white rounded-xl border border-gray-200 mb-6 grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-gray-100">
+          <div className="p-5 text-center">
+            <p className="text-3xl font-extrabold text-gray-900 tabular-nums">{totalGames}</p>
+            <p className="text-[11px] text-gray-400 mt-1 uppercase tracking-widest font-semibold">Games</p>
+          </div>
+          <div className="p-5 text-center">
+            <p className="text-3xl font-extrabold text-emerald-600 tabular-nums">{wins}</p>
+            <p className="text-[11px] text-gray-400 mt-1 uppercase tracking-widest font-semibold">Wins</p>
+          </div>
+          <div className="p-5 text-center">
+            <p className="text-3xl font-extrabold text-red-500 tabular-nums">{losses}</p>
+            <p className="text-[11px] text-gray-400 mt-1 uppercase tracking-widest font-semibold">Losses</p>
+          </div>
+          <div className="p-5 text-center">
+            <p className="text-3xl font-extrabold text-primary tabular-nums">{winRate}%</p>
+            <p className="text-[11px] text-gray-400 mt-1 uppercase tracking-widest font-semibold">Win Rate</p>
+          </div>
+        </div>
+
+        {/* Main Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          {/* Left Column */}
+          <div className="lg:col-span-4 space-y-5">
+
+            {/* Skill & Rating */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h3 className="font-semibold text-gray-900 mb-4">Skill & Rating</h3>
-              <div className="space-y-3">
+              <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">Skill & Rating</h3>
+              <div className="space-y-4">
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm text-gray-600">Skill Level</span>
                     <span className="text-sm font-bold text-gray-900">
-                      {player?.skill_level ? `${player.skill_level}/10` : 'Unranked'}
+                      {player?.skill_level ? `${player.skill_level} / 10` : 'Unranked'}
                     </span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
                     <div
-                      className={`h-2 rounded-full transition-all ${!player?.skill_level ? 'bg-gray-300' : 'bg-primary'}`}
+                      className={`h-2.5 rounded-full transition-all duration-500 ${
+                        !player?.skill_level
+                          ? 'bg-gray-300'
+                          : player.skill_level <= 3
+                          ? 'bg-emerald-500'
+                          : player.skill_level <= 6
+                          ? 'bg-blue-500'
+                          : player.skill_level <= 8
+                          ? 'bg-amber-500'
+                          : 'bg-purple-500'
+                      }`}
                       style={{ width: `${player?.skill_level ? (player.skill_level / 10) * 100 : 0}%` }}
                     />
                   </div>
                 </div>
-                <div className="pt-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-600">ELO Rating</span>
-                    <span className="text-sm font-bold text-gray-900">{player?.rating || '-'}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${!player?.skill_level ? 'bg-gray-100 text-gray-600' :
-                      player.skill_level <= 3 ? 'bg-green-100 text-green-800' :
-                        player.skill_level <= 6 ? 'bg-blue-100 text-blue-800' :
-                          player.skill_level <= 8 ? 'bg-amber-100 text-amber-800' :
-                            'bg-purple-100 text-purple-800'
-                      }`}>
-                      {getSkillTier(player?.skill_level || null)}
-                    </span>
-                  </div>
+                <div className="flex items-center justify-between pt-1 border-t border-gray-100">
+                  <span className="text-sm text-gray-600">ELO Rating</span>
+                  <span className="text-lg font-bold text-gray-900 tabular-nums">{player?.rating ?? '—'}</span>
                 </div>
-
                 {player?.average_rating && (
-                  <div className="pt-2 border-t border-gray-100">
+                  <div className="flex items-center justify-between pt-1 border-t border-gray-100">
+                    <span className="text-sm text-gray-600">Player Rating</span>
                     <div className="flex items-center gap-1">
-                      <span className="text-sm text-gray-600">Average Rating:</span>
-                      <div className="flex items-center gap-1">
-                        <svg className="w-4 h-4 text-yellow-400 fill-current" viewBox="0 0 20 20">
-                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                        </svg>
-                        <span className="text-sm font-semibold text-gray-900">{player.average_rating.toFixed(1)}</span>
-                      </div>
+                      <svg className="w-4 h-4 text-yellow-400 fill-current" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                      <span className="text-sm font-bold text-gray-900">{player.average_rating.toFixed(1)}</span>
                     </div>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Personal Info Card */}
+            {/* Personal Info */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h3 className="font-semibold text-gray-900 mb-4">Personal Information</h3>
-              <div className="space-y-3 text-sm">
+              <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">Personal Info</h3>
+              <div className="space-y-3">
                 {profile?.email && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Email</span>
-                    <span className="text-gray-900">{profile.email}</span>
+                  <div className="flex items-center gap-3 text-sm">
+                    <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    <span className="text-gray-600 truncate">{profile.email}</span>
                   </div>
                 )}
                 {profile?.phone && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Phone</span>
-                    <span className="text-gray-900">{profile.phone}</span>
+                  <div className="flex items-center gap-3 text-sm">
+                    <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                    </svg>
+                    <span className="text-gray-600">{profile.phone}</span>
                   </div>
                 )}
                 {player?.birth_date && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Birth Date</span>
-                    <span className="text-gray-900">{new Date(player.birth_date).toLocaleDateString()}</span>
+                  <div className="flex items-center gap-3 text-sm">
+                    <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span className="text-gray-600">
+                      {new Date(player.birth_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                    </span>
                   </div>
                 )}
                 {player?.gender && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Gender</span>
-                    <span className="text-gray-900 capitalize">{player.gender}</span>
+                  <div className="flex items-center gap-3 text-sm">
+                    <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <span className="text-gray-600 capitalize">{player.gender}</span>
                   </div>
+                )}
+                {!profile?.email && !profile?.phone && !player?.birth_date && !player?.gender && (
+                  <p className="text-sm text-gray-400 text-center py-2">No personal info added yet</p>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Right Column - Bio, Play Styles, Recent Activity */}
-          <div className="lg:col-span-8 space-y-6">
+          {/* Right Column */}
+          <div className="lg:col-span-8 space-y-5">
             {/* Bio */}
             {player?.bio && (
               <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h3 className="font-semibold text-gray-900 mb-3">About</h3>
+                <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">About</h3>
                 <p className="text-gray-600 text-sm leading-relaxed">{player.bio}</p>
               </div>
             )}
 
             {/* Play Styles */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h3 className="font-semibold text-gray-900 mb-4">Play Styles</h3>
-              <div className="flex flex-wrap gap-2">
-                {playStyles.length > 0 ? (
-                  playStyles.map((style: string) => (
+              <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">Play Styles</h3>
+              {playStyles.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {playStyles.map((style: string) => (
                     <span
                       key={style}
-                      className="px-3 py-1.5 bg-primary/10 text-primary text-sm font-medium rounded-full"
+                      className="px-3 py-1.5 bg-primary/10 text-primary text-sm font-semibold rounded-full border border-primary/20"
                     >
                       {style.trim()}
                     </span>
-                  ))
-                ) : (
-                  <div className="text-center w-full py-8">
-                    <p className="text-gray-400 text-sm mb-3">No play styles set yet</p>
-                    <Link
-                      href="/profile/edit"
-                      className="inline-block px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary/90"
-                    >
-                      Add Play Styles
-                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center py-8 text-center">
+                  <div className="w-11 h-11 bg-gray-100 rounded-full flex items-center justify-center mb-3">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
                   </div>
-                )}
-              </div>
+                  <p className="text-gray-500 text-sm mb-1">No play styles set yet</p>
+                  <Link href="/profile/edit" className="text-xs text-primary font-semibold hover:underline mt-1">
+                    Add Play Styles →
+                  </Link>
+                </div>
+              )}
             </div>
 
             {/* Recent Matches */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h3 className="font-semibold text-gray-900 mb-4">Recent Matches</h3>
-              <div className="text-center py-12">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
+              <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">Recent Matches</h3>
+              {recentMatches && recentMatches.length > 0 ? (
+                <div className="space-y-2">
+                  {recentMatches.map((match) => {
+                    const isTeamA = (match.team_a_players as string[]).includes(user?.id ?? '')
+                    const userWon = isTeamA ? match.winner === 'team_a' : match.winner === 'team_b'
+                    const isDraw = match.winner === 'draw'
+                    const courtName = (match.courts as { name: string | null; venues: { name: string } | null } | null)?.name
+                    const venueName = (match.courts as { name: string | null; venues: { name: string } | null } | null)?.venues?.name
+                    const displayPlace = courtName ?? venueName ?? 'Unknown Court'
+                    const scoreDisplay = match.score_a != null && match.score_b != null
+                      ? isTeamA ? `${match.score_a} – ${match.score_b}` : `${match.score_b} – ${match.score_a}`
+                      : null
+                    const matchDate = match.completed_at
+                      ? new Date(match.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                      : 'Unknown date'
+                    const resultLabel = isDraw ? 'DRAW' : userWon ? 'WIN' : 'LOSS'
+                    const badgeStyle = isDraw
+                      ? 'bg-gray-100 text-gray-600 border-gray-200'
+                      : userWon
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-red-50 text-red-600 border-red-200'
+                    const borderStyle = isDraw ? 'border-l-gray-300' : userWon ? 'border-l-emerald-500' : 'border-l-red-400'
+
+                    return (
+                      <div key={match.id} className={`flex items-center justify-between px-4 py-3 rounded-lg bg-gray-50 border-l-4 ${borderStyle}`}>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-[10px] font-bold tracking-widest px-2 py-0.5 rounded border flex-shrink-0 ${badgeStyle}`}>
+                            {resultLabel}
+                          </span>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">
+                              {match.game_format === 'singles' ? 'Singles' : 'Doubles'}
+                            </p>
+                            <p className="text-xs text-gray-500">{displayPlace} · {matchDate}</p>
+                          </div>
+                        </div>
+                        {scoreDisplay && (
+                          <span className="text-base font-bold text-gray-800 tabular-nums">{scoreDisplay}</span>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
-                <p className="text-gray-500 text-sm mb-3">No match history yet</p>
-                <p className="text-gray-400 text-xs mb-4">Join a queue to start playing!</p>
-                <Link
-                  href="/queue"
-                  className="inline-block px-6 py-2.5 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium text-sm"
-                >
-                  Join Queue
-                </Link>
-              </div>
+              ) : (
+                <div className="flex flex-col items-center py-10 text-center">
+                  <div className="w-11 h-11 bg-gray-100 rounded-full flex items-center justify-center mb-3">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                  </div>
+                  <p className="text-gray-500 text-sm font-medium mb-1">No match history yet</p>
+                  <p className="text-gray-400 text-xs mb-4">Join a queue to start playing!</p>
+                  <Link
+                    href="/queue"
+                    className="px-5 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium text-sm"
+                  >
+                    Join Queue
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
-    </div >
+    </div>
   )
 }
