@@ -96,22 +96,59 @@ export function MatchCard({ match }: MatchCardProps) {
         <div className={`relative flex-1 p-4 sm:p-5 overflow-hidden ${isWin ? 'bg-gradient-to-r from-primary/30 via-primary/10 to-transparent' : ''}`}>
           {isWin && <Confetti />}
           <p className="relative text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-3">Your Team</p>
-          <div className="relative space-y-3">
-            {userTeamPlayers.map((player) => (
-              <div key={player.id} className="flex items-center gap-3">
-                <Avatar
-                  src={player.avatarUrl}
-                  name={player.name}
-                  size={player.id === 'self' ? 44 : 38}
-                />
-                <div className="min-w-0">
-                  <p className={`truncate ${player.id === 'self' ? 'text-base font-semibold text-gray-900' : 'text-sm font-medium text-gray-700'}`}>
-                    {player.name}
-                  </p>
+          
+          {match.eloGain !== null && match.eloGain !== undefined ? (
+            <div className="flex items-center gap-4">
+              {/* Player list */}
+              <div className="relative space-y-3 flex-1">
+                {userTeamPlayers.map((player) => (
+                  <div key={player.id} className="flex items-center gap-3">
+                    <Avatar
+                      src={player.avatarUrl}
+                      name={player.name}
+                      size={player.id === 'self' ? 44 : 38}
+                    />
+                    <div className="min-w-0">
+                      <p className={`truncate ${player.id === 'self' ? 'text-base font-semibold text-gray-900' : 'text-sm font-medium text-gray-700'}`}>
+                        {player.name}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {/* ELO badge on the right - color changes based on win/loss */}
+              <div className="flex items-center h-full shrink-0">
+                <div className={`inline-flex items-center gap-2 border px-3 py-2 rounded-lg ${
+                  isWin 
+                    ? 'bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200 animate-bounce' 
+                    : 'bg-gradient-to-r from-red-50 to-orange-50 border-red-200 animate-pulse'
+                }`}>
+                  <span className={`font-bold text-sm ${isWin ? 'text-emerald-700' : 'text-red-700'}`}>ELO</span>
+                  <span className={`font-bold text-sm ${isWin ? 'text-emerald-700' : 'text-red-700'}`}>
+                    {match.eloGain > 0 ? '+' : ''}{match.eloGain}
+                  </span>
                 </div>
               </div>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <div className="relative space-y-3">
+              {userTeamPlayers.map((player) => (
+                <div key={player.id} className="flex items-center gap-3">
+                  <Avatar
+                    src={player.avatarUrl}
+                    name={player.name}
+                    size={player.id === 'self' ? 44 : 38}
+                  />
+                  <div className="min-w-0">
+                    <p className={`truncate ${player.id === 'self' ? 'text-base font-semibold text-gray-900' : 'text-sm font-medium text-gray-700'}`}>
+                      {player.name}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Center scoreboard */}

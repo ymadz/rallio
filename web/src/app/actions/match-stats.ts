@@ -20,6 +20,7 @@ export interface MatchWithDetails {
   status: string
   startedAt: string | null
   completedAt: string | null
+  metadata?: Record<string, any>
   queueSession: {
     id: string
     sessionDate: string
@@ -42,6 +43,7 @@ export interface MatchWithDetails {
   userTeam: 'team_a' | 'team_b' | null
   userWon: boolean | null
   userAvatarUrl: string | null
+  eloGain: number | null
   opponents: PlayerDetail[]
   teammates: PlayerDetail[]
   opponentNames: string[]
@@ -85,6 +87,7 @@ export async function getPlayerMatchHistory(
         status,
         started_at,
         completed_at,
+        metadata,
         queue_session_id,
         court_id
       `)
@@ -232,6 +235,11 @@ export async function getPlayerMatchHistory(
           venue: resolvedCourt.venue,
         } : null
 
+        // Extract ELO gain for current user from metadata
+        const ratingChanges = (match.metadata?.ratingChanges as Record<string, any>) || {}
+        const userRatingChange = ratingChanges[userId]
+        const eloGain = userRatingChange?.diff ? Math.round(userRatingChange.diff) : null
+
         return {
           id: match.id,
           matchNumber: match.match_number,
@@ -244,11 +252,13 @@ export async function getPlayerMatchHistory(
           status: match.status,
           startedAt: match.started_at,
           completedAt: match.completed_at,
+          metadata: match.metadata,
           queueSession: queueSessionData,
           court: courtData,
           userTeam,
           userWon,
           userAvatarUrl: userProfile?.avatarUrl ?? null,
+          eloGain,
           opponents: opponentDetails,
           teammates: teammateDetails,
           opponentNames,
