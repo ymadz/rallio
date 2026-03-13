@@ -579,7 +579,7 @@ export function BookingCard({
             {booking.type === 'queue_session' && booking.queue_session_id ? (
               /* Queue Session Actions */
               <>
-                <Link href={`/queue/${booking.queue_session_id || booking.courts?.id || booking.court_id}`}>
+                <Link href={`/queue/${booking.queue_session_id || booking.courts?.id}`}>
                   <Button
                     variant="outline"
                     className="w-full h-10 rounded-xl text-green-700 border-green-300 bg-white hover:bg-green-50 hover:text-green-800 hover:border-green-400 transition-colors"
