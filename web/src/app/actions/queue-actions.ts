@@ -116,14 +116,20 @@ export async function getQueueDetails(courtId: string) {
     if (linkedReservationId) {
       const { data: linkedReservation } = await supabase
         .from('reservations')
-        .select('status')
+        .select('status, total_amount, amount_paid')
         .eq('id', linkedReservationId)
         .single()
 
-      if (!isOrganizer && (!linkedReservation || !['confirmed', 'ongoing', 'completed'].includes(linkedReservation.status))) {
+      const hasPaidInFull = !!linkedReservation
+        && ['confirmed', 'ongoing', 'completed'].includes(linkedReservation.status)
+        && Number(linkedReservation.amount_paid || 0) + 0.01 >= Number(linkedReservation.total_amount || 0)
+
+      if (!isOrganizer && !hasPaidInFull) {
         console.log('[getQueueDetails] 🔒 Queue hidden: linked reservation not fully paid yet', {
           sessionId: session.id,
           reservationStatus: linkedReservation?.status,
+          amountPaid: linkedReservation?.amount_paid,
+          totalAmount: linkedReservation?.total_amount,
         })
         return { success: true, queue: null }
       }
@@ -744,11 +750,15 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
     if (reservationIds.length > 0) {
       const { data: reservations } = await supabase
         .from('reservations')
-        .select('id, status')
+        .select('id, status, total_amount, amount_paid')
         .in('id', reservationIds)
 
       ;(reservations || []).forEach((reservation: any) => {
-        if (['confirmed', 'ongoing', 'completed'].includes(reservation.status)) {
+        const hasPaidInFull =
+          ['confirmed', 'ongoing', 'completed'].includes(reservation.status)
+          && Number(reservation.amount_paid || 0) + 0.01 >= Number(reservation.total_amount || 0)
+
+        if (hasPaidInFull) {
           fullyPaidReservationIds.add(reservation.id)
         }
       })
