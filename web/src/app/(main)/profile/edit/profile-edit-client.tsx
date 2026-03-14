@@ -83,29 +83,8 @@ export function ProfileEditClient({ profile, player }: ProfileEditClientProps) {
     setMessage(null)
 
     try {
-      let avatarUrl = profile?.avatar_url
-
-      // Upload avatar if changed
-      if (formData.avatarFile) {
-        const supabase = createClient()
-        const fileExt = formData.avatarFile.name.split('.').pop()
-        const fileName = `${profile.id}-${Date.now()}.${fileExt}`
-        const filePath = `avatars/${fileName}`
-
-        const { error: uploadError } = await supabase.storage
-          .from('avatars')
-          .upload(filePath, formData.avatarFile, { upsert: true })
-
-        if (uploadError) {
-          throw new Error('Failed to upload avatar')
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('avatars')
-          .getPublicUrl(filePath)
-
-        avatarUrl = publicUrl
-      }
+      // Use avatarPreview as the avatarUrl
+      const avatarUrl = avatarPreview || profile?.avatar_url
 
       // Update profile
       const profileResult = await updateProfileAction({

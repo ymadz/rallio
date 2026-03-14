@@ -6,6 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Camera, Upload, X, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import Cropper from 'react-easy-crop'
+
+type Point = { x: number; y: number }
+type Area = { width: number; height: number; x: number; y: number }
 
 interface AvatarUploadProps {
   userId: string
@@ -37,17 +41,63 @@ export function AvatarUpload({
   const [avatarUrl, setAvatarUrl] = useState(currentAvatarUrl)
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isCropOpen, setIsCropOpen] = useState(false)
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null)
+  const [crop, setCrop] = useState<Point>({ x: 0, y: 0 })
+  const [zoom, setZoom] = useState(1)
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
-  const handleFileSelect = () => {
-    fileInputRef.current?.click()
+  const loadImage = (src: string) => {
+    return new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => resolve(img)
+      img.onerror = reject
+      img.src = src
+    })
   }
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  const getCroppedBlob = async (imageSrc: string, cropArea: Area) => {
+    const image = await loadImage(imageSrc)
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
 
+    if (!ctx) {
+      throw new Error('Failed to process image')
+    }
+
+    canvas.width = cropArea.width
+    canvas.height = cropArea.height
+
+    ctx.drawImage(
+      image,
+      cropArea.x,
+      cropArea.y,
+      cropArea.width,
+      cropArea.height,
+      0,
+      0,
+      cropArea.width,
+      cropArea.height
+    )
+
+    return new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error('Failed to create cropped image'))
+            return
+          }
+          resolve(blob)
+        },
+        'image/jpeg',
+        0.92
+      )
+    })
+  }
+
+  const uploadAvatarFile = async (file: File) => {
     // Validate file type
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
     if (!validTypes.includes(file.type)) {
@@ -56,7 +106,7 @@ export function AvatarUpload({
     }
 
     // Validate file size (5MB max)
-    const maxSize = 5 * 1024 * 1024 // 5MB
+    const maxSize = 5 * 1024 * 1024
     if (file.size > maxSize) {
       setError('Image must be less than 5MB')
       return
@@ -66,9 +116,7 @@ export function AvatarUpload({
     setError(null)
 
     try {
-      // Generate unique filename
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${userId}/${Date.now()}.${fileExt}`
+      const fileName = `${userId}/${Date.now()}.jpg`
 
       // Delete old avatar if exists
       if (avatarUrl) {
@@ -109,16 +157,80 @@ export function AvatarUpload({
 
       setAvatarUrl(newAvatarUrl)
       onUploadComplete?.(newAvatarUrl)
-
     } catch (err: any) {
       console.error('Avatar upload error:', err)
       setError(err.message || 'Failed to upload avatar')
     } finally {
       setIsUploading(false)
-      // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
+    }
+  }
+
+  const handleFileSelect = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type and size before opening cropper
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+    if (!validTypes.includes(file.type)) {
+      setError('Please upload a JPEG, PNG, GIF, or WebP image')
+      return
+    }
+
+    const maxSize = 5 * 1024 * 1024
+    if (file.size > maxSize) {
+      setError('Image must be less than 5MB')
+      return
+    }
+
+    setError(null)
+    const imageUrl = URL.createObjectURL(file)
+    setImageToCrop(imageUrl)
+    setCrop({ x: 0, y: 0 })
+    setZoom(1)
+    setCroppedAreaPixels(null)
+    setIsCropOpen(true)
+  }
+
+  const handleCropComplete = (_: Area, croppedPixels: Area) => {
+    setCroppedAreaPixels(croppedPixels)
+  }
+
+  const handleCancelCrop = () => {
+    if (imageToCrop) {
+      URL.revokeObjectURL(imageToCrop)
+    }
+    setImageToCrop(null)
+    setIsCropOpen(false)
+    setCrop({ x: 0, y: 0 })
+    setZoom(1)
+    setCroppedAreaPixels(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const handleConfirmCrop = async () => {
+    if (!imageToCrop || !croppedAreaPixels) {
+      setError('Please adjust the crop area first')
+      return
+    }
+
+    try {
+      const croppedBlob = await getCroppedBlob(imageToCrop, croppedAreaPixels)
+      const croppedFile = new File([croppedBlob], 'avatar.jpg', { type: 'image/jpeg' })
+
+      await uploadAvatarFile(croppedFile)
+      handleCancelCrop()
+    } catch (err: any) {
+      console.error('Crop error:', err)
+      setError(err.message || 'Failed to crop image')
     }
   }
 
@@ -186,6 +298,7 @@ export function AvatarUpload({
 
         {/* Hover Overlay */}
         <button
+          type="button"
           onClick={handleFileSelect}
           disabled={isUploading}
           className={cn(
@@ -199,6 +312,7 @@ export function AvatarUpload({
         {/* Remove Button */}
         {avatarUrl && !isUploading && (
           <button
+            type="button"
             onClick={handleRemoveAvatar}
             className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white hover:bg-red-600 transition-colors shadow-sm"
             title="Remove avatar"
@@ -219,6 +333,7 @@ export function AvatarUpload({
 
       {/* Upload Button */}
       <Button
+        type="button"
         variant="outline"
         size="sm"
         onClick={handleFileSelect}
@@ -245,8 +360,63 @@ export function AvatarUpload({
 
       {/* Help Text */}
       <p className="text-xs text-gray-500 text-center">
-        JPEG, PNG, GIF or WebP. Max 5MB.
+        JPEG, PNG, GIF or WebP. Max 5MB. You can crop before upload.
       </p>
+
+      {/* Crop Modal */}
+      {isCropOpen && imageToCrop && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-4 sm:p-5">
+            <div className="mb-3">
+              <h3 className="text-base font-semibold text-gray-900">Crop Profile Photo</h3>
+              <p className="mt-1 text-sm text-gray-500">Move and zoom your photo to fit the avatar frame.</p>
+            </div>
+
+            <div className="relative h-72 w-full overflow-hidden rounded-xl bg-gray-900">
+              <Cropper
+                image={imageToCrop}
+                crop={crop}
+                zoom={zoom}
+                aspect={1}
+                cropShape="round"
+                showGrid={false}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropComplete={handleCropComplete}
+              />
+            </div>
+
+            <div className="mt-4">
+              <label className="mb-2 block text-sm font-medium text-gray-700">Zoom</label>
+              <input
+                type="range"
+                min={1}
+                max={3}
+                step={0.01}
+                value={zoom}
+                onChange={(e) => setZoom(Number(e.target.value))}
+                className="w-full"
+              />
+            </div>
+
+            <div className="mt-5 flex gap-2">
+              <Button type="button" variant="outline" className="flex-1" onClick={handleCancelCrop}>
+                Cancel
+              </Button>
+              <Button type="button" className="flex-1" onClick={handleConfirmCrop} disabled={isUploading}>
+                {isUploading ? (
+                  <>
+                    <Spinner size="sm" className="mr-2" />
+                    Uploading...
+                  </>
+                ) : (
+                  'Use This Photo'
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

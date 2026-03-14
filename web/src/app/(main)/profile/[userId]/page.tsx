@@ -1,26 +1,52 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
+import { notFound, redirect } from 'next/navigation'
 
-export const metadata = {
-  title: 'Profile | Rallio',
-  description: 'Your player profile',
+export async function generateMetadata({ params }: { params: Promise<{ userId: string }> }) {
+  const { userId } = await params
+  const supabase = await createClient()
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('first_name, last_name, display_name')
+    .eq('id', userId)
+    .single()
+
+  const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ')
+    || profile?.display_name
+    || 'Player'
+
+  return {
+    title: `${name} | Rallio`,
+    description: `View ${name}'s player profile on Rallio`,
+  }
 }
 
-export default async function ProfilePage() {
+export default async function PublicProfilePage({ params }: { params: Promise<{ userId: string }> }) {
+  const { userId } = await params
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
 
-  // Get profile and player data
+  // Check if viewer is the profile owner — redirect to own profile
+  const { data: { user: currentUser } } = await supabase.auth.getUser()
+  if (currentUser?.id === userId) {
+    redirect('/profile')
+  }
+
+  // Fetch the target user's profile
   const { data: profile } = await supabase
     .from('profiles')
     .select('*')
-    .eq('id', user?.id)
+    .eq('id', userId)
     .single()
+
+  if (!profile) {
+    notFound()
+  }
 
   const { data: player } = await supabase
     .from('players')
     .select('*')
-    .eq('user_id', user?.id)
+    .eq('user_id', userId)
     .single()
 
   const fullName = [profile?.first_name, profile?.middle_initial, profile?.last_name]
@@ -29,7 +55,6 @@ export default async function ProfilePage() {
 
   const playStyles = player?.play_style?.split(',').filter(Boolean) || []
 
-  // Map skill level to tier
   const getSkillTier = (level: number | null) => {
     if (!level) return 'UNRANKED'
     if (level <= 3) return 'BEGINNER'
@@ -38,20 +63,20 @@ export default async function ProfilePage() {
     return 'ELITE'
   }
 
-  // Calculate win rate
   const totalGames = player?.total_games_played || 0
   const wins = player?.total_wins || 0
   const losses = player?.total_losses || 0
   const winRate = totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0
 
-  // Format member since date
-  const memberSince = profile?.created_at ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Unknown'
+  const memberSince = profile?.created_at
+    ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    : 'Unknown'
 
-  // Get recent completed matches where user was a participant
+  // Recent matches for this user
   const { data: recentMatches } = await supabase
     .from('matches')
     .select('id, score_a, score_b, winner, completed_at, game_format, team_a_players, team_b_players, courts(name, venues(name))')
-    .or(`team_a_players.cs.{${user?.id}},team_b_players.cs.{${user?.id}}`)
+    .or(`team_a_players.cs.{${userId}},team_b_players.cs.{${userId}}`)
     .eq('status', 'completed')
     .order('completed_at', { ascending: false })
     .limit(5)
@@ -82,33 +107,10 @@ export default async function ProfilePage() {
           transform: rotate(-15deg);
           animation: pb-shimmer 5s ease-in-out infinite;
         }
-        /* Stats card — same glass system as MatchStatsCard */
         .pf-stats-card {
           position: relative; overflow: hidden;
           border-radius: 1.25rem;
           border: 1px solid #e5e7eb;
-          
-        }
-        .pf-stats-header { position: relative; overflow: hidden; border-radius: 1.25rem; }
-        .pf-stats-noise {
-          position: absolute; inset: 0; pointer-events: none; z-index: 1; opacity: 0.055;
-          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='pf'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23pf)' opacity='1'/%3E%3C/svg%3E");
-          background-size: 150px 150px; mix-blend-mode: overlay;
-        }
-        .pf-stats-highlight {
-          position: absolute; inset: 0; pointer-events: none; z-index: 2;
-          background: linear-gradient(135deg, rgba(204,251,241,0.18) 0%, rgba(153,246,228,0.06) 30%, transparent 55%, rgba(0,0,0,0.04) 100%);
-        }
-        .pf-stats-shimmer {
-          position: absolute; top: -20%; left: -60%; width: 80%; height: 140%;
-          pointer-events: none; z-index: 3;
-          background: linear-gradient(125deg, transparent 30%, rgba(255,255,255,0.05) 48%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.05) 52%, transparent 70%);
-          transform: rotate(-15deg);
-          animation: pf-stats-shimmer 4s ease-in-out infinite;
-        }
-        @keyframes pf-stats-shimmer {
-          0%, 100% { opacity: 0; left: -60%; }
-          50% { opacity: 1; left: 60%; }
         }
       `}</style>
 
@@ -176,20 +178,6 @@ export default async function ProfilePage() {
                 Zamboanga City · Member since {memberSince}
               </p>
             </div>
-            <div className="flex gap-2">
-              <Link
-                href="/profile/edit"
-                className="px-4 py-2 text-sm border border-gray-300 bg-white rounded-lg hover:bg-gray-50 text-gray-700 font-medium"
-              >
-                Edit Profile
-              </Link>
-              <Link
-                href="/settings"
-                className="px-4 py-2 text-sm border border-gray-300 bg-white rounded-lg hover:bg-gray-50 text-gray-700 font-medium"
-              >
-                Settings
-              </Link>
-            </div>
           </div>
         </div>
 
@@ -217,7 +205,6 @@ export default async function ProfilePage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
           {/* Left Column */}
           <div className="lg:col-span-4 space-y-5">
-
             {/* Skill & Rating */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">Skill & Rating</h3>
@@ -263,50 +250,6 @@ export default async function ProfilePage() {
                 )}
               </div>
             </div>
-
-            {/* Personal Info */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">Personal Info</h3>
-              <div className="space-y-3">
-                {profile?.email && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
-                    <span className="text-gray-600 truncate">{profile.email}</span>
-                  </div>
-                )}
-                {profile?.phone && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                    </svg>
-                    <span className="text-gray-600">{profile.phone}</span>
-                  </div>
-                )}
-                {player?.birth_date && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <span className="text-gray-600">
-                      {new Date(player.birth_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                    </span>
-                  </div>
-                )}
-                {player?.gender && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                    <span className="text-gray-600 capitalize">{player.gender}</span>
-                  </div>
-                )}
-                {!profile?.email && !profile?.phone && !player?.birth_date && !player?.gender && (
-                  <p className="text-sm text-gray-400 text-center py-2">No personal info added yet</p>
-                )}
-              </div>
-            </div>
           </div>
 
           {/* Right Column */}
@@ -334,17 +277,7 @@ export default async function ProfilePage() {
                   ))}
                 </div>
               ) : (
-                <div className="flex flex-col items-center py-8 text-center">
-                  <div className="w-11 h-11 bg-gray-100 rounded-full flex items-center justify-center mb-3">
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                  </div>
-                  <p className="text-gray-500 text-sm mb-1">No play styles set yet</p>
-                  <Link href="/profile/edit" className="text-xs text-primary font-semibold hover:underline mt-1">
-                    Add Play Styles →
-                  </Link>
-                </div>
+                <p className="text-sm text-gray-400 text-center py-4">No play styles set yet</p>
               )}
             </div>
 
@@ -354,7 +287,7 @@ export default async function ProfilePage() {
               {recentMatches && recentMatches.length > 0 ? (
                 <div className="space-y-2">
                   {recentMatches.map((match) => {
-                    const isTeamA = (match.team_a_players as string[]).includes(user?.id ?? '')
+                    const isTeamA = (match.team_a_players as string[]).includes(userId)
                     const userWon = isTeamA ? match.winner === 'team_a' : match.winner === 'team_b'
                     const isDraw = match.winner === 'draw'
                     const courtData = match.courts as any
@@ -403,13 +336,7 @@ export default async function ProfilePage() {
                     </svg>
                   </div>
                   <p className="text-gray-500 text-sm font-medium mb-1">No match history yet</p>
-                  <p className="text-gray-400 text-xs mb-4">Join a queue to start playing!</p>
-                  <Link
-                    href="/queue"
-                    className="px-5 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium text-sm"
-                  >
-                    Join Queue
-                  </Link>
+                  <p className="text-gray-400 text-xs">This player hasn&apos;t completed any matches.</p>
                 </div>
               )}
             </div>
