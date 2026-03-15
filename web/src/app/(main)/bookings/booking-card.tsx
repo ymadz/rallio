@@ -333,6 +333,52 @@ export function BookingCard({
           </div>
         </div>
 
+        {/* Reschedule Rejection Info */}
+        {booking.metadata?.last_reschedule_rejection && (
+          <div className="rounded-xl p-4 mb-4 border border-red-200 bg-gradient-to-br from-red-50 to-rose-50">
+            <div className="flex items-center gap-2 mb-2">
+              <svg className="w-4 h-4 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+              <p className="text-red-800 font-semibold text-xs uppercase tracking-wider">
+                Reschedule Rejected
+              </p>
+            </div>
+            <p className="text-sm text-red-700 leading-relaxed">
+              {booking.metadata.last_reschedule_rejection.reason}
+            </p>
+            {booking.metadata.last_reschedule_rejection.rejected_at && (
+              <p className="text-xs text-red-400 mt-2">
+                {format(new Date(booking.metadata.last_reschedule_rejection.rejected_at), 'MMM d, yyyy · h:mm a')}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Pending Reschedule Request */}
+        {booking.metadata?.reschedule_request?.status === 'pending' && (
+          <div className="rounded-xl p-4 mb-4 border border-amber-200 bg-gradient-to-br from-amber-50 to-yellow-50">
+            <div className="flex items-center gap-2 mb-2">
+              <svg className="w-4 h-4 text-amber-500 shrink-0 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-amber-800 font-semibold text-xs uppercase tracking-wider">
+                Reschedule Pending Approval
+              </p>
+            </div>
+            <div className="text-sm text-amber-700 space-y-1">
+              <p>
+                <span className="font-medium">Proposed:</span>{' '}
+                {format(new Date(booking.metadata.reschedule_request.proposed_start_time), 'EEE, MMM d, yyyy')}
+              </p>
+              <p>
+                {format(new Date(booking.metadata.reschedule_request.proposed_start_time), 'h:mm a')} –{' '}
+                {format(new Date(booking.metadata.reschedule_request.proposed_end_time), 'h:mm a')}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Details Grid */}
         <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
           {/* Reason for rejection instead of payment */}

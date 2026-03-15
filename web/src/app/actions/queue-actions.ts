@@ -1848,6 +1848,9 @@ export async function closeQueueSession(sessionId: string): Promise<{
       totalRevenue,
       totalParticipants,
       unpaidBalances,
+      closedBy: user.user_metadata?.full_name || user.email || user.id,
+      closedAt: new Date().toISOString(),
+      closedReason: 'manual',
     }
 
     console.log('[closeQueueSession] ✅ Calculated summary:', summary)
@@ -1861,7 +1864,7 @@ export async function closeQueueSession(sessionId: string): Promise<{
         settings: {
           ...(session.settings || {}),
           manually_closed: true,
-          completed_at: new Date().toISOString(),
+          completed_at: summary.closedAt,
           summary,
         },
       })
@@ -2297,12 +2300,11 @@ export async function markAsPaid(
       return { success: true } // Idempotent - already paid is success
     }
 
-    // 6. Update participant to mark as paid and clear outstanding balance
+    // 6. Update participant to mark as paid (preserve amount_owed for revenue tracking)
     const { error: updateError } = await serviceClient
       .from('queue_participants')
       .update({
         payment_status: 'paid',
-        amount_owed: 0,
       })
       .eq('id', participantId)
 

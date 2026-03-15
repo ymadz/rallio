@@ -226,7 +226,7 @@ export default function PlatformSettingsDashboard() {
   if (loading) {
     return (
       <div className="p-8 flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
+        <Loader2 className="w-8 h-8 text-teal-600 animate-spin" />
       </div>
     )
   }
@@ -262,7 +262,7 @@ export default function PlatformSettingsDashboard() {
             onClick={() => setActiveTab('general')}
             className={`pb-3 border-b-2 transition-colors flex items-center gap-2 ${
               activeTab === 'general'
-                ? 'border-purple-600 text-purple-600'
+                ? 'border-teal-600 text-teal-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -274,7 +274,7 @@ export default function PlatformSettingsDashboard() {
             onClick={() => setActiveTab('fees')}
             className={`pb-3 border-b-2 transition-colors flex items-center gap-2 ${
               activeTab === 'fees'
-                ? 'border-purple-600 text-purple-600'
+                ? 'border-teal-600 text-teal-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -286,7 +286,7 @@ export default function PlatformSettingsDashboard() {
             onClick={() => setActiveTab('legal')}
             className={`pb-3 border-b-2 transition-colors flex items-center gap-2 ${
               activeTab === 'legal'
-                ? 'border-purple-600 text-purple-600'
+                ? 'border-teal-600 text-teal-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -298,7 +298,7 @@ export default function PlatformSettingsDashboard() {
             onClick={() => setActiveTab('notifications')}
             className={`pb-3 border-b-2 transition-colors flex items-center gap-2 ${
               activeTab === 'notifications'
-                ? 'border-purple-600 text-purple-600'
+                ? 'border-teal-600 text-teal-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -310,7 +310,7 @@ export default function PlatformSettingsDashboard() {
             onClick={() => setActiveTab('payment')}
             className={`pb-3 border-b-2 transition-colors flex items-center gap-2 ${
               activeTab === 'payment'
-                ? 'border-purple-600 text-purple-600'
+                ? 'border-teal-600 text-teal-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -325,7 +325,7 @@ export default function PlatformSettingsDashboard() {
         <div className="space-y-6">
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <Globe className="w-5 h-5 text-purple-600" />
+              <Globe className="w-5 h-5 text-teal-600" />
               Platform Information
             </h2>
 
@@ -338,7 +338,7 @@ export default function PlatformSettingsDashboard() {
                   type="text"
                   value={generalSettings.platform_name}
                   onChange={(e) => setGeneralSettings(prev => ({ ...prev, platform_name: e.target.value }))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                   placeholder="Rallio"
                 />
               </div>
@@ -351,7 +351,7 @@ export default function PlatformSettingsDashboard() {
                   type="text"
                   value={generalSettings.tagline}
                   onChange={(e) => setGeneralSettings(prev => ({ ...prev, tagline: e.target.value }))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                   placeholder="Find Your Court, Join The Game"
                 />
               </div>
@@ -375,7 +375,7 @@ export default function PlatformSettingsDashboard() {
 
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <Mail className="w-5 h-5 text-purple-600" />
+              <Mail className="w-5 h-5 text-teal-600" />
               Contact Information
             </h2>
 
@@ -388,7 +388,7 @@ export default function PlatformSettingsDashboard() {
                   type="email"
                   value={generalSettings.contact_email}
                   onChange={(e) => setGeneralSettings(prev => ({ ...prev, contact_email: e.target.value }))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                   placeholder="support@rallio.com"
                 />
               </div>
@@ -401,7 +401,7 @@ export default function PlatformSettingsDashboard() {
                   type="tel"
                   value={generalSettings.contact_phone}
                   onChange={(e) => setGeneralSettings(prev => ({ ...prev, contact_phone: e.target.value }))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                   placeholder="+63 XXX XXX XXXX"
                 />
               </div>
@@ -411,7 +411,7 @@ export default function PlatformSettingsDashboard() {
           <button
             onClick={handleSaveGeneralSettings}
             disabled={saving}
-            className="w-full px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full px-6 py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
             Save General Settings
@@ -424,12 +424,12 @@ export default function PlatformSettingsDashboard() {
         <div className="space-y-6">
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <PhilippinePeso className="w-5 h-5 text-purple-600" />
+              <PhilippinePeso className="w-5 h-5 text-teal-600" />
               Platform Service Fee
             </h2>
 
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg">
+              <div className="flex items-center justify-between p-4 bg-teal-50 rounded-lg">
                 <div>
                   <h3 className="font-medium text-gray-900">Enable Platform Fee</h3>
                   <p className="text-sm text-gray-600">Apply service fee to all bookings</p>
@@ -437,7 +437,7 @@ export default function PlatformSettingsDashboard() {
                 <button
                   onClick={() => setPlatformFee(prev => ({ ...prev, enabled: !prev.enabled }))}
                   className={`p-2 rounded-lg transition-colors ${
-                    platformFee.enabled ? 'bg-purple-600 text-white' : 'bg-gray-300 text-gray-600'
+                    platformFee.enabled ? 'bg-teal-600 text-white' : 'bg-gray-300 text-gray-600'
                   }`}
                 >
                   {platformFee.enabled ? <ToggleRight className="w-6 h-6" /> : <ToggleLeft className="w-6 h-6" />}
@@ -456,7 +456,7 @@ export default function PlatformSettingsDashboard() {
                     step="0.1"
                     value={platformFee.percentage}
                     onChange={(e) => setPlatformFee(prev => ({ ...prev, percentage: parseFloat(e.target.value) || 0 }))}
-                    className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg font-semibold"
+                    className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 text-lg font-semibold"
                   />
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 font-semibold">%</span>
                 </div>
@@ -472,7 +472,7 @@ export default function PlatformSettingsDashboard() {
                 <textarea
                   value={platformFee.description}
                   onChange={(e) => setPlatformFee(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                   rows={3}
                   placeholder="Platform service fee description..."
                 />
@@ -493,7 +493,7 @@ export default function PlatformSettingsDashboard() {
           <button
             onClick={handleSavePlatformFee}
             disabled={saving}
-            className="w-full px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full px-6 py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
             Save Platform Fee
@@ -507,7 +507,7 @@ export default function PlatformSettingsDashboard() {
           {/* Terms and Conditions */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <Shield className="w-5 h-5 text-purple-600" />
+              <Shield className="w-5 h-5 text-teal-600" />
               Terms and Conditions
             </h2>
 
@@ -515,7 +515,7 @@ export default function PlatformSettingsDashboard() {
               <textarea
                 value={termsContent}
                 onChange={(e) => setTermsContent(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono text-sm"
                 rows={15}
                 placeholder="# Terms and Conditions&#10;&#10;Your terms and conditions content here..."
               />
@@ -527,7 +527,7 @@ export default function PlatformSettingsDashboard() {
             <button
               onClick={handleSaveTerms}
               disabled={saving}
-              className="w-full mt-4 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full mt-4 px-6 py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
               Save Terms and Conditions
@@ -537,7 +537,7 @@ export default function PlatformSettingsDashboard() {
           {/* Refund Policy */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <PhilippinePeso className="w-5 h-5 text-purple-600" />
+              <PhilippinePeso className="w-5 h-5 text-teal-600" />
               Refund Policy
             </h2>
 
@@ -545,7 +545,7 @@ export default function PlatformSettingsDashboard() {
               <textarea
                 value={refundContent}
                 onChange={(e) => setRefundContent(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono text-sm"
                 rows={15}
                 placeholder="# Refund Policy&#10;&#10;Your refund policy content here..."
               />
@@ -557,7 +557,7 @@ export default function PlatformSettingsDashboard() {
             <button
               onClick={handleSaveRefundPolicy}
               disabled={saving}
-              className="w-full mt-4 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full mt-4 px-6 py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
               Save Refund Policy
@@ -571,7 +571,7 @@ export default function PlatformSettingsDashboard() {
         <div className="space-y-6">
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <Bell className="w-5 h-5 text-purple-600" />
+              <Bell className="w-5 h-5 text-teal-600" />
               Notification Channels
             </h2>
 
@@ -593,7 +593,7 @@ export default function PlatformSettingsDashboard() {
                     onClick={() => setNotificationSettings(prev => ({ ...prev, [setting.key]: !prev[setting.key as keyof typeof prev] }))}
                     className={`p-2 rounded-lg transition-colors ${
                       notificationSettings[setting.key as keyof typeof notificationSettings]
-                        ? 'bg-purple-600 text-white'
+                        ? 'bg-teal-600 text-white'
                         : 'bg-gray-300 text-gray-600'
                     }`}
                   >
@@ -611,7 +611,7 @@ export default function PlatformSettingsDashboard() {
           <button
             onClick={handleSaveNotifications}
             disabled={saving}
-            className="w-full px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full px-6 py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
             Save Notification Settings
@@ -624,7 +624,7 @@ export default function PlatformSettingsDashboard() {
         <div className="space-y-6">
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-purple-600" />
+              <CreditCard className="w-5 h-5 text-teal-600" />
               Payment Configuration
             </h2>
 
@@ -638,7 +638,7 @@ export default function PlatformSettingsDashboard() {
                     type="text"
                     value={paymentSettings.currency}
                     onChange={(e) => setPaymentSettings(prev => ({ ...prev, currency: e.target.value }))}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
 
@@ -650,7 +650,7 @@ export default function PlatformSettingsDashboard() {
                     type="text"
                     value={paymentSettings.currency_symbol}
                     onChange={(e) => setPaymentSettings(prev => ({ ...prev, currency_symbol: e.target.value }))}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
               </div>
@@ -666,7 +666,7 @@ export default function PlatformSettingsDashboard() {
                         type="checkbox"
                         checked={paymentSettings.payment_methods.includes(method)}
                         onChange={() => togglePaymentMethod(method)}
-                        className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                        className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500"
                       />
                       <span className="text-gray-900 capitalize">{method.replace('_', ' ')}</span>
                     </label>
@@ -683,7 +683,7 @@ export default function PlatformSettingsDashboard() {
                     type="number"
                     value={paymentSettings.min_booking_amount}
                     onChange={(e) => setPaymentSettings(prev => ({ ...prev, min_booking_amount: parseInt(e.target.value) || 0 }))}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
 
@@ -695,7 +695,7 @@ export default function PlatformSettingsDashboard() {
                     type="number"
                     value={paymentSettings.max_booking_amount}
                     onChange={(e) => setPaymentSettings(prev => ({ ...prev, max_booking_amount: parseInt(e.target.value) || 0 }))}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
               </div>
@@ -705,7 +705,7 @@ export default function PlatformSettingsDashboard() {
           <button
             onClick={handleSavePaymentSettings}
             disabled={saving}
-            className="w-full px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full px-6 py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
             Save Payment Settings
@@ -715,3 +715,4 @@ export default function PlatformSettingsDashboard() {
     </div>
   )
 }
+

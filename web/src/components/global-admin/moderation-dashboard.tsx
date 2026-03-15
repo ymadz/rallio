@@ -226,7 +226,7 @@ export default function ModerationDashboard() {
   if (loading) {
     return (
       <div className="p-8 flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
+        <Loader2 className="w-8 h-8 text-teal-600 animate-spin" />
       </div>
     )
   }
@@ -273,8 +273,8 @@ export default function ModerationDashboard() {
 
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <div className="flex items-center justify-between mb-3">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <Ban className="w-5 h-5 text-purple-600" />
+            <div className="p-2 bg-teal-100 rounded-lg">
+              <Ban className="w-5 h-5 text-teal-600" />
             </div>
           </div>
           <h3 className="text-2xl font-bold text-gray-900">{stats.bannedUsers}</h3>
@@ -298,7 +298,7 @@ export default function ModerationDashboard() {
           <button
             onClick={() => setActiveTab('flagged')}
             className={`pb-3 border-b-2 transition-colors ${activeTab === 'flagged'
-              ? 'border-purple-600 text-purple-600'
+              ? 'border-teal-600 text-teal-600'
               : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
           >
@@ -316,7 +316,7 @@ export default function ModerationDashboard() {
           <button
             onClick={() => setActiveTab('banned')}
             className={`pb-3 border-b-2 transition-colors ${activeTab === 'banned'
-              ? 'border-purple-600 text-purple-600'
+              ? 'border-teal-600 text-teal-600'
               : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
           >
@@ -324,7 +324,7 @@ export default function ModerationDashboard() {
               <UserX className="w-4 h-4" />
               <span className="font-medium">Banned Users</span>
               {stats.bannedUsers > 0 && (
-                <span className="bg-purple-500 text-white text-xs px-2 py-0.5 rounded-full">
+                <span className="bg-teal-500 text-white text-xs px-2 py-0.5 rounded-full">
                   {stats.bannedUsers}
                 </span>
               )}
@@ -334,7 +334,7 @@ export default function ModerationDashboard() {
           <button
             onClick={() => setActiveTab('activity')}
             className={`pb-3 border-b-2 transition-colors ${activeTab === 'activity'
-              ? 'border-purple-600 text-purple-600'
+              ? 'border-teal-600 text-teal-600'
               : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
           >
@@ -355,7 +355,7 @@ export default function ModerationDashboard() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
               >
                 <option value="pending">Pending</option>
                 <option value="resolved">Resolved</option>
@@ -381,7 +381,7 @@ export default function ModerationDashboard() {
             {flaggedReviews.length > 0 && (
               <button
                 onClick={toggleSelectAll}
-                className="text-sm text-purple-600 hover:text-purple-700 font-medium"
+                className="text-sm text-teal-600 hover:text-teal-700 font-medium"
               >
                 {selectedReviews.size === flaggedReviews.length ? 'Deselect All' : 'Select All'}
               </button>
@@ -407,7 +407,7 @@ export default function ModerationDashboard() {
                       type="checkbox"
                       checked={selectedReviews.has(review.id)}
                       onChange={() => toggleReviewSelection(review.id)}
-                      className="mt-1 w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                      className="mt-1 w-4 h-4 text-teal-600 rounded focus:ring-teal-500"
                     />
 
                     {/* User Avatar */}
@@ -459,7 +459,7 @@ export default function ModerationDashboard() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => setSelectedReview(review)}
-                          className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 text-sm"
+                          className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 flex items-center gap-2 text-sm"
                         >
                           <Eye className="w-4 h-4" />
                           Review
@@ -534,7 +534,7 @@ export default function ModerationDashboard() {
             <div className="space-y-3">
               {activities.map((activity) => (
                 <div key={activity.id} className="flex items-start gap-3 pb-3 border-b border-gray-100 last:border-0">
-                  <div className="w-2 h-2 rounded-full bg-purple-500 mt-2"></div>
+                  <div className="w-2 h-2 rounded-full bg-teal-500 mt-2"></div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-gray-900">
@@ -606,7 +606,7 @@ export default function ModerationDashboard() {
                 <textarea
                   value={actionNotes}
                   onChange={(e) => setActionNotes(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                   rows={3}
                   placeholder="Add notes about your moderation decision..."
                 />
@@ -635,7 +635,7 @@ export default function ModerationDashboard() {
                 <button
                   onClick={() => handleResolveReview(selectedReview.id, 'ban_user')}
                   disabled={processing}
-                  className="flex-1 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1 px-4 py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   <Ban className="w-5 h-5" />
                   Ban User

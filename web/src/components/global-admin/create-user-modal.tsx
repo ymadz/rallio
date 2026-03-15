@@ -1,105 +1,102 @@
-'use client'
+'use client';
 
-import { useState } from 'react'
-import { X, Loader2, Mail, Lock, User, Phone, Image } from 'lucide-react'
-import { createUser } from '@/app/actions/global-admin-user-actions'
-import { useToast } from '@/hooks/use-toast'
+import { useState } from 'react';
+import { X, Loader2, Mail, Lock, User, Phone, Image } from 'lucide-react';
+import { createUser } from '@/app/actions/global-admin-user-actions';
+import { useToast } from '@/hooks/use-toast';
 
 interface CreateUserModalProps {
-  onClose: () => void
-  onUserCreated: () => void
+  onClose: () => void;
+  onUserCreated: () => void;
 }
 
 export function CreateUserModal({ onClose, onUserCreated }: CreateUserModalProps) {
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     confirmPassword: '',
     displayName: '',
-    phone: ''
-  })
-  const [errors, setErrors] = useState<Record<string, string>>({})
-  const { toast } = useToast()
+    phone: '',
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const { toast } = useToast();
 
   const validateForm = () => {
-    const newErrors: Record<string, string> = {}
+    const newErrors: Record<string, string> = {};
 
     // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!formData.email) {
-      newErrors.email = 'Email is required'
+      newErrors.email = 'Email is required';
     } else if (!emailRegex.test(formData.email)) {
-      newErrors.email = 'Invalid email format'
+      newErrors.email = 'Invalid email format';
     }
 
     // Password validation
     if (!formData.password) {
-      newErrors.password = 'Password is required'
+      newErrors.password = 'Password is required';
     } else if (formData.password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters'
+      newErrors.password = 'Password must be at least 8 characters';
     }
 
     // Confirm password
     if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match'
+      newErrors.confirmPassword = 'Passwords do not match';
     }
 
     // Display name validation
     if (!formData.displayName) {
-      newErrors.displayName = 'Display name is required'
+      newErrors.displayName = 'Display name is required';
     }
 
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
 
     if (!validateForm()) {
-      return
+      return;
     }
 
-    setLoading(true)
+    setLoading(true);
 
     const result = await createUser({
       email: formData.email,
       password: formData.password,
       displayName: formData.displayName,
-      phone: formData.phone || undefined
-    })
+      phone: formData.phone || undefined,
+    });
 
     if (result.success) {
       toast({
         title: 'Success',
-        description: 'User created successfully and assigned Player role'
-      })
-      onUserCreated()
-      onClose()
+        description: 'User created successfully and assigned Player role',
+      });
+      onUserCreated();
+      onClose();
     } else {
       toast({
         title: 'Error',
         description: 'error' in result ? result.error : 'Failed to create user',
-        variant: 'destructive'
-      })
+        variant: 'destructive',
+      });
     }
 
-    setLoading(false)
-  }
+    setLoading(false);
+  };
 
   return (
     <>
       {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/50 z-50"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 bg-black/50 z-50 h-full" onClick={onClose} />
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div
-          className="bg-white rounded-xl shadow-2xl max-w-md w-full pointer-events-auto"
+          className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[85vh] overflow-hidden pointer-events-auto"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
@@ -114,7 +111,10 @@ export function CreateUserModal({ onClose, onUserCreated }: CreateUserModalProps
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <form
+            onSubmit={handleSubmit}
+            className="p-5 space-y-3 overflow-y-auto max-h-[calc(85vh-76px)]"
+          >
             {/* Email */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -148,7 +148,9 @@ export function CreateUserModal({ onClose, onUserCreated }: CreateUserModalProps
                   placeholder="John Doe"
                 />
               </div>
-              {errors.displayName && <p className="text-sm text-red-600 mt-1">{errors.displayName}</p>}
+              {errors.displayName && (
+                <p className="text-sm text-red-600 mt-1">{errors.displayName}</p>
+              )}
             </div>
 
             {/* Password */}
@@ -184,14 +186,14 @@ export function CreateUserModal({ onClose, onUserCreated }: CreateUserModalProps
                   placeholder="Re-enter password"
                 />
               </div>
-              {errors.confirmPassword && <p className="text-sm text-red-600 mt-1">{errors.confirmPassword}</p>}
+              {errors.confirmPassword && (
+                <p className="text-sm text-red-600 mt-1">{errors.confirmPassword}</p>
+              )}
             </div>
 
             {/* Phone (Optional) */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Phone Number
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
               <div className="relative">
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
@@ -207,12 +209,13 @@ export function CreateUserModal({ onClose, onUserCreated }: CreateUserModalProps
             {/* Info Box */}
             <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
               <p className="text-sm text-primary">
-                <strong>Note:</strong> New users will be automatically assigned the "Player" role. You can add additional roles and upload an avatar after creation.
+                <strong>Note:</strong> New users will be automatically assigned the "Player" role.
+                You can add additional roles and upload an avatar after creation.
               </p>
             </div>
 
             {/* Actions */}
-            <div className="flex gap-3 pt-4">
+            <div className="flex gap-3 pt-3">
               <button
                 type="submit"
                 disabled={loading}
@@ -239,5 +242,5 @@ export function CreateUserModal({ onClose, onUserCreated }: CreateUserModalProps
         </div>
       </div>
     </>
-  )
+  );
 }
