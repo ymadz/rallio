@@ -129,10 +129,21 @@ export default function CheckoutScreen() {
     const platformFee = getPlatformFeeAmount();
     const total = getTotalAmount();           // subtotal + platformFee, discount already applied
 
-    const downPaymentAmount = getDownPaymentAmount();
+    const downPaymentAmount = getDownPaymentAmount(); // store default (venue %) — used as fallback
     const remainingBalance = getRemainingBalance();
-    const isDownPaymentRequired = paymentMethod === 'cash' && downPaymentAmount > 0;
-    const isFullCashOnline = paymentMethod === 'cash' && (downPaymentPercentage ?? 20) >= 100;
+
+    // Derive the actual down payment amount from what the user typed in the input field.
+    // Falls back to store's value (venue default %) if no custom input yet.
+    const minDP = Math.round(total * 0.2 * 100) / 100;
+    const parsedDpInput = parseFloat(dpInput);
+    const dpCustomAmount = paymentMethod === 'cash'
+        ? (!isNaN(parsedDpInput) && parsedDpInput > 0
+            ? Math.min(Math.max(parsedDpInput, minDP), total)
+            : downPaymentAmount || minDP)
+        : 0;
+    // Only require an online deposit for cash when user hasn't chosen to pay the full amount online
+    const isPartialCash = paymentMethod === 'cash' && dpCustomAmount < total;
+    const isDownPaymentRequired = isPartialCash; // cash + partial → need online deposit
 
     const formatTime = (time: string): string => {
         const [hours] = time.split(':').map(Number);
@@ -143,6 +154,8 @@ export default function CheckoutScreen() {
 
     const handleSelectPayment = (method: PaymentMethod) => {
         setPaymentMethod(method);
+        // Reset custom dp input when switching to e-wallet
+        if (method === 'e-wallet') setDpInput('');
     };
 
     // Discount handling is now server-driven where applicable
@@ -228,7 +241,8 @@ export default function CheckoutScreen() {
                     },
                     body: JSON.stringify({
                         reservationId: primaryReservationId,
-                        amount: isDownPaymentRequired ? downPaymentAmount : total,
+                        // For cash partial: pass the exact amount user typed; for e-wallet: full total
+                        amount: isDownPaymentRequired ? dpCustomAmount : total,
                         description: `Booking for ${bookingData.courtName} at ${bookingData.venueName}`,
                         recurrenceGroupId: recurrenceGroupId,
                         isDownPayment: isDownPaymentRequired,
@@ -517,7 +531,7 @@ export default function CheckoutScreen() {
                         <View style={styles.priceRow}>
                             <Text style={styles.totalPriceLabel}>Total Amount</Text>
                             <Text style={styles.totalPriceValue}>
-                                ₱{(isDownPaymentRequired ? downPaymentAmount : total).toLocaleString()}
+                                ₱{(isDownPaymentRequired ? dpCustomAmount : total).toLocaleString()}
                             </Text>
                         </View>
 
@@ -527,7 +541,7 @@ export default function CheckoutScreen() {
                                     <Text style={styles.dpBoxTitle}>REMAINING BALANCE</Text>
                                     <Text style={styles.dpBoxSub}>To be paid at the venue</Text>
                                 </View>
-                                <Text style={styles.dpBoxValue}>₱{remainingBalance.toLocaleString()}</Text>
+                                <Text style={styles.dpBoxValue}>₱{(total - dpCustomAmount).toLocaleString()}</Text>
                             </View>
                         )}
                     </View>
@@ -669,7 +683,7 @@ export default function CheckoutScreen() {
             <View style={styles.bottomCta}>
                 <View style={styles.ctaPrice}>
                     <Text style={styles.ctaPriceLabel}>{isDownPaymentRequired ? 'To Pay Online' : 'Total'}</Text>
-                    <Text style={styles.ctaPriceValue}>₱{(isDownPaymentRequired ? downPaymentAmount : total).toLocaleString()}</Text>
+                    <Text style={styles.ctaPriceValue}>₱{(isDownPaymentRequired ? dpCustomAmount : total).toLocaleString()}</Text>
                 </View>
                 <Button
                     onPress={handleConfirmBooking}
