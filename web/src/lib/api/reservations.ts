@@ -97,7 +97,9 @@ export async function getAvailableTimeSlots(
 
   // Parse opening and closing times
   const [openHour] = dayHours.open.split(':').map(Number)
-  const [closeHour] = dayHours.close.split(':').map(Number)
+  let [closeHour] = dayHours.close.split(':').map(Number)
+  // Handle midnight close ("00:00" = end of day) and data entry errors where close <= open
+  if (closeHour === 0 || closeHour <= openHour) closeHour = 24
 
   // Generate all possible hourly slots
   const allSlots: TimeSlot[] = []
