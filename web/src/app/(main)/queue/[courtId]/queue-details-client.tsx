@@ -70,13 +70,29 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
   const [isInitiatingPayment, setIsInitiatingPayment] = useState(false)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'gcash' | 'paymaya' | null>(null)
   const [paymentError, setPaymentError] = useState<string | null>(null)
+  const [isQueueMaster, setIsQueueMaster] = useState(false)
   const supabase = createClient()
 
-  // Get current user ID
+  // Get current user ID and check if queue master
   useEffect(() => {
     async function getCurrentUser() {
       const { data: { user } } = await supabase.auth.getUser()
       setCurrentUserId(user?.id || null)
+
+      if (user?.id) {
+        try {
+          const { data: roles } = await supabase
+            .from('user_roles')
+            .select('roles(name)')
+            .eq('user_id', user.id)
+
+          const hasQueueMasterRole = roles?.some((r: any) => r.roles?.name === 'queue_master') || false
+          setIsQueueMaster(hasQueueMasterRole)
+        } catch (err) {
+          console.error('Error fetching user roles:', err)
+          setIsQueueMaster(false)
+        }
+      }
     }
     getCurrentUser()
   }, [])
@@ -247,44 +263,78 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
           </div>
 
           <div className="p-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-              <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Total Games</p>
-                  <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
-                    <Trophy className="w-4 h-4 text-teal-700" />
+            {isQueueMaster ? (
+              // Queue Master View: 4 metrics
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Total Games</p>
+                    <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
+                      <Trophy className="w-4 h-4 text-teal-700" />
+                    </div>
                   </div>
+                  <p className="text-3xl font-bold text-teal-900 mt-1">{summary.totalGames}</p>
                 </div>
-                <p className="text-3xl font-bold text-teal-900 mt-1">{summary.totalGames}</p>
-              </div>
-              <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Total Revenue</p>
-                  <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
-                    <CreditCard className="w-4 h-4 text-teal-700" />
+                <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Total Revenue</p>
+                    <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
+                      <CreditCard className="w-4 h-4 text-teal-700" />
+                    </div>
                   </div>
+                  <p className="text-3xl font-bold text-teal-900 mt-1">{formatCurrency(summary.totalRevenue)}</p>
                 </div>
-                <p className="text-3xl font-bold text-teal-900 mt-1">{formatCurrency(summary.totalRevenue)}</p>
-              </div>
-              <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Participants</p>
-                  <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
-                    <Users className="w-4 h-4 text-teal-700" />
+                <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Participants</p>
+                    <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
+                      <Users className="w-4 h-4 text-teal-700" />
+                    </div>
                   </div>
+                  <p className="text-3xl font-bold text-teal-900 mt-1">{summary.totalParticipants}</p>
                 </div>
-                <p className="text-3xl font-bold text-teal-900 mt-1">{summary.totalParticipants}</p>
-              </div>
-              <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Unpaid Balances</p>
-                  <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
-                    <Clock className="w-4 h-4 text-teal-700" />
+                <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Unpaid Balances</p>
+                    <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
+                      <Clock className="w-4 h-4 text-teal-700" />
+                    </div>
                   </div>
+                  <p className="text-3xl font-bold text-teal-900 mt-1">{summary.unpaidBalances}</p>
                 </div>
-                <p className="text-3xl font-bold text-teal-900 mt-1">{summary.unpaidBalances}</p>
               </div>
-            </div>
+            ) : (
+              // Player View: 3 metrics
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Total Games</p>
+                    <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
+                      <Trophy className="w-4 h-4 text-teal-700" />
+                    </div>
+                  </div>
+                  <p className="text-3xl font-bold text-teal-900 mt-1">{summary.totalGames}</p>
+                </div>
+                <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Avg Per Game</p>
+                    <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
+                      <CreditCard className="w-4 h-4 text-teal-700" />
+                    </div>
+                  </div>
+                  <p className="text-3xl font-bold text-teal-900 mt-1">{summary.totalGames > 0 ? formatCurrency(summary.totalRevenue / summary.totalGames) : '-'}</p>
+                </div>
+                <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Participants</p>
+                    <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
+                      <Users className="w-4 h-4 text-teal-700" />
+                    </div>
+                  </div>
+                  <p className="text-3xl font-bold text-teal-900 mt-1">{summary.totalParticipants}</p>
+                </div>
+              </div>
+            )}
 
             <div className="mt-6 pt-6 border-t border-gray-200">
               <div className="flex items-center justify-between mb-3">
