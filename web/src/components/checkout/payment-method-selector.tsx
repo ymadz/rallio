@@ -3,11 +3,12 @@
 import { useCheckoutStore } from '@/stores/checkout-store'
 
 export function PaymentMethodSelector() {
-  const { paymentMethod, setPaymentMethod, downPaymentPercentage, getDownPaymentAmount } = useCheckoutStore()
+  const { paymentMethod, setPaymentMethod, downPaymentPercentage, getTotalAmount } = useCheckoutStore()
 
-  const downPaymentAmount = getDownPaymentAmount()
-  const isDownPaymentRequired = downPaymentPercentage ? downPaymentPercentage > 0 : false
-
+  // Preview the required deposit even if cash is not yet selected
+  const storeDPPercent = (downPaymentPercentage && downPaymentPercentage > 0) ? downPaymentPercentage : 20;
+  const previewDPAmount = (getTotalAmount() * storeDPPercent) / 100;
+  
   return (
     <div className="space-y-4">
       <h3 className="font-semibold text-gray-900 text-lg">Select Payment Method</h3>
@@ -114,9 +115,7 @@ export function PaymentMethodSelector() {
 
           <h4 className="font-semibold text-gray-900 mb-2">Cash</h4>
           <p className="text-sm text-gray-600">
-            {isDownPaymentRequired
-              ? `Pay a ${downPaymentPercentage}% down payment (₱${downPaymentAmount.toFixed(2)}) online to secure your slot. Pay the rest at the venue.`
-              : 'Pay in cash at the venue. Booking will be pending until payment is verified.'}
+            Pay a {storeDPPercent}% down payment (₱{previewDPAmount.toFixed(2)}) online to secure your slot. Pay the rest at the venue.
           </p>
 
           {paymentMethod === 'cash' && (

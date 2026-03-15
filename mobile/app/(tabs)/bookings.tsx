@@ -15,6 +15,7 @@ import { Colors, Spacing, Typography, Radius } from '@/constants/Colors';
 import { Card, CourtListSkeleton } from '@/components/ui';
 import { useAuthStore } from '@/store/auth-store';
 import { supabase } from '@/lib/supabase';
+import { getPaymentStatus, getBookingStatusBadge } from '@/lib/booking-status';
 
 interface Reservation {
     id: string;
@@ -69,50 +70,27 @@ const BookingCard = React.memo(({ booking, onPress }: BookingCardProps) => {
     const isUpcoming = startTime > new Date();
     const isPast = endTime < new Date();
 
-    const statusColors: Record<string, { bg: string; text: string }> = {
-        pending: { bg: Colors.dark.warning + '20', text: Colors.dark.warning },
-        pending_payment: { bg: Colors.dark.warning + '20', text: Colors.dark.warning },
-        partially_paid: { bg: Colors.dark.info + '20', text: Colors.dark.info },
-        confirmed: { bg: Colors.dark.success + '20', text: Colors.dark.success },
-        cancelled: { bg: Colors.dark.error + '20', text: Colors.dark.error },
-        completed: { bg: Colors.dark.textTertiary + '20', text: Colors.dark.textTertiary },
-        no_show: { bg: Colors.dark.error + '20', text: Colors.dark.error },
-        pending_refund: { bg: Colors.dark.warning + '20', text: Colors.dark.warning },
-        refunded: { bg: Colors.dark.success + '20', text: Colors.dark.success },
-    };
-
-    const getStatusLabel = (booking: Reservation): string => {
-        // Fix 17: cash pending_payment shows as "Reserved"
-        if (booking.status === 'pending_payment' && booking.payment_method === 'cash') return 'Reserved';
-        const labels: Record<string, string> = {
-            pending: 'Pending',
-            pending_payment: 'Awaiting Payment',
-            partially_paid: 'Partially Paid',
-            confirmed: 'Confirmed',
-            cancelled: 'Cancelled',
-            completed: 'Completed',
-            no_show: 'No Show',
-            pending_refund: 'Refund Pending',
-            refunded: 'Refunded',
-        };
-        return labels[booking.status] || booking.status;
-    };
-
-    // Get status color with fallback
-    const statusColor = statusColors[booking.status] || {
-        bg: Colors.dark.textTertiary + '20',
-        text: Colors.dark.textTertiary
-    };
-    const statusLabel = getStatusLabel(booking);
+    const bookingBadge = getBookingStatusBadge(booking);
+    const paymentBadge = getPaymentStatus(booking);
 
     return (
         <TouchableOpacity onPress={onPress} activeOpacity={0.8}>
             <Card variant="glass" padding="md" style={styles.bookingCard}>
-                {/* Status badge */}
-                <View style={[styles.statusBadge, { backgroundColor: statusColor.bg }]}>
-                    <Text style={[styles.statusText, { color: statusColor.text }]}>
-                        {statusLabel}
-                    </Text>
+                {/* Header Row: Status Badges */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: Spacing.sm }}>
+                    {/* Primary Status badge */}
+                    <View style={[styles.statusBadge, { backgroundColor: bookingBadge.bg, marginBottom: 0 }]}>
+                        <Text style={[styles.statusText, { color: bookingBadge.text }]}>
+                            {bookingBadge.label}
+                        </Text>
+                    </View>
+
+                    {/* Secondary Payment Status Badge (Optional if we want it top-right like web) */}
+                    <View style={[styles.statusBadge, { backgroundColor: paymentBadge.bg, marginBottom: 0 }]}>
+                        <Text style={[styles.statusText, { color: paymentBadge.text }]}>
+                            {paymentBadge.label}
+                        </Text>
+                    </View>
                 </View>
 
                 {/* Venue Info */}
@@ -145,7 +123,14 @@ const BookingCard = React.memo(({ booking, onPress }: BookingCardProps) => {
                             {booking.num_players} player{booking.num_players !== 1 ? 's' : ''}
                         </Text>
                     </View>
-                    <Text style={styles.amount}>₱{booking.total_amount.toFixed(2)}</Text>
+                    <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.amount}>₱{booking.total_amount.toFixed(2)}</Text>
+                        {booking.status === 'partially_paid' && (
+                            <Text style={{ ...Typography.caption, color: Colors.dark.textSecondary, marginTop: 2 }}>
+                                Paid: ₱{(booking.amount_paid || 0).toFixed(2)}
+                            </Text>
+                        )}
+                    </View>
                 </View>
             </Card>
         </TouchableOpacity>
@@ -187,7 +172,7 @@ export default function BookingsScreen() {
                     )
                 `)
                 .eq('user_id', user.id)
-                .order('start_time', { ascending: false })
+                .order('created_at', { ascending: false })
                 .limit(200);
 
             if (fetchError) throw fetchError;

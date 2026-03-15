@@ -49,7 +49,7 @@ export default function PaymentCallbackScreen() {
                 }
 
                 // Check if payment was successful
-                if (reservation.status === 'paid' || reservation.status === 'confirmed') {
+                if (reservation.status === 'paid' || reservation.status === 'confirmed' || reservation.status === 'partially_paid') {
                     setPaymentStatus('success');
                     return;
                 }

@@ -141,9 +141,8 @@ export default function CheckoutScreen() {
             ? Math.min(Math.max(parsedDpInput, minDP), total)
             : downPaymentAmount || minDP)
         : 0;
-    // Only require an online deposit for cash when user hasn't chosen to pay the full amount online
-    const isPartialCash = paymentMethod === 'cash' && dpCustomAmount < total;
-    const isDownPaymentRequired = isPartialCash; // cash + partial → need online deposit
+    // Cash strictly requires a downpayment online now
+    const isDownPaymentRequired = paymentMethod === 'cash';
 
     const formatTime = (time: string): string => {
         const [hours] = time.split(':').map(Number);
@@ -230,7 +229,7 @@ export default function CheckoutScreen() {
                 console.log(`Mobile Checkout: Initiating ${isDownPaymentRequired ? 'Down Payment' : 'Full Payment'} via PayMongo...`);
 
                 // Add return URL for Expo Go compatibility
-                const redirectUrl = Linking.createURL('/checkout');
+                const redirectUrl = Linking.createURL('/checkout/callback');
                 console.log('Mobile Checkout: Deep link return URL:', redirectUrl);
 
                 const checkoutResponse = await fetch(`${apiUrl}/api/mobile/create-checkout`, {

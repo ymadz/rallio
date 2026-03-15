@@ -274,9 +274,15 @@ export const useCheckoutStore = create<CheckoutState>()(
 
       getDownPaymentAmount: () => {
         const state = get()
-        if (state.paymentMethod !== 'cash' || !state.downPaymentPercentage) return 0
+        if (state.paymentMethod !== 'cash') return 0
+        
         const total = state.getTotalAmount()
-        return Math.round((total * (state.downPaymentPercentage / 100)) * 100) / 100
+        // Determine DP % (use venue's percentage if set, otherwise strictly default to 20%)
+        const dpPercent = (state.downPaymentPercentage && state.downPaymentPercentage > 0) 
+            ? state.downPaymentPercentage 
+            : 20;
+
+        return Math.round((total * (dpPercent / 100)) * 100) / 100
       },
 
       getRemainingBalance: () => {
