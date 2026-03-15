@@ -1907,7 +1907,7 @@ export async function closeQueueSession(sessionId: string): Promise<{
     // 2. Get session and verify user is organizer
     const { data: session, error: sessionError } = await supabase
       .from('queue_sessions')
-      .select('organizer_id, status, court_id, metadata, settings')
+      .select('organizer_id, status, court_id, cost_per_game, metadata, settings')
       .eq('id', sessionId)
       .single()
 
@@ -1938,8 +1938,25 @@ export async function closeQueueSession(sessionId: string): Promise<{
     }
 
     // 4. Calculate summary
-    const totalGames = participants?.reduce((sum, p) => sum + (p.games_played || 0), 0) || 0
-    const totalRevenue = participants?.reduce((sum, p) => sum + parseFloat(p.amount_owed || '0'), 0) || 0
+    const totalGamesFromParticipants = participants?.reduce((sum, p) => sum + (p.games_played || 0), 0) || 0
+    const totalRevenueFromParticipants = participants?.reduce((sum, p) => sum + parseFloat(p.amount_owed || '0'), 0) || 0
+
+    // Fallback: derive from completed matches in case participant counters/owed were not persisted.
+    const costPerGame = parseFloat(session.cost_per_game || '0')
+    const { data: completedMatches } = await supabase
+      .from('matches')
+      .select('team_a_players, team_b_players')
+      .eq('queue_session_id', sessionId)
+      .eq('status', 'completed')
+
+    const totalGamesFromMatches = completedMatches?.length || 0
+    const totalRevenueFromMatches = (completedMatches || []).reduce((sum: number, m: any) => {
+      const playersInMatch = (m.team_a_players?.length || 0) + (m.team_b_players?.length || 0)
+      return sum + playersInMatch * costPerGame
+    }, 0)
+
+    const totalGames = Math.max(totalGamesFromParticipants, totalGamesFromMatches)
+    const totalRevenue = totalRevenueFromParticipants > 0 ? totalRevenueFromParticipants : totalRevenueFromMatches
     const totalParticipants = participants?.length || 0
     const unpaidBalances = participants?.filter(p => p.payment_status !== 'paid' && parseFloat(p.amount_owed || '0') > 0).length || 0
 

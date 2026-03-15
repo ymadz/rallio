@@ -9,6 +9,7 @@ import {
   getMyQueues as getMyQueuesAction,
   getNearbyQueues as getNearbyQueuesAction,
   getMyQueueHistory,
+  getQueueMasterHistory,
 } from '@/app/actions/queue-actions'
 
 export interface QueuePlayer {
@@ -475,6 +476,44 @@ export function useMyQueueHistory() {
 
     fetchHistory()
   }, [])
+
+  return { history, isLoading }
+}
+
+/**
+ * Hook to fetch queue sessions organized by the current queue master
+ */
+export function useQueueMasterHistory(enabled = true) {
+  const [history, setHistory] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(enabled)
+
+  useEffect(() => {
+    if (!enabled) {
+      setHistory([])
+      setIsLoading(false)
+      return
+    }
+
+    async function fetchQueueMasterHistory() {
+      setIsLoading(true)
+      try {
+        const { success, history: data, error } = await getQueueMasterHistory()
+        if (success && data) {
+          setHistory(data)
+        } else {
+          console.error('Error fetching queue master history:', error)
+          setHistory([])
+        }
+      } catch (err) {
+        console.error('Error fetching queue master history:', err)
+        setHistory([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchQueueMasterHistory()
+  }, [enabled])
 
   return { history, isLoading }
 }
