@@ -4,11 +4,11 @@ import {
     Text,
     StyleSheet,
     TouchableOpacity,
-
     ActivityIndicator,
     Alert,
     ScrollView,
     TextInput,
+    Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -24,7 +24,7 @@ import { format } from 'date-fns';
 import RescheduleBottomSheet from '@/components/booking/RescheduleBottomSheet';
 import SubmitReviewBottomSheet from '@/components/venue/SubmitReviewBottomSheet';
 
-type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'no_show' | 'pending_payment' | 'paid' | 'refunded';
+type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'no_show' | 'pending_payment' | 'paid' | 'refunded' | 'partially_paid' | 'pending_refund';
 
 interface Reservation {
     id: string;
@@ -32,14 +32,27 @@ interface Reservation {
     start_time: string;
     end_time: string;
     total_amount: number;
+    amount_paid?: number;
+    payment_status?: string;
     status: BookingStatus;
     payment_method?: string;
+    recurrence_group_id?: string | null;
+    metadata?: {
+        type?: string;
+        rescheduled?: boolean;
+        week?: number;
+        totalWeeks?: number;
+        [key: string]: any;
+    };
     courts?: {
+        id?: string;
         name: string;
         venues?: {
+            id?: string;
             name: string;
             address: string;
             opening_hours?: any;
+            image_url?: string;
         };
     };
 }
@@ -49,9 +62,11 @@ export default function BookingDetailsScreen() {
     const [booking, setBooking] = useState<Reservation | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isCancelling, setIsCancelling] = useState(false);
+    // Fix 6: court image
+    const [courtImageUrl, setCourtImageUrl] = useState<string | null>(null);
 
     // Refund State
-    const [refundStatus, setRefundStatus] = useState<any>(null); // To store existing refund status
+    const [refundStatus, setRefundStatus] = useState<any>(null);
     const [showRefundModal, setShowRefundModal] = useState(false);
     const [refundReason, setRefundReason] = useState('');
     const [isSubmittingRefund, setIsSubmittingRefund] = useState(false);
@@ -160,10 +175,13 @@ export default function BookingDetailsScreen() {
                 .select(`
                     *,
                     courts (
+                        id,
                         name,
                         venues (
+                            id,
                             name,
-                            address
+                            address,
+                            image_url
                         )
                     )
                 `)
@@ -172,6 +190,22 @@ export default function BookingDetailsScreen() {
 
             if (error) throw error;
             setBooking(data);
+
+            // Fix 6: Fetch court image after booking loads
+            if (data?.court_id) {
+                const { data: courtImg } = await supabase
+                    .from('court_images')
+                    .select('url')
+                    .eq('court_id', data.court_id)
+                    .order('is_primary', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                if (courtImg?.url) {
+                    setCourtImageUrl(courtImg.url);
+                } else if (data?.courts?.venues?.image_url) {
+                    setCourtImageUrl(data.courts.venues.image_url);
+                }
+            }
         } catch (error) {
             console.error('Error details:', error);
             Alert.alert('Error', 'Failed to load booking details');
@@ -357,7 +391,19 @@ export default function BookingDetailsScreen() {
             </View>
 
             <ScrollView style={styles.content}>
-                {/* Status Banner */}
+                {/* Fix 6: Court image header */}
+                {courtImageUrl && (
+                    <View style={styles.imageContainer}>
+                        <Image
+                            source={{ uri: courtImageUrl }}
+                            style={styles.courtImage}
+                            resizeMode="cover"
+                        />
+                        <View style={styles.imageGradient} />
+                    </View>
+                )}
+
+                {/* Status Banner — now includes Fix 8 (recurrence), Fix 9 (rescheduled), Fix 15 (queue) badges */}
                 {refundStatus && (
                     <View style={[styles.refundBanner, { backgroundColor: Colors.dark.warning + '20', borderColor: Colors.dark.warning }]}>
                         <ActivityIndicator size="small" color={Colors.dark.warning} />
@@ -367,11 +413,39 @@ export default function BookingDetailsScreen() {
                     </View>
                 )}
 
-                {/* Status Banner */}
-                <View style={[styles.statusBanner, { backgroundColor: getStatusColor(booking.status) + '15' }]}>
-                    <Text style={[styles.statusText, { color: getStatusColor(booking.status) }]}>
-                        {booking.status.toUpperCase().replace('_', ' ')}
-                    </Text>
+                {/* Status + Badges Row */}
+                <View style={styles.statusRow}>
+                    <View style={[styles.statusBanner, { backgroundColor: getStatusColor(booking.status) + '15' }]}>
+                        <Text style={[styles.statusText, { color: getStatusColor(booking.status) }]}>
+                            {booking.status.toUpperCase().replace(/_/g, ' ')}
+                        </Text>
+                    </View>
+
+                    {/* Fix 9: Rescheduled badge */}
+                    {booking.metadata?.rescheduled && (
+                        <View style={styles.badge}>
+                            <Ionicons name="swap-horizontal" size={10} color="#60a5fa" />
+                            <Text style={[styles.badgeText, { color: '#60a5fa' }]}>Rescheduled</Text>
+                        </View>
+                    )}
+
+                    {/* Fix 8: Recurrence badge */}
+                    {booking.metadata?.week && booking.metadata?.totalWeeks && (
+                        <View style={[styles.badge, { backgroundColor: Colors.dark.primary + '20', borderColor: Colors.dark.primary + '40' }]}>
+                            <Ionicons name="repeat" size={10} color={Colors.dark.primary} />
+                            <Text style={[styles.badgeText, { color: Colors.dark.primary }]}>
+                                Week {booking.metadata.week}/{booking.metadata.totalWeeks}
+                            </Text>
+                        </View>
+                    )}
+
+                    {/* Fix 15: Queue session badge */}
+                    {booking.metadata?.type === 'queue_session' && (
+                        <View style={[styles.badge, { backgroundColor: Colors.dark.success + '20', borderColor: Colors.dark.success + '40' }]}>
+                            <Ionicons name="people" size={10} color={Colors.dark.success} />
+                            <Text style={[styles.badgeText, { color: Colors.dark.success }]}>Queue Session</Text>
+                        </View>
+                    )}
                 </View>
 
                 {/* Details */}
@@ -398,6 +472,34 @@ export default function BookingDetailsScreen() {
                         <Text style={styles.totalLabel}>Total Amount</Text>
                         <Text style={styles.totalValue}>₱{booking.total_amount.toLocaleString()}</Text>
                     </View>
+
+                    {/* Fix 7: Partial payment breakdown */}
+                    {booking.payment_status === 'partially_paid' && booking.amount_paid !== undefined && (
+                        <View style={styles.partialPayContainer}>
+                            <View style={styles.partialPayRow}>
+                                <Text style={styles.partialPayLabel}>Amount Paid</Text>
+                                <Text style={[styles.partialPayValue, { color: Colors.dark.success }]}>
+                                    ₱{booking.amount_paid.toLocaleString()}
+                                </Text>
+                            </View>
+                            <View style={styles.partialPayRow}>
+                                <Text style={styles.partialPayLabel}>Remaining Balance</Text>
+                                <Text style={[styles.partialPayValue, { color: Colors.dark.warning }]}>
+                                    ₱{(booking.total_amount - booking.amount_paid).toLocaleString()}
+                                </Text>
+                            </View>
+                            {/* Progress bar */}
+                            <View style={styles.progressBarBg}>
+                                <View style={[
+                                    styles.progressBarFill,
+                                    { width: `${Math.round((booking.amount_paid / booking.total_amount) * 100)}%` as any }
+                                ]} />
+                            </View>
+                            <Text style={styles.progressLabel}>
+                                {Math.round((booking.amount_paid / booking.total_amount) * 100)}% paid
+                            </Text>
+                        </View>
+                    )}
                 </Card>
 
                 {/* Action Buttons */}
@@ -708,5 +810,87 @@ const styles = StyleSheet.create({
     },
     modalButton: {
         flex: 1,
-    }
+    },
+    // Fix 6: Court image styles
+    imageContainer: {
+        marginBottom: Spacing.lg,
+        borderRadius: Radius.md,
+        overflow: 'hidden',
+        height: 180,
+        position: 'relative',
+    },
+    courtImage: {
+        width: '100%',
+        height: 180,
+    },
+    imageGradient: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 60,
+        backgroundColor: 'rgba(15,23,42,0.6)',
+    },
+    // Fix 8/9/15: Status row with badges
+    statusRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: Spacing.xs,
+        alignItems: 'center',
+        marginBottom: Spacing.lg,
+    },
+    badge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: Spacing.sm,
+        paddingVertical: 4,
+        borderRadius: Radius.full,
+        backgroundColor: '#1e3a5f',
+        borderWidth: 1,
+        borderColor: '#60a5fa40',
+    },
+    badgeText: {
+        ...Typography.caption,
+        fontWeight: '600',
+        fontSize: 11,
+    },
+    // Fix 7: Partial payment breakdown
+    partialPayContainer: {
+        marginTop: Spacing.md,
+        paddingTop: Spacing.md,
+        borderTopWidth: 1,
+        borderTopColor: Colors.dark.border,
+        gap: Spacing.sm,
+    },
+    partialPayRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    partialPayLabel: {
+        ...Typography.bodySmall,
+        color: Colors.dark.textSecondary,
+    },
+    partialPayValue: {
+        ...Typography.bodySmall,
+        fontWeight: '600',
+    },
+    progressBarBg: {
+        height: 6,
+        backgroundColor: Colors.dark.border,
+        borderRadius: 3,
+        overflow: 'hidden',
+        marginTop: Spacing.xs,
+    },
+    progressBarFill: {
+        height: 6,
+        backgroundColor: Colors.dark.primary,
+        borderRadius: 3,
+    },
+    progressLabel: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+        textAlign: 'right',
+        marginTop: 2,
+    },
 });

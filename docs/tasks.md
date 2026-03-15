@@ -34,6 +34,21 @@
 | Phase 8: Mobile App | 🔄 Restarted | 5% | Fresh Expo template, roadmap defined |
 | **Testing & QA** | ❌ Not Started | 0% | **No tests exist - CRITICAL GAP** |
 
+## 🚧 Capacitor Android (Web-Parity) Track
+
+Goal: ship Android APK with player-role web parity using Capacitor pure web shell.
+
+- [x] Create dedicated feature branch (`feature/capacitor-web-parity-android`)
+- [x] Add Capacitor bootstrap config (`web/capacitor.config.ts`)
+- [x] Add Capacitor scripts/dependencies in `web/package.json`
+- [x] Install dependencies and validate CLI (`npm run cap:doctor --workspace=web`)
+- [ ] Add Android platform (`npm run cap:add:android --workspace=web`)
+- [ ] Configure `CAPACITOR_SERVER_URL` for dev/staging/prod app shells
+- [ ] Validate auth flow in WebView (login/logout/session restore)
+- [ ] Validate PayMongo callback bridge (`/mobile-payment/callback`) end-to-end
+- [ ] Validate booking + queue parity paths for player role
+- [ ] Build internal test APK and run device smoke test
+
 ## How to Use This File
 - [x] Completed tasks
 - [ ] Pending tasks

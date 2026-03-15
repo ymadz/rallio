@@ -65,6 +65,8 @@ DerivedData
 android/.gradle/
 android/build/
 android/app/build/
+web/android/
+web/.gradle/
 *.apk
 *.aab
 

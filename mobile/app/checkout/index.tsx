@@ -41,6 +41,10 @@ export default function CheckoutScreen() {
         getRemainingBalance,
         setBookingReference,
         resetCheckout,
+        discountAmount,
+        discountReason,
+        downPaymentPercentage,      // ← reactive from store
+        setDownPaymentPercentage,   // ← action from store
     } = useCheckoutStore();
 
     const { getVenueById } = useCourtStore();
@@ -98,15 +102,12 @@ export default function CheckoutScreen() {
         return () => subscription.remove();
     }, [pendingReservationId]);
 
-    // Discount from store (Calculated in backend later, currently removing deprecated promo logic)
-    const [discountAmount, setDiscountAmount] = useState(0);
+    // discountAmount comes from store (set in book.tsx via setDiscount)
+    // No local override — store is the single source of truth
 
-    useEffect(() => {
-        // Adjust total if discount is applied? 
-        // Note: The store `getTotalAmount` usually calculates based on its internal state. 
-        // Since we are adding local discount state, we subtract it here. 
-        // Ideally we should sync this to the store, but for parity fix, local calculation on display and submission is acceptable.
-    }, [discountAmount]);
+    // Down payment input (local string so user can type freely; synced to store on blur)
+    const [dpInput, setDpInput] = useState('');
+    const [dpInputFocused, setDpInputFocused] = useState(false);
 
     useEffect(() => {
         if (!bookingData) {
@@ -124,13 +125,24 @@ export default function CheckoutScreen() {
         );
     }
 
-    const subtotal = getSubtotal();
+    const subtotal = getSubtotal();          // already discount-aware (store subtracts discountAmount)
     const platformFee = getPlatformFeeAmount();
-    const total = getTotalAmount() - discountAmount;
+    const total = getTotalAmount();           // subtotal + platformFee, discount already applied
 
-    const downPaymentAmount = getDownPaymentAmount();
+    const downPaymentAmount = getDownPaymentAmount(); // store default (venue %) — used as fallback
     const remainingBalance = getRemainingBalance();
-    const isDownPaymentRequired = paymentMethod === 'cash' && downPaymentAmount > 0;
+
+    // Derive the actual down payment amount from what the user typed in the input field.
+    // Falls back to store's value (venue default %) if no custom input yet.
+    const minDP = Math.round(total * 0.2 * 100) / 100;
+    const parsedDpInput = parseFloat(dpInput);
+    const dpCustomAmount = paymentMethod === 'cash'
+        ? (!isNaN(parsedDpInput) && parsedDpInput > 0
+            ? Math.min(Math.max(parsedDpInput, minDP), total)
+            : downPaymentAmount || minDP)
+        : 0;
+    // Cash strictly requires a downpayment online now
+    const isDownPaymentRequired = paymentMethod === 'cash';
 
     const formatTime = (time: string): string => {
         const [hours] = time.split(':').map(Number);
@@ -141,6 +153,8 @@ export default function CheckoutScreen() {
 
     const handleSelectPayment = (method: PaymentMethod) => {
         setPaymentMethod(method);
+        // Reset custom dp input when switching to e-wallet
+        if (method === 'e-wallet') setDpInput('');
     };
 
     // Discount handling is now server-driven where applicable
@@ -174,8 +188,8 @@ export default function CheckoutScreen() {
                 courtId: bookingData.courtId,
                 startTimeISO: `${format(new Date(bookingData.date), 'yyyy-MM-dd')}T${bookingData.startTime}:00+08:00`,
                 endTimeISO: `${format(new Date(bookingData.date), 'yyyy-MM-dd')}T${bookingData.endTime}:00+08:00`, // Duration logic handled by server if needed, but passing endISO is clearer
-                totalAmount: total, // GRAND TOTAL (Pre-calculated with discount)
-                discountAmount: discountAmount, // Pass discount info if backend needs it
+                totalAmount: total,
+                discountAmount: discountAmount, // from store
                 paymentType: 'full',
                 paymentMethod: paymentMethod, // 'cash' or 'e-wallet'
                 notes: bookingData.notes,
@@ -215,7 +229,7 @@ export default function CheckoutScreen() {
                 console.log(`Mobile Checkout: Initiating ${isDownPaymentRequired ? 'Down Payment' : 'Full Payment'} via PayMongo...`);
 
                 // Add return URL for Expo Go compatibility
-                const redirectUrl = Linking.createURL('/checkout');
+                const redirectUrl = Linking.createURL('/checkout/callback');
                 console.log('Mobile Checkout: Deep link return URL:', redirectUrl);
 
                 const checkoutResponse = await fetch(`${apiUrl}/api/mobile/create-checkout`, {
@@ -226,7 +240,8 @@ export default function CheckoutScreen() {
                     },
                     body: JSON.stringify({
                         reservationId: primaryReservationId,
-                        amount: isDownPaymentRequired ? downPaymentAmount : total,
+                        // For cash partial: pass the exact amount user typed; for e-wallet: full total
+                        amount: isDownPaymentRequired ? dpCustomAmount : total,
                         description: `Booking for ${bookingData.courtName} at ${bookingData.venueName}`,
                         recurrenceGroupId: recurrenceGroupId,
                         isDownPayment: isDownPaymentRequired,
@@ -361,6 +376,36 @@ export default function CheckoutScreen() {
                 <View style={{ width: 44 }} />
             </View>
 
+            {/* Fix 18: Step progress indicator */}
+            {(() => {
+                const steps = ['Review', 'Payment', 'Done'];
+                const stepIndex = step === 'review' ? 0 : step === 'payment' ? 1 : 2;
+                return (
+                    <View style={styles.stepperContainer}>
+                        {steps.map((label, i) => (
+                            <React.Fragment key={label}>
+                                <View style={styles.stepItem}>
+                                    <View style={[
+                                        styles.stepCircle,
+                                        i <= stepIndex && { backgroundColor: Colors.dark.primary, borderColor: Colors.dark.primary }
+                                    ]}>
+                                        {i < stepIndex ? (
+                                            <Ionicons name="checkmark" size={14} color="#fff" />
+                                        ) : (
+                                            <Text style={[styles.stepNum, i <= stepIndex && { color: '#fff' }]}>{i + 1}</Text>
+                                        )}
+                                    </View>
+                                    <Text style={[styles.stepLabel, i <= stepIndex && { color: Colors.dark.text }]}>{label}</Text>
+                                </View>
+                                {i < steps.length - 1 && (
+                                    <View style={[styles.stepLine, i < stepIndex && { backgroundColor: Colors.dark.primary }]} />
+                                )}
+                            </React.Fragment>
+                        ))}
+                    </View>
+                );
+            })()}
+
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
                 {/* Unified Booking Summary & Price Details */}
                 <Text style={styles.sectionTitle}>Booking Summary</Text>
@@ -375,27 +420,62 @@ export default function CheckoutScreen() {
                     {/* Date & Time */}
                     <View style={styles.summarySectionBlock}>
                         <Text style={styles.summaryLabel}>Date & Time</Text>
-                        <Text style={styles.summaryMainText}>
-                            {format(new Date(bookingData.date), 'EEEE, MMM d, yyyy')}
-                        </Text>
-                        <Text style={styles.summarySubText}>
-                            {formatTime(bookingData.startTime)} - {formatTime(bookingData.endTime)}
-                        </Text>
 
-                        {bookingData.recurrenceWeeks && bookingData.recurrenceWeeks > 1 && (
-                            <View style={styles.recurrenceBadges}>
-                                <View style={styles.recurrenceBadge}>
-                                    <Text style={styles.recurrenceBadgeText}>{bookingData.recurrenceWeeks} Weeks Selection</Text>
-                                </View>
-                                {(bookingData.selectedDays?.length || 0) > 1 && (
-                                    <View style={[styles.recurrenceBadge, styles.weeklyBadge]}>
-                                        <Text style={[styles.recurrenceBadgeText, styles.weeklyBadgeText]}>
-                                            {bookingData.selectedDays?.length}x Weekly
+                        {/* Fix: Show all specific dates for multi-day/week bookings */}
+                        {(() => {
+                            const weeks = bookingData.recurrenceWeeks || 1;
+                            const rawDays = bookingData.selectedDays || [];
+                            const days = rawDays.length > 0 ? rawDays : [new Date(bookingData.date).getDay()];
+                            const uniqueDays = Array.from(new Set(days)).sort((a, b) => a - b);
+                            const startDate = new Date(bookingData.date);
+                            const startDayIdx = startDate.getDay();
+                            const totalSessions = weeks * uniqueDays.length;
+
+                            // Build every session date
+                            const sessionDates: Date[] = [];
+                            for (let w = 0; w < weeks; w++) {
+                                for (const dayIdx of uniqueDays) {
+                                    const offset = ((dayIdx - startDayIdx + 7) % 7) + w * 7;
+                                    const d = new Date(startDate);
+                                    d.setDate(d.getDate() + offset);
+                                    sessionDates.push(d);
+                                }
+                            }
+                            sessionDates.sort((a, b) => a.getTime() - b.getTime());
+
+                            if (totalSessions <= 1) {
+                                // Single session — simple display
+                                return (
+                                    <>
+                                        <Text style={styles.summaryMainText}>
+                                            {format(startDate, 'EEEE, MMM d, yyyy')}
                                         </Text>
+                                        <Text style={styles.summarySubText}>
+                                            {formatTime(bookingData.startTime)} - {formatTime(bookingData.endTime)}
+                                        </Text>
+                                    </>
+                                );
+                            }
+
+                            // Multiple sessions — list all dates
+                            return (
+                                <>
+                                    <Text style={[styles.summarySubText, { marginBottom: 8 }]}>
+                                        {formatTime(bookingData.startTime)} - {formatTime(bookingData.endTime)} · {totalSessions} sessions
+                                    </Text>
+                                    <View style={styles.datesList}>
+                                        {sessionDates.map((d, i) => (
+                                            <View key={i} style={styles.datesListRow}>
+                                                <View style={styles.datesListDot} />
+                                                <Text style={styles.datesListText}>
+                                                    {format(d, 'EEE, MMM d, yyyy')}
+                                                </Text>
+                                            </View>
+                                        ))}
                                     </View>
-                                )}
-                            </View>
-                        )}
+                                </>
+                            );
+                        })()}
                     </View>
 
                     {/* Divider */}
@@ -408,7 +488,10 @@ export default function CheckoutScreen() {
                                 Court Fee (₱{bookingData.hourlyRate.toFixed(2)} × {bookingData.duration} {bookingData.duration > 1 ? 'hrs' : 'hr'})
                                 {bookingData.recurrenceWeeks && bookingData.recurrenceWeeks > 1 ? ` × ${bookingData.recurrenceWeeks * (bookingData.selectedDays?.length || 1)} sessions` : ''}
                             </Text>
-                            <Text style={styles.priceValue}>₱{(subtotal + discountAmount).toLocaleString()}</Text>
+                            {/* Show undiscounted base price in this row */}
+                            <Text style={styles.priceValue}>
+                                ₱{(subtotal + discountAmount).toLocaleString()}
+                            </Text>
                         </View>
 
                         {/* Discount Tags */}
@@ -447,7 +530,7 @@ export default function CheckoutScreen() {
                         <View style={styles.priceRow}>
                             <Text style={styles.totalPriceLabel}>Total Amount</Text>
                             <Text style={styles.totalPriceValue}>
-                                ₱{(isDownPaymentRequired ? downPaymentAmount : total).toLocaleString()}
+                                ₱{(isDownPaymentRequired ? dpCustomAmount : total).toLocaleString()}
                             </Text>
                         </View>
 
@@ -457,7 +540,7 @@ export default function CheckoutScreen() {
                                     <Text style={styles.dpBoxTitle}>REMAINING BALANCE</Text>
                                     <Text style={styles.dpBoxSub}>To be paid at the venue</Text>
                                 </View>
-                                <Text style={styles.dpBoxValue}>₱{remainingBalance.toLocaleString()}</Text>
+                                <Text style={styles.dpBoxValue}>₱{(total - dpCustomAmount).toLocaleString()}</Text>
                             </View>
                         )}
                     </View>
@@ -514,6 +597,71 @@ export default function CheckoutScreen() {
                     </View>
                 </TouchableOpacity>
 
+                {/* Custom down payment input — shown when cash is selected */}
+                {paymentMethod === 'cash' && (() => {
+                    const minDP = Math.round(total * 0.2 * 100) / 100;
+                    const parsedInput = parseFloat(dpInput);
+                    const customDP = !isNaN(parsedInput) && parsedInput > 0 ? parsedInput : downPaymentAmount;
+                    const clampedDP = Math.min(Math.max(customDP, minDP), total);
+                    const remaining = Math.round((total - clampedDP) * 100) / 100;
+                    const isFullPayment = clampedDP >= total;
+
+                    const handleDpBlur = () => {
+                        setDpInputFocused(false);
+                        if (isNaN(parsedInput) || parsedInput <= 0) {
+                            setDpInput(minDP.toFixed(2));
+                            setDownPaymentPercentage(20);
+                            return;
+                        }
+                        const clamped = Math.min(Math.max(parsedInput, minDP), total);
+                        setDpInput(clamped.toFixed(2));
+                        // Back-calculate % for store compatibility
+                        const pct = Math.round((clamped / total) * 100);
+                        setDownPaymentPercentage(pct);
+                    };
+
+                    const handleDpFocus = () => {
+                        setDpInputFocused(true);
+                        if (!dpInput) setDpInput(minDP.toFixed(2));
+                    };
+
+                    return (
+                        <Card variant="glass" padding="md" style={styles.dpPickerCard}>
+                            <Text style={styles.dpPickerTitle}>Down Payment</Text>
+                            <Text style={styles.dpPickerSub}>
+                                Enter how much you'd like to pay now online. Minimum is ₱{minDP.toLocaleString()} (20%).
+                            </Text>
+
+                            <View style={[styles.dpInputRow, dpInputFocused && styles.dpInputRowFocused]}>
+                                <Text style={styles.dpInputPrefix}>₱</Text>
+                                <TextInput
+                                    style={styles.dpInput}
+                                    value={dpInput}
+                                    onChangeText={setDpInput}
+                                    onFocus={handleDpFocus}
+                                    onBlur={handleDpBlur}
+                                    keyboardType="decimal-pad"
+                                    placeholder={minDP.toFixed(2)}
+                                    placeholderTextColor={Colors.dark.textTertiary}
+                                    selectTextOnFocus
+                                />
+                                <Text style={styles.dpInputSuffix}>
+                                    / ₱{total.toLocaleString()}
+                                </Text>
+                            </View>
+
+                            {!isFullPayment && (
+                                <View style={styles.dpRemainingRow}>
+                                    <Ionicons name="information-circle-outline" size={14} color={Colors.dark.textSecondary} />
+                                    <Text style={styles.dpRemainingText}>
+                                        ₱{remaining.toLocaleString()} will be collected at the venue
+                                    </Text>
+                                </View>
+                            )}
+                        </Card>
+                    );
+                })()}
+
                 {/* Cancellation Policy */}
                 <TouchableOpacity
                     style={styles.policyRow}
@@ -534,7 +682,7 @@ export default function CheckoutScreen() {
             <View style={styles.bottomCta}>
                 <View style={styles.ctaPrice}>
                     <Text style={styles.ctaPriceLabel}>{isDownPaymentRequired ? 'To Pay Online' : 'Total'}</Text>
-                    <Text style={styles.ctaPriceValue}>₱{(isDownPaymentRequired ? downPaymentAmount : total).toLocaleString()}</Text>
+                    <Text style={styles.ctaPriceValue}>₱{(isDownPaymentRequired ? dpCustomAmount : total).toLocaleString()}</Text>
                 </View>
                 <Button
                     onPress={handleConfirmBooking}
@@ -970,5 +1118,161 @@ const styles = StyleSheet.create({
         ...Typography.caption,
         color: Colors.dark.success,
         marginTop: 4,
+    },
+    // Fix 18: Checkout stepper
+    stepperContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: Spacing.lg,
+        paddingBottom: Spacing.md,
+    },
+    stepItem: {
+        alignItems: 'center',
+        gap: 4,
+    },
+    stepCircle: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: Colors.dark.surface,
+        borderWidth: 2,
+        borderColor: Colors.dark.border,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    stepNum: {
+        ...Typography.caption,
+        fontWeight: '700',
+        color: Colors.dark.textSecondary,
+    },
+    stepLabel: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+        fontSize: 11,
+    },
+    stepLine: {
+        flex: 1,
+        height: 2,
+        backgroundColor: Colors.dark.border,
+        marginBottom: 14,
+        marginHorizontal: 4,
+    },
+    // Booking dates list (multi-day/week bookings)
+    datesList: {
+        gap: 4,
+        marginTop: 4,
+    },
+    datesListRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    datesListDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: Colors.dark.primary,
+    },
+    datesListText: {
+        ...Typography.bodySmall,
+        color: Colors.dark.textSecondary,
+    },
+    // Down payment input field
+    dpPickerCard: {
+        marginTop: Spacing.sm,
+        marginBottom: Spacing.xs,
+    },
+    dpInputRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.dark.background,
+        borderRadius: Radius.md,
+        borderWidth: 1.5,
+        borderColor: Colors.dark.border,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.sm,
+        marginBottom: Spacing.xs,
+    },
+    dpInputRowFocused: {
+        borderColor: Colors.dark.primary,
+    },
+    dpInputPrefix: {
+        ...Typography.h3,
+        color: Colors.dark.textSecondary,
+        marginRight: 4,
+    },
+    dpInput: {
+        flex: 1,
+        ...Typography.h3,
+        color: Colors.dark.text,
+        padding: 0,
+    },
+    dpInputSuffix: {
+        ...Typography.bodySmall,
+        color: Colors.dark.textSecondary,
+        marginLeft: 4,
+    },
+    dpPickerTitle: {
+        ...Typography.body,
+        color: Colors.dark.text,
+        fontWeight: '700',
+        marginBottom: 4,
+    },
+    dpPickerSub: {
+        ...Typography.bodySmall,
+        color: Colors.dark.textSecondary,
+        marginBottom: Spacing.sm,
+    },
+    dpChipRow: {
+        flexDirection: 'row',
+        gap: 8,
+        flexWrap: 'wrap',
+    },
+    dpChip: {
+        flex: 1,
+        minWidth: 64,
+        alignItems: 'center',
+        paddingVertical: Spacing.sm,
+        paddingHorizontal: Spacing.xs,
+        borderRadius: Radius.md,
+        borderWidth: 1.5,
+        borderColor: Colors.dark.border,
+        backgroundColor: Colors.dark.surface,
+    },
+    dpChipSelected: {
+        borderColor: Colors.dark.primary,
+        backgroundColor: `${Colors.dark.primary}20`,
+    },
+    dpChipLabel: {
+        ...Typography.bodySmall,
+        color: Colors.dark.textSecondary,
+        fontWeight: '600',
+        marginBottom: 2,
+    },
+    dpChipLabelSelected: {
+        color: Colors.dark.primary,
+    },
+    dpChipAmt: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+        fontSize: 11,
+    },
+    dpChipAmtSelected: {
+        color: Colors.dark.primary,
+        fontWeight: '600',
+    },
+    dpRemainingRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: Spacing.sm,
+        paddingTop: Spacing.sm,
+        borderTopWidth: 1,
+        borderTopColor: Colors.dark.border,
+    },
+    dpRemainingText: {
+        ...Typography.bodySmall,
+        color: Colors.dark.textSecondary,
+        flex: 1,
     },
 });

@@ -46,7 +46,7 @@ export function PaymentMethodSelector() {
   const effectiveAmount = Math.min(Math.max(customDownPaymentAmount || minimumDownPayment, 0), total)
   const isBelowMinimum = customDownPaymentAmount !== undefined && customDownPaymentAmount > 0 && customDownPaymentAmount < minimumDownPayment
   const isAboveTotal = customDownPaymentAmount !== undefined && customDownPaymentAmount > total
-
+  
   return (
     <div className="space-y-4">
       <h3 className="font-semibold text-gray-900 text-lg">Select Payment Method</h3>

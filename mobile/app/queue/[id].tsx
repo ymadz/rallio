@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
     View,
     Text,
@@ -92,6 +92,18 @@ export default function QueueDetailScreen() {
     const spotsLeft = session ? session.max_players - session.current_players : 0;
     const isFull = spotsLeft <= 0;
 
+    // Fix 12: Group participants by status
+    const playingNow = sortedParticipants.filter(p => p.status === 'playing');
+    const waitingPlayers = sortedParticipants.filter(p => p.status === 'waiting');
+
+    // Fix 4: Join window timer
+    const [joinWindowCountdown, setJoinWindowCountdown] = useState<string | null>(null);
+    const [joinWindowOpen, setJoinWindowOpen] = useState(true);
+    const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    // Fix 10: Track previous participant status to detect 'playing' transitions
+    const prevUserStatusRef = useRef<string | null>(null);
+
     const fetchSession = useCallback(async (showRefreshIndicator = false) => {
         if (!id) return;
 
@@ -174,6 +186,48 @@ export default function QueueDetailScreen() {
     useEffect(() => {
         fetchSession();
     }, [fetchSession]);
+
+    // Fix 4: Join window timer effect
+    useEffect(() => {
+        if (!session) return;
+        const joinWindowHours: number = (session as any).join_window_hours ?? 0;
+        if (joinWindowHours <= 0) { setJoinWindowOpen(true); return; }
+
+        const tickTimer = () => {
+            const sessionStart = new Date(session.start_time).getTime();
+            const windowOpenAt = sessionStart - joinWindowHours * 60 * 60 * 1000;
+            const now = Date.now();
+            if (now >= windowOpenAt) {
+                setJoinWindowOpen(true);
+                setJoinWindowCountdown(null);
+                if (timerRef.current) clearInterval(timerRef.current);
+                return;
+            }
+            setJoinWindowOpen(false);
+            const diff = windowOpenAt - now;
+            const h = Math.floor(diff / 3600000);
+            const m = Math.floor((diff % 3600000) / 60000);
+            const s = Math.floor((diff % 60000) / 1000);
+            setJoinWindowCountdown(`${h}h ${m}m ${s}s`);
+        };
+        tickTimer();
+        timerRef.current = setInterval(tickTimer, 1000);
+        return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    }, [session]);
+
+    // Fix 10: Detect when user's turn starts via realtime and show alert
+    useEffect(() => {
+        if (!userParticipant) return;
+        const prev = prevUserStatusRef.current;
+        if (prev !== null && prev !== 'playing' && userParticipant.status === 'playing') {
+            Alert.alert(
+                '🎮 Your Turn!',
+                'You are now playing. Head to the court!',
+                [{ text: 'Got it!', style: 'default' }]
+            );
+        }
+        prevUserStatusRef.current = userParticipant.status;
+    }, [userParticipant]);
 
     // Real-time subscription for participant updates
     useEffect(() => {
@@ -525,60 +579,83 @@ export default function QueueDetailScreen() {
                     </View>
                 </View>
 
-                {/* Participants */}
+                {/* Participants — Fix 12: Grouped by status */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>
-                        Players in Queue ({sortedParticipants.length})
-                    </Text>
-                    {sortedParticipants.length > 0 ? (
-                        <View style={styles.participantsList}>
-                            {sortedParticipants.map((p, index) => {
-                                const isCurrentUser = p.user_id === user?.id;
-                                return (
-                                    <View
-                                        key={p.id}
-                                        style={[
+                    {/* Currently Playing */}
+                    {playingNow.length > 0 && (
+                        <View style={styles.playerGroup}>
+                            <View style={styles.groupHeader}>
+                                <View style={[styles.groupDot, { backgroundColor: Colors.dark.success }]} />
+                                <Text style={[styles.sectionTitle, { color: Colors.dark.success }]}>
+                                    Currently Playing ({playingNow.length})
+                                </Text>
+                            </View>
+                            <View style={styles.participantsList}>
+                                {playingNow.map((p) => {
+                                    const isCurrentUser = p.user_id === user?.id;
+                                    return (
+                                        <View key={p.id} style={[
+                                            styles.participantItem,
+                                            isCurrentUser && styles.participantItemCurrent,
+                                            { borderLeftColor: Colors.dark.success }
+                                        ]}>
+                                            <Avatar source={p.user?.avatar_url} name={getDisplayName(p)} size="sm" />
+                                            <View style={styles.participantInfo}>
+                                                <Text style={[styles.participantName, isCurrentUser && styles.participantNameCurrent]}>
+                                                    {getDisplayName(p)} {isCurrentUser && '(You)'}
+                                                </Text>
+                                                <Text style={styles.participantStats}>
+                                                    {p.games_played || 0} games • {p.games_won || 0} wins
+                                                </Text>
+                                            </View>
+                                            <Text style={{ fontSize: 18 }}>🎮</Text>
+                                        </View>
+                                    );
+                                })}
+                            </View>
+                        </View>
+                    )}
+
+                    {/* Waiting */}
+                    <View style={styles.playerGroup}>
+                        <View style={styles.groupHeader}>
+                            <View style={[styles.groupDot, { backgroundColor: Colors.dark.primary }]} />
+                            <Text style={styles.sectionTitle}>
+                                Waiting ({waitingPlayers.length})
+                            </Text>
+                        </View>
+                        {waitingPlayers.length > 0 ? (
+                            <View style={styles.participantsList}>
+                                {waitingPlayers.map((p, index) => {
+                                    const isCurrentUser = p.user_id === user?.id;
+                                    return (
+                                        <View key={p.id} style={[
                                             styles.participantItem,
                                             isCurrentUser && styles.participantItemCurrent
-                                        ]}
-                                    >
-                                        <View style={styles.positionBadge}>
-                                            <Text style={styles.positionBadgeText}>#{index + 1}</Text>
-                                        </View>
-                                        <Avatar
-                                            source={p.user?.avatar_url}
-                                            name={getDisplayName(p)}
-                                            size="sm"
-                                        />
-                                        <View style={styles.participantInfo}>
-                                            <Text style={[
-                                                styles.participantName,
-                                                isCurrentUser && styles.participantNameCurrent
-                                            ]}>
-                                                {getDisplayName(p)} {isCurrentUser && '(You)'}
-                                            </Text>
-                                            <Text style={styles.participantStats}>
-                                                {p.games_played || 0} games • {p.games_won || 0} wins
-                                            </Text>
-                                        </View>
-                                        <View style={[
-                                            styles.participantStatus,
-                                            { backgroundColor: p.status === 'playing' ? Colors.dark.success + '20' : Colors.dark.info + '20' }
                                         ]}>
-                                            <Text style={[
-                                                styles.participantStatusText,
-                                                { color: p.status === 'playing' ? Colors.dark.success : Colors.dark.info }
-                                            ]}>
-                                                {p.status === 'playing' ? '🎮' : '⏳'}
-                                            </Text>
+                                            <View style={styles.positionBadge}>
+                                                <Text style={styles.positionBadgeText}>#{index + 1}</Text>
+                                            </View>
+                                            <Avatar source={p.user?.avatar_url} name={getDisplayName(p)} size="sm" />
+                                            <View style={styles.participantInfo}>
+                                                <Text style={[styles.participantName, isCurrentUser && styles.participantNameCurrent]}>
+                                                    {getDisplayName(p)} {isCurrentUser && '(You)'}
+                                                </Text>
+                                                <Text style={styles.participantStats}>
+                                                    {p.games_played || 0} games • {p.games_won || 0} wins
+                                                </Text>
+                                            </View>
+                                            <View style={[styles.participantStatus, { backgroundColor: Colors.dark.info + '20' }]}>
+                                                <Text style={[styles.participantStatusText, { color: Colors.dark.info }]}>⏳</Text>
+                                            </View>
                                         </View>
-                                    </View>
-                                );
-                            })}
-                        </View>
-                    ) : (
-                        <Text style={styles.noParticipants}>No players yet. Be the first to join!</Text>
-                    )}
+                                    );
+                                })}
+                            </View>
+                        ) : (
+                            <Text style={styles.noParticipants}>No one waiting. Join first!</Text>
+                        )}
+                    </View>
                 </View>
 
                 <View style={{ height: 120 }} />
@@ -586,6 +663,13 @@ export default function QueueDetailScreen() {
 
             {/* Bottom Action */}
             <View style={styles.bottomAction}>
+                {/* Fix 4: Join window timer */}
+                {!isInQueue && !joinWindowOpen && joinWindowCountdown && (
+                    <View style={styles.windowTimerCard}>
+                        <Ionicons name="time-outline" size={16} color={Colors.dark.warning} />
+                        <Text style={styles.windowTimerText}>Queue opens in {joinWindowCountdown}</Text>
+                    </View>
+                )}
                 {isInQueue ? (
                     <Button
                         variant="secondary"
@@ -599,9 +683,12 @@ export default function QueueDetailScreen() {
                     <Button
                         onPress={handleJoinQueue}
                         loading={isJoining}
-                        disabled={isFull || isJoining}
+                        disabled={isFull || isJoining || !joinWindowOpen}
                     >
-                        {isJoining ? 'Joining...' : isFull ? 'Queue Full' : 'Join Queue'}
+                        {isJoining ? 'Joining...'
+                            : isFull ? 'Queue Full'
+                            : !joinWindowOpen ? 'Queue Not Open Yet'
+                            : 'Join Queue'}
                     </Button>
                 )}
             </View>
@@ -906,5 +993,37 @@ const styles = StyleSheet.create({
     },
     leaveButton: {
         borderColor: Colors.dark.error,
+    },
+    // Fix 12: Player group sections
+    playerGroup: {
+        marginBottom: Spacing.md,
+    },
+    groupHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.xs,
+        marginBottom: Spacing.sm,
+    },
+    groupDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
+    // Fix 4: Join window timer
+    windowTimerCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm,
+        backgroundColor: Colors.dark.warning + '15',
+        borderWidth: 1,
+        borderColor: Colors.dark.warning + '40',
+        borderRadius: Radius.md,
+        padding: Spacing.sm,
+        marginBottom: Spacing.sm,
+    },
+    windowTimerText: {
+        ...Typography.bodySmall,
+        color: Colors.dark.warning,
+        fontWeight: '600',
     },
 });

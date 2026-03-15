@@ -303,9 +303,13 @@ export const useCheckoutStore = create<CheckoutState>()(
 
       getDownPaymentAmount: () => {
         const state = get()
-        if (state.paymentMethod !== 'cash' || !state.downPaymentPercentage) return 0
+        if (state.paymentMethod !== 'cash') return 0
+        
         const total = state.getTotalAmount()
-        const minimumDownPayment = Math.round((total * (state.downPaymentPercentage / 100)) * 100) / 100
+        const dpPercent = (state.downPaymentPercentage && state.downPaymentPercentage > 0)
+          ? state.downPaymentPercentage
+          : 20
+        const minimumDownPayment = Math.round((total * (dpPercent / 100)) * 100) / 100
         // If user set a custom amount, use it (clamped between minimum and total)
         if (state.customDownPaymentAmount !== undefined && state.customDownPaymentAmount > 0) {
           const clamped = Math.min(Math.max(state.customDownPaymentAmount, minimumDownPayment), total)

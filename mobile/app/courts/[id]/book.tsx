@@ -301,15 +301,7 @@ export default function BookingScreen() {
         }
         setIsValidatingRecurrence(false);
 
-        // Pass discount info separately
-        // The totalDiscount from engine is already multiplied by actualSlotCount
-        setDiscount(
-            discountResults.totalDiscount,
-            discountResults.discounts.length > 0 ? discountResults.discounts[0].type : undefined,
-            discountResults.discounts.map((d: any) => d.name).join(', ')
-        );
-
-        // Save to checkout store
+        // Save to checkout store FIRST so setDiscount() is applied after and not overwritten
         setBookingData({
             courtId: selectedCourtId,
             courtName: selectedCourt.name,
@@ -323,8 +315,16 @@ export default function BookingScreen() {
             duration: duration,
             notes: notes.trim() || undefined,
             recurrenceWeeks: recurrenceWeeks,
-            selectedDays: selectedDays, // Add this
+            selectedDays: selectedDays,
         });
+
+        // Set discount AFTER setBookingData — store now preserves it
+        // Always call setDiscount (even with 0) to clear any stale value from a previous booking
+        setDiscount(
+            discountResults.totalDiscount,
+            discountResults.discounts.length > 0 ? discountResults.discounts[0].type : undefined,
+            discountResults.discounts.map((d: any) => d.name).join(', ') || undefined,
+        );
 
         // Set down payment percentage from venue metadata
         if (venue.metadata?.down_payment_percentage) {
@@ -610,88 +610,6 @@ export default function BookingScreen() {
                     </>
                 )}
 
-                {/* Notes */}
-                {selectedTime && (
-                    <>
-                        <Text style={styles.sectionTitle}>Notes (Optional)</Text>
-                        <TextInput
-                            style={styles.notesInput}
-                            value={notes}
-                            onChangeText={setNotes}
-                            placeholder="Any special requests..."
-                            placeholderTextColor={Colors.dark.textTertiary}
-                            multiline
-                            numberOfLines={3}
-                        />
-                    </>
-                )}
-
-                {/* Summary */}
-                {selectedTime && selectedCourt && selectedDate && (
-                    <Card variant="glass" padding="lg" style={styles.summaryCard}>
-                        <Text style={styles.summaryTitle}>Booking Summary</Text>
-
-                        <View style={styles.summaryRow}>
-                            <Text style={styles.summaryLabel}>Date</Text>
-                            <Text style={styles.summaryValue}>
-                                {format(selectedDate, 'EEEE, MMM d')}
-                            </Text>
-                        </View>
-
-                        <View style={styles.summaryRow}>
-                            <Text style={styles.summaryLabel}>Time</Text>
-                            <Text style={styles.summaryValue}>
-                                {formatTime(selectedTime)} - {formatTime(getEndTimeStr(endTime || selectedTime))}
-                            </Text>
-                        </View>
-
-                        <View style={styles.summaryRow}>
-                            <Text style={styles.summaryLabel}>Duration</Text>
-                            <Text style={styles.summaryValue}>
-                                {duration} {duration === 1 ? 'hour' : 'hours'}
-                            </Text>
-                        </View>
-
-                        {recurrenceWeeks > 1 && (
-                            <View style={styles.summaryRow}>
-                                <Text style={styles.summaryLabel}>Recurrence</Text>
-                                <Text style={[styles.summaryValue, { color: Colors.dark.primary }]}>
-                                    {recurrenceWeeks} Weeks ({selectedDays.length} days/week)
-                                </Text>
-                            </View>
-                        )}
-
-                        <View style={[styles.summaryRow, styles.totalRow]}>
-                            <Text style={styles.totalLabel}>Total</Text>
-                            <Text style={styles.totalValue}>₱{totalPrice.toLocaleString()}</Text>
-                        </View>
-
-                        {discountResults.discounts.length > 0 && (
-                            <View style={styles.discountContainer}>
-                                {discountResults.discounts.map((discount, index) => (
-                                    <View key={index} style={styles.summaryRow}>
-                                        <Text style={[
-                                            styles.summaryLabel,
-                                            { color: discount.isIncrease ? Colors.dark.error : Colors.dark.success }
-                                        ]}>
-                                            {discount.name} (per week)
-                                        </Text>
-                                        <Text style={[
-                                            styles.summaryValue,
-                                            { color: discount.isIncrease ? Colors.dark.error : Colors.dark.success }
-                                        ]}>
-                                            {discount.isIncrease ? '+' : '-'}₱{discount.amount.toLocaleString()}
-                                        </Text>
-                                    </View>
-                                ))}
-                                <View style={[styles.summaryRow, styles.finalPriceRow]}>
-                                    <Text style={styles.finalPriceLabel}>Final Price</Text>
-                                    <Text style={styles.finalPriceValue}>₱{discountResults.finalPrice.toLocaleString()}</Text>
-                                </View>
-                            </View>
-                        )}
-                    </Card>
-                )}
 
                 <View style={{ height: 120 }} />
             </ScrollView>

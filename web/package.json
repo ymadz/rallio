@@ -5,10 +5,20 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:cap": "npm run build && npm run cap:sync",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "cap:add:android": "npx cap add android",
+    "cap:prepare:android": "mkdir -p android/app/src/main/assets",
+    "cap:copy": "npm run cap:prepare:android && npx cap copy android",
+    "cap:doctor": "npx cap doctor",
+    "cap:open:android": "npx cap open android",
+    "cap:sync": "npm run cap:prepare:android && npx cap sync android"
   },
   "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/cli": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
     "@hookform/resolvers": "^5.0.0",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-dialog": "^1.1.15",

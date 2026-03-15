@@ -178,10 +178,14 @@ export async function POST(req: Request) {
             metadata: metadata
         })
 
-        // Update payment with provider external ID
-        if (result && result.checkoutUrl) {
-            // Note: We might not get the payment intent ID immediately here for GCash sources,
-            // but if we did, we'd update it. For now, rely on webhook to match via metadata.payment_id
+        // ✅ CRITICAL: Save the PayMongo source ID as external_id on the payment record.
+        // The webhook handler (handleSourceChargeable) finds the payment by external_id = sourceId.
+        // Without this, the webhook cannot find the payment → reservation stays pending_payment forever.
+        if (result?.sourceId) {
+            await supabase
+                .from('payments')
+                .update({ external_id: result.sourceId })
+                .eq('id', paymentData.id)
         }
 
         return NextResponse.json(result)

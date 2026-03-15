@@ -93,11 +93,21 @@ export const useCheckoutStore = create<CheckoutState>()(
             ...initialState,
 
             setBookingData: (data) => {
-                set({
-                    ...initialState,
+                set((current) => ({
                     bookingData: data,
                     currentStep: 'details',
-                });
+                    paymentMethod: null,
+                    policyAccepted: false,
+                    bookingReference: undefined,
+                    reservationId: undefined,
+                    isSplitPayment: false,
+                    splitPlayerCount: 2,
+                    // Preserve discount — it is set by setDiscount() AFTER setBookingData()
+                    // but we keep whatever was already in the store to avoid a race condition
+                    discountAmount: current.discountAmount,
+                    discountType: current.discountType,
+                    discountReason: current.discountReason,
+                }));
             },
 
             setCurrentStep: (step) => set({ currentStep: step }),
@@ -163,9 +173,14 @@ export const useCheckoutStore = create<CheckoutState>()(
 
             getDownPaymentAmount: () => {
                 const state = get();
-                if (state.paymentMethod !== 'cash' || !state.downPaymentPercentage) return 0;
+                if (state.paymentMethod !== 'cash') return 0;
+                
                 const total = state.getTotalAmount();
-                return Math.round((total * (state.downPaymentPercentage / 100)) * 100) / 100;
+                const dpPercent = (state.downPaymentPercentage && state.downPaymentPercentage > 0)
+                    ? state.downPaymentPercentage
+                    : 20;
+
+                return Math.round((total * (dpPercent / 100)) * 100) / 100;
             },
 
             getRemainingBalance: () => {
@@ -187,6 +202,10 @@ export const useCheckoutStore = create<CheckoutState>()(
             storage: createJSONStorage(() => AsyncStorage),
             partialize: (state) => ({
                 bookingData: state.bookingData,
+                discountAmount: state.discountAmount,
+                discountType: state.discountType,
+                discountReason: state.discountReason,
+                downPaymentPercentage: state.downPaymentPercentage,
             }),
         }
     )

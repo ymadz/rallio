@@ -17,7 +17,7 @@ import { Card, Button } from '@/components/ui';
 import { useAuthStore } from '@/store/auth-store';
 import { supabase } from '@/lib/supabase';
 
-type PaymentMethod = 'e-wallet' | 'cash';
+type PaymentMethod = 'gcash' | 'maya' | 'cash';
 
 export default function QueuePaymentScreen() {
     const { amount, sessionId, description } = useLocalSearchParams<{ amount: string; sessionId: string; description: string }>();
@@ -64,10 +64,12 @@ export default function QueuePaymentScreen() {
                     'Authorization': `Bearer ${session.access_token}`
                 },
                 body: JSON.stringify({
-                    reservationId: sessionId, // Using session ID as reference for queue payments
+                    reservationId: sessionId,
                     amount: parsedAmount,
                     description: description || 'Queue Fee Payment',
-                    successUrl: 'rallio://queue/payment/success', // Deep link to success handler if needed
+                    // Fix 11: pass specific e-wallet type
+                    paymentMethod: paymentMethod, // 'gcash' | 'maya'
+                    successUrl: 'rallio://queue/payment/success',
                     cancelUrl: 'rallio://queue/payment/cancel',
                     metadata: {
                         type: 'queue_payment',
@@ -116,28 +118,53 @@ export default function QueuePaymentScreen() {
 
                 <Text style={styles.sectionTitle}>Select Payment Method</Text>
 
+                {/* Fix 11: GCash */}
                 <TouchableOpacity
                     style={[
                         styles.paymentOption,
-                        paymentMethod === 'e-wallet' && styles.paymentOptionSelected,
+                        paymentMethod === 'gcash' && styles.paymentOptionSelected,
                     ]}
-                    onPress={() => setPaymentMethod('e-wallet')}
+                    onPress={() => setPaymentMethod('gcash')}
                 >
-                    <View style={styles.paymentIcon}>
-                        <Ionicons name="wallet-outline" size={24} color={Colors.dark.primary} />
+                    <View style={[styles.paymentIcon, { backgroundColor: '#00A3E0' + '20' }]}>
+                        <Text style={{ fontSize: 20 }}>📱</Text>
                     </View>
                     <View style={styles.paymentInfo}>
-                        <Text style={styles.paymentTitle}>E-Wallet</Text>
-                        <Text style={styles.paymentDesc}>GCash, Maya, or Card</Text>
+                        <Text style={styles.paymentTitle}>GCash</Text>
+                        <Text style={styles.paymentDesc}>Pay via GCash e-wallet</Text>
                     </View>
                     <View style={[
                         styles.radioOuter,
-                        paymentMethod === 'e-wallet' && styles.radioSelected,
+                        paymentMethod === 'gcash' && styles.radioSelected,
                     ]}>
-                        {paymentMethod === 'e-wallet' && <View style={styles.radioInner} />}
+                        {paymentMethod === 'gcash' && <View style={styles.radioInner} />}
                     </View>
                 </TouchableOpacity>
 
+                {/* Fix 11: Maya */}
+                <TouchableOpacity
+                    style={[
+                        styles.paymentOption,
+                        paymentMethod === 'maya' && styles.paymentOptionSelected,
+                    ]}
+                    onPress={() => setPaymentMethod('maya')}
+                >
+                    <View style={[styles.paymentIcon, { backgroundColor: '#38b2ac' + '20' }]}>
+                        <Text style={{ fontSize: 20 }}>💳</Text>
+                    </View>
+                    <View style={styles.paymentInfo}>
+                        <Text style={styles.paymentTitle}>Maya</Text>
+                        <Text style={styles.paymentDesc}>Pay via Maya e-wallet</Text>
+                    </View>
+                    <View style={[
+                        styles.radioOuter,
+                        paymentMethod === 'maya' && styles.radioSelected,
+                    ]}>
+                        {paymentMethod === 'maya' && <View style={styles.radioInner} />}
+                    </View>
+                </TouchableOpacity>
+
+                {/* Cash */}
                 <TouchableOpacity
                     style={[
                         styles.paymentOption,
@@ -168,7 +195,7 @@ export default function QueuePaymentScreen() {
                     disabled={!paymentMethod || isProcessing}
                     loading={isProcessing}
                 >
-                    {paymentMethod === 'e-wallet' ? 'Pay Now' : 'Confirm Cash Payment'}
+                    {paymentMethod === 'cash' ? 'Confirm Cash Payment' : 'Pay Now'}
                 </Button>
             </View>
         </SafeAreaView>
