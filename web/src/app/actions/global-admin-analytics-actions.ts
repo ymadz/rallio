@@ -151,8 +151,8 @@ export async function getRecentActivity() {
         target_type,
         target_id,
         created_at,
-        performed_by,
-        admin:performed_by(email, display_name)
+        admin_id,
+        admin:profiles!admin_id(email, display_name)
       `)
       .order('created_at', { ascending: false })
       .limit(20)
