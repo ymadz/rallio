@@ -41,8 +41,10 @@ export default function CheckoutScreen() {
         getRemainingBalance,
         setBookingReference,
         resetCheckout,
-        discountAmount,       // ← read from store (Fix 3)
+        discountAmount,
         discountReason,
+        downPaymentPercentage,      // ← reactive from store
+        setDownPaymentPercentage,   // ← action from store
     } = useCheckoutStore();
 
     const { getVenueById } = useCourtStore();
@@ -126,6 +128,7 @@ export default function CheckoutScreen() {
     const downPaymentAmount = getDownPaymentAmount();
     const remainingBalance = getRemainingBalance();
     const isDownPaymentRequired = paymentMethod === 'cash' && downPaymentAmount > 0;
+    const isFullCashOnline = paymentMethod === 'cash' && (downPaymentPercentage ?? 20) >= 100;
 
     const formatTime = (time: string): string => {
         const [hours] = time.split(':').map(Number);
@@ -576,6 +579,53 @@ export default function CheckoutScreen() {
                         {paymentMethod === 'cash' && <View style={styles.radioInner} />}
                     </View>
                 </TouchableOpacity>
+
+                {/* Custom down payment picker — shown when cash is selected */}
+                {paymentMethod === 'cash' && (() => {
+                    const currentPct = downPaymentPercentage ?? 20;
+                    const dpOptions = [
+                        { label: '20%', pct: 20 },
+                        { label: '30%', pct: 30 },
+                        { label: '50%', pct: 50 },
+                        { label: 'Full', pct: 100 },
+                    ];
+                    return (
+                        <Card variant="glass" padding="md" style={styles.dpPickerCard}>
+                            <Text style={styles.dpPickerTitle}>Down Payment Required</Text>
+                            <Text style={styles.dpPickerSub}>
+                                Choose how much to pay online now. The rest is settled at the venue.
+                            </Text>
+                            <View style={styles.dpChipRow}>
+                                {dpOptions.map(({ label, pct }) => {
+                                    const isSelected = currentPct === pct;
+                                    const dpAmt = pct >= 100 ? total : Math.round((total * pct / 100) * 100) / 100;
+                                    return (
+                                        <TouchableOpacity
+                                            key={pct}
+                                            style={[styles.dpChip, isSelected && styles.dpChipSelected]}
+                                            onPress={() => setDownPaymentPercentage(pct)}
+                                        >
+                                            <Text style={[styles.dpChipLabel, isSelected && styles.dpChipLabelSelected]}>
+                                                {label}
+                                            </Text>
+                                            <Text style={[styles.dpChipAmt, isSelected && styles.dpChipAmtSelected]}>
+                                                ₱{dpAmt.toLocaleString()}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                            {currentPct < 100 && (
+                                <View style={styles.dpRemainingRow}>
+                                    <Ionicons name="information-circle-outline" size={14} color={Colors.dark.textSecondary} />
+                                    <Text style={styles.dpRemainingText}>
+                                        ₱{remainingBalance.toLocaleString()} will be collected at the venue
+                                    </Text>
+                                </View>
+                            )}
+                        </Card>
+                    );
+                })()}
 
                 {/* Cancellation Policy */}
                 <TouchableOpacity
@@ -1091,5 +1141,73 @@ const styles = StyleSheet.create({
     datesListText: {
         ...Typography.bodySmall,
         color: Colors.dark.textSecondary,
+    },
+    // Down payment picker
+    dpPickerCard: {
+        marginTop: Spacing.sm,
+        marginBottom: Spacing.xs,
+    },
+    dpPickerTitle: {
+        ...Typography.body,
+        color: Colors.dark.text,
+        fontWeight: '700',
+        marginBottom: 4,
+    },
+    dpPickerSub: {
+        ...Typography.bodySmall,
+        color: Colors.dark.textSecondary,
+        marginBottom: Spacing.sm,
+    },
+    dpChipRow: {
+        flexDirection: 'row',
+        gap: 8,
+        flexWrap: 'wrap',
+    },
+    dpChip: {
+        flex: 1,
+        minWidth: 64,
+        alignItems: 'center',
+        paddingVertical: Spacing.sm,
+        paddingHorizontal: Spacing.xs,
+        borderRadius: Radius.md,
+        borderWidth: 1.5,
+        borderColor: Colors.dark.border,
+        backgroundColor: Colors.dark.surface,
+    },
+    dpChipSelected: {
+        borderColor: Colors.dark.primary,
+        backgroundColor: `${Colors.dark.primary}20`,
+    },
+    dpChipLabel: {
+        ...Typography.bodySmall,
+        color: Colors.dark.textSecondary,
+        fontWeight: '600',
+        marginBottom: 2,
+    },
+    dpChipLabelSelected: {
+        color: Colors.dark.primary,
+    },
+    dpChipAmt: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+        fontSize: 11,
+    },
+    dpChipAmtSelected: {
+        color: Colors.dark.primary,
+        fontWeight: '600',
+    },
+    dpRemainingRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: Spacing.sm,
+        paddingTop: Spacing.sm,
+        borderTopWidth: 1,
+        borderTopColor: Colors.dark.border,
+    },
+    dpRemainingText: {
+        ...Typography.bodySmall,
+        color: Colors.dark.textSecondary,
+        flex: 1,
     },
 });
