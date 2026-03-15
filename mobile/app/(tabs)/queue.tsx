@@ -3,7 +3,6 @@ import {
     View,
     Text,
     StyleSheet,
-
     FlatList,
     RefreshControl,
     TouchableOpacity,
@@ -36,6 +35,17 @@ interface QueueSession {
             address: string;
         };
     };
+}
+
+// Fix 2: User's own queue participation entry
+interface MyQueueEntry {
+    id: string;
+    queue_session_id: string;
+    status: 'waiting' | 'playing' | 'completed' | 'left';
+    games_played: number;
+    amount_owed: number;
+    payment_status: 'unpaid' | 'partial' | 'paid';
+    queue_sessions?: QueueSession;
 }
 
 interface QueueCardProps {
@@ -155,6 +165,8 @@ QueueCard.displayName = 'QueueCard';
 export default function QueueScreen() {
     const { user } = useAuthStore();
     const [sessions, setSessions] = useState<QueueSession[]>([]);
+    // Fix 2: My queues state
+    const [myQueues, setMyQueues] = useState<MyQueueEntry[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -165,24 +177,55 @@ export default function QueueScreen() {
             else setIsLoading(true);
             setError(null);
 
-            const { data, error: fetchError } = await supabase
-                .from('queue_sessions')
-                .select(`
-                    *,
-                    courts (
-                        name,
-                        venues (
+            // Parallel fetch: available queues + user's queues
+            const [sessionsResult, myQueuesResult] = await Promise.all([
+                supabase
+                    .from('queue_sessions')
+                    .select(`
+                        *,
+                        courts (
                             name,
-                            address
+                            venues (
+                                name,
+                                address
+                            )
                         )
-                    )
-                `)
-                .in('status', ['open', 'active'])
-                .gte('end_time', new Date().toISOString())
-                .order('start_time', { ascending: true });
+                    `)
+                    .in('status', ['open', 'active'])
+                    .eq('is_public', true)
+                    .gte('end_time', new Date().toISOString())
+                    .order('start_time', { ascending: true }),
+                user ? supabase
+                    .from('queue_participants')
+                    .select(`
+                        id,
+                        queue_session_id,
+                        status,
+                        games_played,
+                        amount_owed,
+                        payment_status,
+                        queue_sessions (
+                            *,
+                            courts (
+                                name,
+                                venues (
+                                    name,
+                                    address
+                                )
+                            )
+                        )
+                    `)
+                    .eq('user_id', user.id)
+                    .in('status', ['waiting', 'playing'])
+                    .is('left_at', null) : Promise.resolve({ data: [], error: null })
+            ]);
 
-            if (fetchError) throw fetchError;
-            setSessions(data || []);
+            if (sessionsResult.error) throw sessionsResult.error;
+            setSessions(sessionsResult.data || []);
+
+            if (!myQueuesResult.error && myQueuesResult.data) {
+                setMyQueues(myQueuesResult.data as any);
+            }
         } catch (err: any) {
             console.error('Error fetching queue sessions:', err);
             setError(err.message || 'Failed to load queue sessions');
@@ -190,7 +233,7 @@ export default function QueueScreen() {
             setIsLoading(false);
             setIsRefreshing(false);
         }
-    }, []);
+    }, [user]);
 
     useEffect(() => {
         fetchQueueSessions();
@@ -203,6 +246,13 @@ export default function QueueScreen() {
     const handleSessionPress = (sessionId: string) => {
         router.push(`/queue/${sessionId}`);
     };
+
+    // Fix 2: My queues stats
+    const activeQueuesCount = myQueues.length;
+    const totalGamesPlayed = myQueues.reduce((sum, q) => sum + (q.games_played || 0), 0);
+    const totalOwed = myQueues
+        .filter(q => q.payment_status !== 'paid')
+        .reduce((sum, q) => sum + (parseFloat(String(q.amount_owed || 0))), 0);
 
     const renderEmptyState = () => (
         <View style={styles.emptyContainer}>
@@ -236,11 +286,107 @@ export default function QueueScreen() {
         </View>
     );
 
+    // Fix 16: Tips footer
+    const renderTipsFooter = () => (
+        <Card variant="glass" padding="lg" style={styles.tipsCard}>
+            <View style={styles.tipsHeader}>
+                <Ionicons name="bulb-outline" size={20} color={Colors.dark.warning} />
+                <Text style={styles.tipsTitle}>Queue Tips</Text>
+            </View>
+            {[
+                { icon: 'time-outline', tip: 'Arrive 10 mins early to secure your spot.' },
+                { icon: 'people-outline', tip: 'Be ready when it\'s your turn — missed turns move you to the back.' },
+                { icon: 'card-outline', tip: 'Settle your balance before leaving the queue.' },
+                { icon: 'chatbubble-outline', tip: 'Communicate with the Queue Master for any special requests.' },
+            ].map(({ icon, tip }, i) => (
+                <View key={i} style={styles.tipRow}>
+                    <Ionicons name={icon as any} size={14} color={Colors.dark.textSecondary} />
+                    <Text style={styles.tipText}>{tip}</Text>
+                </View>
+            ))}
+        </Card>
+    );
+
+    // Fix 2: My Queues section header + items for prepending before the main list
+    const renderListHeader = () => (
+        <View>
+            {/* Fix 2: Stats row */}
+            {user && (
+                <View style={styles.statsRow}>
+                    <View style={styles.statCard}>
+                        <Text style={styles.statNumber}>{activeQueuesCount}</Text>
+                        <Text style={styles.statLabel}>Active</Text>
+                    </View>
+                    <View style={[styles.statCard, { borderColor: Colors.dark.primary + '40' }]}>
+                        <Text style={[styles.statNumber, { color: Colors.dark.primary }]}>{totalGamesPlayed}</Text>
+                        <Text style={styles.statLabel}>Games</Text>
+                    </View>
+                    <View style={[styles.statCard, { borderColor: totalOwed > 0 ? Colors.dark.warning + '40' : Colors.dark.border }]}>
+                        <Text style={[styles.statNumber, { color: totalOwed > 0 ? Colors.dark.warning : Colors.dark.text }]}>
+                            ₱{totalOwed.toFixed(0)}
+                        </Text>
+                        <Text style={styles.statLabel}>Balance</Text>
+                    </View>
+                </View>
+            )}
+
+            {/* Fix 2: My Active Queues section */}
+            {myQueues.length > 0 && (
+                <View style={styles.sectionContainer}>
+                    <Text style={styles.sectionTitle}>
+                        <Ionicons name="person" size={14} color={Colors.dark.primary} /> Your Active Queues
+                    </Text>
+                    {myQueues.map(entry => {
+                        const qs = entry.queue_sessions as QueueSession | undefined;
+                        if (!qs) return null;
+                        return (
+                            <TouchableOpacity
+                                key={entry.id}
+                                onPress={() => handleSessionPress(entry.queue_session_id)}
+                                activeOpacity={0.8}
+                            >
+                                <Card variant="elevated" padding="md" style={styles.myQueueCard}>
+                                    <View style={styles.myQueueRow}>
+                                        <View style={[
+                                            styles.playingIndicator,
+                                            { backgroundColor: entry.status === 'playing' ? Colors.dark.success : Colors.dark.primary }
+                                        ]} />
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.myQueueVenue}>{qs.courts?.venues?.name || 'Venue'}</Text>
+                                            <Text style={styles.myQueueCourt}>{qs.courts?.name}</Text>
+                                        </View>
+                                        <View style={styles.myQueueBadge}>
+                                            <Text style={[styles.myQueueStatus, { color: entry.status === 'playing' ? Colors.dark.success : Colors.dark.primary }]}>
+                                                {entry.status === 'playing' ? '🎮 Playing' : '⏳ Waiting'}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                    {entry.amount_owed > 0 && entry.payment_status !== 'paid' && (
+                                        <Text style={styles.myQueueBalance}>
+                                            Balance: ₱{parseFloat(String(entry.amount_owed)).toFixed(2)}
+                                        </Text>
+                                    )}
+                                </Card>
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+            )}
+
+            {/* Divider before available queues */}
+            {sessions.length > 0 && (
+                <Text style={styles.sectionTitle}>
+                    <Ionicons name="globe-outline" size={14} color={Colors.dark.textSecondary} /> Available Queues
+                </Text>
+            )}
+        </View>
+    );
+
     return (
         <SafeAreaView style={styles.container}>
             {/* Header */}
             <View style={styles.header}>
-                <Text style={styles.title}>Join Queue</Text>
+                <Text style={styles.title}>Queue</Text>
                 <TouchableOpacity
                     style={styles.historyButton}
                     onPress={() => router.push('/queue/history')}
@@ -266,6 +412,8 @@ export default function QueueScreen() {
                             onPress={() => handleSessionPress(item.id)}
                         />
                     )}
+                    ListHeaderComponent={renderListHeader}
+                    ListFooterComponent={renderTipsFooter}
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
                     refreshControl={
@@ -276,7 +424,9 @@ export default function QueueScreen() {
                             colors={[Colors.dark.primary]}
                         />
                     }
-                    ListEmptyComponent={renderEmptyState}
+                    ListEmptyComponent={
+                        myQueues.length === 0 ? renderEmptyState : undefined
+                    }
                     ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
                 />
             )}
@@ -490,5 +640,106 @@ const styles = StyleSheet.create({
     retryText: {
         ...Typography.button,
         color: Colors.dark.text,
+    },
+    // Fix 2: Stats row
+    statsRow: {
+        flexDirection: 'row',
+        gap: Spacing.sm,
+        marginBottom: Spacing.md,
+    },
+    statCard: {
+        flex: 1,
+        backgroundColor: Colors.dark.surface,
+        borderRadius: Radius.md,
+        padding: Spacing.md,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: Colors.dark.border,
+    },
+    statNumber: {
+        ...Typography.h2,
+        color: Colors.dark.text,
+    },
+    statLabel: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+        marginTop: 2,
+    },
+    // Fix 2: Section headers + My Queue cards
+    sectionContainer: {
+        marginBottom: Spacing.md,
+    },
+    sectionTitle: {
+        ...Typography.bodySmall,
+        color: Colors.dark.textSecondary,
+        fontWeight: '600',
+        textTransform: 'uppercase',
+        letterSpacing: 0.8,
+        marginBottom: Spacing.sm,
+    },
+    myQueueCard: {
+        marginBottom: Spacing.sm,
+        borderLeftWidth: 3,
+        borderLeftColor: Colors.dark.primary,
+    },
+    myQueueRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm,
+    },
+    playingIndicator: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
+    myQueueVenue: {
+        ...Typography.body,
+        color: Colors.dark.text,
+        fontWeight: '600',
+    },
+    myQueueCourt: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+    },
+    myQueueBadge: {
+        paddingHorizontal: Spacing.sm,
+        paddingVertical: 4,
+        borderRadius: Radius.sm,
+        backgroundColor: Colors.dark.surface,
+    },
+    myQueueStatus: {
+        ...Typography.caption,
+        fontWeight: '600',
+    },
+    myQueueBalance: {
+        ...Typography.caption,
+        color: Colors.dark.warning,
+        marginTop: Spacing.xs,
+    },
+    // Fix 16: Tips card
+    tipsCard: {
+        marginTop: Spacing.xl,
+        marginBottom: Spacing.xl,
+    },
+    tipsHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.xs,
+        marginBottom: Spacing.md,
+    },
+    tipsTitle: {
+        ...Typography.h3,
+        color: Colors.dark.text,
+    },
+    tipRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: Spacing.sm,
+        marginBottom: Spacing.xs,
+    },
+    tipText: {
+        ...Typography.bodySmall,
+        color: Colors.dark.textSecondary,
+        flex: 1,
     },
 });

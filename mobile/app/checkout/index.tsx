@@ -361,6 +361,36 @@ export default function CheckoutScreen() {
                 <View style={{ width: 44 }} />
             </View>
 
+            {/* Fix 18: Step progress indicator */}
+            {(() => {
+                const steps = ['Review', 'Payment', 'Done'];
+                const stepIndex = step === 'review' ? 0 : step === 'payment' ? 1 : 2;
+                return (
+                    <View style={styles.stepperContainer}>
+                        {steps.map((label, i) => (
+                            <React.Fragment key={label}>
+                                <View style={styles.stepItem}>
+                                    <View style={[
+                                        styles.stepCircle,
+                                        i <= stepIndex && { backgroundColor: Colors.dark.primary, borderColor: Colors.dark.primary }
+                                    ]}>
+                                        {i < stepIndex ? (
+                                            <Ionicons name="checkmark" size={14} color="#fff" />
+                                        ) : (
+                                            <Text style={[styles.stepNum, i <= stepIndex && { color: '#fff' }]}>{i + 1}</Text>
+                                        )}
+                                    </View>
+                                    <Text style={[styles.stepLabel, i <= stepIndex && { color: Colors.dark.text }]}>{label}</Text>
+                                </View>
+                                {i < steps.length - 1 && (
+                                    <View style={[styles.stepLine, i < stepIndex && { backgroundColor: Colors.dark.primary }]} />
+                                )}
+                            </React.Fragment>
+                        ))}
+                    </View>
+                );
+            })()}
+
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
                 {/* Unified Booking Summary & Price Details */}
                 <Text style={styles.sectionTitle}>Booking Summary</Text>
@@ -970,5 +1000,43 @@ const styles = StyleSheet.create({
         ...Typography.caption,
         color: Colors.dark.success,
         marginTop: 4,
+    },
+    // Fix 18: Checkout stepper
+    stepperContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: Spacing.lg,
+        paddingBottom: Spacing.md,
+    },
+    stepItem: {
+        alignItems: 'center',
+        gap: 4,
+    },
+    stepCircle: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: Colors.dark.surface,
+        borderWidth: 2,
+        borderColor: Colors.dark.border,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    stepNum: {
+        ...Typography.caption,
+        fontWeight: '700',
+        color: Colors.dark.textSecondary,
+    },
+    stepLabel: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+        fontSize: 11,
+    },
+    stepLine: {
+        flex: 1,
+        height: 2,
+        backgroundColor: Colors.dark.border,
+        marginBottom: 14,
+        marginHorizontal: 4,
     },
 });

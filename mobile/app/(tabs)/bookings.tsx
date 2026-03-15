@@ -23,7 +23,17 @@ interface Reservation {
     end_time: string;
     num_players: number;
     total_amount: number;
-    status: 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'no_show' | 'pending_payment' | 'partially_paid' | 'pending_refund';
+    amount_paid?: number;
+    payment_method?: string;
+    status: 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'no_show' | 'pending_payment' | 'partially_paid' | 'pending_refund' | 'refunded';
+    metadata?: {
+        type?: string;
+        rescheduled?: boolean;
+        week?: number;
+        totalWeeks?: number;
+        [key: string]: any;
+    };
+    recurrence_group_id?: string | null;
     courts?: {
         name: string;
         venues?: {
@@ -68,17 +78,24 @@ const BookingCard = React.memo(({ booking, onPress }: BookingCardProps) => {
         completed: { bg: Colors.dark.textTertiary + '20', text: Colors.dark.textTertiary },
         no_show: { bg: Colors.dark.error + '20', text: Colors.dark.error },
         pending_refund: { bg: Colors.dark.warning + '20', text: Colors.dark.warning },
+        refunded: { bg: Colors.dark.success + '20', text: Colors.dark.success },
     };
 
-    const statusLabels: Record<string, string> = {
-        pending: 'Pending Payment',
-        pending_payment: 'Awaiting Payment',
-        partially_paid: 'Partially Paid',
-        confirmed: 'Confirmed',
-        cancelled: 'Cancelled',
-        completed: 'Completed',
-        no_show: 'No Show',
-        pending_refund: 'Refund Pending',
+    const getStatusLabel = (booking: Reservation): string => {
+        // Fix 17: cash pending_payment shows as "Reserved"
+        if (booking.status === 'pending_payment' && booking.payment_method === 'cash') return 'Reserved';
+        const labels: Record<string, string> = {
+            pending: 'Pending',
+            pending_payment: 'Awaiting Payment',
+            partially_paid: 'Partially Paid',
+            confirmed: 'Confirmed',
+            cancelled: 'Cancelled',
+            completed: 'Completed',
+            no_show: 'No Show',
+            pending_refund: 'Refund Pending',
+            refunded: 'Refunded',
+        };
+        return labels[booking.status] || booking.status;
     };
 
     // Get status color with fallback
@@ -86,7 +103,7 @@ const BookingCard = React.memo(({ booking, onPress }: BookingCardProps) => {
         bg: Colors.dark.textTertiary + '20',
         text: Colors.dark.textTertiary
     };
-    const statusLabel = statusLabels[booking.status] || booking.status;
+    const statusLabel = getStatusLabel(booking);
 
     return (
         <TouchableOpacity onPress={onPress} activeOpacity={0.8}>
@@ -137,7 +154,7 @@ const BookingCard = React.memo(({ booking, onPress }: BookingCardProps) => {
 
 BookingCard.displayName = 'BookingCard';
 
-type TabKey = 'upcoming' | 'past';
+type TabKey = 'upcoming' | 'past' | 'refunds' | 'summary';
 type SubFilter = 'all' | 'today' | 'this-week';
 
 export default function BookingsScreen() {
@@ -170,7 +187,8 @@ export default function BookingsScreen() {
                     )
                 `)
                 .eq('user_id', user.id)
-                .order('start_time', { ascending: false });
+                .order('start_time', { ascending: false })
+                .limit(200);
 
             if (fetchError) throw fetchError;
             setBookings(data || []);
@@ -201,10 +219,19 @@ export default function BookingsScreen() {
         const endTime = new Date(booking.end_time);
         const startTime = new Date(booking.start_time);
 
+        // Fix 1: Refunds tab
+        if (activeTab === 'refunds') {
+            return ['refunded', 'pending_refund'].includes(booking.status);
+        }
+
+        // Fix 14: Summary tab shows all bookings
+        if (activeTab === 'summary') return true;
+
         // Top-level tab filter
         let passesTab = false;
         if (activeTab === 'upcoming') {
-            passesTab = endTime >= now && booking.status !== 'cancelled';
+            passesTab = endTime >= now &&
+                !['cancelled', 'refunded', 'pending_refund'].includes(booking.status);
         } else {
             passesTab = endTime < now || booking.status === 'cancelled';
         }
@@ -230,6 +257,9 @@ export default function BookingsScreen() {
         return true;
     });
 
+    // Fix 1: Refund count for tab badge
+    const refundCount = bookings.filter(b => ['refunded', 'pending_refund'].includes(b.status)).length;
+
     // Stats
     const totalBookings = bookings.length;
     const awaitingPayment = bookings.filter(b =>
@@ -241,16 +271,24 @@ export default function BookingsScreen() {
         <View style={styles.emptyContainer}>
             <Card variant="glass" padding="lg" style={styles.emptyCard}>
                 <Ionicons
-                    name={activeTab === 'upcoming' ? 'calendar-outline' : 'checkmark-done-outline'}
+                    name={
+                        activeTab === 'upcoming' ? 'calendar-outline'
+                        : activeTab === 'refunds' ? 'refresh-outline'
+                        : 'checkmark-done-outline'
+                    }
                     size={64}
                     color={Colors.dark.textTertiary}
                 />
                 <Text style={styles.emptyTitle}>
-                    {activeTab === 'upcoming' ? 'No Upcoming Bookings' : 'No Past Bookings'}
+                    {activeTab === 'upcoming' ? 'No Upcoming Bookings'
+                    : activeTab === 'refunds' ? 'No Refunds'
+                    : 'No Past Bookings'}
                 </Text>
                 <Text style={styles.emptyText}>
                     {activeTab === 'upcoming'
                         ? 'Book a court to get started!'
+                        : activeTab === 'refunds'
+                        ? 'Refunded or pending refund bookings will appear here'
                         : 'Your completed bookings will appear here'}
                 </Text>
                 {activeTab === 'upcoming' && (
@@ -326,17 +364,34 @@ export default function BookingsScreen() {
                     style={[styles.tab, activeTab === 'upcoming' && styles.tabActive]}
                     onPress={() => { setActiveTab('upcoming'); setSubFilter('all'); }}
                 >
-                    <Text style={[styles.tabText, activeTab === 'upcoming' && styles.tabTextActive]}>
-                        Upcoming
-                    </Text>
+                    <Text style={[styles.tabText, activeTab === 'upcoming' && styles.tabTextActive]}>Upcoming</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                     style={[styles.tab, activeTab === 'past' && styles.tabActive]}
                     onPress={() => { setActiveTab('past'); setSubFilter('all'); }}
                 >
-                    <Text style={[styles.tabText, activeTab === 'past' && styles.tabTextActive]}>
-                        Past
-                    </Text>
+                    <Text style={[styles.tabText, activeTab === 'past' && styles.tabTextActive]}>Past</Text>
+                </TouchableOpacity>
+                {/* Fix 1: Refunds tab */}
+                <TouchableOpacity
+                    style={[styles.tab, activeTab === 'refunds' && styles.tabActive]}
+                    onPress={() => { setActiveTab('refunds'); setSubFilter('all'); }}
+                >
+                    <View style={styles.tabInner}>
+                        <Text style={[styles.tabText, activeTab === 'refunds' && styles.tabTextActive]}>Refunds</Text>
+                        {refundCount > 0 && (
+                            <View style={styles.tabBadge}>
+                                <Text style={styles.tabBadgeText}>{refundCount}</Text>
+                            </View>
+                        )}
+                    </View>
+                </TouchableOpacity>
+                {/* Fix 14: Summary tab */}
+                <TouchableOpacity
+                    style={[styles.tab, activeTab === 'summary' && styles.tabActive]}
+                    onPress={() => { setActiveTab('summary'); setSubFilter('all'); }}
+                >
+                    <Text style={[styles.tabText, activeTab === 'summary' && styles.tabTextActive]}>Summary</Text>
                 </TouchableOpacity>
             </View>
 
@@ -364,6 +419,40 @@ export default function BookingsScreen() {
                 </View>
             ) : error ? (
                 renderErrorState()
+            ) : activeTab === 'summary' ? (
+                // Fix 14: Summary view — flat table of all bookings
+                <FlatList
+                    data={bookings}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={styles.listContent}
+                    showsVerticalScrollIndicator={false}
+                    refreshControl={
+                        <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={Colors.dark.primary} />
+                    }
+                    ListHeaderComponent={
+                        <View style={styles.summaryHeader}>
+                            <Text style={[styles.summaryCol, { flex: 2 }]}>Venue / Court</Text>
+                            <Text style={styles.summaryCol}>Date</Text>
+                            <Text style={[styles.summaryCol, { textAlign: 'right' }]}>Amount</Text>
+                        </View>
+                    }
+                    ListEmptyComponent={renderEmptyState}
+                    renderItem={({ item }) => (
+                        <TouchableOpacity onPress={() => handleBookingPress(item.id)} activeOpacity={0.7}>
+                            <View style={styles.summaryRow}>
+                                <View style={{ flex: 2 }}>
+                                    <Text style={styles.summaryVenue} numberOfLines={1}>{item.courts?.venues?.name || 'Venue'}</Text>
+                                    <Text style={styles.summaryCourt} numberOfLines={1}>{item.courts?.name || 'Court'}</Text>
+                                </View>
+                                <Text style={styles.summaryDate}>
+                                    {new Date(item.start_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                </Text>
+                                <Text style={[styles.summaryAmount, { textAlign: 'right' }]}>₱{item.total_amount.toFixed(0)}</Text>
+                            </View>
+                        </TouchableOpacity>
+                    )}
+                    ItemSeparatorComponent={() => <View style={styles.summaryDivider} />}
+                />
             ) : (
                 <FlatList
                     data={filteredBookings}
@@ -586,5 +675,73 @@ const styles = StyleSheet.create({
     },
     subFilterTextActive: {
         color: Colors.dark.primary,
+    },
+    // Tab badge (Fix 1)
+    tabInner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    tabBadge: {
+        backgroundColor: Colors.dark.error,
+        borderRadius: 8,
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+        minWidth: 16,
+        alignItems: 'center',
+    },
+    tabBadgeText: {
+        ...Typography.caption,
+        color: '#fff',
+        fontWeight: '700',
+        fontSize: 10,
+    },
+    // Summary table styles (Fix 14)
+    summaryHeader: {
+        flexDirection: 'row',
+        paddingVertical: Spacing.sm,
+        paddingHorizontal: Spacing.xs,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.dark.border,
+        marginBottom: Spacing.xs,
+    },
+    summaryCol: {
+        flex: 1,
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+        fontWeight: '600',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    summaryRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: Spacing.sm,
+        paddingHorizontal: Spacing.xs,
+    },
+    summaryVenue: {
+        ...Typography.bodySmall,
+        color: Colors.dark.text,
+        fontWeight: '600',
+    },
+    summaryCourt: {
+        ...Typography.caption,
+        color: Colors.dark.textSecondary,
+    },
+    summaryDate: {
+        flex: 1,
+        ...Typography.bodySmall,
+        color: Colors.dark.textSecondary,
+    },
+    summaryAmount: {
+        flex: 1,
+        ...Typography.bodySmall,
+        color: Colors.dark.primary,
+        fontWeight: '600',
+    },
+    summaryDivider: {
+        height: 1,
+        backgroundColor: Colors.dark.border + '60',
+        marginHorizontal: Spacing.xs,
     },
 });
