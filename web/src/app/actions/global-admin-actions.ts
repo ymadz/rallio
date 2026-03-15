@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
 import { type User } from '@supabase/supabase-js'
 
@@ -40,7 +41,7 @@ export async function getDashboardStats() {
   const auth = await verifyGlobalAdmin()
   if (!auth.success) return { success: false, error: auth.error }
 
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   try {
     // Get total users count and 30-day growth
@@ -214,7 +215,7 @@ export async function getGlobalQueueHistory(filters?: {
   const auth = await verifyGlobalAdmin()
   if (!auth.success) return { success: false, error: auth.error }
 
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   try {
     let query = supabase
@@ -223,15 +224,17 @@ export async function getGlobalQueueHistory(filters?: {
         *,
         court:courts!inner(
           id,
+          venue_id,
           name,
           venue:venues!inner(
             id,
             name
           )
         ),
-        organizer:profiles!inner(
+        organizer:profiles!queue_sessions_organizer_id_fkey(
           display_name,
-          email
+          email,
+          avatar_url
         )
       `)
       .order('start_time', { ascending: false })
@@ -258,25 +261,81 @@ export async function getGlobalQueueHistory(filters?: {
 
     if (error) throw error
 
-    // Format for display
-    const formattedSessions = sessions?.map(s => ({
-      id: s.id,
-      venueName: s.court?.venue?.name,
-      courtName: s.court?.name,
-      organizerName: s.organizer?.display_name || 'Unknown',
-      startTime: new Date(s.start_time),
-      endTime: new Date(s.end_time),
-      status: s.status,
-      maxPlayers: s.max_players,
-      costPerGame: s.cost_per_game,
-      totalRevenue: s.settings?.summary?.totalRevenue || 0,
-      totalGames: s.settings?.summary?.totalGames || 0,
-      closedBy: s.settings?.summary?.closedBy || 'unknown',
+    // Always calculate revenue from participants to ensure consistency
+    const formattedSessions = await Promise.all((sessions || []).map(async (s) => {
+      let summary = s.settings?.summary || {}
+
+      try {
+        // Always fetch participants to calculate accurate revenue
+        const { data: participants, error: partError } = await supabase
+          .from('queue_participants')
+          .select('games_played, amount_owed, payment_status')
+          .eq('queue_session_id', s.id)
+
+        if (!partError && participants && participants.length > 0) {
+          const costPerGame = parseFloat(String(s.cost_per_game || '0'))
+          
+          const totalGames = participants.reduce((sum, p) => sum + (p.games_played || 0), 0)
+          
+          // Recover revenue: if amount_owed is 0 but games_played > 0, estimate from cost_per_game
+          const totalRevenue = participants.reduce((sum, p) => {
+            let owed = parseFloat(String(p.amount_owed || '0'))
+            
+            // Recovery: if games played but amount_owed cleared (e.g., by buggy markAsPaid), recalculate
+            if (owed === 0 && (p.games_played || 0) > 0 && costPerGame > 0) {
+              owed = (p.games_played || 0) * costPerGame
+            }
+            
+            return sum + owed
+          }, 0)
+          
+          const totalParticipants = participants.length
+
+          // Use calculated values, preserving existing summary metadata
+          summary = {
+            ...summary,
+            totalGames,
+            totalRevenue,
+            totalParticipants,
+            closedBy: summary.closedBy || s.organizer?.display_name || 'Unknown',
+          }
+        } else if (partError) {
+          console.error(`[getGlobalQueueHistory] Error fetching participants for session ${s.id}:`, partError)
+        }
+      } catch (err) {
+        console.error(`[getGlobalQueueHistory] Failed to fetch participants for session ${s.id}:`, err)
+      }
+
+      return {
+        id: s.id,
+        venueName: s.court?.venue?.name,
+        courtName: s.court?.name,
+        organizerName: s.organizer?.display_name || 'Unknown',
+        organizerAvatar: s.organizer?.avatar_url,
+        startTime: new Date(s.start_time),
+        endTime: new Date(s.end_time),
+        status: s.status,
+        maxPlayers: s.max_players,
+        costPerGame: s.cost_per_game,
+        totalRevenue: summary?.totalRevenue || 0,
+        totalGames: summary?.totalGames || 0,
+        closedBy: summary?.closedBy || s.organizer?.display_name || 'unknown',
+      }
     }))
 
     return { success: true, sessions: formattedSessions }
-  } catch (error: any) {
-    console.error('[getGlobalQueueHistory] Error:', error)
-    return { success: false, error: error.message }
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error
+      ? error.message
+      : typeof error === 'object' && error !== null && 'message' in error
+        ? String((error as { message: unknown }).message)
+        : 'Failed to fetch global queue history'
+
+    console.error('[getGlobalQueueHistory] Error:', {
+      message: errorMessage,
+      error,
+    })
+
+    return { success: false, error: errorMessage }
   }
 }

@@ -30,6 +30,11 @@ import {
   BadgeCheck,
   XCircle
 } from 'lucide-react'
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 
@@ -298,9 +303,12 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
               {/* Header */}
               <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-white text-2xl font-semibold">
-                    {user.display_name?.charAt(0).toUpperCase() || 'U'}
-                  </div>
+                  <Avatar className="h-16 w-16 border-2 border-teal-100">
+                    <AvatarImage src={user.avatar_url || ''} alt={user.display_name || 'User'} />
+                    <AvatarFallback className="bg-gradient-to-br from-teal-400 to-teal-600 text-white text-2xl font-semibold">
+                      {user.display_name?.charAt(0).toUpperCase() || 'U'}
+                    </AvatarFallback>
+                  </Avatar>
                   <div>
                     <h2 className="text-2xl font-bold text-gray-900">{user.display_name}</h2>
                     <p className="text-sm text-gray-600">{user.email}</p>

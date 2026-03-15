@@ -5,6 +5,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { createRefund, getRefund, getPayment } from '@/lib/paymongo'
 import { createNotification, NotificationTemplates } from '@/lib/notifications'
 import { revalidatePath } from 'next/cache'
+import { logAdminAction } from './global-admin-actions'
 import type { RefundReason } from '@/lib/paymongo/types'
 
 // =============================================
@@ -485,6 +486,23 @@ export async function adminProcessRefundAction(
       })
 
       revalidatePath('/bookings')
+
+      if (isGlobalAdmin) {
+        await logAdminAction({
+          actionType: 'reject_refund',
+          targetType: 'refund',
+          targetId: refundId,
+          oldValue: {
+            status: refund.status,
+            amount: refund.amount,
+          },
+          newValue: {
+            status: 'failed',
+            admin_notes: adminNotes || null,
+          }
+        })
+      }
+
       return { success: true, refundId }
     }
 
@@ -555,6 +573,23 @@ export async function adminProcessRefundAction(
         await handleSuccessfulRefund(refundId, refund.reservation_id, refund.user_id)
       }
 
+      if (isGlobalAdmin) {
+        await logAdminAction({
+          actionType: 'approve_refund',
+          targetType: 'refund',
+          targetId: refundId,
+          oldValue: {
+            status: refund.status,
+            amount: refund.amount,
+          },
+          newValue: {
+            status: paymongoRefund.attributes.status === 'succeeded' ? 'succeeded' : 'processing',
+            external_id: paymongoRefund.id,
+            processed_by: user.id,
+          }
+        })
+      }
+
       revalidatePath('/bookings')
       return { success: true, refundId }
 
@@ -570,6 +605,22 @@ export async function adminProcessRefundAction(
           processed_at: new Date().toISOString(),
         })
         .eq('id', refundId)
+
+      if (isGlobalAdmin) {
+        await logAdminAction({
+          actionType: 'refund_processing_failed',
+          targetType: 'refund',
+          targetId: refundId,
+          oldValue: {
+            status: refund.status,
+            amount: refund.amount,
+          },
+          newValue: {
+            status: 'failed',
+            error_message: paymongoError.message,
+          }
+        })
+      }
 
       return { success: false, error: paymongoError.message }
     }
@@ -653,6 +704,16 @@ export async function adminCheckRefundStatusAction(
     // If succeeded, complete the refund flow
     if (paymongoStatus === 'succeeded') {
       await handleSuccessfulRefund(refundId, refund.reservation_id, refund.user_id)
+    }
+
+    if (isGlobalAdmin) {
+      await logAdminAction({
+        actionType: 'sync_refund_status',
+        targetType: 'refund',
+        targetId: refundId,
+        oldValue: { status: refund.status },
+        newValue: { status: paymongoStatus }
+      })
     }
 
     revalidatePath('/bookings')
