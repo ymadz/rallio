@@ -301,15 +301,7 @@ export default function BookingScreen() {
         }
         setIsValidatingRecurrence(false);
 
-        // Pass discount info separately
-        // The totalDiscount from engine is already multiplied by actualSlotCount
-        setDiscount(
-            discountResults.totalDiscount,
-            discountResults.discounts.length > 0 ? discountResults.discounts[0].type : undefined,
-            discountResults.discounts.map((d: any) => d.name).join(', ')
-        );
-
-        // Save to checkout store
+        // Save to checkout store FIRST so setDiscount() is applied after and not overwritten
         setBookingData({
             courtId: selectedCourtId,
             courtName: selectedCourt.name,
@@ -323,8 +315,16 @@ export default function BookingScreen() {
             duration: duration,
             notes: notes.trim() || undefined,
             recurrenceWeeks: recurrenceWeeks,
-            selectedDays: selectedDays, // Add this
+            selectedDays: selectedDays,
         });
+
+        // Set discount AFTER setBookingData — store now preserves it
+        // Always call setDiscount (even with 0) to clear any stale value from a previous booking
+        setDiscount(
+            discountResults.totalDiscount,
+            discountResults.discounts.length > 0 ? discountResults.discounts[0].type : undefined,
+            discountResults.discounts.map((d: any) => d.name).join(', ') || undefined,
+        );
 
         // Set down payment percentage from venue metadata
         if (venue.metadata?.down_payment_percentage) {

@@ -41,6 +41,8 @@ export default function CheckoutScreen() {
         getRemainingBalance,
         setBookingReference,
         resetCheckout,
+        discountAmount,       // ← read from store (Fix 3)
+        discountReason,
     } = useCheckoutStore();
 
     const { getVenueById } = useCourtStore();
@@ -98,15 +100,8 @@ export default function CheckoutScreen() {
         return () => subscription.remove();
     }, [pendingReservationId]);
 
-    // Discount from store (Calculated in backend later, currently removing deprecated promo logic)
-    const [discountAmount, setDiscountAmount] = useState(0);
-
-    useEffect(() => {
-        // Adjust total if discount is applied? 
-        // Note: The store `getTotalAmount` usually calculates based on its internal state. 
-        // Since we are adding local discount state, we subtract it here. 
-        // Ideally we should sync this to the store, but for parity fix, local calculation on display and submission is acceptable.
-    }, [discountAmount]);
+    // discountAmount comes from store (set in book.tsx via setDiscount)
+    // No local override — store is the single source of truth
 
     useEffect(() => {
         if (!bookingData) {
@@ -124,9 +119,9 @@ export default function CheckoutScreen() {
         );
     }
 
-    const subtotal = getSubtotal();
+    const subtotal = getSubtotal();          // already discount-aware (store subtracts discountAmount)
     const platformFee = getPlatformFeeAmount();
-    const total = getTotalAmount() - discountAmount;
+    const total = getTotalAmount();           // subtotal + platformFee, discount already applied
 
     const downPaymentAmount = getDownPaymentAmount();
     const remainingBalance = getRemainingBalance();
@@ -174,8 +169,8 @@ export default function CheckoutScreen() {
                 courtId: bookingData.courtId,
                 startTimeISO: `${format(new Date(bookingData.date), 'yyyy-MM-dd')}T${bookingData.startTime}:00+08:00`,
                 endTimeISO: `${format(new Date(bookingData.date), 'yyyy-MM-dd')}T${bookingData.endTime}:00+08:00`, // Duration logic handled by server if needed, but passing endISO is clearer
-                totalAmount: total, // GRAND TOTAL (Pre-calculated with discount)
-                discountAmount: discountAmount, // Pass discount info if backend needs it
+                totalAmount: total,
+                discountAmount: discountAmount, // from store
                 paymentType: 'full',
                 paymentMethod: paymentMethod, // 'cash' or 'e-wallet'
                 notes: bookingData.notes,
@@ -405,27 +400,62 @@ export default function CheckoutScreen() {
                     {/* Date & Time */}
                     <View style={styles.summarySectionBlock}>
                         <Text style={styles.summaryLabel}>Date & Time</Text>
-                        <Text style={styles.summaryMainText}>
-                            {format(new Date(bookingData.date), 'EEEE, MMM d, yyyy')}
-                        </Text>
-                        <Text style={styles.summarySubText}>
-                            {formatTime(bookingData.startTime)} - {formatTime(bookingData.endTime)}
-                        </Text>
 
-                        {bookingData.recurrenceWeeks && bookingData.recurrenceWeeks > 1 && (
-                            <View style={styles.recurrenceBadges}>
-                                <View style={styles.recurrenceBadge}>
-                                    <Text style={styles.recurrenceBadgeText}>{bookingData.recurrenceWeeks} Weeks Selection</Text>
-                                </View>
-                                {(bookingData.selectedDays?.length || 0) > 1 && (
-                                    <View style={[styles.recurrenceBadge, styles.weeklyBadge]}>
-                                        <Text style={[styles.recurrenceBadgeText, styles.weeklyBadgeText]}>
-                                            {bookingData.selectedDays?.length}x Weekly
+                        {/* Fix: Show all specific dates for multi-day/week bookings */}
+                        {(() => {
+                            const weeks = bookingData.recurrenceWeeks || 1;
+                            const rawDays = bookingData.selectedDays || [];
+                            const days = rawDays.length > 0 ? rawDays : [new Date(bookingData.date).getDay()];
+                            const uniqueDays = Array.from(new Set(days)).sort((a, b) => a - b);
+                            const startDate = new Date(bookingData.date);
+                            const startDayIdx = startDate.getDay();
+                            const totalSessions = weeks * uniqueDays.length;
+
+                            // Build every session date
+                            const sessionDates: Date[] = [];
+                            for (let w = 0; w < weeks; w++) {
+                                for (const dayIdx of uniqueDays) {
+                                    const offset = ((dayIdx - startDayIdx + 7) % 7) + w * 7;
+                                    const d = new Date(startDate);
+                                    d.setDate(d.getDate() + offset);
+                                    sessionDates.push(d);
+                                }
+                            }
+                            sessionDates.sort((a, b) => a.getTime() - b.getTime());
+
+                            if (totalSessions <= 1) {
+                                // Single session — simple display
+                                return (
+                                    <>
+                                        <Text style={styles.summaryMainText}>
+                                            {format(startDate, 'EEEE, MMM d, yyyy')}
                                         </Text>
+                                        <Text style={styles.summarySubText}>
+                                            {formatTime(bookingData.startTime)} - {formatTime(bookingData.endTime)}
+                                        </Text>
+                                    </>
+                                );
+                            }
+
+                            // Multiple sessions — list all dates
+                            return (
+                                <>
+                                    <Text style={[styles.summarySubText, { marginBottom: 8 }]}>
+                                        {formatTime(bookingData.startTime)} - {formatTime(bookingData.endTime)} · {totalSessions} sessions
+                                    </Text>
+                                    <View style={styles.datesList}>
+                                        {sessionDates.map((d, i) => (
+                                            <View key={i} style={styles.datesListRow}>
+                                                <View style={styles.datesListDot} />
+                                                <Text style={styles.datesListText}>
+                                                    {format(d, 'EEE, MMM d, yyyy')}
+                                                </Text>
+                                            </View>
+                                        ))}
                                     </View>
-                                )}
-                            </View>
-                        )}
+                                </>
+                            );
+                        })()}
                     </View>
 
                     {/* Divider */}
@@ -438,7 +468,10 @@ export default function CheckoutScreen() {
                                 Court Fee (₱{bookingData.hourlyRate.toFixed(2)} × {bookingData.duration} {bookingData.duration > 1 ? 'hrs' : 'hr'})
                                 {bookingData.recurrenceWeeks && bookingData.recurrenceWeeks > 1 ? ` × ${bookingData.recurrenceWeeks * (bookingData.selectedDays?.length || 1)} sessions` : ''}
                             </Text>
-                            <Text style={styles.priceValue}>₱{(subtotal + discountAmount).toLocaleString()}</Text>
+                            {/* Show undiscounted base price in this row */}
+                            <Text style={styles.priceValue}>
+                                ₱{(subtotal + discountAmount).toLocaleString()}
+                            </Text>
                         </View>
 
                         {/* Discount Tags */}
@@ -1038,5 +1071,25 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.dark.border,
         marginBottom: 14,
         marginHorizontal: 4,
+    },
+    // Booking dates list (multi-day/week bookings)
+    datesList: {
+        gap: 4,
+        marginTop: 4,
+    },
+    datesListRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    datesListDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: Colors.dark.primary,
+    },
+    datesListText: {
+        ...Typography.bodySmall,
+        color: Colors.dark.textSecondary,
     },
 });
