@@ -2414,12 +2414,13 @@ export async function markAsPaid(
       return { success: true } // Idempotent - already paid is success
     }
 
-    // 6. Update participant to mark as paid and clear outstanding balance
+    // 6. Update participant to mark as paid.
+    // Keep amount_owed intact so revenue/accounting remains auditable and
+    // collected totals can be computed from paid participants.
     const { error: updateError } = await serviceClient
       .from('queue_participants')
       .update({
         payment_status: 'paid',
-        amount_owed: 0,
       })
       .eq('id', participantId)
 
