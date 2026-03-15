@@ -490,6 +490,89 @@ async function markReservationPaidAndConfirmed({
     reservationRecord = data
   }
 
+  const isSplitSharePayment =
+    payment.metadata?.is_split_share === true ||
+    payment.metadata?.is_split_share === 'true'
+
+  if (isSplitSharePayment) {
+    const { data: splitPayments, error: splitPaymentsError } = await supabase
+      .from('payments')
+      .select('id, status, amount, metadata')
+      .eq('reservation_id', reservationId)
+      .eq('metadata->>is_split_share', 'true')
+
+    if (splitPaymentsError || !splitPayments || splitPayments.length === 0) {
+      throw splitPaymentsError || new Error('Split payment rows not found')
+    }
+
+    const paidSplitPayments = splitPayments.filter((row: any) => row.status === 'completed')
+    const totalPaid = paidSplitPayments.reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0)
+    const expectedShares = Number(payment.metadata?.split_player_count || splitPayments.length)
+    const allSharesPaid = paidSplitPayments.length >= expectedShares
+    const splitTargetStatus = allSharesPaid ? 'confirmed' : 'partially_paid'
+
+    // Keep payment_splits update resilient across schema versions.
+    // Older schema uses settled/settled_at; newer schema may use status/paid_at.
+    try {
+      const { error: statusUpdateError } = await supabase
+        .from('payment_splits')
+        .update({
+          status: 'paid',
+          paid_at: nowISO,
+        })
+        .eq('payment_id', payment.id)
+
+      if (statusUpdateError) {
+        const { error: settledUpdateError } = await supabase
+          .from('payment_splits')
+          .update({
+            settled: true,
+            settled_at: nowISO,
+          })
+          .eq('payment_id', payment.id)
+
+        if (settledUpdateError) {
+          console.warn('[markReservationPaidAndConfirmed] payment_splits update skipped (schema mismatch):', {
+            statusUpdateError: statusUpdateError.message,
+            settledUpdateError: settledUpdateError.message,
+            paymentId: payment.id,
+          })
+        }
+      }
+    } catch (splitUpdateError) {
+      console.warn('[markReservationPaidAndConfirmed] payment_splits update failed (non-blocking):', splitUpdateError)
+    }
+
+    const { error: splitReservationUpdateError } = await supabase
+      .from('reservations')
+      .update({
+        status: splitTargetStatus,
+        amount_paid: Math.round(totalPaid * 100) / 100,
+        updated_at: nowISO,
+        metadata: {
+          ...(reservationRecord.metadata || {}),
+          split_payment_status: allSharesPaid ? 'fully_paid' : 'partially_paid',
+          split_payment_progress: {
+            paid_shares: paidSplitPayments.length,
+            total_shares: expectedShares,
+            updated_at: nowISO,
+          },
+          payment_status_history: buildStatusHistory(reservationRecord.metadata, splitTargetStatus),
+        },
+      })
+      .eq('id', reservationId)
+
+    if (splitReservationUpdateError) {
+      throw splitReservationUpdateError
+    }
+
+    if (allSharesPaid) {
+      await consumePromoForReservations([reservationId])
+    }
+
+    return
+  }
+
   // PAYMENT CONFIRMATION FLOW:
   // Go directly from pending_payment → confirmed (or partially_paid for down payments).
   // The 'paid' intermediate state is recorded in metadata for audit trail,

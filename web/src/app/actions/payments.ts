@@ -33,6 +33,13 @@ export interface InitiatePaymentResult {
   checkoutUrl?: string
   paymentId?: string
   sourceId?: string
+  splitPayments?: Array<{
+    playerNumber: number
+    amount: number
+    checkoutUrl: string
+    paymentId: string
+    sourceId: string
+  }>
   error?: string
 }
 
@@ -100,6 +107,16 @@ export async function initiatePaymentAction(
       if (reservation.status !== 'partially_paid') {
         return { success: false, error: 'Reservation already fully paid' }
       }
+    }
+
+    // Split payment flow: generate one checkout link per participant.
+    if (reservation.payment_type === 'split' && (reservation.num_players || 1) > 1) {
+      return await initiateSplitPaymentAction({
+        reservation,
+        reservationId,
+        paymentMethod,
+        user,
+      })
     }
 
     // Generate unique payment reference
@@ -389,6 +406,236 @@ export async function initiatePaymentAction(
   }
 }
 
+async function initiateSplitPaymentAction({
+  reservation,
+  reservationId,
+  paymentMethod,
+  user,
+}: {
+  reservation: ReservationWithRelations
+  reservationId: string
+  paymentMethod: PaymentMethod
+  user: { id: string; email?: string }
+}): Promise<InitiatePaymentResult> {
+  const supabase = await createClient()
+  const playerCount = reservation.num_players || 1
+
+  if (playerCount < 2) {
+    return { success: false, error: 'Invalid split payment player count' }
+  }
+
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  const venueName = reservation.courts?.venues?.name ?? 'Court Reservation'
+  const courtName = reservation.courts?.name ?? 'Court'
+  const totalCentavos = Math.round(reservation.total_amount * 100)
+  const baseShareCentavos = Math.floor(totalCentavos / playerCount)
+  const remainderCentavos = totalCentavos % playerCount
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('first_name, last_name, phone')
+    .eq('id', user.id)
+    .single()
+
+  const billingName = profile
+    ? `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim() || user.email || 'Customer'
+    : user.email || 'Customer'
+
+  const splitResults: InitiatePaymentResult['splitPayments'] = []
+  const splitRows: Array<{
+    payment_id: string
+    user_id: string
+    amount: number
+  }> = []
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString()
+
+  for (let i = 0; i < playerCount; i++) {
+    const shareCentavos = baseShareCentavos + (i < remainderCentavos ? 1 : 0)
+    const shareAmount = shareCentavos / 100
+    const paymentReference = `SPLIT-${reservationId.slice(0, 8)}-P${i + 1}-${Date.now()}`
+    const successUrl = `${baseUrl}/checkout/success?reservation=${reservationId}&split=${i + 1}`
+    const failedUrl = `${baseUrl}/checkout/failed?reservation=${reservationId}&split=${i + 1}`
+    const description = `${venueName} - ${courtName} (Split ${i + 1}/${playerCount})`
+
+    const paymongoMethod = paymentMethod === 'cash' ? 'gcash' : paymentMethod
+    let checkoutUrl = ''
+    let sourceId = ''
+
+    if (paymongoMethod === 'gcash') {
+      const result = await createGCashCheckout({
+        amount: shareAmount,
+        description,
+        successUrl,
+        failedUrl,
+        billing: {
+          name: billingName,
+          email: user.email,
+          phone: profile?.phone,
+        },
+        metadata: {
+          reservation_id: reservationId,
+          split_parent_reservation_id: reservationId,
+          split_player_number: (i + 1).toString(),
+          split_player_count: playerCount.toString(),
+          payment_reference: paymentReference,
+        },
+      })
+      checkoutUrl = result.checkoutUrl
+      sourceId = result.sourceId
+    } else if (paymongoMethod === 'paymaya') {
+      const result = await createMayaCheckout({
+        amount: shareAmount,
+        description,
+        successUrl,
+        failedUrl,
+        billing: {
+          name: billingName,
+          email: user.email,
+          phone: profile?.phone,
+        },
+        metadata: {
+          reservation_id: reservationId,
+          split_parent_reservation_id: reservationId,
+          split_player_number: (i + 1).toString(),
+          split_player_count: playerCount.toString(),
+          payment_reference: paymentReference,
+        },
+      })
+      checkoutUrl = result.checkoutUrl
+      sourceId = result.sourceId
+    } else {
+      return { success: false, error: 'Unsupported payment method for split payment' }
+    }
+
+    const { data: insertedPayment, error: paymentInsertError } = await supabase
+      .from('payments')
+      .insert({
+        reference: paymentReference,
+        user_id: user.id,
+        reservation_id: reservationId,
+        amount: shareAmount,
+        currency: 'PHP',
+        payment_method: paymongoMethod,
+        payment_provider: 'paymongo',
+        external_id: sourceId,
+        status: 'pending',
+        expires_at: expiresAt,
+        metadata: {
+          description,
+          checkout_url: checkoutUrl,
+          source_id: sourceId,
+          reservation_id: reservationId,
+          payment_reference: paymentReference,
+          payment_type: 'split',
+          is_split_share: true,
+          split_parent_reservation_id: reservationId,
+          split_player_number: i + 1,
+          split_player_count: playerCount,
+        },
+      })
+      .select('id')
+      .single()
+
+    if (paymentInsertError || !insertedPayment) {
+      return {
+        success: false,
+        error: paymentInsertError?.message || 'Failed to create split payment record',
+      }
+    }
+
+    splitRows.push({
+      payment_id: insertedPayment.id,
+      user_id: user.id,
+      amount: shareAmount,
+    })
+
+    splitResults?.push({
+      playerNumber: i + 1,
+      amount: shareAmount,
+      checkoutUrl,
+      paymentId: insertedPayment.id,
+      sourceId,
+    })
+  }
+
+  if (splitRows.length > 0) {
+    const adminDb = createServiceClient()
+    const fallbackEmailBase = user.email || `split-${reservationId.slice(0, 8)}@rallio.local`
+    const splitRowsWithReservationAndEmail = splitRows.map((row, index) => ({
+      ...row,
+      reservation_id: reservationId,
+      email: user.email || `player${index + 1}+${fallbackEmailBase}`,
+    }))
+    const splitRowsWithReservation = splitRows.map((row) => ({
+      ...row,
+      reservation_id: reservationId,
+    }))
+    const splitRowsWithEmail = splitRows.map((row, index) => ({
+      ...row,
+      email: user.email || `player${index + 1}+${fallbackEmailBase}`,
+    }))
+
+    let splitInsertError: { message: string } | null = null
+    const payloadAttempts = [
+      splitRowsWithReservationAndEmail,
+      splitRowsWithReservation,
+      splitRowsWithEmail,
+      splitRows,
+    ]
+
+    for (const payload of payloadAttempts) {
+      const { error } = await adminDb
+        .from('payment_splits')
+        .insert(payload as any)
+
+      if (!error) {
+        splitInsertError = null
+        break
+      }
+
+      splitInsertError = { message: error.message }
+
+      // Continue trying reduced payloads only for schema/constraint compatibility cases.
+      const canRetryWithDifferentPayload =
+        error.message.includes('schema cache') ||
+        error.message.includes('Could not find the') ||
+        error.message.includes('null value in column')
+
+      if (!canRetryWithDifferentPayload) {
+        break
+      }
+    }
+
+    if (splitInsertError) {
+      return { success: false, error: splitInsertError.message }
+    }
+  }
+
+  await supabase
+    .from('reservations')
+    .update({
+      status: 'pending_payment',
+      metadata: {
+        ...(reservation.metadata || {}),
+        split_payment_enabled: true,
+        split_player_count: playerCount,
+        split_started_at: new Date().toISOString(),
+      },
+    })
+    .eq('id', reservationId)
+
+  revalidatePath('/reservations')
+  revalidatePath('/bookings')
+
+  return {
+    success: true,
+    splitPayments: splitResults,
+    checkoutUrl: splitResults?.[0]?.checkoutUrl,
+    paymentId: splitResults?.[0]?.paymentId,
+    sourceId: splitResults?.[0]?.sourceId,
+  }
+}
+
 /**
  * Server Action: Check payment status
  * Polls PayMongo to check if payment has been completed
@@ -410,6 +657,127 @@ export async function checkPaymentStatusAction(sourceId: string): Promise<{
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Status check failed',
+    }
+  }
+}
+
+export async function checkSplitPaymentProgressAction(reservationId: string): Promise<{
+  success: boolean
+  payments?: Array<{
+    playerNumber: number
+    status: 'pending' | 'paid' | 'failed'
+    checkoutUrl?: string
+    amountDue: number
+    paidAt?: string
+  }>
+  allPaid?: boolean
+  paidCount?: number
+  error?: string
+}> {
+  try {
+    const supabase = await createClient()
+    const adminDb = createServiceClient()
+    const { data: reservation, error: reservationError } = await supabase
+      .from('reservations')
+      .select('id, user_id')
+      .eq('id', reservationId)
+      .single()
+
+    if (reservationError || !reservation) {
+      return { success: false, error: 'Reservation not found' }
+    }
+
+    const { data: paymentRows, error: paymentRowsError } = await supabase
+      .from('payments')
+      .select('id, amount, status, paid_at, metadata, external_id')
+      .eq('reservation_id', reservationId)
+      .eq('metadata->>is_split_share', 'true')
+      .order('created_at', { ascending: true })
+
+    if (paymentRowsError) {
+      return { success: false, error: paymentRowsError.message }
+    }
+
+    // Fallback reconciliation: if webhook is delayed, poll PayMongo source status
+    // and mark matching split payment rows as completed.
+    let hasReconciledRows = false
+    for (const row of paymentRows || []) {
+      if (row.status === 'completed' || !row.external_id) continue
+
+      try {
+        const source = await getSource(row.external_id)
+        const sourceStatus = source.attributes.status
+
+        if (sourceStatus === 'chargeable' || sourceStatus === 'paid') {
+          const nowISO = new Date().toISOString()
+
+          const { error: paymentUpdateError } = await adminDb
+            .from('payments')
+            .update({
+              status: 'completed',
+              paid_at: nowISO,
+              metadata: {
+                ...(row.metadata || {}),
+                reconciled_by_polling: true,
+                reconciled_at: nowISO,
+                source_status: sourceStatus,
+              },
+            })
+            .eq('id', row.id)
+
+          if (!paymentUpdateError) {
+            hasReconciledRows = true
+          }
+        }
+      } catch {
+        // Ignore transient fetch issues; next polling cycle can retry.
+      }
+    }
+
+    const effectivePaymentRows = hasReconciledRows
+      ? (await adminDb
+        .from('payments')
+        .select('id, amount, status, paid_at, metadata')
+        .eq('reservation_id', reservationId)
+        .eq('metadata->>is_split_share', 'true')
+        .order('created_at', { ascending: true })).data || []
+      : (paymentRows || [])
+
+    const payments = effectivePaymentRows.map((row: any, index: number) => ({
+      playerNumber: Number(row.metadata?.split_player_number || index + 1),
+      status: row.status === 'completed' ? 'paid' as const : row.status === 'failed' ? 'failed' as const : 'pending' as const,
+      checkoutUrl: row.metadata?.checkout_url,
+      amountDue: Number(row.amount || 0),
+      paidAt: row.paid_at || undefined,
+    })).sort((a, b) => a.playerNumber - b.playerNumber)
+
+    const paidCount = payments.filter(payment => payment.status === 'paid').length
+    const paidAmount = payments
+      .filter(payment => payment.status === 'paid')
+      .reduce((sum, payment) => sum + payment.amountDue, 0)
+    const allPaid = payments.length > 0 && paidCount === payments.length
+
+    // Keep reservation status and amount_paid in sync for receipt page.
+    if (payments.length > 0) {
+      await adminDb
+        .from('reservations')
+        .update({
+          status: allPaid ? 'confirmed' : paidCount > 0 ? 'partially_paid' : 'pending_payment',
+          amount_paid: Math.round(paidAmount * 100) / 100,
+        })
+        .eq('id', reservationId)
+    }
+
+    return {
+      success: true,
+      payments,
+      paidCount,
+      allPaid,
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to check split payment progress',
     }
   }
 }

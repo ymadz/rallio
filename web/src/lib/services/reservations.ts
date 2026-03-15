@@ -101,7 +101,7 @@ export async function createReservation(
         const [reservationConflicts, queueConflicts] = await Promise.all([
             adminDb
                 .from('reservations')
-                .select('id, start_time, end_time, status, user_id')
+                .select('id, start_time, end_time, status, user_id, amount_paid')
                 .eq('court_id', data.courtId)
                 .in('status', conflictStatuses)
                 .lt('start_time', currentEndTimeISO)
@@ -125,11 +125,58 @@ export async function createReservation(
             }
         }
 
-        // Filter reservation conflicts — ALL active reservations are real conflicts
-        // (including the user's own pending reservations, since those hold the slot)
-        const realConflicts = reservationConflicts.data?.filter(conflict => {
-            return ['pending_payment', 'partially_paid', 'confirmed', 'ongoing'].includes(conflict.status)
-        }) || []
+        // Allow replacing the same user's stale unpaid pending hold for overlapping slot.
+        // This prevents "Slot is already reserved" on immediate retry after a failed checkout attempt.
+        const ownStalePendingConflicts = (reservationConflicts.data || []).filter(conflict => {
+            return (
+                conflict.user_id === data.userId &&
+                conflict.status === 'pending_payment' &&
+                (Number(conflict.amount_paid || 0) <= 0)
+            )
+        })
+
+        const ownStaleConflictIds = new Set(ownStalePendingConflicts.map(conflict => conflict.id))
+
+        const realConflicts = (reservationConflicts.data || []).filter(conflict => {
+            const isActiveStatus = ['pending_payment', 'partially_paid', 'confirmed', 'ongoing'].includes(conflict.status)
+            if (!isActiveStatus) return false
+
+            // Keep strict behavior for recurring bookings to avoid accidental cancellation across series.
+            if (isRecurring) return true
+
+            // For single-booking retry, ignore stale unpaid self holds.
+            return !ownStaleConflictIds.has(conflict.id)
+        })
+
+        if (!isRecurring && realConflicts.length === 0 && ownStalePendingConflicts.length > 0) {
+            const staleIds = ownStalePendingConflicts.map(conflict => conflict.id)
+            const nowISO = new Date().toISOString()
+
+            console.log('[createReservation] Replacing stale pending reservation(s):', {
+                staleIds,
+                courtId: data.courtId,
+                userId: data.userId,
+                start: currentStartTimeISO,
+                end: currentEndTimeISO,
+            })
+
+            const { error: cancelStaleError } = await adminDb
+                .from('reservations')
+                .update({
+                    status: 'cancelled',
+                    cancelled_at: nowISO,
+                    cancellation_reason: 'Replaced by a new checkout attempt',
+                })
+                .in('id', staleIds)
+
+            if (cancelStaleError) {
+                console.error('[createReservation] Failed to cancel stale pending reservation(s):', cancelStaleError)
+                return {
+                    success: false,
+                    error: 'Could not clear previous pending booking. Please try again.'
+                }
+            }
+        }
 
         if (realConflicts.length > 0) {
             const dateStr = slot.start.toLocaleDateString()

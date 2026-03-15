@@ -4,11 +4,12 @@ import { useEffect, useState, useRef } from 'react'
 import { useCheckoutStore } from '@/stores/checkout-store'
 import { createReservationAction } from '@/app/actions/reservations'
 import { createQueueSession } from '@/app/actions/queue-actions'
-import { initiatePaymentAction } from '@/app/actions/payments'
+import { checkSplitPaymentProgressAction, initiatePaymentAction } from '@/app/actions/payments'
 import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
 import { createClient } from '@/lib/supabase/client'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import { QRCodeSVG } from 'qrcode.react'
 
 export function PaymentProcessing() {
   const router = useRouter()
@@ -25,6 +26,7 @@ export function PaymentProcessing() {
     downPaymentPercentage,
     setCurrentStep,
     setBookingReference,
+    updatePlayerPayment,
     resetCheckout,
     reservationId: storeReservationId,
     discountAmount,
@@ -125,10 +127,12 @@ export function PaymentProcessing() {
           totalAmount: getTotalAmount(),
         })
 
-        let newReservationId: string | null = null
+        let newReservationId: string | null = reservationId || null
         let requiresDownPayment = false
 
-        if (bookingData.isQueueSession && bookingData.queueSessionData) {
+        if (newReservationId) {
+          console.log('Reusing existing reservation for payment:', newReservationId)
+        } else if (bookingData.isQueueSession && bookingData.queueSessionData) {
           console.log('Creating queue session(s)...')
 
           const sessionResult = await createQueueSession({
@@ -265,6 +269,9 @@ export function PaymentProcessing() {
         }
 
         const confirmedReservationId = newReservationId
+        if (!confirmedReservationId) {
+          throw new Error('Failed to create or load reservation for payment')
+        }
         setReservationId(confirmedReservationId)
         console.log('Reservation created successfully:', confirmedReservationId)
 
@@ -284,8 +291,33 @@ export function PaymentProcessing() {
         // cash + down payment and charge only the deposit amount.
         const paymentResult = await initiatePaymentAction(confirmedReservationId, paymentMethod === 'cash' ? 'cash' : 'gcash')
 
-        if (!paymentResult.success || !paymentResult.checkoutUrl) {
+        if (!paymentResult.success) {
           throw new Error(paymentResult.error || 'Failed to initiate payment')
+        }
+
+        // Split payment flow: expose individual links and stay on this page.
+        if (isSplitPayment) {
+          if (!paymentResult.splitPayments || paymentResult.splitPayments.length === 0) {
+            throw new Error('Split payment links were not generated')
+          }
+
+          paymentResult.splitPayments.forEach((splitPayment) => {
+            updatePlayerPayment(splitPayment.playerNumber, {
+              amountDue: splitPayment.amount,
+              status: 'pending',
+              qrCodeUrl: splitPayment.checkoutUrl,
+              paymentReference: splitPayment.paymentId,
+            })
+          })
+
+          setLoading(false)
+          setPaymentStatus('processing')
+          setBookingReference(confirmedReservationId.slice(0, 8), confirmedReservationId)
+          return
+        }
+
+        if (!paymentResult.checkoutUrl) {
+          throw new Error('Failed to get checkout URL')
         }
 
         // Set loading to false and update UI to show confirmation
@@ -312,7 +344,9 @@ export function PaymentProcessing() {
           !errorMessage.includes('Pay with Cash') &&
           !errorMessage.includes('overlaps') &&
           !errorMessage.includes('Conflict') &&
-          !errorMessage.includes('already reserved')
+          !errorMessage.includes('already reserved') &&
+          !errorMessage.includes('schema cache') &&
+          !errorMessage.includes('Could not find the')
 
         if (isTransientError && retryAttempts.current < MAX_RETRIES) {
           retryAttempts.current += 1
@@ -341,6 +375,38 @@ export function PaymentProcessing() {
     // They don't need to be in the dependency array
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookingData, paymentMethod])
+
+  useEffect(() => {
+    if (!isSplitPayment || !reservationId) return
+
+    const pollSplitStatus = async () => {
+      const result = await checkSplitPaymentProgressAction(reservationId)
+      if (!result.success || !result.payments) return
+
+      result.payments.forEach((payment) => {
+        updatePlayerPayment(payment.playerNumber, {
+          status: payment.status,
+          qrCodeUrl: payment.checkoutUrl,
+          amountDue: payment.amountDue,
+          paidAt: payment.paidAt ? new Date(payment.paidAt) : undefined,
+        })
+      })
+
+      if (result.allPaid) {
+        setPaymentStatus('success')
+      }
+    }
+
+    const intervalId = window.setInterval(() => {
+      pollSplitStatus()
+    }, 5000)
+
+    pollSplitStatus()
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [isSplitPayment, reservationId, updatePlayerPayment])
 
   // Manual retry function
   const handleRetry = () => {
@@ -795,21 +861,42 @@ export function PaymentProcessing() {
             ) : payment.status === 'pending' ? (
               <div>
                 {paymentMethod === 'e-wallet' && payment.qrCodeUrl ? (
-                  <div className="flex gap-4">
-                    <div className="bg-white border border-gray-200 rounded-lg p-2 flex-shrink-0">
-                      <div className="relative w-32 h-32">
-                        <Image
-                          src={payment.qrCodeUrl}
-                          alt={`QR Code for Player ${payment.playerNumber}`}
-                          fill
-                          className="object-contain"
-                        />
-                      </div>
+                  <div className="flex flex-col md:flex-row gap-4">
+                    <div className="bg-white border border-gray-200 rounded-lg p-2 flex-shrink-0 self-start">
+                      <QRCodeSVG
+                        value={payment.qrCodeUrl}
+                        size={128}
+                        level="M"
+                        includeMargin={true}
+                      />
                     </div>
-                    <div className="flex-1 flex flex-col justify-center">
-                      <p className="text-sm text-gray-600 mb-2">
-                        Scan with e-wallet app to pay
+                    <div className="flex-1 flex flex-col justify-center gap-2">
+                      <p className="text-sm text-gray-600">
+                        Share this payment link or let your teammate scan the QR.
                       </p>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => window.open(payment.qrCodeUrl, '_blank')}
+                          className="px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-white hover:bg-primary/90"
+                        >
+                          Open Link
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(payment.qrCodeUrl || '')
+                            } catch (copyError) {
+                              console.error('Failed to copy split payment link:', copyError)
+                            }
+                          }}
+                          className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 hover:bg-gray-50"
+                        >
+                          Copy URL
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-500 break-all">{payment.qrCodeUrl}</p>
                       <div className="flex items-center gap-2 text-yellow-600">
                         <div className="animate-spin rounded-full h-4 w-4 border-2 border-yellow-600 border-t-transparent" />
                         <span className="text-xs font-medium">Waiting for payment...</span>
