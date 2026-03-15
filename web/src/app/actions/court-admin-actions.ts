@@ -1347,6 +1347,7 @@ export async function getVenueQueueHistory(filters?: {
         ),
         organizer:profiles!queue_sessions_organizer_id_fkey(
           display_name,
+          avatar_url,
           email
         )
       `)
@@ -1395,6 +1396,7 @@ export async function getVenueQueueHistory(filters?: {
               totalRevenue,
               totalParticipants: participants.length,
               closedBy: s.organizer?.display_name || 'Unknown',
+              closedByAvatarUrl: s.organizer?.avatar_url || null,
             }
           }
         } catch (err) {
@@ -1407,6 +1409,7 @@ export async function getVenueQueueHistory(filters?: {
         venueName: s.court?.venue?.name,
         courtName: s.court?.name,
         organizerName: s.organizer?.display_name || 'Unknown',
+        organizerAvatarUrl: s.organizer?.avatar_url || null,
         startTime: new Date(s.start_time),
         endTime: new Date(s.end_time),
         status: s.status,
@@ -1414,7 +1417,8 @@ export async function getVenueQueueHistory(filters?: {
         costPerGame: s.cost_per_game,
         totalRevenue: summary?.totalRevenue || 0,
         totalGames: summary?.totalGames || 0,
-        closedBy: summary?.closedBy || 'unknown',
+        closedBy: summary?.closedBy || s.organizer?.display_name || 'unknown',
+        closedByAvatarUrl: summary?.closedByAvatarUrl || s.organizer?.avatar_url || null,
       }
     }))
 

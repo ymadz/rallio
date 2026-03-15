@@ -71,7 +71,7 @@ export function QueueHistoryClient({ initialSessions, venues }: QueueHistoryClie
         <div className="space-y-6">
             {/* Stats Overview */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card>
+                <Card className="border-0 shadow-sm">
                     <CardContent className="p-6 flex items-center gap-4">
                         <div className="p-3 bg-purple-100 rounded-full">
                             <Clock className="w-6 h-6 text-purple-600" />
@@ -82,7 +82,7 @@ export function QueueHistoryClient({ initialSessions, venues }: QueueHistoryClie
                         </div>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="border-0 shadow-sm">
                     <CardContent className="p-6 flex items-center gap-4">
                         <div className="p-3 bg-green-100 rounded-full">
                             <PhilippinePeso className="w-6 h-6 text-green-600" />
@@ -93,7 +93,7 @@ export function QueueHistoryClient({ initialSessions, venues }: QueueHistoryClie
                         </div>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="border-0 shadow-sm">
                     <CardContent className="p-6 flex items-center gap-4">
                         <div className="p-3 bg-blue-100 rounded-full">
                             <Trophy className="w-6 h-6 text-blue-600" />
@@ -194,9 +194,17 @@ export function QueueHistoryClient({ initialSessions, venues }: QueueHistoryClie
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-2">
-                                                <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center text-xs font-bold text-purple-600">
-                                                    {session.organizerName.charAt(0).toUpperCase()}
-                                                </div>
+                                                {session.organizerAvatarUrl ? (
+                                                    <img
+                                                        src={session.organizerAvatarUrl}
+                                                        alt={session.organizerName}
+                                                        className="w-6 h-6 rounded-full object-cover border border-gray-200"
+                                                    />
+                                                ) : (
+                                                    <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center text-xs font-bold text-purple-600">
+                                                        {session.organizerName.charAt(0).toUpperCase()}
+                                                    </div>
+                                                )}
                                                 <span className="text-gray-700">{session.organizerName}</span>
                                             </div>
                                         </td>
@@ -212,7 +220,20 @@ export function QueueHistoryClient({ initialSessions, venues }: QueueHistoryClie
                                             </span>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className="text-gray-500 capitalize">{session.closedBy}</span>
+                                            <div className="flex items-center gap-2">
+                                                {session.closedByAvatarUrl ? (
+                                                    <img
+                                                        src={session.closedByAvatarUrl}
+                                                        alt={session.closedBy}
+                                                        className="w-6 h-6 rounded-full object-cover border border-gray-200"
+                                                    />
+                                                ) : (
+                                                    <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center text-xs font-bold text-gray-600">
+                                                        {session.closedBy?.charAt(0)?.toUpperCase() || 'U'}
+                                                    </div>
+                                                )}
+                                                <span className="text-gray-500 capitalize">{session.closedBy}</span>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))
