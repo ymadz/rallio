@@ -50,6 +50,46 @@ export function GlobalQueueHistoryClient({ initialSessions, venues }: GlobalQueu
         return true
     })
 
+    // Export function
+    const handleExport = () => {
+        if (filteredSessions.length === 0) {
+            alert('No sessions to export')
+            return
+        }
+
+        const headers = ['Date', 'Time', 'Venue', 'Court', 'Organizer', 'Status', 'Games', 'Revenue', 'Closed By']
+        const rows = filteredSessions.map(session => [
+            format(new Date(session.startTime), 'MMM d, yyyy'),
+            format(new Date(session.startTime), 'h:mm a'),
+            session.venueName,
+            session.courtName,
+            session.organizerName,
+            session.status,
+            session.totalGames,
+            `₱${session.totalRevenue.toFixed(2)}`,
+            session.closedBy || '-',
+        ])
+
+        // Create CSV content
+        const csvContent = [
+            headers.join(','),
+            ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+        ].join('\n')
+
+        // Create blob with UTF-8 BOM to properly encode special characters like peso sign
+        const blob = new Blob(['\uFEFF', csvContent], { type: 'text/csv;charset=utf-8;' })
+        const link = document.createElement('a')
+        const url = URL.createObjectURL(blob)
+
+        link.setAttribute('href', url)
+        link.setAttribute('download', `queue-history-${format(new Date(), 'yyyy-MM-dd-HHmmss')}.csv`)
+        link.style.visibility = 'hidden'
+
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+    }
+
     // Stats Calculation
     const totalRevenue = filteredSessions.reduce((acc, curr) => acc + (curr.totalRevenue || 0), 0)
     const totalSessions = filteredSessions.length
@@ -91,7 +131,7 @@ export function GlobalQueueHistoryClient({ initialSessions, venues }: GlobalQueu
         <div className="space-y-6">
             {/* Stats Overview */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card>
+                <Card className="border-0">
                     <CardContent className="p-6 flex items-center gap-4">
                         <div className="p-3 bg-purple-100 rounded-full">
                             <Clock className="w-6 h-6 text-purple-600" />
@@ -102,7 +142,7 @@ export function GlobalQueueHistoryClient({ initialSessions, venues }: GlobalQueu
                         </div>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="border-0">
                     <CardContent className="p-6 flex items-center gap-4">
                         <div className="p-3 bg-green-100 rounded-full">
                             <PhilippinePeso className="w-6 h-6 text-green-600" />
@@ -167,7 +207,10 @@ export function GlobalQueueHistoryClient({ initialSessions, venues }: GlobalQueu
                     </div>
 
                     {/* Export Button */}
-                    <button className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700">
+                    <button 
+                        onClick={handleExport}
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
+                    >
                         <Download className="w-4 h-4" />
                         <span>Export</span>
                     </button>
@@ -219,9 +262,17 @@ export function GlobalQueueHistoryClient({ initialSessions, venues }: GlobalQueu
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-2">
-                                                <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center text-xs font-bold text-purple-600">
-                                                    {session.organizerName.charAt(0).toUpperCase()}
-                                                </div>
+                                                {session.organizerAvatar ? (
+                                                    <img
+                                                        src={session.organizerAvatar}
+                                                        alt={session.organizerName}
+                                                        className="w-6 h-6 rounded-full object-cover"
+                                                    />
+                                                ) : (
+                                                    <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center text-xs font-bold text-purple-600">
+                                                        {session.organizerName.charAt(0).toUpperCase()}
+                                                    </div>
+                                                )}
                                                 <span className="text-gray-700">{session.organizerName}</span>
                                             </div>
                                         </td>
