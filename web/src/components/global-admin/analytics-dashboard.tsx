@@ -130,10 +130,10 @@ export default function AnalyticsDashboard() {
     setRevenueBreakdownLoading(true)
 
     try {
-      const result = await getCourtAdminRevenueBreakdown()
+      const result = await getCourtAdminRevenueBreakdown() as any
 
-      if (!result.success || !('admins' in result) || !('totals' in result)) {
-        throw new Error((result as any).error || 'Failed to load revenue breakdown')
+      if (!result.success || !result.admins || !result.totals) {
+        throw new Error(result.error || 'Failed to load revenue breakdown')
       }
 
       setRevenueBreakdown({
