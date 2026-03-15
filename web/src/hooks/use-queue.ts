@@ -47,6 +47,21 @@ export interface QueueSession {
   costPerGame?: number // Cost per game in the queue
   userGamesPlayed?: number // Games played by current user
   userAmountOwed?: number // Amount owed by current user
+  sessionSummary?: {
+    totalGames: number
+    totalRevenue: number
+    totalParticipants: number
+    unpaidBalances: number
+    completedAt?: string
+  }
+  matchOutcomes?: Array<{
+    matchNumber: number
+    winnerNames: string[]
+    loserNames: string[]
+    score: string
+    completedAt?: string
+    result: 'team_a' | 'team_b' | 'draw'
+  }>
   currentMatch?: {
     courtName: string
     players: string[]
@@ -155,6 +170,8 @@ export function useQueue(courtId: string) {
         organizerId: queueData.organizerId,
         organizerName: queueData.organizerName,
         costPerGame: queueData.costPerGame,
+        sessionSummary: (queueData as any).sessionSummary,
+        matchOutcomes: (queueData as any).matchOutcomes,
       }
 
       setQueue(transformedQueue)
