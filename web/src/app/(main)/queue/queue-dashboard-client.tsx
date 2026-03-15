@@ -1,21 +1,26 @@
 'use client'
 
-import { useMyQueues, useNearbyQueues, useMyQueueHistory } from '@/hooks/use-queue'
+import { useMyQueues, useNearbyQueues, useMyQueueHistory, useQueueMasterHistory } from '@/hooks/use-queue'
 import { useQueueNotifications } from '@/hooks/use-queue-notifications'
 import { QueueNotificationBanner } from '@/components/queue/queue-notification-banner'
 import { QueueCard } from '@/components/queue/queue-card'
 import { QueueHistoryList } from '@/components/queue/queue-history-list'
-import { Users, MapPin, Loader2, Activity, Clock, History } from 'lucide-react'
+import { Users, MapPin, Loader2, Activity, Clock, History, FolderOpen, Trophy } from 'lucide-react'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { format } from 'date-fns'
+import { formatCurrency } from '@rallio/shared/utils'
 
 export function QueueDashboardClient() {
   const { queues: myQueues, isLoading: loadingMy } = useMyQueues()
   const { queues: nearbyQueues, isLoading: loadingNearby } = useNearbyQueues()
   const { history: myHistory, isLoading: loadingHistory } = useMyQueueHistory()
+  const [isQueueMaster, setIsQueueMaster] = useState(false)
+  const [isRoleLoading, setIsRoleLoading] = useState(true)
+  const { history: sessionHistory, isLoading: loadingSessionHistory } = useQueueMasterHistory(isQueueMaster)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'active' | 'history'>('active')
+  const [activeTab, setActiveTab] = useState<'active' | 'history' | 'session'>('active')
   const supabase = createClient()
 
   // Get current user ID
@@ -23,6 +28,26 @@ export function QueueDashboardClient() {
     async function getCurrentUser() {
       const { data: { user } } = await supabase.auth.getUser()
       setCurrentUserId(user?.id || null)
+
+      if (!user) {
+        setIsQueueMaster(false)
+        setIsRoleLoading(false)
+        return
+      }
+
+      const { data: roles } = await supabase
+        .from('user_roles')
+        .select(`
+          role_id,
+          roles!inner (
+            name
+          )
+        `)
+        .eq('user_id', user.id)
+
+      const hasQueueMasterRole = roles?.some((r: any) => r.roles?.name === 'queue_master') || false
+      setIsQueueMaster(hasQueueMasterRole)
+      setIsRoleLoading(false)
     }
     getCurrentUser()
   }, [])
@@ -31,6 +56,12 @@ export function QueueDashboardClient() {
   const activeQueues = myQueues.filter(q => q.status === 'active' || q.status === 'waiting')
   const primaryQueue = activeQueues.length > 0 ? activeQueues[0] : null
   const { notifications, dismissNotification } = useQueueNotifications(primaryQueue, currentUserId)
+
+  useEffect(() => {
+    if (!isQueueMaster && activeTab === 'session') {
+      setActiveTab('active')
+    }
+  }, [isQueueMaster, activeTab])
 
   if (loadingMy || loadingNearby) {
     return (
@@ -116,6 +147,18 @@ export function QueueDashboardClient() {
             <History className="w-4 h-4" />
             History
           </button>
+          {!isRoleLoading && isQueueMaster && (
+            <button
+              onClick={() => setActiveTab('session')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'session'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+                }`}
+            >
+              <FolderOpen className="w-4 h-4" />
+              Session
+            </button>
+          )}
         </div>
 
         {activeTab === 'active' ? (
@@ -196,7 +239,7 @@ export function QueueDashboardClient() {
               )}
             </section>
           </>
-        ) : (
+        ) : activeTab === 'history' ? (
           /* History Tab */
           <section>
             <div className="flex items-center gap-2 mb-4">
@@ -212,6 +255,72 @@ export function QueueDashboardClient() {
               </div>
             ) : (
               <QueueHistoryList history={myHistory} />
+            )}
+          </section>
+        ) : (
+          /* Queue Master Session Tab */
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 bg-teal-50 rounded-lg flex items-center justify-center">
+                <FolderOpen className="w-5 h-5 text-teal-600" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-900">Past Queue Sessions</h2>
+            </div>
+
+            {loadingSessionHistory ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="w-6 h-6 text-primary animate-spin" />
+              </div>
+            ) : sessionHistory.length === 0 ? (
+              <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FolderOpen className="w-8 h-8 text-gray-400" />
+                </div>
+                <h3 className="font-semibold text-gray-900 mb-2">No Past Sessions</h3>
+                <p className="text-sm text-gray-500">Your completed queue sessions will appear here.</p>
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {sessionHistory.map((session: any) => (
+                  <Link
+                    key={session.id}
+                    href={`/queue/${session.id}`}
+                    className="block bg-white border border-gray-200 rounded-xl p-5 hover:border-primary/40 hover:shadow-md transition-all"
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{session.courtName}</h3>
+                        <p className="text-sm text-gray-500">{session.venueName}</p>
+                      </div>
+                      <span className="inline-flex items-center rounded-full border border-teal-200 bg-teal-50 text-teal-700 text-xs font-semibold px-2.5 py-1 capitalize">
+                        {session.status}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
+                      <div className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2">
+                        <p className="text-xs text-gray-500">Date</p>
+                        <p className="font-medium text-gray-900">{format(new Date(session.startTime), 'MMM d, yyyy')}</p>
+                      </div>
+                      <div className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2">
+                        <p className="text-xs text-gray-500">Revenue</p>
+                        <p className="font-medium text-gray-900">{formatCurrency(Number(session.totalRevenue || 0))}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 text-xs text-gray-600">
+                      <span className="inline-flex items-center gap-1">
+                        <Trophy className="w-3.5 h-3.5 text-teal-600" />
+                        {session.totalGames || 0} games
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <Users className="w-3.5 h-3.5 text-teal-600" />
+                        Max {session.maxPlayers || 0} players
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
             )}
           </section>
         )}

@@ -9,6 +9,7 @@ import {
   getMyQueues as getMyQueuesAction,
   getNearbyQueues as getNearbyQueuesAction,
   getMyQueueHistory,
+  getQueueMasterHistory,
 } from '@/app/actions/queue-actions'
 
 export interface QueuePlayer {
@@ -47,6 +48,21 @@ export interface QueueSession {
   costPerGame?: number // Cost per game in the queue
   userGamesPlayed?: number // Games played by current user
   userAmountOwed?: number // Amount owed by current user
+  sessionSummary?: {
+    totalGames: number
+    totalRevenue: number
+    totalParticipants: number
+    unpaidBalances: number
+    completedAt?: string
+  }
+  matchOutcomes?: Array<{
+    matchNumber: number
+    winnerNames: string[]
+    loserNames: string[]
+    score: string
+    completedAt?: string
+    result: 'team_a' | 'team_b' | 'draw'
+  }>
   currentMatch?: {
     courtName: string
     players: string[]
@@ -155,6 +171,8 @@ export function useQueue(courtId: string) {
         organizerId: queueData.organizerId,
         organizerName: queueData.organizerName,
         costPerGame: queueData.costPerGame,
+        sessionSummary: (queueData as any).sessionSummary,
+        matchOutcomes: (queueData as any).matchOutcomes,
       }
 
       setQueue(transformedQueue)
@@ -458,6 +476,44 @@ export function useMyQueueHistory() {
 
     fetchHistory()
   }, [])
+
+  return { history, isLoading }
+}
+
+/**
+ * Hook to fetch queue sessions organized by the current queue master
+ */
+export function useQueueMasterHistory(enabled = true) {
+  const [history, setHistory] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(enabled)
+
+  useEffect(() => {
+    if (!enabled) {
+      setHistory([])
+      setIsLoading(false)
+      return
+    }
+
+    async function fetchQueueMasterHistory() {
+      setIsLoading(true)
+      try {
+        const { success, history: data, error } = await getQueueMasterHistory()
+        if (success && data) {
+          setHistory(data)
+        } else {
+          console.error('Error fetching queue master history:', error)
+          setHistory([])
+        }
+      } catch (err) {
+        console.error('Error fetching queue master history:', err)
+        setHistory([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchQueueMasterHistory()
+  }, [enabled])
 
   return { history, isLoading }
 }
