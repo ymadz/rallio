@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { buildAuthRedirectUrl } from '@/lib/auth/redirect-url'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -139,7 +140,7 @@ export default function SignupPage() {
             last_name: formData.lastName,
             // phone_number: formData.phoneNumber, // Removed phone number
           },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: buildAuthRedirectUrl('/auth/callback'),
         },
       })
 
@@ -165,7 +166,7 @@ export default function SignupPage() {
     setError(null)
     try {
       const supabase = createClient()
-      const redirectUrl = `${window.location.origin}/auth/callback`
+      const redirectUrl = buildAuthRedirectUrl('/auth/callback')
       console.log('🔍 [Google Signup] Redirect URL:', redirectUrl)
 
       const { data, error } = await supabase.auth.signInWithOAuth({

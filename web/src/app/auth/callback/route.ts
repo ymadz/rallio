@@ -1,18 +1,18 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { getServerAuthBaseUrl } from '@/lib/auth/redirect-url'
 import { NextResponse } from 'next/server'
 
 // Role priority order (highest first)
 const ROLE_PRIORITY = ['global_admin', 'court_admin', 'queue_master', 'player'] as const
 
 export async function GET(request: Request) {
-  const { searchParams, origin: requestOrigin } = new URL(request.url)
+  const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
   const next = searchParams.get('next')
   const error = searchParams.get('error')
   const errorDescription = searchParams.get('error_description')
-  
-  // Fix Safari issue: use localhost instead of 0.0.0.0 which Safari blocks as restricted port
-  const origin = requestOrigin.replace('0.0.0.0', 'localhost')
+
+  const origin = getServerAuthBaseUrl(request.url)
 
   console.log('🔍 [Auth Callback] Received callback')
   console.log('🔍 [Auth Callback] Code:', code ? 'present' : 'missing')

@@ -4,6 +4,7 @@ import { useState, Suspense, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { buildAuthRedirectUrl } from '@/lib/auth/redirect-url';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/alert';
 
@@ -53,7 +54,7 @@ function VerifyEmailContent() {
         type: 'signup',
         email,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: buildAuthRedirectUrl('/auth/callback'),
         },
       });
 
