@@ -105,6 +105,10 @@ export default function CheckoutScreen() {
     // discountAmount comes from store (set in book.tsx via setDiscount)
     // No local override — store is the single source of truth
 
+    // Down payment input (local string so user can type freely; synced to store on blur)
+    const [dpInput, setDpInput] = useState('');
+    const [dpInputFocused, setDpInputFocused] = useState(false);
+
     useEffect(() => {
         if (!bookingData) {
             router.replace('/(tabs)/courts');
@@ -580,46 +584,64 @@ export default function CheckoutScreen() {
                     </View>
                 </TouchableOpacity>
 
-                {/* Custom down payment picker — shown when cash is selected */}
+                {/* Custom down payment input — shown when cash is selected */}
                 {paymentMethod === 'cash' && (() => {
-                    const currentPct = downPaymentPercentage ?? 20;
-                    const dpOptions = [
-                        { label: '20%', pct: 20 },
-                        { label: '30%', pct: 30 },
-                        { label: '50%', pct: 50 },
-                        { label: 'Full', pct: 100 },
-                    ];
+                    const minDP = Math.round(total * 0.2 * 100) / 100;
+                    const parsedInput = parseFloat(dpInput);
+                    const customDP = !isNaN(parsedInput) && parsedInput > 0 ? parsedInput : downPaymentAmount;
+                    const clampedDP = Math.min(Math.max(customDP, minDP), total);
+                    const remaining = Math.round((total - clampedDP) * 100) / 100;
+                    const isFullPayment = clampedDP >= total;
+
+                    const handleDpBlur = () => {
+                        setDpInputFocused(false);
+                        if (isNaN(parsedInput) || parsedInput <= 0) {
+                            setDpInput(minDP.toFixed(2));
+                            setDownPaymentPercentage(20);
+                            return;
+                        }
+                        const clamped = Math.min(Math.max(parsedInput, minDP), total);
+                        setDpInput(clamped.toFixed(2));
+                        // Back-calculate % for store compatibility
+                        const pct = Math.round((clamped / total) * 100);
+                        setDownPaymentPercentage(pct);
+                    };
+
+                    const handleDpFocus = () => {
+                        setDpInputFocused(true);
+                        if (!dpInput) setDpInput(minDP.toFixed(2));
+                    };
+
                     return (
                         <Card variant="glass" padding="md" style={styles.dpPickerCard}>
-                            <Text style={styles.dpPickerTitle}>Down Payment Required</Text>
+                            <Text style={styles.dpPickerTitle}>Down Payment</Text>
                             <Text style={styles.dpPickerSub}>
-                                Choose how much to pay online now. The rest is settled at the venue.
+                                Enter how much you'd like to pay now online. Minimum is ₱{minDP.toLocaleString()} (20%).
                             </Text>
-                            <View style={styles.dpChipRow}>
-                                {dpOptions.map(({ label, pct }) => {
-                                    const isSelected = currentPct === pct;
-                                    const dpAmt = pct >= 100 ? total : Math.round((total * pct / 100) * 100) / 100;
-                                    return (
-                                        <TouchableOpacity
-                                            key={pct}
-                                            style={[styles.dpChip, isSelected && styles.dpChipSelected]}
-                                            onPress={() => setDownPaymentPercentage(pct)}
-                                        >
-                                            <Text style={[styles.dpChipLabel, isSelected && styles.dpChipLabelSelected]}>
-                                                {label}
-                                            </Text>
-                                            <Text style={[styles.dpChipAmt, isSelected && styles.dpChipAmtSelected]}>
-                                                ₱{dpAmt.toLocaleString()}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    );
-                                })}
+
+                            <View style={[styles.dpInputRow, dpInputFocused && styles.dpInputRowFocused]}>
+                                <Text style={styles.dpInputPrefix}>₱</Text>
+                                <TextInput
+                                    style={styles.dpInput}
+                                    value={dpInput}
+                                    onChangeText={setDpInput}
+                                    onFocus={handleDpFocus}
+                                    onBlur={handleDpBlur}
+                                    keyboardType="decimal-pad"
+                                    placeholder={minDP.toFixed(2)}
+                                    placeholderTextColor={Colors.dark.textTertiary}
+                                    selectTextOnFocus
+                                />
+                                <Text style={styles.dpInputSuffix}>
+                                    / ₱{total.toLocaleString()}
+                                </Text>
                             </View>
-                            {currentPct < 100 && (
+
+                            {!isFullPayment && (
                                 <View style={styles.dpRemainingRow}>
                                     <Ionicons name="information-circle-outline" size={14} color={Colors.dark.textSecondary} />
                                     <Text style={styles.dpRemainingText}>
-                                        ₱{remainingBalance.toLocaleString()} will be collected at the venue
+                                        ₱{remaining.toLocaleString()} will be collected at the venue
                                     </Text>
                                 </View>
                             )}
@@ -1142,10 +1164,40 @@ const styles = StyleSheet.create({
         ...Typography.bodySmall,
         color: Colors.dark.textSecondary,
     },
-    // Down payment picker
+    // Down payment input field
     dpPickerCard: {
         marginTop: Spacing.sm,
         marginBottom: Spacing.xs,
+    },
+    dpInputRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.dark.background,
+        borderRadius: Radius.md,
+        borderWidth: 1.5,
+        borderColor: Colors.dark.border,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.sm,
+        marginBottom: Spacing.xs,
+    },
+    dpInputRowFocused: {
+        borderColor: Colors.dark.primary,
+    },
+    dpInputPrefix: {
+        ...Typography.h3,
+        color: Colors.dark.textSecondary,
+        marginRight: 4,
+    },
+    dpInput: {
+        flex: 1,
+        ...Typography.h3,
+        color: Colors.dark.text,
+        padding: 0,
+    },
+    dpInputSuffix: {
+        ...Typography.bodySmall,
+        color: Colors.dark.textSecondary,
+        marginLeft: 4,
     },
     dpPickerTitle: {
         ...Typography.body,
