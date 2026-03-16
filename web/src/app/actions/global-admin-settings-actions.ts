@@ -261,6 +261,7 @@ export async function updateGeneralSettings(settings: {
   maintenance_mode?: boolean
   contact_email?: string
   contact_phone?: string
+  elo_k_factor?: number
 }) {
   try {
     const { supabase, user } = await verifyGlobalAdmin()

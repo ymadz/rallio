@@ -1,4 +1,4 @@
-{
+  {
   "name": "web",
   "version": "0.1.0",
   "private": true,
@@ -13,7 +13,9 @@
     "cap:copy": "npm run cap:prepare:android && npx cap copy android",
     "cap:doctor": "npx cap doctor",
     "cap:open:android": "npx cap open android",
-    "cap:sync": "npm run cap:prepare:android && npx cap sync android"
+    "cap:sync": "npm run cap:prepare:android && npx cap sync android",
+    "cap:refresh:android": "npm run cap:sync && npm run cap:open:android",
+    "cap:refresh:android:prod": "CAPACITOR_SERVER_URL=https://rallio-amad.vercel.app npm run cap:refresh:android"
   },
   "dependencies": {
     "@capacitor/android": "^7.0.0",
