@@ -14,6 +14,7 @@ import { initiateQueuePaymentAction } from '@/app/actions/payments'
 import { useRouter } from 'next/navigation'
 import { differenceInSeconds, subHours, isBefore, format } from 'date-fns'
 import { useServerTime } from '@/hooks/use-server-time'
+import { formatCurrency } from '@rallio/shared/utils'
 
 interface QueueDetailsClientProps {
   courtId: string
@@ -69,13 +70,29 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
   const [isInitiatingPayment, setIsInitiatingPayment] = useState(false)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'gcash' | 'paymaya' | null>(null)
   const [paymentError, setPaymentError] = useState<string | null>(null)
+  const [isQueueMaster, setIsQueueMaster] = useState(false)
   const supabase = createClient()
 
-  // Get current user ID
+  // Get current user ID and check if queue master
   useEffect(() => {
     async function getCurrentUser() {
       const { data: { user } } = await supabase.auth.getUser()
       setCurrentUserId(user?.id || null)
+
+      if (user?.id) {
+        try {
+          const { data: roles } = await supabase
+            .from('user_roles')
+            .select('roles(name)')
+            .eq('user_id', user.id)
+
+          const hasQueueMasterRole = roles?.some((r: any) => r.roles?.name === 'queue_master') || false
+          setIsQueueMaster(hasQueueMasterRole)
+        } catch (err) {
+          console.error('Error fetching user roles:', err)
+          setIsQueueMaster(false)
+        }
+      }
     }
     getCurrentUser()
   }, [])
@@ -209,6 +226,175 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    )
+  }
+
+  // Closed/cancelled sessions should show summary view instead of join/leave UI.
+  if (queue.status === 'completed') {
+    const summary = queue.sessionSummary || {
+      totalGames: 0,
+      totalRevenue: 0,
+      totalParticipants: queue.currentPlayers || 0,
+      unpaidBalances: 0,
+    }
+    const sortedOutcomes = [...(queue.matchOutcomes || [])].sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0))
+
+    return (
+      <div className="space-y-6">
+        <QueueEventCard queue={queue} onBack={() => router.back()} />
+
+        <div className="rounded-2xl border border-teal-100 bg-white overflow-hidden shadow-[0_8px_28px_rgba(13,148,136,0.10)]">
+          <div className="px-6 py-5 border-b border-white/20 bg-[radial-gradient(ellipse_95%_120%_at_8%_0%,rgba(153,246,228,0.35)_0%,transparent_45%),linear-gradient(135deg,#14b8a6_0%,#0d9488_45%,#0f766e_100%)]">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h3 className="text-xl font-bold text-white">Session Summary</h3>
+                <p className="text-sm text-teal-50/90">Final session stats and match outcomes</p>
+              </div>
+              <span className="inline-flex w-fit items-center rounded-full bg-white/18 text-white text-xs font-semibold px-3 py-1 border border-white/25 backdrop-blur-sm">
+                Completed
+              </span>
+            </div>
+            {summary.completedAt && (
+              <p className="text-sm text-teal-50/80 mt-3">
+                Closed at {format(new Date(summary.completedAt), 'MMM d, yyyy h:mm a')}
+              </p>
+            )}
+          </div>
+
+          <div className="p-6">
+            {isQueueMaster ? (
+              // Queue Master View: 4 metrics
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Total Games</p>
+                    <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
+                      <Trophy className="w-4 h-4 text-teal-700" />
+                    </div>
+                  </div>
+                  <p className="text-3xl font-bold text-teal-900 mt-1">{summary.totalGames}</p>
+                </div>
+                <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Total Revenue</p>
+                    <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
+                      <CreditCard className="w-4 h-4 text-teal-700" />
+                    </div>
+                  </div>
+                  <p className="text-3xl font-bold text-teal-900 mt-1">{formatCurrency(summary.totalRevenue)}</p>
+                </div>
+                <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Participants</p>
+                    <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
+                      <Users className="w-4 h-4 text-teal-700" />
+                    </div>
+                  </div>
+                  <p className="text-3xl font-bold text-teal-900 mt-1">{summary.totalParticipants}</p>
+                </div>
+                <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Unpaid Balances</p>
+                    <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
+                      <Clock className="w-4 h-4 text-teal-700" />
+                    </div>
+                  </div>
+                  <p className="text-3xl font-bold text-teal-900 mt-1">{summary.unpaidBalances}</p>
+                </div>
+              </div>
+            ) : (
+              // Player View: 3 metrics
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Total Games</p>
+                    <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
+                      <Trophy className="w-4 h-4 text-teal-700" />
+                    </div>
+                  </div>
+                  <p className="text-3xl font-bold text-teal-900 mt-1">{summary.totalGames}</p>
+                </div>
+                <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Avg Per Game</p>
+                    <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
+                      <CreditCard className="w-4 h-4 text-teal-700" />
+                    </div>
+                  </div>
+                  <p className="text-3xl font-bold text-teal-900 mt-1">{summary.totalGames > 0 ? formatCurrency(summary.totalRevenue / summary.totalGames) : '-'}</p>
+                </div>
+                <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Participants</p>
+                    <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
+                      <Users className="w-4 h-4 text-teal-700" />
+                    </div>
+                  </div>
+                  <p className="text-3xl font-bold text-teal-900 mt-1">{summary.totalParticipants}</p>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-base font-semibold text-gray-900">Match Results</h4>
+                <span className="inline-flex items-center rounded-full border border-teal-200 bg-teal-50 text-teal-700 text-xs font-semibold px-2.5 py-1">
+                  {sortedOutcomes.length} game{sortedOutcomes.length === 1 ? '' : 's'}
+                </span>
+              </div>
+
+              {sortedOutcomes.length > 0 ? (
+                <div className="space-y-3">
+                  {sortedOutcomes.map((match) => (
+                    <div key={`${match.matchNumber}-${match.completedAt || 'na'}`} className="rounded-xl border border-teal-100 p-4 bg-gradient-to-b from-white to-teal-50/40">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+                        <p className="text-sm font-semibold text-gray-900">Game {match.matchNumber || '-'}</p>
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center rounded-full bg-white border border-teal-200 text-xs font-semibold text-teal-700 px-2.5 py-1">
+                            Score {match.score}
+                          </span>
+                          {match.result === 'draw' && (
+                            <span className="inline-flex items-center rounded-full bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-700 px-2.5 py-1">
+                              Draw
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {match.result === 'draw' ? (
+                        <div className="text-sm text-gray-600 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                          Teams ended in a draw.
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2">
+                            <p className="text-xs font-semibold text-teal-700 mb-1">Winners</p>
+                            <p className="text-sm text-teal-900 font-medium">{match.winnerNames.join(', ') || 'Unknown'}</p>
+                          </div>
+                          <div className="rounded-lg border border-gray-200 bg-white px-3 py-2">
+                            <p className="text-xs font-semibold text-gray-700 mb-1">Losers</p>
+                            <p className="text-sm text-gray-900 font-medium">{match.loserNames.join(', ') || 'Unknown'}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {match.completedAt && (
+                        <p className="text-xs text-gray-500 mt-3">
+                          Finished {format(new Date(match.completedAt), 'MMM d, h:mm a')}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-teal-200 bg-teal-50/30 px-4 py-6 text-center">
+                  <p className="text-sm text-gray-500">No match results available.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     )
   }

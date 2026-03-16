@@ -34,6 +34,21 @@ export interface QueueSessionData {
   paymentStatus?: 'pending' | 'paid' | 'failed'
   paymentMethod?: 'cash' | 'e-wallet'
   participants?: QueueParticipantData[]
+  sessionSummary?: {
+    totalGames: number
+    totalRevenue: number
+    totalParticipants: number
+    unpaidBalances: number
+    completedAt?: string
+  }
+  matchOutcomes?: Array<{
+    matchNumber: number
+    winnerNames: string[]
+    loserNames: string[]
+    score: string
+    completedAt?: string
+    result: 'team_a' | 'team_b' | 'draw'
+  }>
 }
 
 export interface QueueParticipantData {
@@ -85,12 +100,17 @@ export async function getQueueDetails(courtId: string) {
       )
     `
 
+    let resolvedBySessionId = false
+
     let { data: session, error: sessionError } = await supabase
       .from('queue_sessions')
       .select(baseSessionSelect)
       .eq('id', courtId)
-      .in('status', ['pending_payment', 'open', 'active'])
       .maybeSingle()
+
+    if (session) {
+      resolvedBySessionId = true
+    }
 
     if (!session && !sessionError) {
       const fallback = await supabase
@@ -186,8 +206,13 @@ export async function getQueueDetails(courtId: string) {
         revalidatePath('/queue')
       }
 
-      // Return null effectively removing it from view
-      return { success: true, queue: null }
+      // If this page is tied to a specific session ID, keep the session visible
+      // so the UI can render post-session summary instead of a not-found state.
+      if (!resolvedBySessionId) {
+        return { success: true, queue: null }
+      }
+
+      session.status = 'completed'
     }
 
     // Call centralized status auto-advancement to handle upcoming->open->active->completed
@@ -203,7 +228,10 @@ export async function getQueueDetails(courtId: string) {
 
     if (updatedSession?.status === 'completed' || updatedSession?.status === 'cancelled') {
       console.log('[getQueueDetails] 🕒 Session was auto-completed by RPC')
-      return { success: true, queue: null }
+
+      if (!resolvedBySessionId) {
+        return { success: true, queue: null }
+      }
     }
 
     // Update local object to match potential new status (e.g. open -> active)
@@ -240,6 +268,12 @@ export async function getQueueDetails(courtId: string) {
 
     const playerSkillMap = new Map(players?.map((p: any) => [p.user_id, p.skill_level]) || [])
     const playerRatingMap = new Map(players?.map((p: any) => [p.user_id, p.rating]) || [])
+    const participantNameMap = new Map(
+      (participants || []).map((p: any) => [
+        p.user_id,
+        p.user?.display_name || `${p.user?.first_name || ''} ${p.user?.last_name || ''}`.trim() || 'Unknown Player',
+      ])
+    )
 
     // Calculate positions and user position
     const formattedParticipants: QueueParticipantData[] = (participants || []).map((p: any, index: number) => ({
@@ -274,6 +308,62 @@ export async function getQueueDetails(courtId: string) {
       }
     }
 
+    // For completed sessions, include per-match winner/loser summary.
+    let matchOutcomes: QueueSessionData['matchOutcomes'] = undefined
+    if (session.status === 'completed' || session.status === 'cancelled') {
+      const { data: sessionMatches } = await supabase
+        .from('matches')
+        .select('match_number, team_a_players, team_b_players, score_a, score_b, winner, completed_at, created_at')
+        .eq('queue_session_id', session.id)
+        .in('status', ['completed', 'in_progress'])
+        .order('match_number', { ascending: true })
+
+      const allMatchPlayerIds = Array.from(
+        new Set(
+          (sessionMatches || []).flatMap((m: any) => [
+            ...(m.team_a_players || []),
+            ...(m.team_b_players || []),
+          ])
+        )
+      ) as string[]
+
+      const missingProfileIds = allMatchPlayerIds.filter((id: string) => !participantNameMap.has(id))
+      if (missingProfileIds.length > 0) {
+        const { data: missingProfiles } = await supabase
+          .from('profiles')
+          .select('id, display_name, first_name, last_name')
+          .in('id', missingProfileIds)
+
+        for (const profile of missingProfiles || []) {
+          participantNameMap.set(
+            profile.id,
+            profile.display_name || `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || 'Unknown Player'
+          )
+        }
+      }
+
+      matchOutcomes = (sessionMatches || []).map((m: any) => {
+        const teamANames = (m.team_a_players || []).map((id: string) => participantNameMap.get(id) || 'Unknown Player')
+        const teamBNames = (m.team_b_players || []).map((id: string) => participantNameMap.get(id) || 'Unknown Player')
+
+        const winner = (m.winner === 'team_a' || m.winner === 'team_b' || m.winner === 'draw')
+          ? m.winner
+          : 'draw'
+
+        const winnerNames = winner === 'team_a' ? teamANames : winner === 'team_b' ? teamBNames : []
+        const loserNames = winner === 'team_a' ? teamBNames : winner === 'team_b' ? teamANames : []
+
+        return {
+          matchNumber: Number(m.match_number || 0),
+          winnerNames,
+          loserNames,
+          score: `${m.score_a ?? 0} - ${m.score_b ?? 0}`,
+          completedAt: m.completed_at || m.created_at || undefined,
+          result: winner,
+        }
+      })
+    }
+
     const queueData: QueueSessionData & {
       players: QueueParticipantData[]
       userPosition: number | null
@@ -299,6 +389,16 @@ export async function getQueueDetails(courtId: string) {
       userPosition,
       organizerId: session.organizer_id,
       organizerName,
+      sessionSummary: session.settings?.summary
+        ? {
+            totalGames: Number(session.settings.summary.totalGames || 0),
+            totalRevenue: Number(session.settings.summary.totalRevenue || 0),
+            totalParticipants: Number(session.settings.summary.totalParticipants || 0),
+            unpaidBalances: Number(session.settings.summary.unpaidBalances || 0),
+            completedAt: session.settings?.completed_at || undefined,
+          }
+        : undefined,
+      matchOutcomes,
     }
 
     console.log('[getQueueDetails] ✅ Queue fetched successfully:', {
@@ -1807,7 +1907,7 @@ export async function closeQueueSession(sessionId: string): Promise<{
     // 2. Get session and verify user is organizer
     const { data: session, error: sessionError } = await supabase
       .from('queue_sessions')
-      .select('organizer_id, status, court_id, metadata, settings')
+      .select('organizer_id, status, court_id, cost_per_game, metadata, settings')
       .eq('id', sessionId)
       .single()
 
@@ -1838,8 +1938,25 @@ export async function closeQueueSession(sessionId: string): Promise<{
     }
 
     // 4. Calculate summary
-    const totalGames = participants?.reduce((sum, p) => sum + (p.games_played || 0), 0) || 0
-    const totalRevenue = participants?.reduce((sum, p) => sum + parseFloat(p.amount_owed || '0'), 0) || 0
+    const totalGamesFromParticipants = participants?.reduce((sum, p) => sum + (p.games_played || 0), 0) || 0
+    const totalRevenueFromParticipants = participants?.reduce((sum, p) => sum + parseFloat(p.amount_owed || '0'), 0) || 0
+
+    // Fallback: derive from completed matches in case participant counters/owed were not persisted.
+    const costPerGame = parseFloat(session.cost_per_game || '0')
+    const { data: completedMatches } = await supabase
+      .from('matches')
+      .select('team_a_players, team_b_players')
+      .eq('queue_session_id', sessionId)
+      .eq('status', 'completed')
+
+    const totalGamesFromMatches = completedMatches?.length || 0
+    const totalRevenueFromMatches = (completedMatches || []).reduce((sum: number, m: any) => {
+      const playersInMatch = (m.team_a_players?.length || 0) + (m.team_b_players?.length || 0)
+      return sum + playersInMatch * costPerGame
+    }, 0)
+
+    const totalGames = Math.max(totalGamesFromParticipants, totalGamesFromMatches)
+    const totalRevenue = totalRevenueFromParticipants > 0 ? totalRevenueFromParticipants : totalRevenueFromMatches
     const totalParticipants = participants?.length || 0
     const unpaidBalances = participants?.filter(p => p.payment_status !== 'paid' && parseFloat(p.amount_owed || '0') > 0).length || 0
 
@@ -2768,36 +2885,43 @@ export async function getQueueSessionSummary(sessionId: string): Promise<{
           first_name,
           last_name,
           avatar_url
-        ),
-        player:user_id (
-          skill_level
         )
       `)
       .eq('queue_session_id', sessionId)
-      .order('position', { ascending: true })
+      .order('joined_at', { ascending: true })
 
     if (participantsError) {
       console.error('[getQueueSessionSummary] ❌ Failed to fetch participants:', participantsError)
       return { success: false, error: 'Failed to fetch participants' }
     }
 
+    // Load player skill levels separately; queue_participants has no direct FK to players.
+    const participantUserIds = (participants || []).map((p: any) => p.user_id)
+    const { data: participantPlayers } = participantUserIds.length > 0
+      ? await supabase
+          .from('players')
+          .select('user_id, skill_level')
+          .in('user_id', participantUserIds)
+      : { data: [] }
+
+    const participantSkillMap = new Map((participantPlayers || []).map((p: any) => [p.user_id, p.skill_level]))
+
     // 4. Fetch all matches for this session
     const { data: matches, error: matchesError } = await supabase
       .from('matches')
       .select(`
-        *,
-        match_players (
-          user_id,
-          team,
-          user:user_id (
-            display_name,
-            first_name,
-            last_name
-          ),
-          player:user_id (
-            skill_level
-          )
-        )
+        id,
+        match_number,
+        scheduled_at,
+        started_at,
+        completed_at,
+        status,
+        team_a_players,
+        team_b_players,
+        score_a,
+        score_b,
+        winner,
+        created_at
       `)
       .eq('queue_session_id', sessionId)
       .order('match_number', { ascending: true })
@@ -2808,13 +2932,13 @@ export async function getQueueSessionSummary(sessionId: string): Promise<{
     }
 
     // 5. Transform data for frontend
-    const participantsSummary = (participants || []).map((p: any) => ({
+    const participantsSummary = (participants || []).map((p: any, index: number) => ({
       id: p.id,
       userId: p.user_id,
       playerName: p.user.display_name || `${p.user.first_name} ${p.user.last_name}`.trim(),
       avatarUrl: p.user.avatar_url,
-      skillLevel: p.player?.skill_level || 1,
-      position: p.position,
+      skillLevel: participantSkillMap.get(p.user_id) || 1,
+      position: index + 1,
       joinedAt: p.joined_at,
       leftAt: p.left_at,
       gamesPlayed: p.games_played || 0,
@@ -2824,34 +2948,68 @@ export async function getQueueSessionSummary(sessionId: string): Promise<{
       paymentStatus: p.payment_status,
     }))
 
+    // Build a profile map from queue participants first, then fill gaps from profiles table
+    const nameMap = new Map(
+      (participants || []).map((p: any) => [
+        p.user_id,
+        {
+          name: p.user?.display_name || `${p.user?.first_name || ''} ${p.user?.last_name || ''}`.trim() || 'Unknown Player',
+          skillLevel: participantSkillMap.get(p.user_id) || 1,
+        },
+      ])
+    )
+
+    const matchPlayerIds = Array.from(
+      new Set(
+        (matches || []).flatMap((m: any) => [
+          ...(m.team_a_players || []),
+          ...(m.team_b_players || []),
+        ])
+      )
+    ) as string[]
+
+    const missingProfileIds = matchPlayerIds.filter((id: string) => !nameMap.has(id))
+    if (missingProfileIds.length > 0) {
+      const { data: missingProfiles } = await supabase
+        .from('profiles')
+        .select('id, display_name, first_name, last_name')
+        .in('id', missingProfileIds)
+
+      for (const profile of missingProfiles || []) {
+        nameMap.set(profile.id, {
+          name:
+            profile.display_name ||
+            `${profile.first_name || ''} ${profile.last_name || ''}`.trim() ||
+            'Unknown Player',
+          skillLevel: participantSkillMap.get(profile.id) || 1,
+        })
+      }
+    }
+
     const matchesSummary = (matches || []).map((m: any) => {
-      const team1Players = (m.match_players || [])
-        .filter((mp: any) => mp.team === 1)
-        .map((mp: any) => ({
-          id: mp.user_id,
-          name: mp.user?.display_name || `${mp.user?.first_name} ${mp.user?.last_name}`.trim(),
-          skillLevel: mp.player?.skill_level || 1,
+      const team1Players = (m.team_a_players || []).map((userId: string) => ({
+          id: userId,
+          name: nameMap.get(userId)?.name || 'Unknown Player',
+          skillLevel: nameMap.get(userId)?.skillLevel || 1,
         }))
 
-      const team2Players = (m.match_players || [])
-        .filter((mp: any) => mp.team === 2)
-        .map((mp: any) => ({
-          id: mp.user_id,
-          name: mp.user?.display_name || `${mp.user?.first_name} ${mp.user?.last_name}`.trim(),
-          skillLevel: mp.player?.skill_level || 1,
+      const team2Players = (m.team_b_players || []).map((userId: string) => ({
+          id: userId,
+          name: nameMap.get(userId)?.name || 'Unknown Player',
+          skillLevel: nameMap.get(userId)?.skillLevel || 1,
         }))
 
       return {
         id: m.id,
         matchNumber: m.match_number,
-        startTime: m.start_time,
-        endTime: m.end_time,
+        startTime: m.started_at || m.scheduled_at || m.created_at,
+        endTime: m.completed_at,
         status: m.status,
         team1Players,
         team2Players,
-        team1Score: m.team1_score,
-        team2Score: m.team2_score,
-        winnerTeam: m.winner_team,
+        team1Score: m.score_a,
+        team2Score: m.score_b,
+        winnerTeam: m.winner === 'team_a' ? 1 : m.winner === 'team_b' ? 2 : undefined,
       }
     })
 
