@@ -1,5 +1,3 @@
-import type { CapacitorConfig } from '@capacitor/cli'
-
 const serverUrl = process.env.CAPACITOR_SERVER_URL
 const usesLocalServer =
   typeof serverUrl === 'string' &&
@@ -8,7 +6,7 @@ const usesLocalServer =
     serverUrl.includes('127.0.0.1') ||
     serverUrl.includes('192.168.'))
 
-const config: CapacitorConfig = {
+const config = {
   appId: 'com.rallio.player',
   appName: 'Rallio',
   webDir: 'out',
