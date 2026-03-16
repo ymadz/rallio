@@ -181,7 +181,7 @@ export default function AuditLogsViewer() {
         <button
           onClick={handleExport}
           disabled={exportLoading}
-          className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50"
         >
           <Download className="w-4 h-4" />
           {exportLoading ? 'Exporting...' : 'Export CSV'}
@@ -199,7 +199,7 @@ export default function AuditLogsViewer() {
                   {stats.totalLogs.toLocaleString()}
                 </p>
               </div>
-              <Activity className="w-8 h-8 text-purple-600" />
+              <Activity className="w-8 h-8 text-teal-600" />
             </div>
           </div>
 
@@ -468,7 +468,7 @@ export default function AuditLogsViewer() {
                         <div>
                           <div className="font-medium capitalize">{log.target_type}</div>
                           {log.target_id && (
-                            <div className={`text-xs ${log.target_user_name ? 'text-purple-600 font-medium' : 'text-gray-500 font-mono'}`}>
+                            <div className={`text-xs ${log.target_user_name ? 'text-teal-700 font-medium' : 'text-gray-500 font-mono'}`}>
                               {log.target_user_name ? log.target_user_name : `${log.target_id.slice(0, 8)}...`}
                             </div>
                           )}
@@ -483,7 +483,7 @@ export default function AuditLogsViewer() {
                           e.stopPropagation()
                           setSelectedLog(log)
                         }}
-                        className="text-xs text-purple-600 hover:text-purple-700 font-medium"
+                        className="text-xs text-teal-700 hover:text-teal-800 font-medium"
                       >
                         View Details
                       </button>

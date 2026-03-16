@@ -83,7 +83,7 @@ export default async function AuthLayout({
             <Image
               src={logo}
               alt="Rallio"
-              className="w-10 h-10"
+              className="w-10 h-10 brightness-0 invert"
               width={40}
               height={40}
             />

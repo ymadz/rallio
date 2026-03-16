@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { logAdminAction } from './global-admin-actions'
 import { revalidatePath } from 'next/cache'
 
 // Verify user is a global admin
@@ -23,29 +24,6 @@ async function verifyGlobalAdmin() {
   }
 
   return { success: true, user }
-}
-
-// Audit logging helper
-async function logAdminAction(params: {
-  actionType: string
-  targetType: string
-  targetId: string
-  oldValue?: any
-  newValue?: any
-}) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) return
-
-  await supabase.from('admin_audit_logs').insert({
-    action_type: params.actionType,
-    target_type: params.targetType,
-    target_id: params.targetId,
-    old_value: params.oldValue || null,
-    new_value: params.newValue || null,
-    performed_by: user.id
-  })
 }
 
 /**

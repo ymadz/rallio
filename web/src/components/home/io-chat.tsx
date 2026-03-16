@@ -426,7 +426,7 @@ export function IOChat() {
       <button
         onClick={() => setOpen(true)}
         aria-label="Open IO assistant"
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full px-5 py-3 text-white shadow-lg shadow-[#3B6A7F]/30 transition-all hover:shadow-xl hover:shadow-[#3B6A7F]/40 hover:scale-105 active:scale-95"
+        className="fixed bottom-24 right-6 md:bottom-6 z-50 flex items-center gap-2 rounded-full px-5 py-3 text-white shadow-lg shadow-[#3B6A7F]/30 transition-all hover:shadow-xl hover:shadow-[#3B6A7F]/40 hover:scale-105 active:scale-95"
         style={{
           background: [
             'radial-gradient(ellipse 90% 70% at 5% 15%, rgba(163,196,167,0.70) 0%, transparent 50%)',

@@ -77,7 +77,10 @@ export async function getAvailableTimeSlotsAction(
 
   // Parse opening and closing times
   const [openHour] = dayHours.open.split(':').map(Number)
-  const [closeHour] = dayHours.close.split(':').map(Number)
+  let [closeHour] = dayHours.close.split(':').map(Number)
+  // Handle midnight close ("00:00" = end of day) and data entry errors where
+  // close <= open (e.g., "12:00" entered instead of "00:00" for midnight)
+  if (closeHour === 0 || closeHour <= openHour) closeHour = 24
 
   // Get existing reservations AND queue sessions for this court on this date
   // Query for the entire day range to catch any overlapping bookings
@@ -375,6 +378,8 @@ export async function validateBookingAvailabilityAction(data: {
     // Parse open/close times
     const [openH, openM] = dayHours.open.split(':').map(Number)
     const [closeH, closeM] = dayHours.close.split(':').map(Number)
+    // Handle midnight close ("00:00" = end of day) and data entry errors where close <= open
+    const effectiveCloseH = (closeH === 0 || closeH <= openH) ? 24 : closeH
 
     // Parse slot times using explicitly offset UTC methods to bypass Vercel timezones
     const slotStartH = manilaSlotStart.getUTCHours()
@@ -385,7 +390,7 @@ export async function validateBookingAvailabilityAction(data: {
     const slotStartMinutes = slotStartH * 60 + slotStartM
     const slotEndMinutes = slotEndH * 60 + slotEndM
     const openMinutes = openH * 60 + (openM || 0)
-    const closeMinutes = closeH * 60 + (closeM || 0)
+    const closeMinutes = effectiveCloseH * 60 + (closeM || 0)
 
     if (slotStartMinutes < openMinutes || slotEndMinutes > closeMinutes) {
       // Slot is outside operating hours
