@@ -5,9 +5,6 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import {
   ArrowRight,
-  MapPin,
-  Calendar,
-  Zap,
   Download,
 } from 'lucide-react'
 
@@ -77,50 +74,6 @@ export default async function RootPage() {
           from { opacity: 0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        @keyframes shuttle-serve {
-          0% { 
-            left: 8%;
-            top: 30%;
-          }
-          25% {
-            left: 25%;
-            top: 10%;
-          }
-          50% {
-            left: 50%;
-            top: 5%;
-          }
-          75% {
-            left: 75%;
-            top: 10%;
-          }
-          100% {
-            left: 92%;
-            top: 30%;
-          }
-        }
-        @keyframes racket-left-serve {
-          0%, 100% {
-            transform: translateY(0) rotate(0deg);
-          }
-          25% {
-            transform: translateY(-20px) rotate(-45deg);
-          }
-          50% {
-            transform: translateY(0) rotate(0deg);
-          }
-        }
-        @keyframes racket-right-serve {
-          0%, 100% {
-            transform: translateY(0) rotate(0deg);
-          }
-          50% {
-            transform: translateY(0) rotate(0deg);
-          }
-          75% {
-            transform: translateY(-20px) rotate(45deg);
-          }
-        }
         @keyframes pulse-glow {
           0%, 100% { 
             box-shadow: 0 0 30px rgba(13, 148, 136, 0.4), 
@@ -131,15 +84,8 @@ export default async function RootPage() {
                         inset 0 0 30px rgba(6, 182, 212, 0.2);
           }
         }
-        @keyframes float {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-12px); }
-        }
         .glow-pulse {
           animation: pulse-glow 3s ease-in-out infinite;
-        }
-        .float-item {
-          animation: float 4s ease-in-out infinite;
         }
         .badge {
           animation: slideInLeft 0.6s ease-out;
@@ -191,8 +137,8 @@ export default async function RootPage() {
       <header className="sticky top-0 z-30 glass-header border-b">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-3" aria-label="Rallio home">
-            <Image src="/logo.png" alt="Rallio logo" width={30} height={30} className="h-8 w-8" />
-            <span className="text-sm font-bold tracking-wider text-gray-900">RALLIO</span>
+            <Image src="/logo.png" alt="Rallio logo" width={30} height={30} className="h-8 w-8" style={{filter: 'brightness(0) saturate(100%) invert(42%) sepia(93%) saturate(352%) hue-rotate(131deg) brightness(92%) contrast(92%)'}} />
+            <span className="text-sm font-bold tracking-wider text-teal-700">RALLIO</span>
           </Link>
 
           <nav className="hidden items-center gap-8 text-sm text-gray-600 md:flex">
@@ -269,39 +215,15 @@ export default async function RootPage() {
           </div>
 
           <div className="relative flex h-96 items-center justify-center lg:h-full">
-            {/* Badminton court visual */}
-            <div className="float-item relative w-full">
+            {/* Video placeholder - ready for video upload */}
+            <div className="relative w-full">
               <div className="glass-card rounded-3xl p-8">
-                {/* Court container */}
-                <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-gradient-to-b from-green-600 to-green-700 p-4">
-                  {/* Court boundaries */}
-                  <div className="absolute inset-4 border-2 border-white/80 rounded"></div>
-                  
-                  {/* Court lines */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    {/* Center net line */}
-                    <div className="absolute top-1/2 w-full h-1.5 bg-white/80 transform -translate-y-1/2"></div>
-                    
-                    {/* Service box lines */}
-                    <div className="absolute top-1/4 w-full h-0.5 bg-white/60"></div>
-                    <div className="absolute top-3/4 w-full h-0.5 bg-white/60"></div>
-                    
-                    {/* Center mark */}
-                    <div className="absolute top-1/2 left-1/2 w-1.5 h-10 bg-white/80 transform -translate-x-1/2 -translate-y-1/2"></div>
-                  </div>
-
-                  {/* Left racket */}
-                  <div className="racket-left absolute left-2 top-1/3 text-5xl origin-center">🏸</div>
-                  
-                  {/* Right racket */}
-                  <div className="racket-right absolute right-2 top-2/3 text-5xl origin-center">🏸</div>
-
-                  {/* Flying shuttlecock */}
-                  <div className="shuttle absolute text-xs" style={{animation: 'shuttlecock-flight 3s ease-in-out infinite'}}>⚫</div>
-
-                  {/* Text overlay */}
-                  <div className="absolute bottom-3 left-0 right-0 text-center">
-                    <p className="text-xs font-bold uppercase tracking-wider text-white/90 drop-shadow-lg">Badminton Court</p>
+                <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
+                  {/* Placeholder content */}
+                  <div className="text-center">
+                    <div className="mb-4 text-5xl">🎬</div>
+                    <p className="text-lg font-semibold text-white/80">Video Coming Soon</p>
+                    <p className="mt-2 text-sm text-white/60">Your promotional video will be displayed here</p>
                   </div>
                 </div>
               </div>
@@ -310,49 +232,113 @@ export default async function RootPage() {
         </div>
       </section>
 
+      {/* Full-width marquee banner divider */}
+      <section className="w-screen relative left-1/2 right-1/2 -mx-[50vw] bg-gradient-to-r from-teal-700 via-cyan-600 to-teal-700 overflow-hidden py-6">
+        <style>{`
+          @keyframes marquee {
+            0% {
+              transform: translateX(0);
+            }
+            100% {
+              transform: translateX(-33.33%);
+            }
+          }
+          .marquee-content {
+            animation: marquee 30s linear infinite;
+            will-change: transform;
+          }
+        `}</style>
+
+        {/* Container for scrolling text */}
+        <div className="relative flex overflow-hidden">
+          <div className="marquee-content flex whitespace-nowrap">
+            {/* Duplicated content for seamless infinite loop */}
+            <span className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white px-8 flex-shrink-0">
+              Find courts — Book slots — Queue faster — Play more
+            </span>
+            <span className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white px-8 flex-shrink-0">
+              Find courts — Book slots — Queue faster — Play more
+            </span>
+            <span className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white px-8 flex-shrink-0">
+              Find courts — Book slots — Queue faster — Play more
+            </span>
+          </div>
+        </div>
+      </section>
+
       <section id="how" className="border-b border-teal-200/20">
-        <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-          <div className="mb-12 text-center">
-            <h2 className="text-4xl font-black tracking-tight text-gray-950 sm:text-5xl">
+        <div className="mx-auto max-w-7xl px-4 py-32 sm:px-6 lg:px-8">
+          <div className="mb-24 text-center">
+            <h2 className="text-5xl font-black tracking-tight text-gray-950 sm:text-6xl">
               Three steps to court
             </h2>
-            <p className="mt-4 text-lg text-gray-600">
-              Find your court. Book your slot. Queue and play.
+            <p className="mt-6 text-xl text-gray-600">
+              From finding a court to playing your match—streamlined and simple.
             </p>
           </div>
 
-          <div className="relative grid grid-cols-1 gap-8 md:grid-cols-3">
-            {/* Step 1 */}
-            <div className="flow-step text-center">
-              <div className="glow-pulse mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-teal-700">
-                <MapPin className="h-10 w-10 text-white" />
+          <div className="space-y-32">
+            {/* Step 1: Find - Text Left, Image Right */}
+            <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-2">
+              {/* Text Content */}
+              <div className="flex flex-col justify-center">
+                <span className="text-sm font-bold uppercase tracking-widest text-teal-700 mb-4">Step 1</span>
+                <h3 className="text-4xl font-black text-gray-950 leading-tight">Find</h3>
+                <p className="mt-6 text-lg leading-relaxed text-gray-700">
+                  Discover available courts near you with real-time information. Browse detailed court profiles, amenities, ratings, and current pricing—all visualized on an intuitive map.
+                </p>
               </div>
-              <h3 className="mt-6 text-2xl font-bold text-gray-900">Find</h3>
-              <p className="mt-3 text-gray-700">
-                Discover courts near you with real-time availability and pricing
-              </p>
+
+              {/* Image Card - Rotated Clockwise */}
+              <div className="relative h-96">
+                <div className="glass-card absolute inset-0 rounded-3xl p-0 overflow-hidden" style={{transform: 'rotate(3deg)'}}>
+                  <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
+                    <p className="text-gray-500 font-semibold">Image placeholder</p>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* Step 2 */}
-            <div className="flow-step text-center">
-              <div className="glow-pulse mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 to-cyan-700">
-                <Calendar className="h-10 w-10 text-white" />
+            {/* Step 2: Book - Image Left, Text Right */}
+            <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-2">
+              {/* Image Card - Rotated Counter-Clockwise */}
+              <div className="relative h-96 order-2 lg:order-1">
+                <div className="glass-card absolute inset-0 rounded-3xl p-0 overflow-hidden" style={{transform: 'rotate(-3deg)'}}>
+                  <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
+                    <p className="text-gray-500 font-semibold">Image placeholder</p>
+                  </div>
+                </div>
               </div>
-              <h3 className="mt-6 text-2xl font-bold text-gray-900">Book</h3>
-              <p className="mt-3 text-gray-700">
-                Grab your preferred time slot in seconds with guaranteed confirmation
-              </p>
+
+              {/* Text Content */}
+              <div className="flex flex-col justify-center order-1 lg:order-2">
+                <span className="text-sm font-bold uppercase tracking-widest text-cyan-700 mb-4">Step 2</span>
+                <h3 className="text-4xl font-black text-gray-950 leading-tight">Book</h3>
+                <p className="mt-6 text-lg leading-relaxed text-gray-700">
+                  Secure your preferred time slot in seconds with guaranteed confirmation. Select your date, time, and court preferences—checkout is fast, secure, and transparent.
+                </p>
+              </div>
             </div>
 
-            {/* Step 3 */}
-            <div className="flow-step text-center">
-              <div className="glow-pulse mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-cyan-600">
-                <Zap className="h-10 w-10 text-white" />
+            {/* Step 3: Play - Text Left, Image Right */}
+            <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-2">
+              {/* Text Content */}
+              <div className="flex flex-col justify-center">
+                <span className="text-sm font-bold uppercase tracking-widest text-teal-700 mb-4">Step 3</span>
+                <h3 className="text-4xl font-black text-gray-950 leading-tight">Play</h3>
+                <p className="mt-6 text-lg leading-relaxed text-gray-700">
+                  Join the queue and get matched with players of similar skill level. Play your match, rate your opponents, earn ratings, and start climbing the community rankings.
+                </p>
               </div>
-              <h3 className="mt-6 text-2xl font-bold text-gray-900">Play</h3>
-              <p className="mt-3 text-gray-700">
-                Join the queue, get matched with players, and get on court instantly
-              </p>
+
+              {/* Image Card - Rotated Clockwise */}
+              <div className="relative h-96">
+                <div className="glass-card absolute inset-0 rounded-3xl p-0 overflow-hidden" style={{transform: 'rotate(3deg)'}}>
+                  <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
+                    <p className="text-gray-500 font-semibold">Image placeholder</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -439,8 +425,8 @@ export default async function RootPage() {
       <footer className="border-t border-teal-200/20 bg-white/40 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-12 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
-            <Image src="/logo.png" alt="Rallio" width={24} height={24} className="h-6 w-6" />
-            <span className="font-bold text-gray-900">Rallio</span>
+            <Image src="/logo.png" alt="Rallio" width={24} height={24} className="h-6 w-6" style={{filter: 'brightness(0) saturate(100%) invert(42%) sepia(93%) saturate(352%) hue-rotate(131deg) brightness(92%) contrast(92%)'}} />
+            <span className="font-bold text-teal-700">Rallio</span>
             <p className="text-sm text-gray-600">Get more court time.</p>
           </div>
           <div className="flex flex-wrap items-center gap-6 text-sm text-gray-600">
