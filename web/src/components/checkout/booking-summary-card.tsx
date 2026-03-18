@@ -1,7 +1,9 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { useCheckoutStore, CheckoutStep } from '@/stores/checkout-store';
+import { createClient } from '@/lib/supabase/client';
 
 interface BookingSummaryCardProps {
   onContinue?: () => void;
@@ -20,6 +22,7 @@ export function BookingSummaryCard({
   currentStep = 'details',
   showButtons = false,
 }: BookingSummaryCardProps) {
+  const [showPlatformFee, setShowPlatformFee] = useState(true);
   const {
     bookingData,
     isSplitPayment,
@@ -53,6 +56,41 @@ export function BookingSummaryCard({
     downPaymentPercentage &&
     downPaymentPercentage > 0 &&
     downPaymentAmount > 0;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadUserRoleVisibility = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        if (isMounted) setShowPlatformFee(true);
+        return;
+      }
+
+      const { data: roles } = await supabase
+        .from('user_roles')
+        .select('roles!inner(name)')
+        .eq('user_id', user.id);
+
+      const roleNames = roles?.map((entry: any) => entry.roles?.name).filter(Boolean) || [];
+      const hasPrivilegedRole = roleNames.some(
+        (roleName: string) => roleName === 'court_admin' || roleName === 'queue_master' || roleName === 'global_admin'
+      );
+      const isPlayerOnly = roleNames.includes('player') && !hasPrivilegedRole;
+
+      if (isMounted) {
+        setShowPlatformFee(!isPlayerOnly);
+      }
+    };
+
+    loadUserRoleVisibility();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   let duration = 1;
   try {
@@ -262,7 +300,7 @@ export function BookingSummaryCard({
           </div>
         )}
 
-        {platformFeeEnabled && platformFee > 0 && (
+        {showPlatformFee && platformFeeEnabled && platformFee > 0 && (
           <div className="flex justify-between text-sm">
             <span className="text-gray-600">Platform Fee ({platformFeePercentage}%)</span>
             <span className="font-medium text-gray-900">₱{platformFee.toFixed(2)}</span>

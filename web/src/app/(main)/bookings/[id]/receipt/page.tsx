@@ -55,6 +55,18 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
     notFound();
   }
 
+  const { data: userRoles } = await supabase
+    .from('user_roles')
+    .select('roles!inner(name)')
+    .eq('user_id', user.id);
+
+  const roleNames = userRoles?.map((entry: any) => entry.roles?.name).filter(Boolean) || [];
+  const hasPrivilegedRole = roleNames.some(
+    (roleName: string) => roleName === 'court_admin' || roleName === 'queue_master' || roleName === 'global_admin'
+  );
+  const isPlayerOnly = roleNames.includes('player') && !hasPrivilegedRole;
+  const showServiceFee = !isPlayerOnly;
+
   const formatTime = (timeString: string) => {
     try {
       // Use explicit Asia/Manila timezone to avoid server-side UTC rendering issues
@@ -211,7 +223,7 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
                     <span className="text-gray-900">₱{(booking.courts.hourly_rate * durationHours).toFixed(2)}</span>
                   </div>
 
-                  {booking.metadata?.platform_fee > 0 && (
+                  {showServiceFee && booking.metadata?.platform_fee > 0 && (
                     <div className="flex justify-between py-2">
                       <span className="text-gray-600">
                         Service Fee ({booking.metadata.platform_fee_percentage || 5}%)
