@@ -58,6 +58,11 @@ export function QueueSessionModal({
     const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
     const [loading, setLoading] = useState(false)
     const [isBooking, setIsBooking] = useState(false)
+    const [hoveredDate, setHoveredDate] = useState<Date | null>(null)
+    const [hoverPreviewSlots, setHoverPreviewSlots] = useState<TimeSlot[] | null>(null)
+    const [hoverPreviewLoading, setHoverPreviewLoading] = useState(false)
+    const [hoverPreviewError, setHoverPreviewError] = useState<string | null>(null)
+    const [hoverSlotsCache, setHoverSlotsCache] = useState<Record<string, TimeSlot[]>>({})
 
     // Queue session settings
     const [mode, setMode] = useState<'casual' | 'competitive'>('casual')
@@ -113,6 +118,54 @@ export function QueueSessionModal({
 
         fetchTimeSlots()
     }, [selectedDate, courtId, isOpen])
+
+    const handleDayMouseEnter = async (day: Date) => {
+        if (!isOpen) return
+
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const dayOnly = new Date(day)
+        dayOnly.setHours(0, 0, 0, 0)
+
+        if (dayOnly < today) {
+            setHoveredDate(null)
+            setHoverPreviewSlots(null)
+            setHoverPreviewError(null)
+            return
+        }
+
+        setHoveredDate(day)
+        setHoverPreviewError(null)
+
+        const dayKey = format(day, 'yyyy-MM-dd')
+        const cached = hoverSlotsCache[dayKey]
+
+        if (cached) {
+            setHoverPreviewSlots(cached)
+            return
+        }
+
+        setHoverPreviewLoading(true)
+
+        try {
+            const slots = await getAvailableTimeSlotsAction(courtId, dayKey)
+            setHoverSlotsCache(prev => ({ ...prev, [dayKey]: slots }))
+            setHoverPreviewSlots(slots)
+        } catch (error) {
+            console.error('Error fetching hover preview slots:', error)
+            setHoverPreviewSlots([])
+            setHoverPreviewError('Failed to load availability preview')
+        } finally {
+            setHoverPreviewLoading(false)
+        }
+    }
+
+    const handleDayMouseLeave = () => {
+        setHoveredDate(null)
+        setHoverPreviewSlots(null)
+        setHoverPreviewError(null)
+        setHoverPreviewLoading(false)
+    }
 
     // Fetch venue metadata (down payment percentage)
     useEffect(() => {
@@ -478,11 +531,16 @@ export function QueueSessionModal({
                                 <div>
                                     <div id="qm-tour-calendar">
                                         <h4 className="font-semibold text-gray-900 mb-3">Choose Date</h4>
-                                        <div className="border border-gray-200 rounded-xl p-4">
+                                        <div
+                                            data-tutorial-step="1"
+                                            className="border border-gray-200 rounded-xl p-4"
+                                            onMouseLeave={handleDayMouseLeave}
+                                        >
                                             <DayPicker
                                                 mode="single"
                                                 selected={selectedDate}
                                                 onSelect={(date) => date && setSelectedDate(date)}
+                                                onDayMouseEnter={handleDayMouseEnter}
                                                 disabled={disabledDays}
                                                 className="mx-auto"
                                                 modifiers={{
@@ -494,6 +552,47 @@ export function QueueSessionModal({
                                                     additionalBookings: 'border-2 border-dashed border-primary bg-primary/10 rounded-md text-primary font-medium',
                                                 }}
                                             />
+
+                                            {/* Hover Availability Preview */}
+                                            {hoveredDate && (
+                                                <div className="mt-3 p-3 rounded-lg border border-blue-100 bg-blue-50">
+                                                    <div className="flex items-center justify-between gap-2 mb-2">
+                                                        <p className="text-xs font-semibold text-blue-800">
+                                                            {format(hoveredDate, 'EEE, MMM d')} availability
+                                                        </p>
+                                                        {!hoverPreviewLoading && !hoverPreviewError && (
+                                                            <span className="text-[11px] font-medium text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                                                                {(hoverPreviewSlots || []).filter(slot => slot.available).length} open
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    {hoverPreviewLoading ? (
+                                                        <p className="text-xs text-blue-700">Loading available times...</p>
+                                                    ) : hoverPreviewError ? (
+                                                        <p className="text-xs text-red-600">{hoverPreviewError}</p>
+                                                    ) : (() => {
+                                                        const availableSlots = (hoverPreviewSlots || []).filter(slot => slot.available)
+                                                        if (availableSlots.length === 0) {
+                                                            return <p className="text-xs text-gray-600">No available time slots</p>
+                                                        }
+
+                                                        return (
+                                                            <div className="max-h-36 sm:max-h-44 overflow-y-auto scrollbar-hide grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1">
+                                                                {availableSlots.map((slot, index) => (
+                                                                    <p key={`${slot.time}-${index}`} className="text-xs text-gray-700 bg-white/70 rounded px-2 py-1">
+                                                                        {formatTime(slot.time)} - {formatTime(getNextHour(slot.time))}
+                                                                    </p>
+                                                                ))}
+                                                            </div>
+                                                        )
+                                                    })()}
+                                                </div>
+                                            )}
+
+                                            <p className="mt-2 text-[11px] text-gray-500">
+                                                Hover a date to preview all available time slots without selecting it.
+                                            </p>
 
                                             {/* Legend */}
                                             <div className="mt-4 pt-4 border-t border-gray-200 space-y-2">
