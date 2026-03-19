@@ -637,7 +637,7 @@ export function IOChatCard() {
           flexDirection: 'column',
           justifyContent: 'space-between',
           height: '100%',
-          gap: '2rem',
+          gap: '1.5rem',
         }}
       >
         <div className="card-icon-wrap">

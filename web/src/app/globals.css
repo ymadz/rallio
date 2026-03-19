@@ -216,3 +216,22 @@ body {
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
 }
+
+/* Mobile auth layout: bottom sheet slide-up animation */
+@keyframes mobileSheetIn {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes mobileSheetIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+}

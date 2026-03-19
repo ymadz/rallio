@@ -621,7 +621,7 @@ export function BookingCard({
             </Button>
           )}
 
-          <div className="grid grid-cols-2 gap-2.5 pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
             {booking.type === 'queue_session' && booking.queue_session_id ? (
               /* Queue Session Actions */
               <>

@@ -539,7 +539,7 @@ export default function CourtsPage() {
         {/* ML Recommendations are now injected directly into the venues grid via state */}
 
         {loading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-5">
             {[1, 2, 3, 4, 5, 6].map((i) => (
               <div key={i} className="rounded-xl animate-pulse" style={{ height: 280, background: 'linear-gradient(135deg, #dde4e2, #ccfbf1)' }} />
             ))}
@@ -685,7 +685,7 @@ export default function CourtsPage() {
             }
           `}</style>
 
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-5">
 
               {venues.map((venue) => {
                 const rating = venueRatings[venue.id];
