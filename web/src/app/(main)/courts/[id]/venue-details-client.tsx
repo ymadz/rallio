@@ -102,7 +102,7 @@ export function VenueDetailsClient({ courts, venueId, venueName, discounts }: Ve
               </div>
 
               {/* Court Actions */}
-              <div className={`mt-4 grid gap-2 ${isQueueMaster ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              <div className={`mt-4 grid gap-2 ${isQueueMaster ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
                 <button
                   onClick={() => handleViewAvailability(court)}
                   className="bg-primary text-white text-center py-2.5 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
