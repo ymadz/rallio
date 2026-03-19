@@ -131,18 +131,18 @@ export default async function ProfilePage() {
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-12">
         {/* Avatar + Name Row */}
-        <div className="relative z-10 -mt-14 mb-6 flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-5">
-          <div className="w-32 h-32 rounded-full ring-4 ring-white bg-white flex items-center justify-center overflow-hidden flex-shrink-0 sm:translate-x-[15%]">
+        <div className="relative z-10 mt-4 sm:-mt-14 mb-6 flex items-start sm:items-end gap-3 sm:gap-5">
+          <div className="-mt-11 sm:mt-0 w-28 h-28 sm:w-32 sm:h-32 rounded-full ring-4 ring-white bg-white flex items-center justify-center overflow-hidden flex-shrink-0 sm:translate-x-[15%]">
             {profile?.avatar_url ? (
               <img src={profile.avatar_url} alt={fullName} className="w-full h-full object-cover" />
             ) : (
-              <span className="text-5xl font-bold text-gray-300 select-none">{fullName.charAt(0)}</span>
+              <span className="text-4xl sm:text-5xl font-bold text-gray-300 select-none">{fullName.charAt(0)}</span>
             )}
           </div>
-          <div className="pb-1 flex flex-1 items-end justify-between gap-4 flex-wrap">
-            <div className="sm:translate-x-[5%]">
+          <div className="pb-1 flex flex-1 flex-col items-start gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+            <div className="sm:pl-6">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-2xl font-bold text-gray-900">{fullName}</h1>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{fullName}</h1>
                 {player?.verified_player && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-200">
                     <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
@@ -176,7 +176,7 @@ export default async function ProfilePage() {
                 Zamboanga City · Member since {memberSince}
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 self-start sm:self-auto">
               <Link
                 href="/profile/edit"
                 className="px-4 py-2 text-sm border border-gray-300 bg-white rounded-lg hover:bg-gray-50 text-gray-700 font-medium"
