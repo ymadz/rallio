@@ -212,14 +212,17 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
     const dynamicPosition = step.position === 'center' ? 'center' : (isMobile && step.position !== 'top' ? 'bottom' : step.position)
 
     if (isMobile && dynamicPosition !== 'center') {
+      const mobileGap = Math.max(16, Math.round(window.innerHeight * 0.05))
+      const cardHeightEstimate = 220
       const targetCenterY = spotlight.y + spotlight.height / 2
       const placeAboveTarget = targetCenterY > window.innerHeight / 2
+      const top = placeAboveTarget
+        ? Math.max(viewportPadding, spotlight.y - cardHeightEstimate - mobileGap)
+        : Math.min(spotlight.y + spotlight.height + mobileGap, window.innerHeight - cardHeightEstimate - viewportPadding)
 
       return {
         left: '50%',
-        ...(placeAboveTarget
-          ? { top: 'calc(env(safe-area-inset-top, 0px) + 20px)' }
-          : { bottom: 'calc(env(safe-area-inset-bottom, 0px) + 20px)' }),
+        top,
         transform: 'translateX(-50%)',
         width: tooltipWidth,
         maxWidth: `calc(100vw - ${viewportPadding * 2}px)`,
