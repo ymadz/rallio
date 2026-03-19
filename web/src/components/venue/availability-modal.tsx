@@ -454,13 +454,13 @@ export function AvailabilityModal({
       />
 
       {/* Modal */}
-      <div className="flex min-h-full items-center justify-center p-4">
-        <div className="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[calc(100vh-2rem)] md:max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="flex min-h-full items-end justify-center p-0 sm:items-center sm:p-4">
+        <div className="relative bg-white w-full h-[100dvh] max-h-[100dvh] rounded-none shadow-2xl sm:max-w-4xl sm:h-auto sm:max-h-[calc(100vh-2rem)] md:max-h-[90vh] sm:rounded-2xl flex flex-col overflow-hidden">
           {/* Header */}
-          <div className="bg-gradient-to-r from-primary to-primary/80 text-white px-6 py-4 flex items-center justify-between shrink-0">
+          <div className="bg-gradient-to-r from-primary to-primary/80 text-white px-4 py-3 sm:px-6 sm:py-4 flex items-center justify-between shrink-0">
             <div>
-              <h3 className="text-xl font-bold">{courtName}</h3>
-              <p className="text-sm text-white/80 mt-1">Select time range</p>
+              <h3 className="text-lg sm:text-xl font-bold">{courtName}</h3>
+              <p className="text-xs sm:text-sm text-white/80 mt-0.5 sm:mt-1">Select time range</p>
             </div>
             <button
               onClick={onClose}
@@ -473,13 +473,13 @@ export function AvailabilityModal({
           </div>
 
           {/* Content */}
-          <div className="p-6 overflow-y-auto flex-1">
+          <div className="p-4 sm:p-6 overflow-y-auto flex-1">
 
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid md:grid-cols-2 gap-4 sm:gap-6">
               {/* Calendar */}
               <div>
                 <h4 className="font-semibold text-gray-900 mb-3">Choose Date</h4>
-                <div data-tutorial-step="1" className="border border-gray-200 rounded-xl p-4">
+                <div data-tutorial-step="1" className="border border-gray-200 rounded-xl p-3 sm:p-4">
                   <DayPicker
                     mode="single"
                     selected={selectedDate}
@@ -598,7 +598,7 @@ export function AvailabilityModal({
                   Select Time Range
                 </h4>
 
-                <div data-tutorial-step="2" className="border border-gray-200 rounded-xl overflow-hidden flex flex-col h-[400px]">
+                <div data-tutorial-step="2" className="border border-gray-200 rounded-xl overflow-hidden flex flex-col h-[320px] sm:h-[400px]">
                   {loading ? (
                     <div className="flex-1 flex flex-col items-center justify-center p-8">
                       <div className="animate-spin rounded-full h-8 w-8 border-4 border-gray-200 border-t-primary" />
@@ -681,8 +681,8 @@ export function AvailabilityModal({
           </div>
 
           {/* Footer */}
-          <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex items-center justify-between shrink-0">
-            <div>
+          <div className="border-t border-gray-200 px-4 py-3 sm:px-6 sm:py-4 bg-gray-50 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between shrink-0">
+            <div className="min-w-0">
               {startSlot && (
                 <div className="text-sm">
                   {/* Validation Error Display */}
@@ -807,10 +807,10 @@ export function AvailabilityModal({
                 </div>
               )}
             </div>
-            <div className="flex gap-3">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-3 w-full sm:w-auto">
               <button
                 onClick={onClose}
-                className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                className="px-4 sm:px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors w-full"
                 disabled={isBooking}
               >
                 Cancel
@@ -819,7 +819,7 @@ export function AvailabilityModal({
                 data-tutorial-step="5"
                 onClick={handleBook}
                 disabled={!startSlot || isBooking || !validationState.valid || validationState.validating || isCalculatingPrice}
-                className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-4 sm:px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 w-full"
               >
                 {isBooking ? 'Processing...' : `Book (${duration} hr${duration > 1 ? 's' : ''})`}
               </button>
