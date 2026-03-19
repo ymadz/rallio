@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { BookingForm } from '@/components/booking/booking-form'
 import { PlatformFeeLoader } from '@/components/checkout/platform-fee-loader'
+import { CourtHoursTabs } from '@/components/venue/court-hours-tabs'
 
 export async function generateMetadata({ params, searchParams }: {
   params: Promise<{ id: string }>
@@ -151,35 +152,20 @@ export default async function BookingPage({
                   </div>
 
                   <div className="space-y-3">
-                    <div>
-                      {hasOverrides && <p className="text-[10px] text-gray-400 uppercase font-bold mb-2 tracking-wider">Venue Defaults</p>}
-                      <div className="space-y-1">
-                        {Object.entries(venue.opening_hours).map(([day, hours]: [string, any]) => (
-                          <div key={day} className="flex justify-between text-sm">
-                            <span className="text-gray-600 capitalize">{day}</span>
-                            <span className="text-gray-900">
-                              {hours.open} - {hours.close}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {hasOverrides && (
-                      <div className="mt-4 pt-3 border-t border-dashed border-gray-200">
-                        <p className="text-[10px] text-gray-400 uppercase font-bold mb-2 tracking-wider">Court Overrides</p>
-                        <div className="space-y-2">
-                          {courtsWithOverrides.map((court: any) => (
-                            <div key={court.id} className="bg-amber-50/50 border border-amber-100 rounded-lg p-2">
-                              <p className="text-[10px] font-bold text-amber-900 mb-1">{court.name}</p>
-                              <div className="space-y-0.5">
-                                {Object.entries(court.opening_hours).map(([day, hours]: [string, any]) => (
-                                  <div key={day} className="flex justify-between text-[9px] text-amber-700">
-                                    <span className="capitalize">{day.slice(0, 3)}</span>
-                                    <span>{hours.open} – {hours.close}</span>
-                                  </div>
-                                ))}
-                              </div>
+                    {hasOverrides ? (
+                      <CourtHoursTabs 
+                        venueOpeningHours={venue.opening_hours} 
+                        courtsWithOverrides={courtsWithOverrides as any} 
+                      />
+                    ) : (
+                      <div>
+                        <div className="space-y-1">
+                          {Object.entries(venue.opening_hours).map(([day, hours]: [string, any]) => (
+                            <div key={day} className="flex justify-between text-sm">
+                              <span className="text-gray-600 capitalize">{day}</span>
+                              <span className="text-gray-900">
+                                {hours.open} - {hours.close}
+                              </span>
                             </div>
                           ))}
                         </div>
