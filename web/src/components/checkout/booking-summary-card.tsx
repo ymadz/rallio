@@ -1,6 +1,7 @@
 'use client';
 
 import { format } from 'date-fns';
+import { formatTo12Hour } from '@/lib/utils';
 import { useCheckoutStore, CheckoutStep } from '@/stores/checkout-store';
 import { useEffect, useState } from 'react';
 import { checkCartAvailabilityAction } from '@/app/actions/reservations';
@@ -117,13 +118,7 @@ export function BookingSummaryCard({
     duration = calcDuration;
   } catch (e) {}
 
-  const formatTime = (timeString: string) => {
-    try {
-      return format(new Date(timeString), 'h:mm a');
-    } catch {
-      return timeString;
-    }
-  };
+  const formatTime = (timeString: string) => formatTo12Hour(timeString);
 
   // Calculate ACTUAL future slots that will be created (matching checkout-store logic)
   const getActualBookedDates = () => {

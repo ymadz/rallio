@@ -1,6 +1,6 @@
 'use client'
 
-import { cn } from '@/lib/utils'
+import { cn, formatTo12Hour } from '@/lib/utils'
 import { Check, Lock } from 'lucide-react'
 
 export interface TimeSlot {
@@ -27,15 +27,7 @@ export function SessionTimePicker({
     className,
 }: SessionTimePickerProps) {
 
-    // Helper to format time from 24h to 12h format
-    const formatSlotTime = (startTimeStr: string) => {
-        const [hours, minutes] = startTimeStr.split(':').map(Number)
-        const startPeriod = hours >= 12 ? 'PM' : 'AM'
-        const startHour = hours % 12 || 12
-
-        // We just show Start Time here because the end time depends on selection
-        return `${startHour}:${minutes.toString().padStart(2, '0')} ${startPeriod}`
-    }
+    const formatSlotTime = (startTimeStr: string) => formatTo12Hour(startTimeStr)
 
     // Helper to check if a range starting at 'time' is fully available
     const isRangeAvailable = (startTime: string) => {

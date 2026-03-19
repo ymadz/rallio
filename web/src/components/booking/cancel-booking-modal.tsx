@@ -27,7 +27,7 @@ export interface CancelBookingModalProps {
     onClose: () => void
     onCancelSuccess: () => void
     onRefundSuccess: () => void
-    target?: 'reservation' | 'booking' | 'refund_reservation'
+    target?: 'reservation' | 'refund_reservation'
 }
 
 export function CancelBookingModal({
@@ -44,8 +44,8 @@ export function CancelBookingModal({
     const [error, setError] = useState<string | null>(null)
 
     const isPaid = (booking.status === 'confirmed' || booking.status === 'partially_paid') && booking.amount_paid > 0
-    const mode = target === 'refund_reservation' ? 'refund' : target === 'booking' ? 'cancel_booking' : 'cancel'
-    const requiresReason = mode === 'refund' || (mode === 'cancel_booking' && isPaid)
+    const mode = target === 'refund_reservation' ? 'refund' : 'cancel'
+    const requiresReason = mode === 'refund' || (mode === 'cancel' && isPaid)
 
     useEffect(() => {
         setMounted(true)
@@ -81,16 +81,6 @@ export function CancelBookingModal({
                     onClose()
                 } else {
                     setError(result.error || 'Failed to submit refund request')
-                }
-            } else if (mode === 'cancel_booking') {
-                const { cancelEntireBookingAction } = await import('@/app/actions/cancel-booking-action')
-                const result = await cancelEntireBookingAction(booking.booking_id!, reason.trim())
-
-                if (result.success) {
-                    onCancelSuccess()
-                    onClose()
-                } else {
-                    setError(result.error || 'Failed to cancel entire booking')
                 }
             } else {
                 const { cancelReservationAction } = await import('@/app/actions/reservations')
@@ -185,7 +175,7 @@ export function CancelBookingModal({
                                     <p className="text-xs text-green-700">
                                         Refunds are typically processed within 5-10 business days after admin approval.
                                         <br/>
-                                        <span className="opacity-75">{mode === 'cancel_booking' && "The final amount might differ if this is a bulk payment."}</span>
+                                        <span className="opacity-75">{mode === 'refund' && isPaid && "The final amount might differ if this is a bulk payment."}</span>
                                     </p>
                                 </div>
                             )}
@@ -246,8 +236,6 @@ export function CancelBookingModal({
                                 </>
                             ) : mode === 'refund' ? (
                                 'Submit Refund Request'
-                            ) : mode === 'cancel_booking' ? (
-                                'Cancel Entire Booking'
                             ) : (
                                 'Cancel Booking'
                             )}

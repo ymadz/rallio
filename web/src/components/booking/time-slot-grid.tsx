@@ -1,5 +1,7 @@
 'use client'
 
+import { format } from 'date-fns';
+import { formatTo12Hour } from '@/lib/utils';
 import { cn } from '@/lib/utils'
 
 export interface TimeSlot {
@@ -137,9 +139,4 @@ export function TimeSlotGrid({
 }
 
 // Helper function to format time from 24h to 12h format
-function formatTime(time: string): string {
-  const [hours, minutes] = time.split(':').map(Number)
-  const period = hours >= 12 ? 'PM' : 'AM'
-  const displayHours = hours % 12 || 12
-  return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`
-}
+const formatTime = (timeString: string) => formatTo12Hour(timeString);

@@ -676,35 +676,46 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
     }
 
     // BULK/RECURRING PAYMENT HANDLING
-    // Check if this is part of a recurrence group and confirm the rest
+    // Check if this is part of a booking or recurrence group and confirm the rest
     const recurrenceGroupId = payment.metadata?.recurrence_group_id
-    if (recurrenceGroupId) {
-      console.log('🔄 Bulk Payment detected in processChargeableSourceAction:', recurrenceGroupId)
+    const bookingId = payment.metadata?.booking_id || payment.booking_id
 
-      // Fetch all other pending reservations in this group
-      const { data: groupReservations, error: groupFetchError } = await supabase
+    if (bookingId || recurrenceGroupId) {
+      console.log('🔄 Bulk Payment detected in processChargeableSourceAction:', { bookingId, recurrenceGroupId })
+
+      // Fetch all other pending reservations in this group/booking
+      const query = supabase
         .from('reservations')
         .select('id, total_amount, metadata')
-        .eq('recurrence_group_id', recurrenceGroupId)
         .neq('id', payment.reservation_id) // Exclude the one we just updated
         .in('status', ['pending_payment'])
 
+      if (bookingId) {
+        query.eq('booking_id', bookingId)
+      } else {
+        query.eq('recurrence_group_id', recurrenceGroupId!)
+      }
+
+      const { data: groupReservations, error: groupFetchError } = await query
+
       if (groupFetchError) {
-        console.error('❌ Failed to fetch recurrence group for bulk update:', groupFetchError)
+        console.error('❌ Failed to fetch bulk group for update:', groupFetchError)
       } else if (groupReservations && groupReservations.length > 0) {
-        console.log(`🔄 Confirming ${groupReservations.length} additional recurring reservations...`)
+        console.log(`🔄 Confirming ${groupReservations.length} additional reservations...`)
 
         for (const res of groupReservations) {
           // If original payment was a down payment, set each reservation to partially_paid
-          // with amount_paid = each reservation's down_payment_amount.
-          // Otherwise, mark as fully confirmed.
+          // with amount_paid = each reservation's down_payment_amount if available, 
+          // or a proportional share of the total payment.
           let resStatus = 'confirmed'
           let resAmountPaid = res.total_amount
 
           if (isDownPayment) {
             const resMeta = (res as any).metadata as any
             resStatus = 'partially_paid'
-            resAmountPaid = Number(resMeta?.down_payment_amount || 0)
+            // Total payment amount should be distributed. 
+            // Preferably we use the pre-calculated item split in metadata.
+            resAmountPaid = Number(resMeta?.down_payment_amount || (payment.amount / (groupReservations.length + 1)))
           }
 
           const { error: bulkUpdateError } = await supabase
@@ -716,7 +727,7 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
             .eq('id', res.id)
 
           if (bulkUpdateError) {
-            console.error(`❌ Failed to confirm recurring reservation ${res.id}:`, bulkUpdateError)
+            console.error(`❌ Failed to confirm reservation ${res.id} in bulk update:`, bulkUpdateError)
           }
         }
         console.log('✅ Bulk confirmation complete')

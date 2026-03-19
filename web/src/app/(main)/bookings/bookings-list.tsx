@@ -32,7 +32,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
   const [bookings, setBookings] = useState(initialBookings)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [reschedulingBooking, setReschedulingBooking] = useState<Booking | null>(null)
-  const [cancelModalState, setCancelModalState] = useState<{booking: Booking, target: 'reservation' | 'booking' | 'refund_reservation'} | null>(null)
+  const [cancelModalState, setCancelModalState] = useState<{booking: Booking, target: 'reservation' | 'refund_reservation'} | null>(null)
   const [resumingPaymentId, setResumingPaymentId] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'today' | 'week'>('all')
   // activeTab state is now managed by the Tabs component, but we can track it if needed for filtering logic separate from rendering
@@ -174,7 +174,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     }
   }
 
-  const handleCancelBooking = (booking: Booking, target: 'reservation' | 'booking' = 'reservation') => {
+  const handleCancelBooking = (booking: Booking, target: 'reservation' = 'reservation') => {
     setCancelModalState({ booking, target })
   }
 

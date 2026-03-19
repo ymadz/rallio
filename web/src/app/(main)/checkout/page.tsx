@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { formatTo12Hour } from '@/lib/utils';
+import { format } from 'date-fns';
 import { useRouter } from 'next/navigation'
 import { useCheckoutStore } from '@/stores/checkout-store'
 import { CheckoutStepper } from '@/components/checkout/checkout-stepper'
@@ -209,7 +211,9 @@ export default function CheckoutPage() {
                                                 <div key={`${item.courtId}-${item.startTime}-${index}`} className="border border-gray-200 rounded-md p-3">
                                                     <p className="font-medium text-gray-900">{item.courtName}</p>
                                                     <p className="text-xs text-gray-600">{item.venueName}</p>
-                                                    <p className="text-xs text-gray-600">{new Date(item.date).toLocaleDateString()} • {item.startTime} - {item.endTime}</p>
+                                                    <p className="text-xs text-gray-600">
+                      {new Date(item.date).toLocaleDateString()} • {formatTo12Hour(item.startTime)} - {formatTo12Hour(item.endTime)}
+                    </p>
                                                 </div>
                                             ))}
                                         </div>

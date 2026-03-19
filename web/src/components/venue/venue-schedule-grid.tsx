@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
+import { formatTo12Hour } from '@/lib/utils'
 import { getAvailableTimeSlotsAction } from '@/app/actions/reservations'
 import { useCheckoutStore } from '@/stores/checkout-store'
 
@@ -38,10 +39,7 @@ interface VenueScheduleGridProps {
 }
 
 function to12Hour(time: string) {
-  const [hours, minutes] = time.split(':').map(Number)
-  const period = hours >= 12 ? 'PM' : 'AM'
-  const displayHours = hours % 12 || 12
-  return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`
+  return formatTo12Hour(time)
 }
 
 function nextHour(time: string) {

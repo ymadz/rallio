@@ -11,6 +11,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { TimeSlotGrid } from './time-slot-grid'
 import { DiscountDisplay } from './discount-display'
 import { getAvailableTimeSlotsAction } from '@/app/actions/reservations'
+import { formatTo12Hour } from '@/lib/utils'
 import { useCheckoutStore } from '@/stores/checkout-store'
 import { format } from 'date-fns'
 import type { Venue, Court } from '@rallio/shared'
@@ -78,12 +79,7 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
   const totalSeriesPrice = sessionPrice * recurrenceWeeks
 
   // Format time for display
-  const formatTime = (time: string): string => {
-    const [hours, minutes] = time.split(':').map(Number)
-    const period = hours >= 12 ? 'PM' : 'AM'
-    const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours
-    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`
-  }
+  const formatTime = (timeString: string) => formatTo12Hour(timeString);
 
   // Calculate end time based on start time and duration
   const getEndTime = (startTime: string, durationHours: number): string => {
@@ -409,12 +405,4 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
       </div>
     </form>
   )
-}
-
-// Helper function to format time
-function formatTime(time: string): string {
-  const [hours, minutes] = time.split(':').map(Number)
-  const period = hours >= 12 ? 'PM' : 'AM'
-  const displayHours = hours % 12 || 12
-  return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`
 }

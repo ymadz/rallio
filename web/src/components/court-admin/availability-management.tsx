@@ -13,6 +13,7 @@ import {
   X,
   Loader2
 } from 'lucide-react'
+import { formatTo12Hour } from '@/lib/utils'
 import { getVenueAvailability, getBlockedDates, updateOperatingHours, addBlockedDate, removeBlockedDate } from '@/app/actions/court-admin-availability-actions'
 import { getVenueCourts } from '@/app/actions/court-admin-court-actions'
 
@@ -421,10 +422,10 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
                           <div className="font-medium text-gray-900 capitalize">{day}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{hours.isOpen ? hours.open : '-'}</div>
+                          <div className="text-sm text-gray-900">{hours.isOpen ? formatTo12Hour(hours.open) : '-'}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{hours.isOpen ? hours.close : '-'}</div>
+                          <div className="text-sm text-gray-900">{hours.isOpen ? formatTo12Hour(hours.close) : '-'}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           {hours.isOpen ? (
