@@ -19,6 +19,7 @@ export default function CheckoutPage() {
     const [courtImageUrl, setCourtImageUrl] = useState<string | null>(null)
     const {
         bookingData,
+        bookingCart,
         currentStep,
         isSplitPayment,
         paymentMethod,
@@ -98,6 +99,9 @@ export default function CheckoutPage() {
         )
     }
 
+    const effectiveCart = bookingCart.length > 0 ? bookingCart : [bookingData]
+    const isMultiCourt = effectiveCart.length > 1
+
     // Calculate duration from startTime and endTime
     const startHour = parseInt(bookingData.startTime.split(':')[0])
     const endHour = parseInt(bookingData.endTime.split(':')[0])
@@ -146,10 +150,8 @@ export default function CheckoutPage() {
         if (currentStep === 'payment') {
             if (!paymentMethod) return false
             if (paymentMethod === 'cash') {
-                const total = getSubtotal() // Total is subtotal + platform fee or just what getTotalAmount returns
-                const { platformFeeEnabled, platformFeePercentage, downPaymentPercentage, customDownPaymentAmount } = useCheckoutStore.getState()
-                const platformFee = platformFeeEnabled ? Math.round((total * (platformFeePercentage / 100)) * 100) / 100 : 0
-                const finalTotal = Math.round((total + platformFee) * 100) / 100
+                const { getTotalAmount, downPaymentPercentage, customDownPaymentAmount } = useCheckoutStore.getState()
+                const finalTotal = getTotalAmount()
                 const isDownPaymentRequired = downPaymentPercentage ? downPaymentPercentage > 0 : false
 
                 if (isDownPaymentRequired) {
@@ -197,43 +199,64 @@ export default function CheckoutPage() {
                         {/* Step 1: Details */}
                         {currentStep === 'details' && (
                             <>
-                                {/* Court Card */}
-                                <div className="bg-white border border-gray-200 rounded-xl p-6">
-                                    <h3 className="font-semibold text-gray-900 text-lg mb-4">Court Details</h3>
-                                    <div className="flex gap-4">
-                                        <div className="w-32 h-32 bg-gray-100 rounded-lg flex-shrink-0 overflow-hidden">
-                                            {courtImageUrl ? (
-                                                <img
-                                                    src={courtImageUrl}
-                                                    alt={bookingData.courtName}
-                                                    className="w-full h-full object-cover"
-                                                />
-                                            ) : (
-                                                <div className="w-full h-full flex items-center justify-center">
-                                                    <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                                    </svg>
+                                {/* Court Card / Cart Card */}
+                                {isMultiCourt ? (
+                                    <div className="bg-white border border-gray-200 rounded-xl p-6">
+                                        <h3 className="font-semibold text-gray-900 text-lg mb-4">Multi-Court Cart</h3>
+                                        <p className="text-sm text-gray-600 mb-4">{effectiveCart.length} court slots will be processed in one checkout.</p>
+                                        <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+                                            {effectiveCart.map((item, index) => (
+                                                <div key={`${item.courtId}-${item.startTime}-${index}`} className="border border-gray-200 rounded-md p-3">
+                                                    <p className="font-medium text-gray-900">{item.courtName}</p>
+                                                    <p className="text-xs text-gray-600">{item.venueName}</p>
+                                                    <p className="text-xs text-gray-600">{new Date(item.date).toLocaleDateString()} • {item.startTime} - {item.endTime}</p>
                                                 </div>
-                                            )}
+                                            ))}
                                         </div>
-                                        <div className="flex-1">
-                                            <h4 className="font-semibold text-gray-900 text-xl mb-2">{bookingData.courtName}</h4>
-                                            <p className="text-sm text-gray-600 mb-3">{bookingData.venueName}</p>
-                                            <div className="flex flex-wrap gap-2">
-                                                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                                                    🏸 Indoor
-                                                </span>
-                                                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                                                    Synthetic
-                                                </span>
+                                    </div>
+                                ) : (
+                                    <div className="bg-white border border-gray-200 rounded-xl p-6">
+                                        <h3 className="font-semibold text-gray-900 text-lg mb-4">Court Details</h3>
+                                        <div className="flex gap-4">
+                                            <div className="w-32 h-32 bg-gray-100 rounded-lg flex-shrink-0 overflow-hidden">
+                                                {courtImageUrl ? (
+                                                    <img
+                                                        src={courtImageUrl}
+                                                        alt={bookingData.courtName}
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center">
+                                                        <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                        </svg>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="flex-1">
+                                                <h4 className="font-semibold text-gray-900 text-xl mb-2">{bookingData.courtName}</h4>
+                                                <p className="text-sm text-gray-600 mb-3">{bookingData.venueName}</p>
+                                                <div className="flex flex-wrap gap-2">
+                                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                                        🏸 Indoor
+                                                    </span>
+                                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                                        Synthetic
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
+                                )}
 
                                 {/* Detail Breakdown */}
                                 <div className="bg-white border border-gray-200 rounded-xl p-6">
                                     <h3 className="font-semibold text-gray-900 text-lg mb-4">Detail Breakdown</h3>
+                                    {isMultiCourt && (
+                                        <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                                            Showing aggregate totals for {effectiveCart.length} cart items. Per-item pricing appears in Booking Summary.
+                                        </div>
+                                    )}
                                     <div className="space-y-3">
                                         <div className="flex justify-between py-3 border-b border-gray-100">
                                             <span className="text-gray-600">Duration:</span>
@@ -380,6 +403,11 @@ export default function CheckoutPage() {
                                 {/* Detail Breakdown (repeated) */}
                                 <div className="bg-white border border-gray-200 rounded-xl p-6">
                                     <h3 className="font-semibold text-gray-900 text-lg mb-4">Detail Breakdown</h3>
+                                    {isMultiCourt && (
+                                        <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                                            Showing aggregate totals for {effectiveCart.length} cart items. Per-item pricing appears in Booking Summary.
+                                        </div>
+                                    )}
                                     <div className="space-y-3">
                                         <div className="flex justify-between py-3 border-b border-gray-100">
                                             <span className="text-gray-600">Duration:</span>

@@ -18,6 +18,7 @@ type ReservationWithRelations = {
   payment_type?: string
   num_players?: number
   recurrence_group_id?: string | null
+  booking_id?: string | null
   metadata?: Record<string, any> | null
   payment_method?: string
   courts: {
@@ -122,9 +123,10 @@ export async function initiatePaymentAction(
     const courtName = reservation.courts?.name ?? 'Court'
     let description = `${venueName} - ${courtName}`
 
-    // Check for recurrence group to handle bulk payment
+    // Check for bulk payment group
     let amountToCharge = reservation.total_amount
     let recurrenceGroupId = reservation.recurrence_group_id
+    let bookingId = reservation.booking_id
     let isDownPayment = false
 
     // If reservation is already partially paid, we are charging the remaining balance
@@ -148,6 +150,7 @@ export async function initiatePaymentAction(
 
     console.log('[initiatePaymentAction] 🔍 Down payment debug:', {
       recurrenceGroupId,
+      bookingId,
       isDownPayment,
       amountToCharge,
       reservationStatus: reservation.status,
@@ -157,13 +160,20 @@ export async function initiatePaymentAction(
       reservationPaymentMethod: reservation.payment_method,
     })
 
-    if (recurrenceGroupId) {
+    if (bookingId || recurrenceGroupId) {
       // Fetch all reservations in this group
-      const { data: groupReservations } = await supabase
+      const query = supabase
         .from('reservations')
         .select('total_amount, status, metadata')
-        .eq('recurrence_group_id', recurrenceGroupId)
         .in('status', ['pending_payment'])
+
+      if (bookingId) {
+        query.eq('booking_id', bookingId)
+      } else {
+        query.eq('recurrence_group_id', recurrenceGroupId!)
+      }
+
+      const { data: groupReservations } = await query
 
       if (groupReservations && groupReservations.length > 0) {
         if (isDownPayment) {
@@ -176,10 +186,11 @@ export async function initiatePaymentAction(
         } else {
           // For full payments, sum up the total amount
           amountToCharge = groupReservations.reduce((sum, res) => sum + (res.total_amount || 0), 0)
-          description += ` (Recurring: ${groupReservations.length} sessions)`
+          description += ` (Bulk: ${groupReservations.length} sessions)`
         }
-        console.log('[initiatePaymentAction] 🔄 Detected recurring group:', {
-          groupId: recurrenceGroupId,
+        console.log('[initiatePaymentAction] 🔄 Detected bulk group:', {
+          bookingId,
+          recurrenceGroupId,
           count: groupReservations.length,
           totalBulkAmount: amountToCharge,
           isDownPayment
@@ -192,12 +203,12 @@ export async function initiatePaymentAction(
       singleAmount: reservation.total_amount,
       numPlayers: reservation.num_players,
       amountToCharge,
-      isBulk: !!recurrenceGroupId
+      isBulk: !!(bookingId || recurrenceGroupId)
     })
 
     // Generate success/failed URLs
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    const successUrl = `${baseUrl}/checkout/success?reservation=${reservationId}`
+    const successUrl = `${baseUrl}/checkout/success?reservation=${reservationId}${bookingId ? `&booking=${bookingId}` : ''}`
     const failedUrl = `${baseUrl}/checkout/failed?reservation=${reservationId}`
 
     let checkoutUrl: string
@@ -222,6 +233,7 @@ export async function initiatePaymentAction(
           },
           metadata: {
             reservation_id: reservationId,
+            booking_id: bookingId || undefined,
             user_id: user.id,
             payment_reference: paymentReference,
             payment_type: reservation.payment_type || 'full',
@@ -245,6 +257,7 @@ export async function initiatePaymentAction(
           },
           metadata: {
             reservation_id: reservationId,
+            booking_id: bookingId || undefined,
             user_id: user.id,
             payment_reference: paymentReference,
             payment_type: reservation.payment_type || 'full',
@@ -293,6 +306,7 @@ export async function initiatePaymentAction(
       reference: paymentReference,
       user_id: user.id,
       reservation_id: reservationId,
+      booking_id: bookingId || null,
       amount: amountToCharge, // Use the calculated per-player amount for split payments
       currency: 'PHP',
       payment_method: paymentMethod,
@@ -305,6 +319,7 @@ export async function initiatePaymentAction(
         checkout_url: checkoutUrl,
         source_id: sourceId,
         reservation_id: reservationId,
+        booking_id: bookingId || null,
         payment_reference: paymentReference,
         payment_type: reservation.payment_type || 'full',
         player_count: reservation.num_players || 1,

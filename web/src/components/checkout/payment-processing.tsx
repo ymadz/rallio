@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useCheckoutStore } from '@/stores/checkout-store'
-import { createReservationAction } from '@/app/actions/reservations'
+import { createReservationAction, createMultiCourtReservationsAction } from '@/app/actions/reservations'
 import { createQueueSession } from '@/app/actions/queue-actions'
 import { initiatePaymentAction } from '@/app/actions/payments'
 import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
@@ -14,6 +14,7 @@ export function PaymentProcessing() {
   const router = useRouter()
   const {
     bookingData,
+    bookingCart,
     isSplitPayment,
     playerCount,
     playerPayments,
@@ -60,6 +61,8 @@ export function PaymentProcessing() {
         console.warn('Payment initialization skipped: No booking data available')
         return
       }
+
+      const effectiveCart = bookingCart.length > 0 ? bookingCart : [bookingData]
 
       // CRITICAL: Only initialize if payment method has been selected
       if (!paymentMethod) {
@@ -129,6 +132,10 @@ export function PaymentProcessing() {
         let requiresDownPayment = false
 
         if (bookingData.isQueueSession && bookingData.queueSessionData) {
+          if (effectiveCart.length > 1) {
+            throw new Error('Multi-court queue sessions are not supported yet. Please book one queue session at a time.')
+          }
+
           console.log('Creating queue session(s)...')
 
           const sessionResult = await createQueueSession({
@@ -176,6 +183,55 @@ export function PaymentProcessing() {
 
           newReservationId = sessionResult.session.reservationId
 
+        } else if (effectiveCart.length > 1) {
+          // Multi-court reservation flow
+          const multiItems = effectiveCart.map((item, index) => {
+            const itemDate = typeof item.date === 'string' ? new Date(item.date) : item.date
+            if (Number.isNaN(itemDate.getTime())) {
+              throw new Error(`Invalid booking date for item ${index + 1}`)
+            }
+
+            const [itemStartHour, itemStartMinute] = item.startTime.split(':').map(Number)
+            const [itemEndHour, itemEndMinute] = item.endTime.split(':').map(Number)
+
+            const itemStartDateTime = new Date(itemDate.getTime())
+            itemStartDateTime.setHours(itemStartHour, itemStartMinute ?? 0, 0, 0)
+
+            const itemEndDateTime = new Date(itemDate.getTime())
+            itemEndDateTime.setHours(itemEndHour, itemEndMinute ?? 0, 0, 0)
+
+            if (itemEndDateTime <= itemStartDateTime) {
+              itemEndDateTime.setDate(itemEndDateTime.getDate() + 1)
+            }
+
+            const itemDurationHours = Math.max(1, itemEndHour - itemStartHour)
+            const itemTotalAmount = item.hourlyRate * itemDurationHours
+
+            return {
+              courtId: item.courtId,
+              startTimeISO: itemStartDateTime.toISOString(),
+              endTimeISO: itemEndDateTime.toISOString(),
+              totalAmount: itemTotalAmount,
+              paymentType: isSplitPayment ? 'split' as const : 'full' as const,
+              paymentMethod,
+              notes: `Multi-court item ${index + 1}/${effectiveCart.length}`,
+              numPlayers: isSplitPayment ? playerCount : 1,
+            }
+          })
+
+          const multiResult = await createMultiCourtReservationsAction({
+            userId: user.id,
+            customDownPaymentAmount,
+            promoCode,
+            items: multiItems,
+          })
+
+          if (!multiResult.success || !multiResult.reservationId) {
+            throw new Error(multiResult.error || 'Failed to create multi-court reservations')
+          }
+
+          newReservationId = multiResult.reservationId
+          requiresDownPayment = !!multiResult.downPaymentRequired
         } else {
           // Standard Reservation Flow
           console.log('Creating standard reservation...')
@@ -340,7 +396,7 @@ export function PaymentProcessing() {
     // Note: getTotalAmount and setBookingReference are stable Zustand store functions
     // They don't need to be in the dependency array
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookingData, paymentMethod])
+  }, [bookingData, bookingCart, paymentMethod])
 
   // Manual retry function
   const handleRetry = () => {

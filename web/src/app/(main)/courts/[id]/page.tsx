@@ -159,6 +159,10 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
 
   const openingHours = formatOpeningHours(venue.opening_hours)
 
+  // Detect court-specific overrides
+  const courtsWithOverrides = activeCourts.filter((c: any) => c.opening_hours && Object.keys(c.opening_hours).length > 0)
+  const hasOverrides = courtsWithOverrides.length > 0
+
   // Collect all court images from active courts
   const allCourtImages: string[] = []
   activeCourts.forEach(court => {
@@ -289,45 +293,73 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
               {/* Operating Hours */}
               {openingHours && (
                 <div className="mb-4 pb-4 border-b border-gray-100">
-                  <div className="flex items-center gap-2 mb-3">
-                    <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <h4 className="font-semibold text-gray-900 text-sm">Operating Hours</h4>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <h4 className="font-semibold text-gray-900 text-sm">Operating Hours</h4>
+                    </div>
+                    {hasOverrides && (
+                      <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+                        Custom per court
+                      </span>
+                    )}
                   </div>
-                  {Array.isArray(openingHours) && typeof openingHours[0] === 'object' ? (
-                    <div className="space-y-1.5">
-                      {openingHours.map((schedule: any, index: number) => (
-                        <div
-                          key={index}
-                          className={`flex items-center justify-between px-3 py-2 rounded-lg ${schedule.closed
-                            ? 'bg-gray-50'
-                            : 'bg-primary/5'
-                            }`}
-                        >
-                          <span className={`text-xs font-semibold ${schedule.closed ? 'text-gray-400' : 'text-gray-700'
-                            }`}>
-                            {schedule.day}
-                          </span>
-                          {schedule.closed ? (
-                            <span className="text-xs text-gray-400">Closed</span>
-                          ) : (
-                            <span className="text-xs text-primary font-medium">
-                              {schedule.open} – {schedule.close}
-                            </span>
-                          )}
+                  
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-[10px] text-gray-400 uppercase font-bold mb-2 tracking-wider">Venue Defaults</p>
+                      {Array.isArray(openingHours) && typeof openingHours[0] === 'object' ? (
+                        <div className="space-y-1.5">
+                          {openingHours.map((schedule: any, index: number) => (
+                            <div
+                              key={index}
+                              className={`flex items-center justify-between px-3 py-1.5 rounded-lg ${schedule.closed
+                                ? 'bg-gray-50'
+                                : 'bg-primary/5'
+                                }`}
+                            >
+                              <span className={`text-[10px] font-semibold ${schedule.closed ? 'text-gray-400' : 'text-gray-700'
+                                }`}>
+                                {schedule.day}
+                              </span>
+                              {schedule.closed ? (
+                                <span className="text-[10px] text-gray-400">Closed</span>
+                              ) : (
+                                <span className="text-[10px] text-primary font-medium">
+                                  {schedule.open} – {schedule.close}
+                                </span>
+                              )}
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      ) : (
+                        <p className="text-gray-600 text-xs">{String(openingHours)}</p>
+                      )}
                     </div>
-                  ) : Array.isArray(openingHours) ? (
-                    <div className="space-y-1">
-                      {openingHours.map((schedule, index) => (
-                        <p key={index} className="text-gray-600 text-xs">{String(schedule)}</p>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-gray-600 text-xs">{openingHours}</p>
-                  )}
+
+                    {hasOverrides && (
+                      <div className="mt-4 pt-3 border-t border-dashed border-gray-200">
+                        <p className="text-[10px] text-gray-400 uppercase font-bold mb-2 tracking-wider">Court Overrides</p>
+                        <div className="space-y-2">
+                          {courtsWithOverrides.map((court: any) => (
+                            <div key={court.id} className="bg-amber-50/50 border border-amber-100 rounded-lg p-2">
+                              <p className="text-[10px] font-bold text-amber-900 mb-1">{court.name}</p>
+                              <div className="space-y-0.5">
+                                {Object.entries(court.opening_hours).map(([day, hours]: [string, any]) => (
+                                  <div key={day} className="flex justify-between text-[9px] text-amber-700">
+                                    <span className="capitalize">{day.slice(0, 3)}</span>
+                                    <span>{formatTo12Hour(hours.open)} – {formatTo12Hour(hours.close)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

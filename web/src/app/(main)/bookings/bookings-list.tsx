@@ -32,7 +32,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
   const [bookings, setBookings] = useState(initialBookings)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [reschedulingBooking, setReschedulingBooking] = useState<Booking | null>(null)
-  const [cancelModalBooking, setCancelModalBooking] = useState<Booking | null>(null)
+  const [cancelModalState, setCancelModalState] = useState<{booking: Booking, target: 'reservation' | 'booking' | 'refund_reservation'} | null>(null)
   const [resumingPaymentId, setResumingPaymentId] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'today' | 'week'>('all')
   // activeTab state is now managed by the Tabs component, but we can track it if needed for filtering logic separate from rendering
@@ -174,12 +174,12 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     }
   }
 
-  const handleCancelBooking = (booking: Booking) => {
-    setCancelModalBooking(booking)
+  const handleCancelBooking = (booking: Booking, target: 'reservation' | 'booking' = 'reservation') => {
+    setCancelModalState({ booking, target })
   }
 
   const handleRefundBooking = (booking: Booking) => {
-    setCancelModalBooking(booking)
+    setCancelModalState({ booking, target: 'refund_reservation' })
   }
 
   const totalConfirmed = filteredBookings.filter((b) => b.status === 'confirmed').length
@@ -658,7 +658,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
               resumingPaymentId={resumingPaymentId}
               cancellingId={cancellingId}
               onResumePayment={handleResumePayment}
-              onCancelBooking={(b) => { setSelectedBooking(null); handleCancelBooking(b) }}
+              onCancelBooking={(b, target) => { setSelectedBooking(null); handleCancelBooking(b, target) }}
               onRefundBooking={(b) => { setSelectedBooking(null); handleRefundBooking(b) }}
               onReschedule={(b) => { setSelectedBooking(null); setReschedulingBooking(b) }}
               setBookings={setBookings}
@@ -679,22 +679,19 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
         />
       )}
 
-      {cancelModalBooking && (
+      {cancelModalState && (
         <CancelBookingModal
-          booking={cancelModalBooking}
-          isOpen={!!cancelModalBooking}
-          onClose={() => setCancelModalBooking(null)}
+          booking={cancelModalState.booking}
+          target={cancelModalState.target}
+          isOpen={!!cancelModalState}
+          onClose={() => setCancelModalState(null)}
           onCancelSuccess={() => {
-            setBookings((prev) => prev.map((b) =>
-              b.id === cancelModalBooking.id ? { ...b, status: 'cancelled' } : b
-            ))
-            setCancelModalBooking(null)
+            router.refresh()
+            setCancelModalState(null)
           }}
           onRefundSuccess={() => {
-            setBookings((prev) => prev.map((b) =>
-              b.id === cancelModalBooking.id ? { ...b, status: 'pending_refund' } : b
-            ))
-            setCancelModalBooking(null)
+            router.refresh()
+            setCancelModalState(null)
           }}
         />
       )}

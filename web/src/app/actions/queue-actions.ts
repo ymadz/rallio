@@ -1378,6 +1378,33 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
       totalAmountPerSlot
     })
 
+    // 1. Create a parent Booking record for this session group
+    const { data: newBooking, error: bookingError } = await supabase
+      .from('bookings')
+      .insert({
+        user_id: user.id,
+        total_amount: totalAmountPerSlot * targetDates.length,
+        amount_paid: 0,
+        remaining_balance: totalAmountPerSlot * targetDates.length,
+        payment_status: 'unpaid',
+        status: 'pending',
+        metadata: {
+          booking_origin: 'queue_session',
+          is_recurring: recurrenceWeeks > 1 || (data.selectedDays && data.selectedDays.length > 1),
+          recurrence_group_id: recurrenceGroupId,
+          promo_code: data.promoCode || undefined
+        }
+      })
+      .select('id')
+      .single()
+
+    if (bookingError || !newBooking) {
+      console.error('[createQueueSession] ❌ Failed to create parent booking:', bookingError)
+      return { success: false, error: 'Failed to initialize booking transaction' }
+    }
+
+    const bookingId = newBooking.id
+
     for (const sessionStart of targetDates) {
       const sessionEnd = new Date(sessionStart.getTime() + durationMs)
 
@@ -1416,6 +1443,7 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
       const { data: reservation, error: reservationError } = await supabase
         .from('reservations')
         .insert({
+          booking_id: bookingId,
           court_id: data.courtId,
           user_id: user.id,
           start_time: sessionStart.toISOString(),
@@ -1454,6 +1482,10 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
 
       if (reservationError || !reservation) {
         console.error('[createQueueSession] ❌ Failed to create reservation:', reservationError)
+        
+        // Cancel the parent booking
+        await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId)
+        
         return { success: false, error: `Failed to create reservation for ${sessionStart.toLocaleDateString()}` }
       }
 
@@ -1475,6 +1507,7 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
           current_players: 0,
           metadata: {
             reservation_id: reservation.id,
+            booking_id: bookingId,
             recurrence_group_id: recurrenceGroupId,
             payment_required: totalAmountPerSlot,
             payment_status: 'pending',

@@ -25,7 +25,7 @@ interface BookingFormProps {
 
 export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingFormProps) {
   const router = useRouter()
-  const { setBookingData, setDiscountDetails } = useCheckoutStore()
+  const { setBookingData, setBookingCart, setDiscountDetails } = useCheckoutStore()
 
   // Form state
   const [courtId, setCourtId] = useState(selectedCourtId)
@@ -122,49 +122,27 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!selectedDate || !selectedTime || !selectedCourt) {
-      setError('Please select a date, time, and court')
-      return
-    }
-
-    if (!isDurationAvailable()) {
-      setError(`The selected ${duration}-hour slot is not fully available`)
+    if (!selectedDate || !selectedTime || !selectedCourt || !isDurationAvailable()) {
+      setError('Please select a court, date, and available time slot')
       return
     }
 
     const endTime = getEndTime(selectedTime, duration)
 
-    // Save booking data to checkout store
     setBookingData({
-      courtId: courtId,
+      courtId,
       courtName: selectedCourt.name,
       venueId: venue.id,
       venueName: venue.name,
       date: selectedDate,
       startTime: selectedTime,
-      endTime: endTime,
-
-      // NOTE: hourlyRate in store seems to be strictly "hourly" but usage says "baseRate = bookingData.hourlyRate * duration".
-      // Wait, let's look at store again: "baseRate = bookingData.hourlyRate * duration". 
-      // So `hourlyRate` should indeed be the PER HOUR rate.
-      // But if finalPrice is calculated by discount module (which might return TOTAL discounted price for the session),
-      // we need to be careful.
-      // If no discount: hourlyRate = selectedCourt.hourlyRate.
-      // If discount: We pass `hourlyRate` as the *effective* hourly rate?
-      // Let's keep it simple: Pass the RAW hourly rate. 
-      // The store calculates subtotal then subtracts discountAmount.
-      // So here we pass `selectedCourt.hourlyRate`. 
-
-      hourlyRate: selectedCourt.hourlyRate, // Fix: Pass actual hourly rate, handle discount separately
+      endTime,
+      hourlyRate: selectedCourt.hourlyRate,
       capacity: selectedCourt.capacity,
-      recurrenceWeeks: recurrenceWeeks
+      recurrenceWeeks,
     })
 
-    // Save discount details
     if (discountAmount !== 0) {
-      // discountAmount is per-session from the engine.
-      // The checkout store subtracts discountAmount from totalBase in getSubtotal(),
-      // so we multiply by recurrenceWeeks to get total discount across all sessions.
       setDiscountDetails({
         amount: discountAmount * recurrenceWeeks,
         type: discountType,
@@ -172,9 +150,10 @@ export function BookingForm({ venue, courts, selectedCourtId, userId }: BookingF
       })
     }
 
-    // Navigate to checkout
     router.push('/checkout')
   }
+
+
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">

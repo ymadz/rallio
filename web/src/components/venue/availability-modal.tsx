@@ -77,6 +77,7 @@ export function AvailabilityModal({
   const [loading, setLoading] = useState(false)
   const [isBooking, setIsBooking] = useState(false)
 
+
   // Pricing state
   const [calculatedPrice, setCalculatedPrice] = useState<{
     original: number
@@ -395,6 +396,8 @@ export function AvailabilityModal({
     }
   }
 
+
+
   const disabledDays = { before: new Date() }
 
   const additionalBookedDates = (() => {
@@ -683,6 +686,7 @@ export function AvailabilityModal({
           {/* Footer */}
           <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex items-center justify-between shrink-0">
             <div>
+
               {startSlot && (
                 <div className="text-sm">
                   {/* Validation Error Display */}

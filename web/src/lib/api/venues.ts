@@ -189,6 +189,7 @@ export async function getVenues(filters: VenueFilters = {}, retries = 2): Promis
           name,
           court_type,
           hourly_rate,
+          opening_hours,
           is_active,
           is_verified,
           surface_type,
@@ -301,6 +302,7 @@ export async function getVenues(filters: VenueFilters = {}, retries = 2): Promis
           name,
           court_type,
           hourly_rate,
+          opening_hours,
           is_active,
           is_verified,
           surface_type,
@@ -607,6 +609,7 @@ export async function getVenueById(
           court_type,
           capacity,
           hourly_rate,
+          opening_hours,
           is_active,
           metadata,
           court_amenities (

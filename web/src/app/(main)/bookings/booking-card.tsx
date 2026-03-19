@@ -10,6 +10,7 @@ import { StatusBadge } from '@/components/shared/status-badge';
 // Redefining interface to avoid circular deps or complex exports for now
 export interface Booking {
   id: string;
+  booking_id?: string | null;
   start_time: string;
   end_time: string;
   status: string;
@@ -61,7 +62,7 @@ interface BookingCardProps {
   serverDate: Date | null;
   cancellingId: string | null;
   resumingPaymentId: string | null;
-  onCancelBooking: (booking: Booking) => void;
+  onCancelBooking: (booking: Booking, target?: 'reservation' | 'booking') => void;
   onRefundBooking: (booking: Booking) => void;
   onResumePayment: (booking: Booking, paymentMethod?: 'gcash' | 'paymaya') => void;
   onReschedule: (booking: Booking) => void;
@@ -783,7 +784,7 @@ export function BookingCard({
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => onCancelBooking(booking)}
+                        onClick={() => onCancelBooking(booking, 'reservation')}
                         disabled={cancellingId === booking.id}
                         className="w-full h-10 rounded-xl text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors"
                       >
@@ -807,7 +808,32 @@ export function BookingCard({
                                 d="M6 18L18 6M6 6l12 12"
                               />
                             </svg>
-                            Cancel
+                            Cancel Slot
+                          </>
+                        )}
+                      </Button>
+                    )}
+
+                    {/* Show Cancel Entire Booking if this reservation is part of a bulk parent booking */}
+                    {booking.booking_id && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onCancelBooking(booking, 'booking')}
+                        disabled={cancellingId === booking.id}
+                        className="w-full h-10 rounded-xl text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors col-span-1"
+                      >
+                        {cancellingId === booking.id ? (
+                          <>
+                            <Spinner className="w-4 h-4 mr-2" />
+                            Please wait...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            Cancel Entire Booking
                           </>
                         )}
                       </Button>

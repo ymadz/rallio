@@ -50,7 +50,9 @@ export async function getAvailableTimeSlotsAction(
     .select(`
       id,
       hourly_rate,
-      venues (
+      opening_hours,
+      venue:venues (
+        id,
         opening_hours
       )
     `)
@@ -67,8 +69,8 @@ export async function getAvailableTimeSlotsAction(
   const dayOfWeek = dayNames[date.getDay()]
 
   // Get operating hours for this day
-  const venueData = Array.isArray(court.venues) ? court.venues[0] : court.venues
-  const openingHours = venueData?.opening_hours as Record<string, { open: string; close: string }> | null
+  const venueData = (court as any).venue
+  const openingHours = (court.opening_hours || venueData?.opening_hours) as Record<string, { open: string; close: string }> | null
   const dayHours = openingHours?.[dayOfWeek]
 
   if (!dayHours) {
@@ -304,7 +306,9 @@ export async function validateBookingAvailabilityAction(data: {
     .from('courts')
     .select(`
       id,
-      venues (
+      opening_hours,
+      venue:venues (
+        id,
         opening_hours
       )
     `)
@@ -315,8 +319,8 @@ export async function validateBookingAvailabilityAction(data: {
     return { available: false, error: 'Court not found.' }
   }
 
-  const venueData = Array.isArray(court.venues) ? court.venues[0] : court.venues
-  const openingHours = venueData?.opening_hours as Record<string, { open: string; close: string }> | null
+  const venueData = (court as any).venue
+  const openingHours = (court.opening_hours || venueData?.opening_hours) as Record<string, { open: string; close: string }> | null
   const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 
   // 1. GENERATE PHASE
@@ -447,6 +451,131 @@ export async function validateBookingAvailabilityAction(data: {
 }
 
 /**
+ * Server Action: Check availability for all items in a checkout cart.
+ * Identifies conflicts for recurring and multi-court bookings.
+ */
+export async function checkCartAvailabilityAction(items: Array<{
+  courtId: string
+  date: string | Date
+  startTime: string
+  endTime: string
+  recurrenceWeeks?: number
+  selectedDays?: number[]
+}>): Promise<{
+  available: boolean
+  totalSlots: number
+  availableSlots: number
+  conflicts: Array<{
+    courtId: string
+    date: string
+    startTime: string
+    endTime: string
+    reason: string
+  }>
+}> {
+  const adminDb = createServiceClient()
+
+  // Pre-merge consecutive items
+  const sorted = [...items].sort((a, b) => {
+    if (a.courtId !== b.courtId) return a.courtId.localeCompare(b.courtId)
+    const dateA = new Date(a.date).getTime()
+    const dateB = new Date(b.date).getTime()
+    if (dateA !== dateB) return dateA - dateB
+    return a.startTime.localeCompare(b.startTime)
+  })
+
+  const merged: typeof items = []
+  if (sorted.length > 0) {
+    let current = { ...sorted[0] }
+    for (let i = 1; i < sorted.length; i++) {
+      const next = sorted[i]
+      const sameCourt = current.courtId === next.courtId
+      const sameDay = new Date(current.date).toDateString() === new Date(next.date).toDateString()
+      const consecutive = current.endTime === next.startTime
+      const sameRecurrence = current.recurrenceWeeks === next.recurrenceWeeks && 
+                            JSON.stringify(current.selectedDays) === JSON.stringify(next.selectedDays)
+
+      if (sameCourt && sameDay && consecutive && sameRecurrence) {
+        current.endTime = next.endTime
+      } else {
+        merged.push(current)
+        current = { ...next }
+      }
+    }
+    merged.push(current)
+  }
+
+  const allConflicts: Array<{
+    courtId: string
+    date: string
+    startTime: string
+    endTime: string
+    reason: string
+  }> = []
+  let totalSlots = 0
+  let availableSlots = 0
+
+  for (const item of merged) {
+    const bookingDate = typeof item.date === 'string' ? new Date(item.date) : item.date
+    const [startH, startM] = item.startTime.split(':').map(Number)
+    const [endH, endM] = item.endTime.split(':').map(Number)
+
+    const initialStartTime = new Date(bookingDate)
+    initialStartTime.setHours(startH, startM || 0, 0, 0)
+
+    const recurrenceWeeks = item.recurrenceWeeks || 1
+    const selectedDays = item.selectedDays || []
+    const startDayIndex = initialStartTime.getDay()
+
+    const uniqueSelectedDays = selectedDays.length > 0
+      ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
+      : [startDayIndex]
+
+    for (let i = 0; i < recurrenceWeeks; i++) {
+      for (const dayIndex of uniqueSelectedDays) {
+        totalSlots++
+        const dayOffset = (dayIndex - startDayIndex + 7) % 7
+        const slotStart = new Date(initialStartTime.getTime())
+        slotStart.setDate(slotStart.getDate() + (i * 7) + dayOffset)
+
+        const slotEnd = new Date(slotStart.getTime())
+        slotEnd.setHours(endH, endM || 0, 0, 0)
+        
+        if (slotEnd <= slotStart) slotEnd.setDate(slotEnd.getDate() + 1)
+
+        const { data: conflicts } = await adminDb
+          .from('reservations')
+          .select('id')
+          .eq('court_id', item.courtId)
+          .in('status', ['pending_payment', 'confirmed', 'partially_paid', 'ongoing'])
+          .lt('start_time', slotEnd.toISOString())
+          .gt('end_time', slotStart.toISOString())
+          .limit(1)
+
+        if (conflicts && conflicts.length > 0) {
+          allConflicts.push({
+            courtId: item.courtId,
+            date: slotStart.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+            startTime: item.startTime,
+            endTime: item.endTime,
+            reason: 'Slot already reserved'
+          })
+        } else {
+          availableSlots++
+        }
+      }
+    }
+  }
+
+  return {
+    available: allConflicts.length === 0,
+    totalSlots,
+    availableSlots,
+    conflicts: allConflicts
+  }
+}
+
+/**
  * Server Action: Create a new reservation
  */
 export async function createReservationAction(data: {
@@ -466,7 +595,8 @@ export async function createReservationAction(data: {
   selectedDays?: number[] // Array of day indices (0-6)
   customDownPaymentAmount?: number
   promoCode?: string
-}): Promise<{ success: boolean; reservationId?: string; error?: string; count?: number; downPaymentRequired?: boolean; downPaymentAmount?: number }> {
+  targetDateCount?: number // Number of unique dates in the bulk booking
+}): Promise<{ success: boolean; bookingId?: string; reservationId?: string; error?: string; count?: number; downPaymentRequired?: boolean; downPaymentAmount?: number }> {
   const supabase = await createClient()
 
   // Use the shared service
@@ -478,6 +608,158 @@ export async function createReservationAction(data: {
   }
 
   return result
+}
+
+/**
+ * Server Action: Create multiple reservations for a single checkout group.
+ * This powers multi-court booking with a unified payment flow.
+ */
+export async function createMultiCourtReservationsAction(data: {
+  userId: string
+  customDownPaymentAmount?: number
+  promoCode?: string
+  items: Array<{
+    courtId: string
+    startTimeISO: string
+    endTimeISO: string
+    totalAmount: number
+    paymentType?: 'full' | 'split'
+    paymentMethod?: 'cash' | 'e-wallet'
+    notes?: string
+    numPlayers?: number
+  }>
+}): Promise<{
+  success: boolean
+  reservationId?: string
+  reservationIds?: string[]
+  bookingId?: string
+  downPaymentRequired?: boolean
+  error?: string
+}> {
+  const supabase = await createClient()
+
+  if (!data.items || data.items.length === 0) {
+    return { success: false, error: 'No booking items provided' }
+  }
+
+  // MERGE PHASE: Detect and merge consecutive items for the same court and day
+  const mergedItems: typeof data.items = []
+  
+  // Sort items by courtId, then start time to make merging easier
+  const sortedItems = [...data.items].sort((a, b) => {
+    if (a.courtId !== b.courtId) return a.courtId.localeCompare(b.courtId)
+    return a.startTimeISO.localeCompare(b.startTimeISO)
+  })
+
+  if (sortedItems.length > 0) {
+    let current = { ...sortedItems[0] }
+    
+    for (let i = 1; i < sortedItems.length; i++) {
+      const next = sortedItems[i]
+      
+      const sameCourt = current.courtId === next.courtId
+      const sameDay = new Date(current.startTimeISO).toDateString() === new Date(next.startTimeISO).toDateString()
+      const consecutive = current.endTimeISO === next.startTimeISO
+      const samePayment = current.paymentType === next.paymentType && current.paymentMethod === next.paymentMethod
+
+      if (sameCourt && sameDay && consecutive && samePayment) {
+        // Merge
+        current.endTimeISO = next.endTimeISO
+        current.totalAmount += next.totalAmount
+        // Append notes if they exist and are different
+        if (next.notes && current.notes !== next.notes) {
+          current.notes = `${current.notes}; ${next.notes}`
+        }
+      } else {
+        mergedItems.push(current)
+        current = { ...next }
+      }
+    }
+    mergedItems.push(current)
+  }
+
+  const itemsToProcess = mergedItems
+  const createdReservationIds: string[] = []
+  let downPaymentRequired = false
+  let currentBookingId: string | undefined = undefined
+
+  // Phase 2A: Count total unique booking dates for multi_day discount aggregation
+  const uniqueDates = new Set(itemsToProcess.map(item => new Date(item.startTimeISO).toDateString()))
+  const totalBookingDateCount = uniqueDates.size
+
+  // Phase 4B: Proportional downpayment split instead of an even split
+  const grandTotal = itemsToProcess.reduce((s, i) => s + i.totalAmount, 0)
+
+  for (const item of itemsToProcess) {
+    const itemDownPayment = data.customDownPaymentAmount && grandTotal > 0
+      ? data.customDownPaymentAmount * (item.totalAmount / grandTotal)
+      : undefined
+
+    const result = await createReservation(supabase, {
+      courtId: item.courtId,
+      userId: data.userId,
+      startTimeISO: item.startTimeISO,
+      endTimeISO: item.endTimeISO,
+      totalAmount: item.totalAmount,
+      paymentType: item.paymentType || 'full',
+      paymentMethod: item.paymentMethod || 'e-wallet',
+      notes: item.notes,
+      numPlayers: item.numPlayers || 1,
+      recurrenceWeeks: 1,
+      selectedDays: [],
+      bookingId: currentBookingId,
+      targetDateCount: totalBookingDateCount,
+      customDownPaymentAmount: itemDownPayment,
+      promoCode: data.promoCode
+    })
+
+    if (!result.success || !result.reservationId) {
+      if (createdReservationIds.length > 0) {
+        await supabase
+          .from('reservations')
+          .update({
+            status: 'cancelled',
+            cancelled_at: new Date().toISOString(),
+            cancellation_reason: 'Rolled back due to failed multi-court booking creation',
+          })
+          .in('id', createdReservationIds)
+      }
+
+      if (currentBookingId) {
+        await supabase
+          .from('bookings')
+          .update({
+            status: 'cancelled',
+            metadata: { cancellation_reason: 'Multi-court item creation failed' }
+          })
+          .eq('id', currentBookingId)
+      }
+
+      return {
+        success: false,
+        error: result.error || 'Failed to create multi-court booking item',
+      }
+    }
+
+    if (!currentBookingId && result.bookingId) {
+      currentBookingId = result.bookingId
+    }
+
+    createdReservationIds.push(result.reservationId)
+    downPaymentRequired = downPaymentRequired || !!result.downPaymentRequired
+  }
+
+
+  revalidatePath('/reservations')
+  revalidatePath('/bookings')
+
+  return {
+    success: true,
+    reservationId: createdReservationIds[0],
+    reservationIds: createdReservationIds,
+    bookingId: currentBookingId,
+    downPaymentRequired,
+  }
 }
 
 /**
