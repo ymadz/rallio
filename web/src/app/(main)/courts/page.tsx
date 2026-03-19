@@ -375,22 +375,11 @@ export default function CourtsPage() {
               </div>
             </div>
 
-            {/* Mobile: Filter Toggle Button */}
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`md:hidden flex items-center justify-center w-10 h-10 rounded-full transition-colors ${showFilters
-                ? 'bg-primary text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-              </svg>
-            </button>
+            {/* Mobile filter button moved beside search input */}
           </div>
 
-          {/* Mobile: Search Bar */}
-          <div className="md:hidden flex gap-2">
+          {/* Mobile: Search + Filter */}
+          <div className="md:hidden flex items-stretch gap-2">
             <div className="flex-1 relative">
               <input
                 type="text"
@@ -413,6 +402,27 @@ export default function CourtsPage() {
                 />
               </svg>
             </div>
+
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`shrink-0 inline-flex items-center justify-center gap-1.5 px-3 rounded-xl border text-sm font-medium transition-colors ${showFilters
+                ? 'bg-primary text-white border-primary'
+                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              aria-label="Toggle filters"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+              </svg>
+              <span>Filter</span>
+              {(courtType ||
+                category ||
+                minRating > 0 ||
+                priceRange[1] < 1000 ||
+                selectedAmenities.length > 0) && (
+                  <span className="ml-0.5 bg-red-500 w-2 h-2 rounded-full" />
+                )}
+            </button>
           </div>
         </div>
 
