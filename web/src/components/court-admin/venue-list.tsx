@@ -354,15 +354,18 @@ export function VenueList() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {venues.map((venue) => (
-            <Link
-              key={venue.id}
-              href={`/court-admin/venues/${venue.id}`}
-              className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-lg hover:border-primary/30 transition-all group"
-            >
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          {venues.map((venue) => {
+            const courtCount = venue.courts?.[0]?.count || 0
+
+            return (
+              <Link
+                key={venue.id}
+                href={`/court-admin/venues/${venue.id}`}
+                className="bg-white border border-gray-200 rounded-xl p-6 md:p-7 hover:shadow-lg hover:border-primary/30 transition-all group"
+              >
               {/* Venue Header */}
-              <div className="flex items-start justify-between mb-4">
+              <div className="flex items-start justify-between gap-4 mb-5">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-xl font-bold text-gray-900 group-hover:text-primary transition-colors">
@@ -386,8 +389,10 @@ export function VenueList() {
                     )}
                   </div>
                   {!venue.is_verified && venue.is_active && (
-                    <p className="text-xs text-yellow-600 bg-yellow-50 px-3 py-2 rounded-lg">
-                      ⏳ Your venue is awaiting Global Admin approval. It won't appear in public listings until verified.
+                    <p className="text-xs text-yellow-700 bg-yellow-50 px-3 py-2 rounded-lg border border-yellow-200">
+                      {courtCount === 0
+                        ? 'Your venue is pending approval. Please add at least one court to complete your application.'
+                        : "Your venue is awaiting Global Admin approval. It won't appear in public listings until verified."}
                     </p>
                   )}
                   {!venue.is_verified && !venue.is_active && (
@@ -396,14 +401,14 @@ export function VenueList() {
                     </p>
                   )}
                   {venue.description && (
-                    <p className="text-sm text-gray-600 line-clamp-2">{venue.description}</p>
+                    <p className="text-sm text-gray-600 line-clamp-2 mt-3">{venue.description}</p>
                   )}
                 </div>
                 <ChevronRight className="w-6 h-6 text-gray-400 group-hover:text-primary group-hover:translate-x-1 transition-all flex-shrink-0" />
               </div>
 
               {/* Venue Info */}
-              <div className="space-y-2 mb-4">
+              <div className="space-y-3 mb-5">
                 {venue.address && (
                   <div className="flex items-center gap-2 text-sm text-gray-600">
                     <MapPin className="w-4 h-4 text-gray-400" />
@@ -425,44 +430,45 @@ export function VenueList() {
               </div>
 
               {/* Stats */}
-              <div className="pt-4 border-t border-gray-200">
+              <div className="pt-5 border-t border-gray-200">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="text-center">
                     <p className="text-2xl font-bold text-gray-900">{venue.courts?.[0]?.count || 0}</p>
                     <p className="text-xs text-gray-500 mt-1">Courts</p>
                   </div>
                   <div className="text-center">
-                    <div className="space-y-1">
-                      <p className={`text-sm font-medium ${venue.is_active ? 'text-primary' : 'text-gray-400'
-                        }`}>
-                        {venue.is_active ? 'Active' : 'Inactive'}
-                      </p>
-                      <p className={`text-xs font-medium ${venue.is_verified ? 'text-primary' : !venue.is_active ? 'text-red-600' : 'text-yellow-600'
-                        }`}>
-                        {venue.is_verified ? 'Verified' : !venue.is_active ? 'Not Approved' : 'Pending Verification'}
-                      </p>
-                    </div>
+                    <p className={`text-sm font-medium ${venue.is_verified ? 'text-primary' : !venue.is_active ? 'text-red-600' : 'text-yellow-600'
+                      }`}>
+                      {venue.is_verified ? 'Active' : !venue.is_active ? 'Not Approved' : 'Pending Verification'}
+                    </p>
                     <p className="text-xs text-gray-500 mt-1">Status</p>
                   </div>
                 </div>
               </div>
 
               {/* Status */}
-              <div className="mt-4 pt-4 border-t border-gray-200">
+              <div className="mt-5 pt-5 border-t border-gray-200">
                 <div className="flex items-center justify-between">
-                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${venue.is_active
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${venue.is_verified
                     ? 'bg-primary/10 text-primary'
-                    : 'bg-gray-100 text-gray-700'
+                    : !venue.is_active
+                      ? 'bg-gray-100 text-gray-700'
+                      : 'bg-yellow-100 text-yellow-700'
                     }`}>
-                    {venue.is_active ? (
+                    {venue.is_verified ? (
                       <>
                         <CheckCircle className="w-3 h-3" />
                         <span>Active</span>
                       </>
-                    ) : (
+                    ) : !venue.is_active ? (
                       <>
                         <XCircle className="w-3 h-3" />
                         <span>Inactive</span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle className="w-3 h-3" />
+                        <span>Pending Approval</span>
                       </>
                     )}
                   </span>
@@ -471,8 +477,9 @@ export function VenueList() {
                   </span>
                 </div>
               </div>
-            </Link>
-          ))}
+              </Link>
+            )
+          })}
         </div>
       )}
 

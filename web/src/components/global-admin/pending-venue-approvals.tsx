@@ -109,6 +109,11 @@ export function PendingVenueApprovals({ onApprovalComplete }: Props) {
   }
 
   const handleApprove = async (venue: PendingVenue) => {
+    if (venue.court_count === 0) {
+      toast.error('Add at least 1 court before approving this venue')
+      return
+    }
+
     setProcessingId(venue.id)
     try {
       const result = await toggleVenueVerified(venue.id, true)
@@ -271,6 +276,11 @@ export function PendingVenueApprovals({ onApprovalComplete }: Props) {
                     <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full">
                       {venue.court_count} court{venue.court_count !== 1 ? 's' : ''}
                     </span>
+                    {venue.court_count === 0 && (
+                      <span className="px-3 py-1 bg-orange-50 text-orange-700 border border-orange-200 rounded-full font-medium">
+                        Add a court before approval
+                      </span>
+                    )}
                     {venue.website && (
                       <a
                         href={venue.website}
@@ -289,15 +299,15 @@ export function PendingVenueApprovals({ onApprovalComplete }: Props) {
                 <div className="flex flex-col gap-2 ml-4">
                   <button
                     onClick={() => handleApprove(venue)}
-                    disabled={processingId === venue.id}
-                    className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+                    disabled={processingId === venue.id || venue.court_count === 0}
+                    className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {processingId === venue.id ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
                       <CheckCircle className="w-4 h-4" />
                     )}
-                    Approve
+                    {venue.court_count === 0 ? 'Needs Court' : 'Approve'}
                   </button>
                   <button
                     onClick={() => setShowRejectModal(venue.id)}
