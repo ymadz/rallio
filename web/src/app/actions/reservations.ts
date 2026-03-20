@@ -12,6 +12,12 @@ export interface TimeSlot {
   price?: number
 }
 
+export interface DailySlotAvailability {
+  date: string
+  availableSlots: number
+  totalSlots: number
+}
+
 /**
  * Server Action: Get venue metadata (like down payment percentage)
  */
@@ -257,13 +263,12 @@ export async function getAvailableTimeSlotsAction(
 }
 
 /**
- * Server Action: Get fully booked dates for a court within a month.
- * A date is fully booked when it has no remaining available hourly slots.
+ * Server Action: Get slot availability summary for each date in a month.
  */
-export async function getFullyBookedDatesAction(
+export async function getMonthlySlotAvailabilityAction(
   courtId: string,
   monthDateString: string
-): Promise<string[]> {
+): Promise<DailySlotAvailability[]> {
   const monthDate = new Date(monthDateString)
 
   if (Number.isNaN(monthDate.getTime())) {
@@ -278,13 +283,36 @@ export async function getFullyBookedDatesAction(
     const currentDate = new Date(monthStart.getFullYear(), monthStart.getMonth(), day)
     const dateString = format(currentDate, 'yyyy-MM-dd')
     const slots = await getAvailableTimeSlotsAction(courtId, dateString)
-    const hasAvailableSlot = slots.some((slot) => slot.available)
+    const availableSlots = slots.filter((slot) => slot.available).length
 
-    return hasAvailableSlot ? null : dateString
+    return {
+      date: dateString,
+      availableSlots,
+      totalSlots: slots.length,
+    }
   })
 
-  const results = await Promise.all(checks)
-  return results.filter((value): value is string => Boolean(value))
+  return Promise.all(checks)
+}
+
+/**
+ * Server Action: Get fully booked dates for a court within a month.
+ * A date is fully booked when it has no remaining available hourly slots.
+ */
+export async function getFullyBookedDatesAction(
+  courtId: string,
+  monthDateString: string
+): Promise<string[]> {
+  const monthDate = new Date(monthDateString)
+
+  if (Number.isNaN(monthDate.getTime())) {
+    return []
+  }
+
+  const monthlySummary = await getMonthlySlotAvailabilityAction(courtId, monthDateString)
+  return monthlySummary
+    .filter((day) => day.totalSlots > 0 && day.availableSlots === 0)
+    .map((day) => day.date)
 }
 /**
  * Server Action: Validate if a booking series is available without creating it

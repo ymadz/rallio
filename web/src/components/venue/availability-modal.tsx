@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { DayPicker } from 'react-day-picker'
+import { DayPicker, DayButton as RdpDayButton } from 'react-day-picker'
 import { format } from 'date-fns'
 import 'react-day-picker/dist/style.css'
 import { useCheckoutStore } from '@/stores/checkout-store'
 import {
   getAvailableTimeSlotsAction,
-  getFullyBookedDatesAction,
+  getMonthlySlotAvailabilityAction,
   validateBookingAvailabilityAction,
   getVenueMetadataAction
 } from '@/app/actions/reservations'
@@ -62,7 +62,9 @@ export function AvailabilityModal({
   const [recurrenceWeeks, setRecurrenceWeeks] = useState<number>(1)
   const [selectedDays, setSelectedDays] = useState<number[]>([]) // [0-6] for Sun-Sat
   const [fullyBookedDateSet, setFullyBookedDateSet] = useState<Set<string>>(new Set())
+  const [monthSlotSummaryMap, setMonthSlotSummaryMap] = useState<Map<string, { availableSlots: number; totalSlots: number }>>(new Map())
   const fullyBookedMonthCacheRef = useRef<Map<string, Set<string>>>(new Map())
+  const monthSlotSummaryCacheRef = useRef<Map<string, Map<string, { availableSlots: number; totalSlots: number }>>>(new Map())
 
   // Validation state
   const [validationState, setValidationState] = useState<{
@@ -127,19 +129,39 @@ export function AvailabilityModal({
       try {
         const monthKey = format(displayedMonth, 'yyyy-MM-01')
         const cacheKey = `${courtId}:${monthKey}`
-        const cached = fullyBookedMonthCacheRef.current.get(cacheKey)
+        const cachedFullyBooked = fullyBookedMonthCacheRef.current.get(cacheKey)
+        const cachedSummary = monthSlotSummaryCacheRef.current.get(cacheKey)
 
-        if (cached) {
-          setFullyBookedDateSet(cached)
+        if (cachedFullyBooked && cachedSummary) {
+          setFullyBookedDateSet(cachedFullyBooked)
+          setMonthSlotSummaryMap(cachedSummary)
           return
         }
 
-        const dates = await getFullyBookedDatesAction(courtId, monthKey)
-        const nextSet = new Set(dates)
-        fullyBookedMonthCacheRef.current.set(cacheKey, nextSet)
-        setFullyBookedDateSet(nextSet)
+        const monthlySummary = await getMonthlySlotAvailabilityAction(courtId, monthKey)
+
+        const nextSummaryMap = new Map<string, { availableSlots: number; totalSlots: number }>()
+        const nextFullyBookedSet = new Set<string>()
+
+        monthlySummary.forEach((day) => {
+          nextSummaryMap.set(day.date, {
+            availableSlots: day.availableSlots,
+            totalSlots: day.totalSlots,
+          })
+
+          if (day.totalSlots > 0 && day.availableSlots === 0) {
+            nextFullyBookedSet.add(day.date)
+          }
+        })
+
+        monthSlotSummaryCacheRef.current.set(cacheKey, nextSummaryMap)
+        fullyBookedMonthCacheRef.current.set(cacheKey, nextFullyBookedSet)
+
+        setMonthSlotSummaryMap(nextSummaryMap)
+        setFullyBookedDateSet(nextFullyBookedSet)
       } catch (error) {
         console.error('Error fetching fully booked dates:', error)
+        setMonthSlotSummaryMap(new Map())
         setFullyBookedDateSet(new Set())
       }
     }
@@ -540,6 +562,39 @@ export function AvailabilityModal({
                       additionalBookings: 'border-2 border-dashed border-primary bg-primary/10 rounded-md text-primary font-medium',
                       fullyBookedDate: 'bg-gray-100 text-gray-400 line-through opacity-80',
                     }}
+                    components={{
+                      DayButton: (props) => {
+                        const dateKey = format(props.day.date, 'yyyy-MM-dd')
+                        const summary = monthSlotSummaryMap.get(dateKey)
+
+                        const shouldShowCount =
+                          !props.modifiers.outside &&
+                          Boolean(summary) &&
+                          (summary?.totalSlots || 0) > 0 &&
+                          (summary?.availableSlots || 0) > 0 &&
+                          (summary?.availableSlots || 0) < (summary?.totalSlots || 0)
+
+                        return (
+                          <RdpDayButton {...props}>
+                            <span className="relative inline-flex items-center justify-center w-full h-full">
+                              <span>{props.children}</span>
+                              {shouldShowCount && (
+                                <span
+                                  className={cn(
+                                    'absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 rounded-full border text-[10px] font-semibold leading-none flex items-center justify-center pointer-events-none',
+                                    props.modifiers.selected
+                                      ? 'bg-white text-primary border-white/80'
+                                      : 'bg-primary text-white border-primary'
+                                  )}
+                                >
+                                  {summary?.availableSlots}
+                                </span>
+                              )}
+                            </span>
+                          </RdpDayButton>
+                        )
+                      }
+                    }}
                   />
 
                   {/* Legend */}
@@ -555,6 +610,10 @@ export function AvailabilityModal({
                     <div className="flex items-center gap-2 text-xs">
                       <div className="w-4 h-4 bg-gray-100 border border-gray-300 rounded" />
                       <span className="text-gray-600">Fully Booked Day</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <div className="w-[18px] h-[18px] rounded-full bg-primary/10 border border-primary/20 text-[10px] text-primary font-semibold flex items-center justify-center">3</div>
+                      <span className="text-gray-600">Slots Left (shown only for partially booked days)</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
                       <div className="w-4 h-4 bg-primary rounded" />
