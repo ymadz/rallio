@@ -103,6 +103,18 @@ export default function CheckoutPage() {
 
     const effectiveCart = bookingCart.length > 0 ? bookingCart : [bookingData]
     const isMultiCourt = effectiveCart.length > 1
+    const totalCartHours = effectiveCart.reduce((sum, item) => {
+        const itemStartHour = parseInt(item.startTime.split(':')[0])
+        const itemEndHour = parseInt(item.endTime.split(':')[0])
+        return sum + Math.max(itemEndHour - itemStartHour, 0)
+    }, 0)
+    const totalCartAmount = effectiveCart.reduce((sum, item) => {
+        const itemStartHour = parseInt(item.startTime.split(':')[0])
+        const itemEndHour = parseInt(item.endTime.split(':')[0])
+        const itemDuration = Math.max(itemEndHour - itemStartHour, 0)
+        return sum + (item.hourlyRate * itemDuration)
+    }, 0)
+    const uniqueVenueCount = new Set(effectiveCart.map((item) => item.venueId)).size
 
     // Calculate duration from startTime and endTime
     const startHour = parseInt(bookingData.startTime.split(':')[0])
@@ -204,18 +216,58 @@ export default function CheckoutPage() {
                                 {/* Court Card / Cart Card */}
                                 {isMultiCourt ? (
                                     <div className="bg-white border border-gray-200 rounded-xl p-6">
-                                        <h3 className="font-semibold text-gray-900 text-lg mb-4">Multi-Court Cart</h3>
-                                        <p className="text-sm text-gray-600 mb-4">{effectiveCart.length} court slots will be processed in one checkout.</p>
-                                        <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
-                                            {effectiveCart.map((item, index) => (
-                                                <div key={`${item.courtId}-${item.startTime}-${index}`} className="border border-gray-200 rounded-md p-3">
-                                                    <p className="font-medium text-gray-900">{item.courtName}</p>
-                                                    <p className="text-xs text-gray-600">{item.venueName}</p>
-                                                    <p className="text-xs text-gray-600">
-                      {new Date(item.date).toLocaleDateString()} • {formatTo12Hour(item.startTime)} - {formatTo12Hour(item.endTime)}
-                    </p>
+                                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+                                            <div>
+                                                <h3 className="font-semibold text-gray-900 text-lg">Multi-Court Cart</h3>
+                                                <p className="text-sm text-gray-600">{effectiveCart.length} court slots will be processed in one checkout.</p>
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-2 text-center">
+                                                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                                                    <p className="text-[11px] uppercase tracking-wide text-gray-500">Venues</p>
+                                                    <p className="text-sm font-semibold text-gray-900">{uniqueVenueCount}</p>
                                                 </div>
-                                            ))}
+                                                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                                                    <p className="text-[11px] uppercase tracking-wide text-gray-500">Hours</p>
+                                                    <p className="text-sm font-semibold text-gray-900">{totalCartHours}</p>
+                                                </div>
+                                                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                                                    <p className="text-[11px] uppercase tracking-wide text-gray-500">Total</p>
+                                                    <p className="text-sm font-semibold text-gray-900">₱{totalCartAmount.toFixed(2)}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="max-h-[320px] overflow-y-auto rounded-lg border border-gray-200 divide-y divide-gray-100">
+                                            {effectiveCart.map((item, index) => {
+                                                const itemStartHour = parseInt(item.startTime.split(':')[0])
+                                                const itemEndHour = parseInt(item.endTime.split(':')[0])
+                                                const itemDuration = Math.max(itemEndHour - itemStartHour, 0)
+                                                const itemTotal = item.hourlyRate * itemDuration
+
+                                                return (
+                                                    <div key={`${item.courtId}-${item.startTime}-${index}`} className="p-4">
+                                                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                                            <div className="min-w-0">
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/10 px-1.5 text-[11px] font-semibold text-primary">
+                                                                        {index + 1}
+                                                                    </span>
+                                                                    <p className="font-medium text-gray-900 truncate">{item.courtName}</p>
+                                                                </div>
+                                                                <p className="text-xs text-gray-600 truncate">{item.venueName}</p>
+                                                                <p className="text-xs text-gray-600 mt-1">
+                                                                    {format(new Date(item.date), 'EEE, MMM d, yyyy')} • {formatTo12Hour(item.startTime)} - {formatTo12Hour(item.endTime)}
+                                                                </p>
+                                                            </div>
+
+                                                            <div className="sm:text-right">
+                                                                <p className="text-xs text-gray-500">{itemDuration} {itemDuration === 1 ? 'hr' : 'hrs'} @ ₱{item.hourlyRate.toFixed(2)}/hr</p>
+                                                                <p className="text-sm font-semibold text-gray-900 mt-0.5">₱{itemTotal.toFixed(2)}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })}
                                         </div>
                                     </div>
                                 ) : (

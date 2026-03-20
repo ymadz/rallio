@@ -168,15 +168,16 @@ export function BookingSummaryCard({
       <div className="space-y-3 pb-4 border-b border-gray-200">
         {isMultiCourt ? (
           <div>
-            <p className="text-sm text-gray-500">Cart Items</p>
-            <p className="font-medium text-gray-900 mb-2">{effectiveCart.length} court slots</p>
-            <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-gray-500">Cart Items</p>
+              <p className="text-sm font-medium text-gray-900">{effectiveCart.length} slots</p>
+            </div>
+            <div className="max-h-[220px] overflow-y-auto rounded-md border border-gray-100 divide-y divide-gray-100">
               {effectiveCart.map((item, index) => (
-                <div key={`${item.courtId}-${item.startTime}-${index}`} className="border border-gray-200 rounded-md p-2">
-                  <p className="text-sm font-medium text-gray-900">{item.courtName}</p>
-                  <p className="text-xs text-gray-600">{item.venueName}</p>
-                  <p className="text-xs text-gray-600">
-                    {format(new Date(item.date), 'EEE, MMM d, yyyy')} • {formatTime(item.startTime)} - {formatTime(item.endTime)}
+                <div key={`${item.courtId}-${item.startTime}-${index}`} className="px-2.5 py-2">
+                  <p className="text-sm font-medium text-gray-900 truncate">{item.courtName}</p>
+                  <p className="text-xs text-gray-600 truncate">
+                    {format(new Date(item.date), 'EEE, MMM d')} • {formatTime(item.startTime)} - {formatTime(item.endTime)}
                   </p>
                 </div>
               ))}
