@@ -219,19 +219,15 @@ export default function CheckoutPage() {
                                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
                                             <div>
                                                 <h3 className="font-semibold text-gray-900 text-lg">Multi-Court Cart</h3>
-                                                <p className="text-sm text-gray-600">{effectiveCart.length} court slots will be processed in one checkout.</p>
+                                                <p className="text-sm text-gray-600">{effectiveCart.length} slots in one payment.</p>
                                             </div>
-                                            <div className="grid grid-cols-3 gap-2 text-center">
+                                            <div className="grid grid-cols-2 gap-2 text-center">
                                                 <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                                                    <p className="text-[11px] uppercase tracking-wide text-gray-500">Venues</p>
-                                                    <p className="text-sm font-semibold text-gray-900">{uniqueVenueCount}</p>
+                                                    <p className="text-[11px] uppercase tracking-wide text-gray-500">Slots</p>
+                                                    <p className="text-sm font-semibold text-gray-900">{effectiveCart.length}</p>
                                                 </div>
                                                 <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                                                    <p className="text-[11px] uppercase tracking-wide text-gray-500">Hours</p>
-                                                    <p className="text-sm font-semibold text-gray-900">{totalCartHours}</p>
-                                                </div>
-                                                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                                                    <p className="text-[11px] uppercase tracking-wide text-gray-500">Total</p>
+                                                    <p className="text-[11px] uppercase tracking-wide text-gray-500">Subtotal</p>
                                                     <p className="text-sm font-semibold text-gray-900">₱{totalCartAmount.toFixed(2)}</p>
                                                 </div>
                                             </div>
@@ -246,7 +242,7 @@ export default function CheckoutPage() {
 
                                                 return (
                                                     <div key={`${item.courtId}-${item.startTime}-${index}`} className="p-4">
-                                                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                                        <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
                                                             <div className="min-w-0">
                                                                 <div className="flex items-center gap-2 mb-1">
                                                                     <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/10 px-1.5 text-[11px] font-semibold text-primary">
@@ -254,15 +250,14 @@ export default function CheckoutPage() {
                                                                     </span>
                                                                     <p className="font-medium text-gray-900 truncate">{item.courtName}</p>
                                                                 </div>
-                                                                <p className="text-xs text-gray-600 truncate">{item.venueName}</p>
-                                                                <p className="text-xs text-gray-600 mt-1">
-                                                                    {format(new Date(item.date), 'EEE, MMM d, yyyy')} • {formatTo12Hour(item.startTime)} - {formatTo12Hour(item.endTime)}
+                                                                <p className="text-xs text-gray-600 truncate">
+                                                                    {item.venueName} • {format(new Date(item.date), 'EEE, MMM d, yyyy')} • {formatTo12Hour(item.startTime)} - {formatTo12Hour(item.endTime)}
                                                                 </p>
                                                             </div>
 
                                                             <div className="sm:text-right">
-                                                                <p className="text-xs text-gray-500">{itemDuration} {itemDuration === 1 ? 'hr' : 'hrs'} @ ₱{item.hourlyRate.toFixed(2)}/hr</p>
-                                                                <p className="text-sm font-semibold text-gray-900 mt-0.5">₱{itemTotal.toFixed(2)}</p>
+                                                                <p className="text-xs text-gray-500">{itemDuration} {itemDuration === 1 ? 'hr' : 'hrs'}</p>
+                                                                <p className="text-sm font-semibold text-gray-900">₱{itemTotal.toFixed(2)}</p>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -308,45 +303,63 @@ export default function CheckoutPage() {
                                 {/* Detail Breakdown */}
                                 <div className="bg-white border border-gray-200 rounded-xl p-6">
                                     <h3 className="font-semibold text-gray-900 text-lg mb-4">Detail Breakdown</h3>
-                                    {isMultiCourt && (
-                                        <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-                                            Showing aggregate totals for {effectiveCart.length} cart items. Per-item pricing appears in Booking Summary.
-                                        </div>
-                                    )}
                                     <div className="space-y-3">
-                                        <div className="flex justify-between py-3 border-b border-gray-100">
-                                            <span className="text-gray-600">Duration:</span>
-                                            <span className="font-medium text-gray-900">{duration} {duration === 1 ? 'hour' : 'hours'}</span>
-                                        </div>
-                                        <div className="flex justify-between py-3 border-b border-gray-100">
-                                            <span className="text-gray-600">Hourly Rate:</span>
-                                            <span className="font-medium text-gray-900">₱{bookingData.hourlyRate.toFixed(2)}</span>
-                                        </div>
-
-                                        {(bookingData.recurrenceWeeks && bookingData.recurrenceWeeks > 1) && (
-                                            <div className="flex justify-between py-3 border-b border-gray-100">
-                                                <span className="text-gray-600">Recurrence:</span>
-                                                <span className="font-medium text-gray-900">{bookingData.recurrenceWeeks} weeks</span>
-                                            </div>
-                                        )}
-
-                                        {(bookingData.selectedDays && bookingData.selectedDays.length > 1) && (
-                                            <div className="flex justify-between py-3 border-b border-gray-100">
-                                                <span className="text-gray-600">Sessions per Week:</span>
-                                                <div className="text-right">
-                                                    <span className="block font-medium text-gray-900">{bookingData.selectedDays.length} sessions</span>
-                                                    <span className="text-xs text-gray-500">
-                                                        {bookingData.selectedDays.map(d => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ')}
-                                                    </span>
+                                        {isMultiCourt ? (
+                                            <>
+                                                <div className="flex justify-between py-3 border-b border-gray-100">
+                                                    <span className="text-gray-600">Selected Slots:</span>
+                                                    <span className="font-medium text-gray-900">{effectiveCart.length}</span>
                                                 </div>
-                                            </div>
-                                        )}
+                                                <div className="flex justify-between py-3 border-b border-gray-100">
+                                                    <span className="text-gray-600">Combined Playtime:</span>
+                                                    <span className="font-medium text-gray-900">{totalCartHours} {totalCartHours === 1 ? 'hour' : 'hours'}</span>
+                                                </div>
+                                                <div className="flex justify-between py-3 border-b border-gray-100">
+                                                    <span className="text-gray-600">Venues:</span>
+                                                    <span className="font-medium text-gray-900">{uniqueVenueCount}</span>
+                                                </div>
+                                                <div className="flex justify-between py-3 border-b border-gray-100">
+                                                    <span className="text-gray-600">Cart Subtotal:</span>
+                                                    <span className="font-medium text-gray-900">₱{totalCartAmount.toFixed(2)}</span>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="flex justify-between py-3 border-b border-gray-100">
+                                                    <span className="text-gray-600">Duration:</span>
+                                                    <span className="font-medium text-gray-900">{duration} {duration === 1 ? 'hour' : 'hours'}</span>
+                                                </div>
+                                                <div className="flex justify-between py-3 border-b border-gray-100">
+                                                    <span className="text-gray-600">Hourly Rate:</span>
+                                                    <span className="font-medium text-gray-900">₱{bookingData.hourlyRate.toFixed(2)}</span>
+                                                </div>
 
-                                        {((bookingData.recurrenceWeeks || 1) * (bookingData.selectedDays?.length || 1)) > 1 && (
-                                            <div className="flex justify-between py-3 border-b border-gray-100 bg-gray-50 -mx-6 px-6">
-                                                <span className="text-gray-600 font-medium">Total Sessions:</span>
-                                                <span className="font-medium text-gray-900">{(bookingData.recurrenceWeeks || 1) * (bookingData.selectedDays?.length || 1)}</span>
-                                            </div>
+                                                {(bookingData.recurrenceWeeks && bookingData.recurrenceWeeks > 1) && (
+                                                    <div className="flex justify-between py-3 border-b border-gray-100">
+                                                        <span className="text-gray-600">Recurrence:</span>
+                                                        <span className="font-medium text-gray-900">{bookingData.recurrenceWeeks} weeks</span>
+                                                    </div>
+                                                )}
+
+                                                {(bookingData.selectedDays && bookingData.selectedDays.length > 1) && (
+                                                    <div className="flex justify-between py-3 border-b border-gray-100">
+                                                        <span className="text-gray-600">Sessions per Week:</span>
+                                                        <div className="text-right">
+                                                            <span className="block font-medium text-gray-900">{bookingData.selectedDays.length} sessions</span>
+                                                            <span className="text-xs text-gray-500">
+                                                                {bookingData.selectedDays.map(d => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ')}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {((bookingData.recurrenceWeeks || 1) * (bookingData.selectedDays?.length || 1)) > 1 && (
+                                                    <div className="flex justify-between py-3 border-b border-gray-100 bg-gray-50 -mx-6 px-6">
+                                                        <span className="text-gray-600 font-medium">Total Sessions:</span>
+                                                        <span className="font-medium text-gray-900">{(bookingData.recurrenceWeeks || 1) * (bookingData.selectedDays?.length || 1)}</span>
+                                                    </div>
+                                                )}
+                                            </>
                                         )}
                                         {discountAmount !== 0 && (
                                             <div className="flex justify-between py-3 border-b border-gray-100">
@@ -459,45 +472,63 @@ export default function CheckoutPage() {
                                 {/* Detail Breakdown (repeated) */}
                                 <div className="bg-white border border-gray-200 rounded-xl p-6">
                                     <h3 className="font-semibold text-gray-900 text-lg mb-4">Detail Breakdown</h3>
-                                    {isMultiCourt && (
-                                        <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-                                            Showing aggregate totals for {effectiveCart.length} cart items. Per-item pricing appears in Booking Summary.
-                                        </div>
-                                    )}
                                     <div className="space-y-3">
-                                        <div className="flex justify-between py-3 border-b border-gray-100">
-                                            <span className="text-gray-600">Duration:</span>
-                                            <span className="font-medium text-gray-900">{duration} {duration === 1 ? 'hour' : 'hours'}</span>
-                                        </div>
-                                        <div className="flex justify-between py-3 border-b border-gray-100">
-                                            <span className="text-gray-600">Hourly Rate:</span>
-                                            <span className="font-medium text-gray-900">₱{bookingData.hourlyRate.toFixed(2)}</span>
-                                        </div>
-
-                                        {(bookingData.recurrenceWeeks && bookingData.recurrenceWeeks > 1) && (
-                                            <div className="flex justify-between py-3 border-b border-gray-100">
-                                                <span className="text-gray-600">Recurrence:</span>
-                                                <span className="font-medium text-gray-900">{bookingData.recurrenceWeeks} weeks</span>
-                                            </div>
-                                        )}
-
-                                        {(bookingData.selectedDays && bookingData.selectedDays.length > 1) && (
-                                            <div className="flex justify-between py-3 border-b border-gray-100">
-                                                <span className="text-gray-600">Sessions per Week:</span>
-                                                <div className="text-right">
-                                                    <span className="block font-medium text-gray-900">{bookingData.selectedDays.length} sessions</span>
-                                                    <span className="text-xs text-gray-500">
-                                                        {bookingData.selectedDays.map(d => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ')}
-                                                    </span>
+                                        {isMultiCourt ? (
+                                            <>
+                                                <div className="flex justify-between py-3 border-b border-gray-100">
+                                                    <span className="text-gray-600">Selected Slots:</span>
+                                                    <span className="font-medium text-gray-900">{effectiveCart.length}</span>
                                                 </div>
-                                            </div>
-                                        )}
+                                                <div className="flex justify-between py-3 border-b border-gray-100">
+                                                    <span className="text-gray-600">Combined Playtime:</span>
+                                                    <span className="font-medium text-gray-900">{totalCartHours} {totalCartHours === 1 ? 'hour' : 'hours'}</span>
+                                                </div>
+                                                <div className="flex justify-between py-3 border-b border-gray-100">
+                                                    <span className="text-gray-600">Venues:</span>
+                                                    <span className="font-medium text-gray-900">{uniqueVenueCount}</span>
+                                                </div>
+                                                <div className="flex justify-between py-3 border-b border-gray-100">
+                                                    <span className="text-gray-600">Cart Subtotal:</span>
+                                                    <span className="font-medium text-gray-900">₱{totalCartAmount.toFixed(2)}</span>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="flex justify-between py-3 border-b border-gray-100">
+                                                    <span className="text-gray-600">Duration:</span>
+                                                    <span className="font-medium text-gray-900">{duration} {duration === 1 ? 'hour' : 'hours'}</span>
+                                                </div>
+                                                <div className="flex justify-between py-3 border-b border-gray-100">
+                                                    <span className="text-gray-600">Hourly Rate:</span>
+                                                    <span className="font-medium text-gray-900">₱{bookingData.hourlyRate.toFixed(2)}</span>
+                                                </div>
 
-                                        {((bookingData.recurrenceWeeks || 1) * (bookingData.selectedDays?.length || 1)) > 1 && (
-                                            <div className="flex justify-between py-3 border-b border-gray-100 bg-gray-50 -mx-6 px-6">
-                                                <span className="text-gray-600 font-medium">Total Sessions:</span>
-                                                <span className="font-medium text-gray-900">{(bookingData.recurrenceWeeks || 1) * (bookingData.selectedDays?.length || 1)}</span>
-                                            </div>
+                                                {(bookingData.recurrenceWeeks && bookingData.recurrenceWeeks > 1) && (
+                                                    <div className="flex justify-between py-3 border-b border-gray-100">
+                                                        <span className="text-gray-600">Recurrence:</span>
+                                                        <span className="font-medium text-gray-900">{bookingData.recurrenceWeeks} weeks</span>
+                                                    </div>
+                                                )}
+
+                                                {(bookingData.selectedDays && bookingData.selectedDays.length > 1) && (
+                                                    <div className="flex justify-between py-3 border-b border-gray-100">
+                                                        <span className="text-gray-600">Sessions per Week:</span>
+                                                        <div className="text-right">
+                                                            <span className="block font-medium text-gray-900">{bookingData.selectedDays.length} sessions</span>
+                                                            <span className="text-xs text-gray-500">
+                                                                {bookingData.selectedDays.map(d => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ')}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {((bookingData.recurrenceWeeks || 1) * (bookingData.selectedDays?.length || 1)) > 1 && (
+                                                    <div className="flex justify-between py-3 border-b border-gray-100 bg-gray-50 -mx-6 px-6">
+                                                        <span className="text-gray-600 font-medium">Total Sessions:</span>
+                                                        <span className="font-medium text-gray-900">{(bookingData.recurrenceWeeks || 1) * (bookingData.selectedDays?.length || 1)}</span>
+                                                    </div>
+                                                )}
+                                            </>
                                         )}
                                         {discountAmount !== 0 && (
                                             <div className="flex justify-between py-3 border-b border-gray-100">
