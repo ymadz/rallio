@@ -14,6 +14,7 @@ import {
   getAvailableTimeSlotsAction,
   checkCartAvailabilityAction,
 } from '@/app/actions/reservations';
+import { calculateApplicableDiscounts } from '@/app/actions/discount-actions';
 import { useCheckoutStore } from '@/stores/checkout-store';
 import {
   Dialog,
@@ -368,7 +369,20 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
     confirmBooking(cartItems, []);
   };
 
-  const confirmBooking = (items: any[], conflictList: any[]) => {
+  const toDateTimeWithOffset = (date: Date, time: string) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return `${dateStr}T${time}:00+08:00`;
+  };
+
+  const getDurationHours = (startTime: string, endTime: string) => {
+    const [startH, startM] = startTime.split(':').map(Number);
+    const [endH, endM] = endTime.split(':').map(Number);
+    let duration = (endH + (endM || 0) / 60) - (startH + (startM || 0) / 60);
+    if (duration <= 0) duration += 24;
+    return duration;
+  };
+
+  const confirmBooking = async (items: any[], conflictList: any[]) => {
     setIsBooking(true);
 
     // Filter out items that match a conflict in the conflictList
@@ -383,9 +397,57 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
       return !hasConflict;
     });
 
+    if (validItems.length === 0) {
+      setNotice('No valid slots available after conflict checks.');
+      setIsBooking(false);
+      return;
+    }
+
     setBookingCart(validItems);
     setConflictingSlots(conflictList);
-    setDiscountDetails({ amount: 0, type: undefined, reason: undefined, discounts: [] });
+
+    try {
+      const sortedItems = [...validItems].sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+
+      const totalBasePrice = validItems.reduce((sum, item) => {
+        const duration = getDurationHours(item.startTime, item.endTime);
+        return sum + item.hourlyRate * duration;
+      }, 0);
+
+      const uniqueDateCount = new Set(
+        validItems.map((item) => format(new Date(item.date), 'yyyy-MM-dd'))
+      ).size;
+
+      const earliest = sortedItems[0];
+      const latest = sortedItems[sortedItems.length - 1];
+
+      const discountResult = await calculateApplicableDiscounts({
+        venueId,
+        courtId: earliest.courtId,
+        startDate: toDateTimeWithOffset(new Date(earliest.date), earliest.startTime),
+        endDate: toDateTimeWithOffset(new Date(latest.date), latest.endTime),
+        recurrenceWeeks: 1,
+        targetDateCount: uniqueDateCount,
+        basePrice: totalBasePrice,
+      });
+
+      if (discountResult.success) {
+        setDiscountDetails({
+          amount: discountResult.totalDiscount,
+          type: discountResult.discounts.map((d) => d.type).join(', ') || undefined,
+          reason: discountResult.discounts.map((d) => d.name).join(', ') || undefined,
+          discounts: discountResult.discounts,
+        });
+      } else {
+        setDiscountDetails({ amount: 0, type: undefined, reason: undefined, discounts: [] });
+      }
+    } catch (error) {
+      console.error('Failed to calculate discounts before checkout:', error);
+      setDiscountDetails({ amount: 0, type: undefined, reason: undefined, discounts: [] });
+    }
+
     router.push('/checkout');
   };
 
