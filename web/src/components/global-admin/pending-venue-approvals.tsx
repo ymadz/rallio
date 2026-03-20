@@ -224,7 +224,7 @@ export function PendingVenueApprovals({ onApprovalComplete }: Props) {
           >
             {/* Venue Header */}
             <div className="p-6">
-              <div className="flex items-start justify-between">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
@@ -296,11 +296,11 @@ export function PendingVenueApprovals({ onApprovalComplete }: Props) {
                 </div>
 
                 {/* Actions */}
-                <div className="flex flex-col gap-2 ml-4">
+                <div className="grid grid-cols-3 lg:grid-cols-1 gap-2 w-full lg:w-[150px] lg:ml-4 lg:flex-none">
                   <button
                     onClick={() => handleApprove(venue)}
                     disabled={processingId === venue.id || venue.court_count === 0}
-                    className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="h-10 flex items-center justify-center gap-2 px-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium whitespace-nowrap"
                   >
                     {processingId === venue.id ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -312,14 +312,14 @@ export function PendingVenueApprovals({ onApprovalComplete }: Props) {
                   <button
                     onClick={() => setShowRejectModal(venue.id)}
                     disabled={processingId === venue.id}
-                    className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors disabled:opacity-50"
+                    className="h-10 flex items-center justify-center gap-2 px-3 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium whitespace-nowrap"
                   >
                     <XCircle className="w-4 h-4" />
                     Reject
                   </button>
                   <button
                     onClick={() => loadVenueDetails(venue.id)}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                    className="h-10 flex items-center justify-center gap-2 px-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium whitespace-nowrap"
                   >
                     {expandedVenue === venue.id ? (
                       <ChevronUp className="w-4 h-4" />
