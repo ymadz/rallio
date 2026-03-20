@@ -572,6 +572,7 @@ export function AvailabilityModal({
                           Boolean(summary) &&
                           (summary?.totalSlots || 0) > 0 &&
                           (summary?.availableSlots || 0) > 0 &&
+                          (summary?.availableSlots || 0) <= 10 &&
                           (summary?.availableSlots || 0) < (summary?.totalSlots || 0)
 
                         return (
@@ -613,7 +614,7 @@ export function AvailabilityModal({
                     </div>
                     <div className="flex items-center gap-2 text-xs">
                       <div className="w-[18px] h-[18px] rounded-full bg-primary border border-primary text-[10px] text-white font-semibold flex items-center justify-center">3</div>
-                      <span className="text-gray-600">Slots Left (shown only for partially booked days)</span>
+                      <span className="text-gray-600">10 or fewer slots left</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
                       <div className="w-4 h-4 bg-primary rounded" />
