@@ -85,6 +85,7 @@ interface CheckoutState {
   reservationId?: string
   downPaymentPercentage?: number
   customDownPaymentAmount?: number
+  conflictingSlots: Array<{ courtId: string; date: string; startTime: string; endTime: string }>
 
   // Actions
   setBookingData: (data: BookingData) => void
@@ -106,6 +107,7 @@ interface CheckoutState {
   setBookingReference: (reference: string, reservationId: string) => void
   setDownPaymentPercentage: (percentage: number) => void
   setCustomDownPaymentAmount: (amount: number | undefined) => void
+  setConflictingSlots: (slots: Array<{ courtId: string; date: string; startTime: string; endTime: string }>) => void
   resetCheckout: () => void
 
   // Computed values
@@ -136,6 +138,7 @@ const initialState = {
   bookingReference: undefined,
   reservationId: undefined,
   downPaymentPercentage: 20, // Default 20%
+  conflictingSlots: [],
 }
 
 
@@ -306,6 +309,8 @@ export const useCheckoutStore = create<CheckoutState>()(
 
       setCustomDownPaymentAmount: (amount) => set({ customDownPaymentAmount: amount }),
 
+      setConflictingSlots: (slots) => set({ conflictingSlots: slots }),
+
       resetCheckout: () => set(initialState),
 
       // Computed values
@@ -345,7 +350,17 @@ export const useCheckoutStore = create<CheckoutState>()(
               const slotStartTime = new Date(initialStartTime.getTime())
               slotStartTime.setDate(slotStartTime.getDate() + (i * 7) + dayOffset)
 
-              actualSlotCount++
+              // Check if this specific slot is in the conflict list
+              const dateStr = slotStartTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+              const isConflicted = state.conflictingSlots.some(c => 
+                c.courtId === bookingData.courtId && 
+                c.date === dateStr && 
+                c.startTime === bookingData.startTime
+              )
+
+              if (!isConflicted) {
+                actualSlotCount++
+              }
             }
           }
 
@@ -414,6 +429,7 @@ export const useCheckoutStore = create<CheckoutState>()(
         playerCount: state.playerCount,
         customDownPaymentAmount: state.customDownPaymentAmount,
         downPaymentPercentage: state.downPaymentPercentage,
+        conflictingSlots: state.conflictingSlots,
         // DO NOT persist paymentMethod - user must select it fresh each time
         // paymentMethod: state.paymentMethod,
       }),

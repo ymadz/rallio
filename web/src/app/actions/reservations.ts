@@ -200,39 +200,27 @@ export async function getAvailableTimeSlotsAction(
 
   // Mark unavailable slots based on existing reservations AND queue sessions
   if (allBookedSlots && allBookedSlots.length > 0) {
+    // We need to compare against the queried day's boundaries in Manila time
+    const dayStartTS = new Date(startOfDayLocal).getTime()
+    const dayEndTS = new Date(endOfDayLocal).getTime()
+
     for (const reservation of allBookedSlots) {
       try {
-        // Parse ISO timestamps to get local hours in venue's timezone (Asia/Manila)
-        // We need to use toLocaleString to get the hour in the specific timezone
-        const startTime = new Date(reservation.start_time)
-        const endTime = new Date(reservation.end_time)
+        const resStartTS = new Date(reservation.start_time).getTime()
+        const resEndTS = new Date(reservation.end_time).getTime()
 
-        const startHourStr = startTime.toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Manila' })
-        const endHourStr = endTime.toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Manila' })
+        // Iterate through all candidate slots for the current day
+        for (const slot of allSlots) {
+          // Construct the actual timestamp for this 1-hour slot on the queried date
+          // Each slot.time is "HH:00"
+          const [h] = slot.time.split(':').map(Number)
+          const slotStartTS = new Date(dateOnlyString + `T${h.toString().padStart(2, '0')}:00:00+08:00`).getTime()
+          const slotEndTS = slotStartTS + (60 * 60 * 1000) // +1 hour
 
-        // Handle "24" as 0 if needed, but usually 0-23
-        const startHour = parseInt(startHourStr) % 24
-        let endHour = parseInt(endHourStr) % 24
-
-        // Special case: if end time is 00:00 (midnight) of the next day, it might show as 24 or 0
-        // If endHour is 0 and startHour is > 0, it means it crosses midnight or ends at midnight
-        if (endHour === 0 && startHour > 0) {
-          endHour = 24
-        }
-
-        // If end time has minutes (e.g., 14:30), we need to block that hour too
-        const endMinutes = endTime.getMinutes()
-        const endHourCeil = endMinutes > 0 ? endHour + 1 : endHour
-
-        console.log(`[Availability Check] Blocking slots from ${startHour}:00 to ${endHourCeil}:00 (status: ${reservation.status})`)
-
-        // Mark all hours in this reservation as unavailable
-        for (let hour = startHour; hour < endHourCeil; hour++) {
-          const timeString = `${hour.toString().padStart(2, '0')}:00`
-          const slot = allSlots.find((s) => s.time === timeString)
-          if (slot) {
-            console.log(`[Availability Check] Marking ${timeString} as unavailable`)
+          // Standard overlap check: (StartA < EndB) AND (EndA > StartB)
+          if (resStartTS < slotEndTS && resEndTS > slotStartTS) {
             slot.available = false
+            console.log(`[Availability Check] Marking ${slot.time} as unavailable due to overlap with ${reservation.start_time} - ${reservation.end_time}`)
           }
         }
       } catch (error) {
@@ -475,7 +463,6 @@ export async function checkCartAvailabilityAction(items: Array<{
 }> {
   const adminDb = createServiceClient()
 
-  // Pre-merge consecutive items
   const sorted = [...items].sort((a, b) => {
     if (a.courtId !== b.courtId) return a.courtId.localeCompare(b.courtId)
     const dateA = new Date(a.date).getTime()
@@ -484,26 +471,8 @@ export async function checkCartAvailabilityAction(items: Array<{
     return a.startTime.localeCompare(b.startTime)
   })
 
-  const merged: typeof items = []
-  if (sorted.length > 0) {
-    let current = { ...sorted[0] }
-    for (let i = 1; i < sorted.length; i++) {
-      const next = sorted[i]
-      const sameCourt = current.courtId === next.courtId
-      const sameDay = new Date(current.date).toDateString() === new Date(next.date).toDateString()
-      const consecutive = current.endTime === next.startTime
-      const sameRecurrence = current.recurrenceWeeks === next.recurrenceWeeks && 
-                            JSON.stringify(current.selectedDays) === JSON.stringify(next.selectedDays)
-
-      if (sameCourt && sameDay && consecutive && sameRecurrence) {
-        current.endTime = next.endTime
-      } else {
-        merged.push(current)
-        current = { ...next }
-      }
-    }
-    merged.push(current)
-  }
+  // Pre-merge phase removed for accurate per-slot grid validation
+  const itemsToProcess = sorted
 
   const allConflicts: Array<{
     courtId: string
@@ -515,7 +484,7 @@ export async function checkCartAvailabilityAction(items: Array<{
   let totalSlots = 0
   let availableSlots = 0
 
-  for (const item of merged) {
+  for (const item of itemsToProcess) {
     const bookingDate = typeof item.date === 'string' ? new Date(item.date) : item.date
     const [startH, startM] = item.startTime.split(':').map(Number)
     const [endH, endM] = item.endTime.split(':').map(Number)
@@ -543,16 +512,32 @@ export async function checkCartAvailabilityAction(items: Array<{
         
         if (slotEnd <= slotStart) slotEnd.setDate(slotEnd.getDate() + 1)
 
-        const { data: conflicts } = await adminDb
-          .from('reservations')
-          .select('id')
-          .eq('court_id', item.courtId)
-          .in('status', ['pending_payment', 'confirmed', 'partially_paid', 'ongoing'])
-          .lt('start_time', slotEnd.toISOString())
-          .gt('end_time', slotStart.toISOString())
-          .limit(1)
+        // Check both reservations and queue sessions for conflicts
+        const [reservationsConflicts, queueConflicts] = await Promise.all([
+          adminDb
+            .from('reservations')
+            .select('id')
+            .eq('court_id', item.courtId)
+            .in('status', ['pending_payment', 'partially_paid', 'confirmed', 'ongoing', 'pending_refund', 'completed', 'no_show'])
+            .lt('start_time', slotEnd.toISOString())
+            .gt('end_time', slotStart.toISOString())
+            .limit(1),
+          
+          adminDb
+            .from('queue_sessions')
+            .select('id')
+            .eq('court_id', item.courtId)
+            .in('status', ['pending_payment', 'open', 'active'])
+            .lt('start_time', slotEnd.toISOString())
+            .gt('end_time', slotStart.toISOString())
+            .limit(1)
+        ])
 
-        if (conflicts && conflicts.length > 0) {
+        const hasConflict = 
+          (reservationsConflicts.data && reservationsConflicts.data.length > 0) || 
+          (queueConflicts.data && queueConflicts.data.length > 0)
+
+        if (hasConflict) {
           allConflicts.push({
             courtId: item.courtId,
             date: slotStart.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),

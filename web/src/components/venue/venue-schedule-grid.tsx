@@ -3,10 +3,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
-import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
 import { formatTo12Hour } from '@/lib/utils'
-import { getAvailableTimeSlotsAction } from '@/app/actions/reservations'
+import { getAvailableTimeSlotsAction, checkCartAvailabilityAction } from '@/app/actions/reservations'
 import { useCheckoutStore } from '@/stores/checkout-store'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { AlertTriangle, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface Court {
   id: string
@@ -69,8 +77,14 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
   const [repeatWeeks, setRepeatWeeks] = useState(1)
   const [additionalDates, setAdditionalDates] = useState<string[]>([])
   const [isBooking, setIsBooking] = useState(false)
+  const [isChecking, setIsChecking] = useState(false)
+  const [validatingConflicts, setValidatingConflicts] = useState(false)
+  const [activeConflicts, setActiveConflicts] = useState<any[]>([])
+  const [conflictModalOpen, setConflictModalOpen] = useState(false)
+  const [conflicts, setConflicts] = useState<any[]>([])
+  const [pendingCartItems, setPendingCartItems] = useState<any[]>([])
 
-  const { bookingCart, setBookingCart, setDiscountDetails } = useCheckoutStore()
+  const { bookingCart, setBookingCart, setDiscountDetails, setConflictingSlots } = useCheckoutStore()
 
   useEffect(() => {
     async function load() {
@@ -111,20 +125,52 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
       }
       return dates
     }
-    // custom: base date + additional dates, deduplicated & sorted
     return Array.from(new Set([selectedDate, ...additionalDates])).sort()
   }, [selectedDate, repeatMode, repeatWeeks, additionalDates])
+
+  // Reactive Conflict Detection
+  useEffect(() => {
+    const checkConflicts = async () => {
+      if (selectedCells.length === 0) {
+        setActiveConflicts([])
+        return
+      }
+
+      setValidatingConflicts(true)
+      try {
+        const cartItemsForCheck: any[] = []
+        for (const date of allDatesToBook) {
+          for (const cell of selectedCells) {
+            cartItemsForCheck.push({
+              courtId: cell.courtId,
+              date: new Date(`${date}T${cell.time}:00`),
+              startTime: cell.time,
+              endTime: nextHour(cell.time),
+              recurrenceWeeks: 1
+            })
+          }
+        }
+
+        const result = await checkCartAvailabilityAction(cartItemsForCheck)
+        setActiveConflicts(result.conflicts || [])
+      } catch (error) {
+        console.error('Reactive validation failed:', error)
+      } finally {
+        setValidatingConflicts(false)
+      }
+    }
+
+    const timer = setTimeout(checkConflicts, 400)
+    return () => clearTimeout(timer)
+  }, [selectedCells, allDatesToBook])
 
   const allTimes = useMemo(() => {
     const times = new Set<string>()
     Object.values(slotsByCourt).forEach((slots) => {
       slots.forEach((slot) => times.add(slot.time))
     })
-
     return Array.from(times).sort((a, b) => a.localeCompare(b))
   }, [slotsByCourt])
-
-  const cartCountForVenue = bookingCart.filter((item) => item.venueId === venueId).length
 
   const selectedTotal = useMemo(() => {
     return selectedCells.reduce((sum, cell) => {
@@ -134,10 +180,23 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
     }, 0)
   }, [selectedCells, courts, slotsByCourt])
 
-  const totalEstimate = selectedTotal * allDatesToBook.length
+  const validSlotCount = Math.max(0, (selectedCells.length * allDatesToBook.length) - activeConflicts.length)
+  const accurateTotalEstimate = selectedCells.reduce((sum, cell) => {
+    const court = courts.find((c) => c.id === cell.courtId)
+    const slot = slotsByCourt[cell.courtId]?.find((s) => s.time === cell.time)
+    const rate = Number(slot?.price || court?.hourly_rate || 0)
+    
+    const cellConflicts = activeConflicts.filter(c => c.courtId === cell.courtId && c.startTime === cell.time)
+    const validDatesForCell = Math.max(0, allDatesToBook.length - cellConflicts.length)
+    
+    return sum + (rate * validDatesForCell)
+  }, 0)
 
   const isSelected = (courtId: string, time: string) =>
     selectedCells.some((cell) => cell.courtId === courtId && cell.time === time)
+
+  const isCellConflicted = (courtId: string, time: string) =>
+    activeConflicts.some((c) => c.courtId === courtId && c.startTime === time)
 
   const toggleCell = (courtId: string, time: string) => {
     const slot = slotsByCourt[courtId]?.find((s) => s.time === time)
@@ -152,35 +211,27 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
     })
   }
 
-  const handleBookNow = () => {
-    if (selectedCells.length === 0 || isBooking) {
+  const handleBookNow = async () => {
+    if (selectedCells.length === 0 || isBooking || isChecking) {
       setNotice('Select at least one available slot first.')
       return
     }
 
     setIsBooking(true)
-    const cartItems: Parameters<typeof setBookingCart>[0] = []
+    const cartItems: any[] = []
 
-    // Group selected cells by date and court
     for (const date of allDatesToBook) {
       const dateCellsByCourt: Record<string, string[]> = {}
-      
       for (const cell of selectedCells) {
-        if (!dateCellsByCourt[cell.courtId]) {
-          dateCellsByCourt[cell.courtId] = []
-        }
+        if (!dateCellsByCourt[cell.courtId]) dateCellsByCourt[cell.courtId] = []
         dateCellsByCourt[cell.courtId].push(cell.time)
       }
 
-      // For each court, find consecutive blocks
       for (const courtId in dateCellsByCourt) {
         const court = courts.find((c) => c.id === courtId)
         if (!court) continue
 
         const times = dateCellsByCourt[courtId].sort()
-        if (times.length === 0) continue
-
-        // Identify consecutive blocks
         const blocks: Array<{ start: string; end: string }> = []
         let currentBlock = { start: times[0], end: nextHour(times[0]) }
 
@@ -196,19 +247,17 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
         blocks.push(currentBlock)
 
         for (const block of blocks) {
-          const start = new Date(`${date}T${block.start}:00`)
-
           cartItems.push({
             courtId: court.id,
             courtName: court.name,
             venueId,
             venueName,
-            date: start,
+            date: new Date(`${date}T${block.start}:00`),
             startTime: block.start,
             endTime: block.end,
             hourlyRate: court.hourly_rate,
             capacity: court.capacity,
-            recurrenceWeeks: repeatMode === 'weekly' ? repeatWeeks : 1,
+            recurrenceWeeks: 1,
           })
         }
       }
@@ -220,8 +269,37 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
       return
     }
 
-    // Set the entire cart in one shot and navigate
-    setBookingCart(cartItems)
+    setIsChecking(true)
+    try {
+      const result = await checkCartAvailabilityAction(cartItems.map(item => ({
+        courtId: item.courtId,
+        date: item.date,
+        startTime: item.startTime,
+        endTime: item.endTime,
+        recurrenceWeeks: 1
+      })))
+
+      if (!result.available && result.conflicts.length > 0) {
+        setConflicts(result.conflicts)
+        setPendingCartItems(cartItems)
+        setConflictModalOpen(true)
+        setIsChecking(false)
+        setIsBooking(false)
+        return
+      }
+    } catch (error) {
+      console.error('Validation failed:', error)
+    } finally {
+      setIsChecking(false)
+    }
+
+    confirmBooking(cartItems, [])
+  }
+
+  const confirmBooking = (items: any[], conflictList: any[]) => {
+    setIsBooking(true)
+    setBookingCart(items)
+    setConflictingSlots(conflictList)
     setDiscountDetails({ amount: 0, type: undefined, reason: undefined, discounts: [] })
     router.push('/checkout')
   }
@@ -257,7 +335,7 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
             </button>
 
             <div className="relative h-9 border-l border-r border-gray-200">
-              <Calendar className="h-4 w-4 text-gray-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <CalendarIcon className="h-4 w-4 text-gray-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 id="venue-schedule-date"
                 type="date"
@@ -397,7 +475,7 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
         <div className="py-10 text-center text-sm text-gray-500">No time slots available for this date.</div>
       ) : (
         <>
-          {/* Desktop/Tablet Matrix */}
+          {/* Desktop/MatrixMatrix */}
           <div className="hidden md:block overflow-x-auto border border-gray-200 rounded-lg">
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50">
@@ -423,6 +501,7 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
                       const slot = slotsByCourt[court.id]?.find((item) => item.time === time)
                       const available = !!slot?.available
                       const selected = isSelected(court.id, time)
+                      const conflicted = selected && isCellConflicted(court.id, time)
 
                       return (
                         <td key={`${court.id}-${time}`} className="px-2 py-2">
@@ -430,15 +509,17 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
                             onClick={() => toggleCell(court.id, time)}
                             disabled={!available}
                             className={[
-                              'w-full rounded-md px-2 py-2 text-xs font-medium transition-colors border',
+                              'w-full rounded-md px-2 py-2 text-xs font-medium transition-colors border flex flex-col items-center justify-center gap-0.5',
                               selected
-                                ? 'bg-primary text-white border-primary'
+                                ? conflicted 
+                                  ? 'bg-amber-50 text-amber-700 border-amber-300' 
+                                  : 'bg-primary text-white border-primary'
                                 : available
                                   ? 'bg-white text-gray-700 border-gray-300 hover:border-primary hover:bg-primary/5'
                                   : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed',
                             ].join(' ')}
                           >
-                            {selected ? 'Selected' : available ? 'Available' : (slot ? 'Booked' : 'Closed')}
+                             <span>{selected ? (conflicted ? 'Conflicted' : 'Selected') : available ? 'Available' : (slot ? 'Booked' : 'Closed')}</span>
                           </button>
                         </td>
                       )
@@ -459,6 +540,7 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
                     const slot = slotsByCourt[court.id]?.find((item) => item.time === time)
                     const available = !!slot?.available
                     const selected = isSelected(court.id, time)
+                    const conflicted = selected && isCellConflicted(court.id, time)
 
                     return (
                       <button
@@ -466,16 +548,18 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
                         onClick={() => toggleCell(court.id, time)}
                         disabled={!available}
                         className={[
-                          'rounded-md px-2 py-2 text-xs font-medium border text-left',
+                          'rounded-md px-2 py-2 text-xs font-medium border text-left flex flex-col',
                           selected
-                            ? 'bg-primary text-white border-primary'
+                            ? conflicted 
+                              ? 'bg-amber-50 text-amber-700 border-amber-300' 
+                              : 'bg-primary text-white border-primary'
                             : available
                               ? 'bg-white text-gray-700 border-gray-300'
                               : 'bg-gray-100 text-gray-400 border-gray-200',
                         ].join(' ')}
                       >
                         <p className="font-semibold truncate">{court.name}</p>
-                        <p className="text-[10px] opacity-90">{selected ? 'Selected' : available ? 'Available' : (slot ? 'Booked' : 'Closed')}</p>
+                        <p className="text-[10px] opacity-90">{selected ? (conflicted ? 'Conflicted' : 'Selected') : available ? 'Available' : (slot ? 'Booked' : 'Closed')}</p>
                       </button>
                     )
                   })}
@@ -495,21 +579,27 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
                 × {allDatesToBook.length} dates = {selectedCells.length * allDatesToBook.length} bookings
               </span>
             )}
+            {activeConflicts.length > 0 && (
+              <span className="text-amber-600 font-medium ml-2">
+                ({activeConflicts.length} conflicted)
+              </span>
+            )}
           </p>
           <p className="text-xs text-gray-600">
             Estimated subtotal:{' '}
             {allDatesToBook.length > 1 ? (
               <>
-                <span className="line-through text-gray-400 mr-1">₱{selectedTotal.toFixed(2)}</span>
-                <span className="font-semibold text-gray-800">₱{totalEstimate.toFixed(2)}</span>
-                <span className="text-gray-400 ml-1">({allDatesToBook.length}× dates)</span>
+                <span className="line-through text-gray-400 mr-1">₱{(selectedTotal * allDatesToBook.length).toFixed(2)}</span>
+                <span className="font-semibold text-gray-800">₱{accurateTotalEstimate.toFixed(2)}</span>
+                <span className="text-gray-400 ml-1">({validSlotCount} valid slots)</span>
               </>
             ) : (
-              <span>₱{selectedTotal.toFixed(2)}</span>
+              <span>₱{accurateTotalEstimate.toFixed(2)}</span>
             )}
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {validatingConflicts && <span className="text-[10px] text-gray-400 animate-pulse">Checking conflicts...</span>}
           <button
             onClick={() => setSelectedCells([])}
             className="px-3 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors"
@@ -518,13 +608,81 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
           </button>
           <button
             onClick={handleBookNow}
-            disabled={selectedCells.length === 0 || isBooking}
-            className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            disabled={selectedCells.length === 0 || isBooking || isChecking || (activeConflicts.length === selectedCells.length * allDatesToBook.length)}
+            className={[
+              "px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm",
+              activeConflicts.length > 0 && activeConflicts.length < selectedCells.length * allDatesToBook.length
+                ? "bg-amber-600 hover:bg-amber-700 text-white"
+                : "bg-primary text-white hover:bg-primary/90",
+              "disabled:opacity-50 disabled:cursor-not-allowed"
+            ].join(" ")}
           >
-            {isBooking ? 'Booking...' : `Book Now (${selectedCells.length * allDatesToBook.length} slot${selectedCells.length * allDatesToBook.length !== 1 ? 's' : ''})`}
+            {isChecking ? 'Checking...' : isBooking ? 'Booking...' : 
+             (activeConflicts.length === selectedCells.length * allDatesToBook.length && selectedCells.length > 0) ? 'All Slots Conflicted' :
+             activeConflicts.length > 0 ? 'Review Conflicts' : 
+             `Book Now (${validSlotCount} slot${validSlotCount !== 1 ? 's' : ''})`}
           </button>
         </div>
       </div>
+
+      <Dialog open={conflictModalOpen} onOpenChange={setConflictModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="mx-auto w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-4">
+              <AlertTriangle className="w-6 h-6 text-amber-600" />
+            </div>
+            <DialogTitle className="text-xl text-center">Conflict Resolution</DialogTitle>
+            <DialogDescription className="text-center pt-2">
+              Some selected slots are unavailable. Review the valid slots below.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4 space-y-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <p className="text-sm font-semibold text-amber-800 mb-2">
+                Unavailable Slots (Excluded):
+              </p>
+              <ul className="space-y-1 max-h-[140px] overflow-y-auto">
+                {conflicts.map((c, i) => (
+                  <li key={i} className="text-[11px] text-amber-700 flex items-center gap-2">
+                    <span className="shrink-0 w-1 h-1 rounded-full bg-amber-400" />
+                    <span className="font-semibold">{c.date}</span> • {to12Hour(c.startTime)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <p className="text-sm font-semibold text-green-800 mb-2">
+                Valid Slots (To be Booked):
+              </p>
+              <p className="text-xs text-green-700 mb-3">
+                Total: <span className="font-bold">{validSlotCount} sessions</span> • 
+                Subtotal: <span className="font-bold">₱{accurateTotalEstimate.toFixed(2)}</span>
+              </p>
+              <p className="text-[11px] text-green-600 italic">
+                Only these slots will be added to your booking summary.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 mt-2">
+            <button
+              onClick={() => setConflictModalOpen(false)}
+              className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+            >
+              Cancel / Adjust
+            </button>
+            <button
+              onClick={() => confirmBooking(pendingCartItems, conflicts)}
+              disabled={validSlotCount === 0}
+              className="flex-1 px-4 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50"
+            >
+              Confirm & Book Now
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

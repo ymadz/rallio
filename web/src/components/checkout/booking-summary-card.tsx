@@ -39,9 +39,10 @@ export function BookingSummaryCard({
     platformFeePercentage,
     platformFeeEnabled,
     paymentMethod,
-    downPaymentPercentage,
+    customDownPaymentAmount,
     getDownPaymentAmount,
     getRemainingBalance,
+    setConflictingSlots,
   } = useCheckoutStore();
 
   const [availability, setAvailability] = useState<{
@@ -82,9 +83,13 @@ export function BookingSummaryCard({
           totalSlots: result.totalSlots,
           availableSlots: result.availableSlots
         });
+        
+        // Sync with store for price calculation
+        setConflictingSlots(result.conflicts);
       } catch (error) {
         console.error('Failed to check availability:', error);
         setAvailability(prev => ({ ...prev, loading: false }));
+        setConflictingSlots([]);
       }
     };
 
@@ -370,7 +375,9 @@ export function BookingSummaryCard({
                 {availability.availableSlots > 0 && (
                   <ul className="mt-2 text-xs text-amber-700 list-disc list-inside space-y-0.5">
                     {availability.conflicts.slice(0, 3).map((c, i) => (
-                      <li key={i}>{c.date}</li>
+                      <li key={i}>
+                        <span className="font-semibold">{c.date}</span> • {formatTime(c.startTime)} - {formatTime(c.endTime)}
+                      </li>
                     ))}
                     {availability.conflicts.length > 3 && <li>...and {availability.conflicts.length - 3} more</li>}
                   </ul>

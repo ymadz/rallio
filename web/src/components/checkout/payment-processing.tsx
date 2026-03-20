@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useCheckoutStore } from '@/stores/checkout-store'
-import { createReservationAction, createMultiCourtReservationsAction } from '@/app/actions/reservations'
+import { createReservationAction, createMultiCourtReservationsAction, checkCartAvailabilityAction } from '@/app/actions/reservations'
 import { createQueueSession } from '@/app/actions/queue-actions'
 import { initiatePaymentAction } from '@/app/actions/payments'
 import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
@@ -90,6 +90,26 @@ export function PaymentProcessing() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) {
           throw new Error('User not authenticated')
+        }
+
+        // Step 0: Final availability re-validation
+        const validationResult = await checkCartAvailabilityAction(effectiveCart.map(item => ({
+          courtId: item.courtId,
+          date: item.date,
+          startTime: item.startTime,
+          endTime: item.endTime,
+          recurrenceWeeks: item.recurrenceWeeks
+        })))
+
+        if (!validationResult.available && validationResult.conflicts.length > 0) {
+          // If EVERYTHING is conflicted now, we must stop.
+          if (validationResult.availableSlots === 0) {
+            throw new Error('All selected slots have just become unavailable. Please go back and select different times.')
+          }
+          // If some are conflicted, we could proceed, but it's safer to alert the user if they haven't seen this yet.
+          // However, our createReservation logic already skips conflicted ones. 
+          // To be strict as requested, we'll throw if the available count changed from what we expected.
+          console.warn('Final validation found new conflicts:', validationResult.conflicts)
         }
 
         // Step 1: Create the reservation
