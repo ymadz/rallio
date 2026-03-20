@@ -17,6 +17,12 @@ interface DailyAvailabilitySummary {
   availableSlots: number
 }
 
+interface SameTimeSelection {
+  courtId: string
+  startTime: string
+  endTime: string
+}
+
 /**
  * Server Action: Get venue metadata (like down payment percentage)
  */
@@ -390,6 +396,121 @@ export async function getVenueDailyAvailabilitySummaryAction(params: {
   }
 
   return summary
+}
+
+/**
+ * Server Action: For a date range, return whether each date can accept the same
+ * selected court/time slots without conflicts.
+ */
+export async function getSameTimeBookingEligibleDatesAction(params: {
+  startDate: string
+  endDate: string
+  selections: SameTimeSelection[]
+}): Promise<Record<string, boolean>> {
+  const adminDb = createServiceClient()
+
+  const { startDate, endDate, selections } = params
+  if (!startDate || !endDate) return {}
+
+  const start = new Date(`${startDate}T00:00:00`)
+  const end = new Date(`${endDate}T00:00:00`)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return {}
+
+  const uniqueSelections = Array.from(
+    new Map(selections.map((selection) => [`${selection.courtId}|${selection.startTime}|${selection.endTime}`, selection])).values()
+  )
+
+  // If no selected slots yet, every date is eligible by this rule.
+  if (uniqueSelections.length === 0) {
+    const allEligible: Record<string, boolean> = {}
+    const cursor = new Date(start)
+    while (cursor <= end) {
+      allEligible[format(cursor, 'yyyy-MM-dd')] = true
+      cursor.setDate(cursor.getDate() + 1)
+    }
+    return allEligible
+  }
+
+  const courtIds = Array.from(new Set(uniqueSelections.map((selection) => selection.courtId)))
+  const activeReservationStatuses = [
+    'pending_payment',
+    'partially_paid',
+    'confirmed',
+    'ongoing',
+    'pending_refund',
+    'completed',
+    'no_show',
+  ]
+
+  const startRangeLocal = `${startDate}T00:00:00+08:00`
+  const endRangeLocal = `${endDate}T23:59:59+08:00`
+
+  const [reservationsResult, queueSessionsResult] = await Promise.all([
+    adminDb
+      .from('reservations')
+      .select('court_id, start_time, end_time')
+      .in('court_id', courtIds)
+      .in('status', activeReservationStatuses)
+      .lt('start_time', endRangeLocal)
+      .gt('end_time', startRangeLocal),
+    adminDb
+      .from('queue_sessions')
+      .select('court_id, start_time, end_time')
+      .in('court_id', courtIds)
+      .in('status', ['pending_payment', 'open', 'active'])
+      .lt('start_time', endRangeLocal)
+      .gt('end_time', startRangeLocal),
+  ])
+
+  if (reservationsResult.error) {
+    console.error('[getSameTimeBookingEligibleDatesAction] Reservations query failed:', reservationsResult.error)
+  }
+  if (queueSessionsResult.error) {
+    console.error('[getSameTimeBookingEligibleDatesAction] Queue sessions query failed:', queueSessionsResult.error)
+  }
+
+  const eventsByCourt: Record<string, Array<{ start: string; end: string }>> = {}
+  for (const reservation of reservationsResult.data || []) {
+    if (!eventsByCourt[reservation.court_id]) eventsByCourt[reservation.court_id] = []
+    eventsByCourt[reservation.court_id].push({ start: reservation.start_time, end: reservation.end_time })
+  }
+  for (const queueSession of queueSessionsResult.data || []) {
+    if (!eventsByCourt[queueSession.court_id]) eventsByCourt[queueSession.court_id] = []
+    eventsByCourt[queueSession.court_id].push({ start: queueSession.start_time, end: queueSession.end_time })
+  }
+
+  const eligibility: Record<string, boolean> = {}
+  const cursor = new Date(start)
+
+  while (cursor <= end) {
+    const dateKey = format(cursor, 'yyyy-MM-dd')
+    let dateEligible = true
+
+    for (const selection of uniqueSelections) {
+      const slotStartTS = new Date(`${dateKey}T${selection.startTime}:00+08:00`).getTime()
+      let slotEndTS = new Date(`${dateKey}T${selection.endTime}:00+08:00`).getTime()
+      if (slotEndTS <= slotStartTS) {
+        slotEndTS += 24 * 60 * 60 * 1000
+      }
+
+      const courtEvents = eventsByCourt[selection.courtId] || []
+      const hasConflict = courtEvents.some((event) => {
+        const eventStartTS = new Date(event.start).getTime()
+        const eventEndTS = new Date(event.end).getTime()
+        return eventStartTS < slotEndTS && eventEndTS > slotStartTS
+      })
+
+      if (hasConflict) {
+        dateEligible = false
+        break
+      }
+    }
+
+    eligibility[dateKey] = dateEligible
+    cursor.setDate(cursor.getDate() + 1)
+  }
+
+  return eligibility
 }
 /**
  * Server Action: Validate if a booking series is available without creating it

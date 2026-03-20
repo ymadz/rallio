@@ -9,6 +9,7 @@ import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 import logo from '@/assets/logo.png';
 import {
+  getSameTimeBookingEligibleDatesAction,
   getVenueDailyAvailabilitySummaryAction,
   getAvailableTimeSlotsAction,
   checkCartAvailabilityAction,
@@ -120,6 +121,9 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   const [calendarSummary, setCalendarSummary] = useState<Record<string, DailyAvailabilitySummary>>({});
   const [loadingCalendarSummary, setLoadingCalendarSummary] = useState(false);
+  const [isAddDatePickerOpen, setIsAddDatePickerOpen] = useState(false);
+  const [sameTimeEligibilityByDate, setSameTimeEligibilityByDate] = useState<Record<string, boolean>>({});
+  const [loadingSameTimeEligibility, setLoadingSameTimeEligibility] = useState(false);
 
   const { bookingCart, setBookingCart, setDiscountDetails, setConflictingSlots } =
     useCheckoutStore();
@@ -405,6 +409,44 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
     loadCalendarSummary();
   }, [isDatePickerOpen, calendarMonth, venueId, courts.length]);
 
+  useEffect(() => {
+    async function loadSameTimeEligibility() {
+      if (!isAddDatePickerOpen || repeatMode !== 'custom') return;
+
+      if (selectedCells.length === 0) {
+        setSameTimeEligibilityByDate({});
+        return;
+      }
+
+      setLoadingSameTimeEligibility(true);
+      try {
+        const monthStart = format(startOfMonth(calendarMonth), 'yyyy-MM-dd');
+        const monthEnd = format(endOfMonth(calendarMonth), 'yyyy-MM-dd');
+
+        const selections = selectedCells.map((cell) => ({
+          courtId: cell.courtId,
+          startTime: cell.time,
+          endTime: nextHour(cell.time),
+        }));
+
+        const result = await getSameTimeBookingEligibleDatesAction({
+          startDate: monthStart,
+          endDate: monthEnd,
+          selections,
+        });
+
+        setSameTimeEligibilityByDate(result || {});
+      } catch (error) {
+        console.error('Failed to load same-time booking eligibility:', error);
+        setSameTimeEligibilityByDate({});
+      } finally {
+        setLoadingSameTimeEligibility(false);
+      }
+    }
+
+    loadSameTimeEligibility();
+  }, [isAddDatePickerOpen, repeatMode, selectedCells, calendarMonth]);
+
   const isDateFullyBooked = (date: Date) => {
     const dateKey = format(date, 'yyyy-MM-dd');
     const day = calendarSummary[dateKey];
@@ -423,6 +465,19 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
     const start = new Date(today + 'T00:00:00');
     if (date < start) return true;
     return isDateFullyBooked(date);
+  };
+
+  const isSameTimeEligible = (date: Date) => {
+    const dateKey = format(date, 'yyyy-MM-dd');
+    if (selectedCells.length === 0) return true;
+    return sameTimeEligibilityByDate[dateKey] === true;
+  };
+
+  const isCustomAddDateDisabled = (date: Date) => {
+    if (isCalendarDateDisabled(date)) return true;
+    if (selectedCells.length === 0) return false;
+    if (loadingSameTimeEligibility) return true;
+    return !isSameTimeEligible(date);
   };
 
   const shiftSelectedDate = (days: number) => {
@@ -473,7 +528,7 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
               align="end"
               side="bottom"
               sideOffset={8}
-              className="w-auto rounded-xl border border-gray-200 bg-white p-4 shadow-lg"
+              className="w-auto rounded-xl border border-gray-200 bg-white p-4 shadow-lg !max-h-none !overflow-visible"
               onCloseAutoFocus={(event) => event.preventDefault()}
             >
               <DayPicker
@@ -639,23 +694,59 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
                 </button>
               </span>
             ))}
-            <label className="cursor-pointer">
-              <span className="rounded-full border border-primary px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/5">
-                + Add date
-              </span>
-              <input
-                type="date"
-                min={today}
-                className="sr-only"
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val && val !== selectedDate && !additionalDates.includes(val)) {
-                    setAdditionalDates((prev) => [...prev, val].sort());
-                  }
-                  e.target.value = '';
-                }}
-              />
-            </label>
+            <DropdownMenu open={isAddDatePickerOpen} onOpenChange={setIsAddDatePickerOpen}>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="rounded-full border border-primary px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/5"
+                >
+                  + Add date
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                side="bottom"
+                sideOffset={8}
+                className="w-auto rounded-xl border border-gray-200 bg-white p-4 shadow-lg !max-h-none !overflow-visible"
+                onCloseAutoFocus={(event) => event.preventDefault()}
+              >
+                <DayPicker
+                  mode="single"
+                  month={calendarMonth}
+                  onMonthChange={setCalendarMonth}
+                  disabled={isCustomAddDateDisabled}
+                  modifiers={{
+                    fullyBooked: (date) => isDateFullyBooked(date),
+                    sameTimeIneligible: (date) => !isCalendarDateDisabled(date) && selectedCells.length > 0 && !isSameTimeEligible(date),
+                  }}
+                  modifiersClassNames={{
+                    selected: 'bg-primary text-white hover:bg-primary',
+                    today: 'font-bold text-primary',
+                    fullyBooked: 'bg-gray-200 text-gray-500 opacity-90 cursor-not-allowed',
+                    sameTimeIneligible: 'bg-gray-100 text-gray-400 opacity-80 cursor-not-allowed',
+                  }}
+                  onSelect={(date) => {
+                    if (!date || isCustomAddDateDisabled(date)) return;
+                    const newDate = format(date, 'yyyy-MM-dd');
+                    if (newDate !== selectedDate) {
+                      setAdditionalDates((prev) => {
+                        if (prev.includes(newDate)) return prev;
+                        return [...prev, newDate].sort();
+                      });
+                    }
+                    setIsAddDatePickerOpen(false);
+                  }}
+                  className="mx-auto"
+                />
+                <p className="mt-2 text-center text-[11px] text-gray-500">
+                  {loadingSameTimeEligibility
+                    ? 'Checking same-time availability...'
+                    : selectedCells.length > 0
+                      ? 'Only dates available for the same selected time slots are clickable.'
+                      : 'Select time slots first to filter dates by same-time availability.'}
+                </p>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         )}
       </div>
