@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import {
     Avatar,
     AvatarFallback,
@@ -44,6 +45,14 @@ export function UserNav({ user }: UserNavProps) {
 
     const toggleDropdown = () => setIsOpen(!isOpen)
 
+    const handleSignOut = async () => {
+        const supabase = createClient()
+        await supabase.auth.signOut()
+        setIsOpen(false)
+        router.push('/login')
+        router.refresh()
+    }
+
     // Let's refine the component code.
     return (
         <div className="relative" ref={dropdownRef}>
@@ -70,8 +79,12 @@ export function UserNav({ user }: UserNavProps) {
                     >
                         View Profile
                     </button>
-                    {/* Logout is handled in sidebar commonly, but if needed here: */}
-                    {/* <button className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 transition-colors">Logout</button> */}
+                    <button
+                        onClick={handleSignOut}
+                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 transition-colors"
+                    >
+                        Log out
+                    </button>
                 </div>
             )}
         </div>

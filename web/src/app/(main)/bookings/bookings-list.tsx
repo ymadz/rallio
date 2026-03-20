@@ -235,6 +235,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     const isFullyPaid = b.amount_paid >= b.total_amount
     return ['pending_payment', 'pending', 'partially_paid'].includes(b.status) || (b.status === 'confirmed' && !isFullyPaid)
   }).length
+  const summaryBookings = [...bookings].sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime())
 
   return (
     <div>
@@ -446,9 +447,9 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
           </div>
 
           {/* Stats Cards (Only show for Upcoming) */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
             {/* Total Bookings */}
-            <div className="stat-glass stat-glass-teal relative overflow-hidden rounded-2xl p-4 border border-white/20 transition-transform duration-300 hover:-translate-y-1 hover:scale-[1.02]"
+            <div className="stat-glass stat-glass-teal relative overflow-hidden rounded-xl p-2.5 sm:rounded-2xl sm:p-4 border border-white/20 transition-transform duration-300 hover:-translate-y-1 hover:scale-[1.02]"
               style={{
                 backgroundImage: [
                   'radial-gradient(ellipse 80% 60% at 15% 20%, rgba(20,184,166,0.55) 0%, transparent 55%)',
@@ -458,21 +459,21 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                 boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.22), 0 4px 20px rgba(13,148,136,0.2)'
               }}>
               <div className="absolute inset-0 pointer-events-none opacity-[0.04]" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E\")", backgroundSize: '180px 180px', mixBlendMode: 'overlay' }} />
-              <div className="relative z-10 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center border border-white/30" style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', boxShadow: '0 0 0 3px rgba(255,255,255,0.06)' }}>
+              <div className="relative z-10 flex items-center gap-2 sm:gap-3">
+                <div className="hidden w-10 h-10 rounded-full sm:flex items-center justify-center border border-white/30" style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', boxShadow: '0 0 0 3px rgba(255,255,255,0.06)' }}>
                   <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-white/75">Total Bookings</p>
-                  <p className="text-2xl font-bold text-white" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.15)' }}>{filteredBookings.length}</p>
+                  <p className="text-[10px] sm:text-xs leading-tight font-medium text-white/75">Total Bookings</p>
+                  <p className="text-lg sm:text-2xl leading-none sm:leading-normal font-bold text-white" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.15)' }}>{filteredBookings.length}</p>
                 </div>
               </div>
             </div>
 
             {/* Awaiting Payment */}
-            <div className="stat-glass stat-glass-amber relative overflow-hidden rounded-2xl p-4 border border-white/20 transition-transform duration-300 hover:-translate-y-1 hover:scale-[1.02]"
+            <div className="stat-glass stat-glass-amber relative overflow-hidden rounded-xl p-2.5 sm:rounded-2xl sm:p-4 border border-white/20 transition-transform duration-300 hover:-translate-y-1 hover:scale-[1.02]"
               style={{
                 backgroundImage: [
                   'radial-gradient(ellipse 80% 60% at 20% 25%, rgba(251,191,36,0.50) 0%, transparent 55%)',
@@ -482,21 +483,21 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                 boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.22), 0 4px 20px rgba(217,119,6,0.2)'
               }}>
               <div className="absolute inset-0 pointer-events-none opacity-[0.04]" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E\")", backgroundSize: '180px 180px', mixBlendMode: 'overlay' }} />
-              <div className="relative z-10 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center border border-white/30" style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', boxShadow: '0 0 0 3px rgba(255,255,255,0.06)' }}>
+              <div className="relative z-10 flex items-center gap-2 sm:gap-3">
+                <div className="hidden w-10 h-10 rounded-full sm:flex items-center justify-center border border-white/30" style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', boxShadow: '0 0 0 3px rgba(255,255,255,0.06)' }}>
                   <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3" />
                   </svg>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-white/75">Awaiting Payment</p>
-                  <p className="text-2xl font-bold text-white" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.15)' }}>{awaitingPayment}</p>
+                  <p className="text-[10px] sm:text-xs leading-tight font-medium text-white/75">Awaiting Payment</p>
+                  <p className="text-lg sm:text-2xl leading-none sm:leading-normal font-bold text-white" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.15)' }}>{awaitingPayment}</p>
                 </div>
               </div>
             </div>
 
             {/* Confirmed / Paid */}
-            <div className="stat-glass stat-glass-emerald relative overflow-hidden rounded-2xl p-4 border border-white/20 transition-transform duration-300 hover:-translate-y-1 hover:scale-[1.02]"
+            <div className="stat-glass stat-glass-emerald relative overflow-hidden rounded-xl p-2.5 sm:rounded-2xl sm:p-4 border border-white/20 transition-transform duration-300 hover:-translate-y-1 hover:scale-[1.02]"
               style={{
                 backgroundImage: [
                   'radial-gradient(ellipse 80% 60% at 80% 20%, rgba(52,211,153,0.50) 0%, transparent 55%)',
@@ -506,15 +507,15 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                 boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.22), 0 4px 20px rgba(5,150,105,0.2)'
               }}>
               <div className="absolute inset-0 pointer-events-none opacity-[0.04]" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E\")", backgroundSize: '180px 180px', mixBlendMode: 'overlay' }} />
-              <div className="relative z-10 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center border border-white/30" style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', boxShadow: '0 0 0 3px rgba(255,255,255,0.06)' }}>
+              <div className="relative z-10 flex items-center gap-2 sm:gap-3">
+                <div className="hidden w-10 h-10 rounded-full sm:flex items-center justify-center border border-white/30" style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', boxShadow: '0 0 0 3px rgba(255,255,255,0.06)' }}>
                   <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-white/75">Confirmed / Paid</p>
-                  <p className="text-2xl font-bold text-white" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.15)' }}>{totalConfirmed}</p>
+                  <p className="text-[10px] sm:text-xs leading-tight font-medium text-white/75">Confirmed / Paid</p>
+                  <p className="text-lg sm:text-2xl leading-none sm:leading-normal font-bold text-white" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.15)' }}>{totalConfirmed}</p>
                 </div>
               </div>
             </div>
@@ -548,23 +549,14 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {groupedBookings.map((group) => (
-                group.type === 'single' ? (
-                  <BookingPreviewCard
-                    key={group.id}
-                    booking={group.reservations[0]}
-                    serverDate={serverDate}
-                    onClick={() => handleSelectBooking(group.reservations[0])}
-                  />
-                ) : (
-                  <GroupedBookingPreviewCard
-                    key={group.id}
-                    group={group as any}
-                    serverDate={serverDate}
-                    onClick={() => setSelectedGroup(group)}
-                  />
-                )
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {filteredBookings.map((booking) => (
+                <BookingPreviewCard
+                  key={booking.id}
+                  booking={booking}
+                  serverDate={serverDate}
+                  onClick={() => handleSelectBooking(booking)}
+                />
               ))}
             </div>
           )}
@@ -584,23 +576,14 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {groupedBookings.map((group) => (
-                group.type === 'single' ? (
-                  <BookingPreviewCard
-                    key={group.id}
-                    booking={group.reservations[0]}
-                    serverDate={serverDate}
-                    onClick={() => handleSelectBooking(group.reservations[0])}
-                  />
-                ) : (
-                  <GroupedBookingPreviewCard
-                    key={group.id}
-                    group={group as any}
-                    serverDate={serverDate}
-                    onClick={() => setSelectedGroup(group)}
-                  />
-                )
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {filteredBookings.map((booking) => (
+                <BookingPreviewCard
+                  key={booking.id}
+                  booking={booking}
+                  serverDate={serverDate}
+                  onClick={() => handleSelectBooking(booking)}
+                />
               ))}
             </div>
           )}
@@ -620,23 +603,14 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {groupedBookings.map((group) => (
-                group.type === 'single' ? (
-                  <BookingPreviewCard
-                    key={group.id}
-                    booking={group.reservations[0]}
-                    serverDate={serverDate}
-                    onClick={() => handleSelectBooking(group.reservations[0])}
-                  />
-                ) : (
-                  <GroupedBookingPreviewCard
-                    key={group.id}
-                    group={group as any}
-                    serverDate={serverDate}
-                    onClick={() => setSelectedGroup(group)}
-                  />
-                )
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {filteredBookings.map((booking) => (
+                <BookingPreviewCard
+                  key={booking.id}
+                  booking={booking}
+                  serverDate={serverDate}
+                  onClick={() => handleSelectBooking(booking)}
+                />
               ))}
             </div>
           )}
@@ -664,55 +638,87 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                   <CardTitle className="relative z-10 text-xl font-bold text-white tracking-tight drop-shadow-sm">Booking Summary</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0 bg-white">
-                  <Table className="border-0">
-                    <TableHeader className="border-0">
-                      <TableRow className="bg-gray-50/50 hover:bg-gray-50/50 border-b border-gray-100">
-                        <TableHead className="font-semibold text-gray-600 pl-6 w-[40%] text-xs uppercase tracking-wider py-4">Venue & Court</TableHead>
-                        <TableHead className="font-semibold text-gray-600 text-xs uppercase tracking-wider py-4">Date & Time</TableHead>
-                        <TableHead className="font-semibold text-gray-600 text-right pr-6 text-xs uppercase tracking-wider py-4">Payment</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody className="border-0">
-                      {[...bookings]
-                        .sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime())
-                        .map((booking) => {
-                        const paymentMethod = booking.metadata?.intended_payment_method || booking.metadata?.payment_method || booking.payments?.[0]?.payment_method || 'N/A'
-                        const formattedMethod = paymentMethod === 'N/A' ? 'N/A' : paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1)
-                        
-                        return (
-                          <TableRow key={booking.id} className="border-b border-gray-100/50 last:border-0 hover:bg-teal-50/40 transition-all duration-300 cursor-pointer group" onClick={() => handleSelectBooking(booking)}>
-                            <TableCell className="pl-6 py-4">
-                              <div className="flex flex-col gap-1 border-l-2 border-transparent group-hover:border-teal-400 pl-3 transition-colors duration-300">
-                                <span className="text-[15px] font-bold text-gray-800 tracking-tight group-hover:text-teal-900 transition-colors">
-                                  {booking.courts.venues.name}
-                                </span>
-                                <span className="text-[13px] text-gray-500 font-medium">
-                                  {booking.courts.name}
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="py-4">
-                              <div className="flex flex-col gap-1">
-                                <span className="text-[14px] font-semibold text-gray-800">
-                                  {format(new Date(booking.start_time), 'MMM d, yyyy')}
-                                </span>
-                                <span className="text-[12px] text-gray-500 font-medium bg-gray-100/60 px-2 py-0.5 rounded-md inline-block w-fit">
-                                  {format(new Date(booking.start_time), 'h:mm a')} - {format(new Date(booking.end_time), 'h:mm a')}
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right pr-6 py-4">
-                              <div className="inline-flex items-center gap-2 text-[13px] font-bold text-teal-700 bg-white/60 px-3.5 py-1.5 rounded-xl ring-1 ring-teal-200/50 shadow-sm shadow-teal-900/5 whitespace-nowrap backdrop-blur-md">
-                                <span>₱{booking.total_amount.toFixed(2)}</span>
-                                <span className="w-1 h-1 rounded-full bg-teal-400/60"></span>
-                                <span>{formattedMethod}</span>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        )
-                      })}
-                    </TableBody>
-                  </Table>
+                  <div className="md:hidden p-3 space-y-2">
+                    {summaryBookings.map((booking) => {
+                      const paymentMethod = booking.metadata?.intended_payment_method || booking.metadata?.payment_method || booking.payments?.[0]?.payment_method || 'N/A'
+                      const formattedMethod = paymentMethod === 'N/A' ? 'N/A' : paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1)
+
+                      return (
+                        <button
+                          key={booking.id}
+                          type="button"
+                          onClick={() => handleSelectBooking(booking)}
+                          className="w-full text-left rounded-xl border border-gray-100 bg-white p-3 transition-colors hover:bg-teal-50/40"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-gray-800 truncate">{booking.courts.venues.name}</p>
+                              <p className="text-xs text-gray-500 truncate">{booking.courts.name}</p>
+                            </div>
+                            <div className="shrink-0 rounded-lg bg-teal-50 px-2 py-1 text-xs font-bold text-teal-700">
+                              ₱{booking.total_amount.toFixed(2)}
+                            </div>
+                          </div>
+                          <div className="mt-2 flex items-center justify-between gap-2">
+                            <p className="text-xs text-gray-600">
+                              {format(new Date(booking.start_time), 'MMM d, yyyy')} • {format(new Date(booking.start_time), 'h:mm a')} - {format(new Date(booking.end_time), 'h:mm a')}
+                            </p>
+                            <p className="shrink-0 text-[11px] font-semibold text-gray-500">{formattedMethod}</p>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div className="hidden md:block">
+                    <Table className="border-0">
+                      <TableHeader className="border-0">
+                        <TableRow className="bg-gray-50/50 hover:bg-gray-50/50 border-b border-gray-100">
+                          <TableHead className="font-semibold text-gray-600 pl-6 w-[40%] text-xs uppercase tracking-wider py-4">Venue & Court</TableHead>
+                          <TableHead className="font-semibold text-gray-600 text-xs uppercase tracking-wider py-4">Date & Time</TableHead>
+                          <TableHead className="font-semibold text-gray-600 text-right pr-6 text-xs uppercase tracking-wider py-4">Payment</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody className="border-0">
+                        {summaryBookings.map((booking) => {
+                          const paymentMethod = booking.metadata?.intended_payment_method || booking.metadata?.payment_method || booking.payments?.[0]?.payment_method || 'N/A'
+                          const formattedMethod = paymentMethod === 'N/A' ? 'N/A' : paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1)
+
+                          return (
+                            <TableRow key={booking.id} className="border-b border-gray-100/50 last:border-0 hover:bg-teal-50/40 transition-all duration-300 cursor-pointer group" onClick={() => handleSelectBooking(booking)}>
+                              <TableCell className="pl-6 py-4">
+                                <div className="flex flex-col gap-1 border-l-2 border-transparent group-hover:border-teal-400 pl-3 transition-colors duration-300">
+                                  <span className="text-[15px] font-bold text-gray-800 tracking-tight group-hover:text-teal-900 transition-colors">
+                                    {booking.courts.venues.name}
+                                  </span>
+                                  <span className="text-[13px] text-gray-500 font-medium">
+                                    {booking.courts.name}
+                                  </span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-4">
+                                <div className="flex flex-col gap-1">
+                                  <span className="text-[14px] font-semibold text-gray-800">
+                                    {format(new Date(booking.start_time), 'MMM d, yyyy')}
+                                  </span>
+                                  <span className="text-[12px] text-gray-500 font-medium bg-gray-100/60 px-2 py-0.5 rounded-md inline-block w-fit">
+                                    {format(new Date(booking.start_time), 'h:mm a')} - {format(new Date(booking.end_time), 'h:mm a')}
+                                  </span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right pr-6 py-4">
+                                <div className="inline-flex items-center gap-2 text-[13px] font-bold text-teal-700 bg-white/60 px-3.5 py-1.5 rounded-xl ring-1 ring-teal-200/50 shadow-sm shadow-teal-900/5 whitespace-nowrap backdrop-blur-md">
+                                  <span>₱{booking.total_amount.toFixed(2)}</span>
+                                  <span className="w-1 h-1 rounded-full bg-teal-400/60"></span>
+                                  <span>{formattedMethod}</span>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </CardContent>
               </Card>
             )}

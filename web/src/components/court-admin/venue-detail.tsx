@@ -216,6 +216,14 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
           </div>
         </div>
 
+        {!venue.is_verified && venue.is_active && (venue.courtsCount ?? 0) === 0 && (
+          <div className="mt-4 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3">
+            <p className="text-sm font-medium text-orange-800">
+              Add at least 1 court before this venue can be approved on the Global Admin side.
+            </p>
+          </div>
+        )}
+
         {/* Quick Stats */}
         <div className="grid grid-cols-2 gap-4 mt-6 pt-6 border-t border-gray-200">
           <div className="text-center">
@@ -225,24 +233,19 @@ export function VenueDetail({ venueId }: VenueDetailProps) {
           <div className="text-center">
             <div className="space-y-2">
               <div className="flex items-center justify-center gap-2">
-                {venue.is_active ? (
+                {venue.is_verified ? (
                   <>
                     <CheckCircle className="w-5 h-5 text-green-600" />
                     <p className="text-lg font-semibold text-green-600">Active</p>
                   </>
+                ) : venue.is_active ? (
+                  <>
+                    <AlertCircle className="w-5 h-5 text-yellow-600" />
+                    <p className="text-lg font-semibold text-yellow-600">Pending Approval</p>
+                  </>
                 ) : (
                   <p className="text-lg font-semibold text-gray-400">Inactive</p>
                 )}
-              </div>
-              <div className="flex items-center justify-center gap-2">
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${venue.is_verified
-                  ? 'bg-primary/10 text-primary border border-primary/20'
-                  : !venue.is_active
-                    ? 'bg-red-100 text-red-700 border border-red-200'
-                    : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
-                  }`}>
-                  {venue.is_verified ? 'Verified' : !venue.is_active ? 'Not Approved' : 'Pending Verification'}
-                </span>
               </div>
             </div>
             <p className="text-sm text-gray-500 mt-1">Status</p>

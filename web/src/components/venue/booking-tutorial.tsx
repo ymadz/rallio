@@ -204,11 +204,30 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
 
   // Tooltip position calculation
   const getTooltipStyle = (): React.CSSProperties => {
-    const tooltipWidth = 320
-    const gap = 16
-
     const isMobile = window.innerWidth < 768
+    const viewportPadding = isMobile ? 12 : 16
+    const tooltipWidth = isMobile ? Math.min(window.innerWidth - viewportPadding * 2, 360) : 320
+    const gap = isMobile ? 10 : 16
+
     const dynamicPosition = step.position === 'center' ? 'center' : (isMobile && step.position !== 'top' ? 'bottom' : step.position)
+
+    if (isMobile && dynamicPosition !== 'center') {
+      const mobileGap = Math.max(16, Math.round(window.innerHeight * 0.05))
+      const cardHeightEstimate = 220
+      const targetCenterY = spotlight.y + spotlight.height / 2
+      const placeAboveTarget = targetCenterY > window.innerHeight / 2
+      const top = placeAboveTarget
+        ? Math.max(viewportPadding, spotlight.y - cardHeightEstimate - mobileGap)
+        : Math.min(spotlight.y + spotlight.height + mobileGap, window.innerHeight - cardHeightEstimate - viewportPadding)
+
+      return {
+        left: '50%',
+        top,
+        transform: 'translateX(-50%)',
+        width: tooltipWidth,
+        maxWidth: `calc(100vw - ${viewportPadding * 2}px)`,
+      }
+    }
 
     switch (dynamicPosition) {
       case 'center':
@@ -216,6 +235,7 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
           left: '50%',
           top: '50%',
           transform: 'translate(-50%, -50%)',
+          width: tooltipWidth,
           maxWidth: tooltipWidth,
         }
       case 'right':
@@ -240,7 +260,7 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
       default:
         return {
           left: Math.max(spotlight.x, 16),
-          top: spotlight.y + spotlight.height + gap,
+          top: Math.min(spotlight.y + spotlight.height + gap, window.innerHeight - 220),
           maxWidth: tooltipWidth,
         }
     }
@@ -302,7 +322,7 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
 
       {/* Tooltip card */}
       <div
-        className="absolute bg-white rounded-xl shadow-2xl p-5 transition-all duration-500 ease-out"
+        className="absolute bg-white rounded-xl shadow-2xl p-4 sm:p-5 transition-all duration-500 ease-out max-h-[70vh] overflow-y-auto"
         style={{
           ...getTooltipStyle(),
           pointerEvents: 'auto',
@@ -328,29 +348,29 @@ export function BookingTutorial({ isOpen }: BookingTutorialProps) {
         </div>
 
         {/* Content */}
-        <h4 className="font-bold text-gray-900 text-base mb-1.5">{step.title}</h4>
-        <p className="text-sm text-gray-600 leading-relaxed">{step.description}</p>
+        <h4 className="font-bold text-gray-900 text-sm sm:text-base mb-1.5">{step.title}</h4>
+        <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">{step.description}</p>
 
         {/* Actions */}
-        <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
+        <div className="flex items-center justify-between gap-2 mt-4 pt-3 border-t border-gray-100">
           <button
             onClick={completeTutorial}
-            className="text-xs text-gray-400 hover:text-gray-600 transition-colors font-medium"
+            className="inline-flex items-center h-8 text-xs text-gray-400 hover:text-gray-600 transition-colors font-medium"
           >
             Skip tour
           </button>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-end gap-2">
             {currentStep > 0 && (
               <button
                 onClick={handleBack}
-                className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors rounded-lg hover:bg-gray-50"
+                className="inline-flex items-center h-8 px-3 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors rounded-lg hover:bg-gray-50"
               >
                 Back
               </button>
             )}
             <button
               onClick={handleNext}
-              className="px-4 py-1.5 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
+              className="inline-flex items-center h-8 px-4 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
             >
               {currentStep === STEPS.length - 1 ? 'Got it!' : 'Next'}
             </button>
