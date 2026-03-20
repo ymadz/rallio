@@ -12,6 +12,12 @@ export interface TimeSlot {
   price?: number
 }
 
+export interface DailySlotAvailability {
+  date: string
+  availableSlots: number
+  totalSlots: number
+}
+
 /**
  * Server Action: Get venue metadata (like down payment percentage)
  */
@@ -254,6 +260,59 @@ export async function getAvailableTimeSlotsAction(
   }
 
   return allSlots
+}
+
+/**
+ * Server Action: Get slot availability summary for each date in a month.
+ */
+export async function getMonthlySlotAvailabilityAction(
+  courtId: string,
+  monthDateString: string
+): Promise<DailySlotAvailability[]> {
+  const monthDate = new Date(monthDateString)
+
+  if (Number.isNaN(monthDate.getTime())) {
+    return []
+  }
+
+  const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1)
+  const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0)
+
+  const checks = Array.from({ length: monthEnd.getDate() }, async (_, index) => {
+    const day = index + 1
+    const currentDate = new Date(monthStart.getFullYear(), monthStart.getMonth(), day)
+    const dateString = format(currentDate, 'yyyy-MM-dd')
+    const slots = await getAvailableTimeSlotsAction(courtId, dateString)
+    const availableSlots = slots.filter((slot) => slot.available).length
+
+    return {
+      date: dateString,
+      availableSlots,
+      totalSlots: slots.length,
+    }
+  })
+
+  return Promise.all(checks)
+}
+
+/**
+ * Server Action: Get fully booked dates for a court within a month.
+ * A date is fully booked when it has no remaining available hourly slots.
+ */
+export async function getFullyBookedDatesAction(
+  courtId: string,
+  monthDateString: string
+): Promise<string[]> {
+  const monthDate = new Date(monthDateString)
+
+  if (Number.isNaN(monthDate.getTime())) {
+    return []
+  }
+
+  const monthlySummary = await getMonthlySlotAvailabilityAction(courtId, monthDateString)
+  return monthlySummary
+    .filter((day) => day.totalSlots > 0 && day.availableSlots === 0)
+    .map((day) => day.date)
 }
 /**
  * Server Action: Validate if a booking series is available without creating it

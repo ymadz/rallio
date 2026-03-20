@@ -1,12 +1,17 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { DayPicker } from 'react-day-picker'
+import { DayPicker, DayButton as RdpDayButton } from 'react-day-picker'
 import { format } from 'date-fns'
 import 'react-day-picker/dist/style.css'
 import { useCheckoutStore } from '@/stores/checkout-store'
-import { getAvailableTimeSlotsAction, validateBookingAvailabilityAction, getVenueMetadataAction } from '@/app/actions/reservations'
+import {
+  getAvailableTimeSlotsAction,
+  getMonthlySlotAvailabilityAction,
+  validateBookingAvailabilityAction,
+  getVenueMetadataAction
+} from '@/app/actions/reservations'
 import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
 import { cn } from '@/lib/utils'
 import { Label } from '@/components/ui/label'
@@ -53,8 +58,13 @@ export function AvailabilityModal({
   const router = useRouter()
   const { setBookingData, setDiscountDetails, setDiscount, setDownPaymentPercentage } = useCheckoutStore()
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+  const [displayedMonth, setDisplayedMonth] = useState<Date>(new Date())
   const [recurrenceWeeks, setRecurrenceWeeks] = useState<number>(1)
   const [selectedDays, setSelectedDays] = useState<number[]>([]) // [0-6] for Sun-Sat
+  const [fullyBookedDateSet, setFullyBookedDateSet] = useState<Set<string>>(new Set())
+  const [monthSlotSummaryMap, setMonthSlotSummaryMap] = useState<Map<string, { availableSlots: number; totalSlots: number }>>(new Map())
+  const fullyBookedMonthCacheRef = useRef<Map<string, Set<string>>>(new Map())
+  const monthSlotSummaryCacheRef = useRef<Map<string, Map<string, { availableSlots: number; totalSlots: number }>>>(new Map())
 
   // Validation state
   const [validationState, setValidationState] = useState<{
@@ -110,6 +120,54 @@ export function AvailabilityModal({
 
     fetchTimeSlots()
   }, [selectedDate, courtId, isOpen])
+
+  // Fetch fully booked days for currently displayed month (for disabled calendar dates)
+  useEffect(() => {
+    async function fetchFullyBookedDates() {
+      if (!isOpen || !courtId || !displayedMonth) return
+
+      try {
+        const monthKey = format(displayedMonth, 'yyyy-MM-01')
+        const cacheKey = `${courtId}:${monthKey}`
+        const cachedFullyBooked = fullyBookedMonthCacheRef.current.get(cacheKey)
+        const cachedSummary = monthSlotSummaryCacheRef.current.get(cacheKey)
+
+        if (cachedFullyBooked && cachedSummary) {
+          setFullyBookedDateSet(cachedFullyBooked)
+          setMonthSlotSummaryMap(cachedSummary)
+          return
+        }
+
+        const monthlySummary = await getMonthlySlotAvailabilityAction(courtId, monthKey)
+
+        const nextSummaryMap = new Map<string, { availableSlots: number; totalSlots: number }>()
+        const nextFullyBookedSet = new Set<string>()
+
+        monthlySummary.forEach((day) => {
+          nextSummaryMap.set(day.date, {
+            availableSlots: day.availableSlots,
+            totalSlots: day.totalSlots,
+          })
+
+          if (day.totalSlots > 0 && day.availableSlots === 0) {
+            nextFullyBookedSet.add(day.date)
+          }
+        })
+
+        monthSlotSummaryCacheRef.current.set(cacheKey, nextSummaryMap)
+        fullyBookedMonthCacheRef.current.set(cacheKey, nextFullyBookedSet)
+
+        setMonthSlotSummaryMap(nextSummaryMap)
+        setFullyBookedDateSet(nextFullyBookedSet)
+      } catch (error) {
+        console.error('Error fetching fully booked dates:', error)
+        setMonthSlotSummaryMap(new Map())
+        setFullyBookedDateSet(new Set())
+      }
+    }
+
+    fetchFullyBookedDates()
+  }, [isOpen, courtId, displayedMonth])
 
   // Fetch venue metadata (down payment percentage)
   useEffect(() => {
@@ -395,7 +453,13 @@ export function AvailabilityModal({
     }
   }
 
-  const disabledDays = { before: new Date() }
+  const disabledDays = (date: Date) => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const dateKey = format(date, 'yyyy-MM-dd')
+    return date < today || fullyBookedDateSet.has(dateKey)
+  }
 
   const additionalBookedDates = (() => {
     if (selectedDays.length <= 1 && recurrenceWeeks === 1) return []
@@ -484,15 +548,53 @@ export function AvailabilityModal({
                     mode="single"
                     selected={selectedDate}
                     onSelect={(date) => date && setSelectedDate(date)}
+                    month={displayedMonth}
+                    onMonthChange={setDisplayedMonth}
                     disabled={disabledDays}
                     className="mx-auto"
                     modifiers={{
-                      additionalBookings: additionalBookedDates
+                      additionalBookings: additionalBookedDates,
+                      fullyBookedDate: (date) => fullyBookedDateSet.has(format(date, 'yyyy-MM-dd')),
                     }}
                     modifiersClassNames={{
                       selected: 'bg-primary text-white hover:bg-primary',
                       today: 'font-bold text-primary',
                       additionalBookings: 'border-2 border-dashed border-primary bg-primary/10 rounded-md text-primary font-medium',
+                      fullyBookedDate: 'bg-gray-100 text-gray-400 line-through opacity-80',
+                    }}
+                    components={{
+                      DayButton: (props) => {
+                        const dateKey = format(props.day.date, 'yyyy-MM-dd')
+                        const summary = monthSlotSummaryMap.get(dateKey)
+
+                        const shouldShowCount =
+                          !props.modifiers.outside &&
+                          Boolean(summary) &&
+                          (summary?.totalSlots || 0) > 0 &&
+                          (summary?.availableSlots || 0) > 0 &&
+                          (summary?.availableSlots || 0) <= 10 &&
+                          (summary?.availableSlots || 0) < (summary?.totalSlots || 0)
+
+                        return (
+                          <RdpDayButton {...props}>
+                            <span className="relative inline-flex items-center justify-center w-full h-full">
+                              <span>{props.children}</span>
+                              {shouldShowCount && (
+                                <span
+                                  className={cn(
+                                    'absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 rounded-full border text-[10px] font-semibold leading-none flex items-center justify-center pointer-events-none',
+                                    props.modifiers.selected
+                                      ? 'bg-white text-primary border-white/80'
+                                      : 'bg-primary text-white border-primary'
+                                  )}
+                                >
+                                  {summary?.availableSlots}
+                                </span>
+                              )}
+                            </span>
+                          </RdpDayButton>
+                        )
+                      }
                     }}
                   />
 
@@ -505,6 +607,14 @@ export function AvailabilityModal({
                     <div className="flex items-center gap-2 text-xs">
                       <div className="w-4 h-4 bg-gray-100 text-gray-400 flex items-center justify-center rounded text-[10px]">✕</div>
                       <span className="text-gray-600">Reserved / Unavailable</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <div className="w-4 h-4 bg-gray-100 border border-gray-300 rounded" />
+                      <span className="text-gray-600">Fully Booked Day</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <div className="w-[18px] h-[18px] rounded-full bg-primary border border-primary text-[10px] text-white font-semibold flex items-center justify-center">3</div>
+                      <span className="text-gray-600">10 or fewer slots left</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
                       <div className="w-4 h-4 bg-primary rounded" />
@@ -538,7 +648,7 @@ export function AvailabilityModal({
                   </Select>
 
                   {recurrenceWeeks > 1 && (
-                    <div className="mt-2 text-xs text-blue-700 bg-blue-50 px-2 py-1.5 rounded flex items-start gap-1.5 border border-blue-100">
+                    <div className="mt-2 text-xs text-primary bg-primary/10 px-2 py-1.5 rounded flex items-start gap-1.5 border border-primary/20">
                       <span className="mt-0.5">ℹ️</span>
                       <span>
                         Booking will be created for <strong>{recurrenceWeeks} consecutive weeks</strong> at this time.
@@ -614,8 +724,8 @@ export function AvailabilityModal({
                     </div>
                   ) : (
                     <>
-                      <div className="bg-blue-50 border-b border-blue-100 px-4 py-3 shrink-0">
-                        <p className="text-xs text-blue-700">
+                      <div className="bg-primary/10 border-b border-primary/20 px-4 py-3 shrink-0">
+                        <p className="text-xs text-primary">
                           {!startSlot ? (
                             "Tap a time to start your booking"
                           ) : !endSlot ? (
@@ -697,8 +807,8 @@ export function AvailabilityModal({
                   )}
                   {/* Validation Loading */}
                   {validationState.validating && (
-                    <div className="mb-2 text-xs text-blue-600 flex items-center gap-1.5">
-                      <div className="animate-spin rounded-full h-3 w-3 border-2 border-blue-600 border-t-transparent" />
+                    <div className="mb-2 text-xs text-primary flex items-center gap-1.5">
+                      <div className="animate-spin rounded-full h-3 w-3 border-2 border-primary border-t-transparent" />
                       Checking availability...
                     </div>
                   )}
@@ -807,10 +917,10 @@ export function AvailabilityModal({
                 </div>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-3 w-full sm:w-auto">
+            <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center sm:justify-end sm:gap-3">
               <button
                 onClick={onClose}
-                className="px-4 sm:px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors w-full"
+                className="h-10 px-4 sm:px-6 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors w-full sm:w-auto whitespace-nowrap"
                 disabled={isBooking}
               >
                 Cancel
@@ -819,7 +929,7 @@ export function AvailabilityModal({
                 data-tutorial-step="5"
                 onClick={handleBook}
                 disabled={!startSlot || isBooking || !validationState.valid || validationState.validating || isCalculatingPrice}
-                className="px-4 sm:px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 w-full"
+                className="h-10 px-4 sm:px-6 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 w-full sm:w-auto whitespace-nowrap"
               >
                 {isBooking ? 'Processing...' : `Book (${duration} hr${duration > 1 ? 's' : ''})`}
               </button>

@@ -348,6 +348,21 @@ export async function toggleVenueVerified(venueId: string, isVerified: boolean) 
 
   const supabase = await createClient()
 
+  if (isVerified) {
+    const { count: courtCount, error: countError } = await supabase
+      .from('courts')
+      .select('*', { count: 'exact', head: true })
+      .eq('venue_id', venueId)
+
+    if (countError) {
+      return { success: false, error: countError.message }
+    }
+
+    if (!courtCount || courtCount < 1) {
+      return { success: false, error: 'Venue must have at least 1 court before it can be verified' }
+    }
+  }
+
   const { error } = await supabase
     .from('venues')
     .update({ is_verified: isVerified, updated_at: new Date().toISOString() })
@@ -699,14 +714,35 @@ export async function batchUpdateVenues(
     if (action === 'verify') updates.is_verified = true
     if (action === 'unverify') updates.is_verified = false
 
+    let targetVenueIds = venueIds
+
+    if (action === 'verify') {
+      const { data: courtRows, error: courtRowsError } = await supabase
+        .from('courts')
+        .select('venue_id')
+        .in('venue_id', venueIds)
+
+      if (courtRowsError) throw courtRowsError
+
+      const eligibleVenueIdSet = new Set((courtRows || []).map((row: any) => row.venue_id))
+      targetVenueIds = venueIds.filter((id) => eligibleVenueIdSet.has(id))
+
+      if (targetVenueIds.length === 0) {
+        return {
+          success: false,
+          error: 'None of the selected venues can be verified because they have no courts'
+        }
+      }
+    }
+
     const { error } = await supabase
       .from('venues')
       .update(updates)
-      .in('id', venueIds)
+      .in('id', targetVenueIds)
 
     if (error) throw error
 
-    for (const venueId of venueIds) {
+    for (const venueId of targetVenueIds) {
       await logAdminAction({
         actionType: `batch_${action}_venues`,
         targetType: 'venue',
@@ -716,7 +752,16 @@ export async function batchUpdateVenues(
     }
 
     revalidatePath('/admin/venues')
-    return { success: true, message: `${venueIds.length} venues ${action}d successfully` }
+
+    if (action === 'verify' && targetVenueIds.length !== venueIds.length) {
+      const skippedCount = venueIds.length - targetVenueIds.length
+      return {
+        success: true,
+        message: `${targetVenueIds.length} venues verified successfully (${skippedCount} skipped: no courts)`
+      }
+    }
+
+    return { success: true, message: `${targetVenueIds.length} venues ${action}d successfully` }
   } catch (error: any) {
     return { success: false, error: error.message }
   }

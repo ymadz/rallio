@@ -177,6 +177,22 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
     }
   }
 
+  const applyDayHoursToDays = (sourceDay: string, targetDays: string[]) => {
+    setOperatingHours((prev) => {
+      const source = prev[sourceDay]
+      if (!source) return prev
+
+      const next = { ...prev }
+      targetDays.forEach((day) => {
+        if (next[day]) {
+          next[day] = { ...source }
+        }
+      })
+
+      return next
+    })
+  }
+
   const getTypeColor = (type: string) => {
     switch (type) {
       case 'maintenance': return 'bg-primary/10 text-primary border-primary/20'
@@ -424,10 +440,15 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
 
       {/* Add Custom Hours Modal */}
       {showHoursModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-xl max-w-2xl w-full p-6 my-8">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-gray-900">Set Operating Hours</h3>
+        <div className="fixed inset-0 bg-black/55 backdrop-blur-[2px] flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-3xl w-full my-8 border border-gray-200 shadow-2xl overflow-hidden">
+            <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-primary/5 to-white">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Set Operating Hours</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Configure weekly default hours for all courts in this venue.
+                </p>
+              </div>
               <button
                 onClick={() => setShowHoursModal(false)}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -436,100 +457,103 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
               </button>
             </div>
 
-            <div className="space-y-4 max-h-96 overflow-y-auto">
-              <div className="bg-primary/5 p-4 rounded-xl mb-4 border border-primary/20">
+            <div className="px-6 py-5 space-y-4 max-h-[65vh] overflow-y-auto">
+              <div className="bg-primary/5 p-4 rounded-xl border border-primary/20">
                 <p className="text-xs font-semibold text-primary/80 uppercase tracking-wider mb-3">Quick Actions</p>
                 <div className="flex flex-wrap gap-2">
                   <button
-                    onClick={() => {
-                      const monday = operatingHours['monday']
-                      const newHours = { ...operatingHours }
-                      Object.keys(newHours).forEach(day => {
-                        newHours[day] = { ...monday }
-                      })
-                      setOperatingHours(newHours)
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-white text-primary text-xs font-medium rounded-lg border border-primary/20 hover:bg-primary/5 transition-colors shadow-sm"
+                    onClick={() => applyDayHoursToDays('monday', Object.keys(operatingHours))}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-white text-primary text-xs font-medium rounded-lg border border-primary/20 hover:bg-primary/10 transition-colors"
                     title="Copy Monday's hours to every day of the week"
                   >
                     <Clock className="w-3.5 h-3.5" />
                     Copy Monday to All Days
                   </button>
                   <button
-                    onClick={() => {
-                      const monday = operatingHours['monday']
-                      const newHours = { ...operatingHours }
-                        ;['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].forEach(day => {
-                          newHours[day] = { ...monday }
-                        })
-                      setOperatingHours(newHours)
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-white text-gray-700 text-xs font-medium rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors shadow-sm"
+                    onClick={() => applyDayHoursToDays('monday', ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'])}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-white text-gray-700 text-xs font-medium rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
                     title="Copy Monday's hours to Tuesday through Friday"
                   >
                     <Calendar className="w-3.5 h-3.5" />
                     Copy Mon → Weekdays
                   </button>
                   <button
-                    onClick={() => {
-                      const saturday = operatingHours['saturday']
-                      const newHours = { ...operatingHours }
-                        ;['saturday', 'sunday'].forEach(day => {
-                          newHours[day] = { ...saturday }
-                        })
-                      setOperatingHours(newHours)
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-white text-gray-700 text-xs font-medium rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors shadow-sm"
+                    onClick={() => applyDayHoursToDays('saturday', ['saturday', 'sunday'])}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-white text-gray-700 text-xs font-medium rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
                     title="Copy Saturday's hours to Sunday"
                   >
                     <Calendar className="w-3.5 h-3.5" />
                     Copy Sat → Weekends
                   </button>
+                  <button
+                    onClick={() => applyDayHoursToDays('monday', ['monday', 'wednesday', 'friday', 'sunday'])}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-white text-gray-700 text-xs font-medium rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                    title="Copy Monday's hours to Monday, Wednesday, Friday, and Sunday"
+                  >
+                    <Calendar className="w-3.5 h-3.5" />
+                    Copy Mon → M/W/F/Sun
+                  </button>
+                  <button
+                    onClick={() => applyDayHoursToDays('tuesday', ['tuesday', 'thursday', 'saturday'])}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-white text-gray-700 text-xs font-medium rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                    title="Copy Tuesday's hours to Tuesday, Thursday, and Saturday"
+                  >
+                    <Calendar className="w-3.5 h-3.5" />
+                    Copy Tue → T/Th/Sat
+                  </button>
                 </div>
               </div>
 
               {Object.keys(operatingHours).map(day => (
-                <div key={day} className="flex items-center gap-4 pb-3 border-b">
-                  <input
-                    type="checkbox"
-                    checked={operatingHours[day].isOpen}
-                    onChange={(e) => setOperatingHours({
-                      ...operatingHours,
-                      [day]: { ...operatingHours[day], isOpen: e.target.checked }
-                    })}
-                    className="w-4 h-4"
-                  />
-                  <span className="w-24 font-medium capitalize">{day}</span>
-                  {operatingHours[day].isOpen ? (
-                    <>
+                <div key={day} className="rounded-xl border border-gray-200 bg-white p-3 md:p-4">
+                  <div className="flex flex-col gap-3 md:gap-4 md:flex-row md:items-center md:justify-between">
+                    <div className="flex items-center gap-3 min-w-[180px]">
                       <input
-                        type="time"
-                        value={operatingHours[day].open}
+                        id={`hours-${day}`}
+                        type="checkbox"
+                        checked={operatingHours[day].isOpen}
                         onChange={(e) => setOperatingHours({
                           ...operatingHours,
-                          [day]: { ...operatingHours[day], open: e.target.value }
+                          [day]: { ...operatingHours[day], isOpen: e.target.checked }
                         })}
-                        className="px-3 py-2 border rounded-lg"
+                        className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
                       />
-                      <span>to</span>
-                      <input
-                        type="time"
-                        value={operatingHours[day].close}
-                        onChange={(e) => setOperatingHours({
-                          ...operatingHours,
-                          [day]: { ...operatingHours[day], close: e.target.value }
-                        })}
-                        className="px-3 py-2 border rounded-lg"
-                      />
-                    </>
-                  ) : (
-                    <span className="text-gray-500">Closed</span>
-                  )}
+                      <label htmlFor={`hours-${day}`} className="font-semibold capitalize text-gray-900 cursor-pointer">
+                        {day}
+                      </label>
+                    </div>
+
+                    {operatingHours[day].isOpen ? (
+                      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 md:gap-3 w-full md:max-w-[360px]">
+                        <input
+                          type="time"
+                          value={operatingHours[day].open}
+                          onChange={(e) => setOperatingHours({
+                            ...operatingHours,
+                            [day]: { ...operatingHours[day], open: e.target.value }
+                          })}
+                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        />
+                        <span className="text-center text-sm font-medium text-gray-500">to</span>
+                        <input
+                          type="time"
+                          value={operatingHours[day].close}
+                          onChange={(e) => setOperatingHours({
+                            ...operatingHours,
+                            [day]: { ...operatingHours[day], close: e.target.value }
+                          })}
+                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        />
+                      </div>
+                    ) : (
+                      <span className="text-sm text-gray-500">Closed</span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
 
-            <div className="flex gap-2 pt-4 mt-4 border-t">
+            <div className="flex gap-2 px-6 py-4 border-t border-gray-200 bg-gray-50">
               <button
                 onClick={() => setShowHoursModal(false)}
                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
