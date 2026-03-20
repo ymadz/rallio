@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,7 @@ import { markRescheduleResultSeenAction } from '@/app/actions/reschedule-actions
 
 import { RescheduleModal } from '@/components/booking/reschedule-modal'
 import { CancelBookingModal } from '@/components/booking/cancel-booking-modal'
+import { BookingGroupModal } from '@/components/booking/booking-group-modal'
 import { useServerTime } from '@/hooks/use-server-time'
 import Link from 'next/link'
 
@@ -19,6 +20,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { BookingCard, Booking } from './booking-card'
 import { BookingPreviewCard } from './booking-preview-card'
+import { GroupedBookingPreviewCard } from './grouped-booking-preview-card'
+
+interface BookingGroup {
+  id: string
+  type: 'single' | 'grouped_multi_court' | 'grouped_recurring'
+  reservations: Booking[]
+  totalAmount: number
+  amountPaid: number
+}
 
 // Booking interface moved to booking-card.tsx
 
@@ -41,6 +51,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
   // We will keep `activeTab` and sync it with Tabs onValueChange to keep logic simple without rewriting everything right away.
   const [activeTab, setActiveTab] = useState('upcoming')
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
+  const [selectedGroup, setSelectedGroup] = useState<BookingGroup | null>(null)
   const [outOfOrderWarning, setOutOfOrderWarning] = useState<{
     booking: Booking
     paymentMethod: 'gcash' | 'paymaya'
@@ -111,12 +122,40 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     }
   })
 
-  // Sort Bookings
-  filteredBookings.sort((a, b) => {
-    const timeA = new Date(a.start_time).getTime()
-    const timeB = new Date(b.start_time).getTime()
-    return activeTab === 'upcoming' ? timeA - timeB : timeB - timeA
-  })
+  const groupedBookings = useMemo(() => {
+    const groups: { [key: string]: BookingGroup } = {}
+
+    filteredBookings.forEach(booking => {
+      // Priority 1: booking_id (multi-court)
+      // Priority 2: recurrence_group_id (recurring)
+      // Priority 3: individual id (single)
+      const groupId = booking.booking_id || booking.recurrence_group_id || booking.id
+      const groupType = booking.booking_id 
+        ? 'grouped_multi_court' 
+        : (booking.recurrence_group_id ? 'grouped_recurring' : 'single')
+
+      if (!groups[groupId]) {
+        groups[groupId] = {
+          id: groupId,
+          type: groupType,
+          reservations: [],
+          totalAmount: 0,
+          amountPaid: 0
+        }
+      }
+
+      groups[groupId].reservations.push(booking)
+      groups[groupId].totalAmount += booking.total_amount
+      groups[groupId].amountPaid += booking.amount_paid
+    })
+
+    return Object.values(groups).sort((a, b) => {
+      const timeA = new Date(a.reservations[0].start_time).getTime()
+      const timeB = new Date(b.reservations[0].start_time).getTime()
+      return activeTab === 'upcoming' ? timeA - timeB : timeB - timeA
+    })
+  }, [filteredBookings, activeTab])
+
 
   const getUnpaidEarlierDays = (booking: Booking): number[] => {
     if (!booking.recurrence_group_id) return []
@@ -501,13 +540,22 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {filteredBookings.map((booking) => (
-                <BookingPreviewCard
-                  key={booking.id}
-                  booking={booking}
-                  serverDate={serverDate}
-                  onClick={() => handleSelectBooking(booking)}
-                />
+              {groupedBookings.map((group) => (
+                group.type === 'single' ? (
+                  <BookingPreviewCard
+                    key={group.id}
+                    booking={group.reservations[0]}
+                    serverDate={serverDate}
+                    onClick={() => handleSelectBooking(group.reservations[0])}
+                  />
+                ) : (
+                  <GroupedBookingPreviewCard
+                    key={group.id}
+                    group={group as any}
+                    serverDate={serverDate}
+                    onClick={() => setSelectedGroup(group)}
+                  />
+                )
               ))}
             </div>
           )}
@@ -528,13 +576,22 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {filteredBookings.map((booking) => (
-                <BookingPreviewCard
-                  key={booking.id}
-                  booking={booking}
-                  serverDate={serverDate}
-                  onClick={() => handleSelectBooking(booking)}
-                />
+              {groupedBookings.map((group) => (
+                group.type === 'single' ? (
+                  <BookingPreviewCard
+                    key={group.id}
+                    booking={group.reservations[0]}
+                    serverDate={serverDate}
+                    onClick={() => handleSelectBooking(group.reservations[0])}
+                  />
+                ) : (
+                  <GroupedBookingPreviewCard
+                    key={group.id}
+                    group={group as any}
+                    serverDate={serverDate}
+                    onClick={() => setSelectedGroup(group)}
+                  />
+                )
               ))}
             </div>
           )}
@@ -555,13 +612,22 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {filteredBookings.map((booking) => (
-                <BookingPreviewCard
-                  key={booking.id}
-                  booking={booking}
-                  serverDate={serverDate}
-                  onClick={() => handleSelectBooking(booking)}
-                />
+              {groupedBookings.map((group) => (
+                group.type === 'single' ? (
+                  <BookingPreviewCard
+                    key={group.id}
+                    booking={group.reservations[0]}
+                    serverDate={serverDate}
+                    onClick={() => handleSelectBooking(group.reservations[0])}
+                  />
+                ) : (
+                  <GroupedBookingPreviewCard
+                    key={group.id}
+                    group={group as any}
+                    serverDate={serverDate}
+                    onClick={() => setSelectedGroup(group)}
+                  />
+                )
               ))}
             </div>
           )}
@@ -744,6 +810,17 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
           </div>
         </DialogContent>
       </Dialog>
+        {/* Group Details Modal */}
+        <BookingGroupModal
+          group={selectedGroup as any}
+          isOpen={!!selectedGroup}
+          onClose={() => setSelectedGroup(null)}
+          onSelectBooking={(b) => {
+            setSelectedGroup(null);
+            handleSelectBooking(b);
+          }}
+          serverDate={serverDate}
+        />
     </div>
   )
 }
