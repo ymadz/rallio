@@ -1,12 +1,17 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { DayPicker } from 'react-day-picker'
 import { format } from 'date-fns'
 import 'react-day-picker/dist/style.css'
 import { useCheckoutStore } from '@/stores/checkout-store'
-import { getAvailableTimeSlotsAction, validateBookingAvailabilityAction, getVenueMetadataAction } from '@/app/actions/reservations'
+import {
+  getAvailableTimeSlotsAction,
+  getFullyBookedDatesAction,
+  validateBookingAvailabilityAction,
+  getVenueMetadataAction
+} from '@/app/actions/reservations'
 import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
 import { cn } from '@/lib/utils'
 import { Label } from '@/components/ui/label'
@@ -53,8 +58,11 @@ export function AvailabilityModal({
   const router = useRouter()
   const { setBookingData, setDiscountDetails, setDiscount, setDownPaymentPercentage } = useCheckoutStore()
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+  const [displayedMonth, setDisplayedMonth] = useState<Date>(new Date())
   const [recurrenceWeeks, setRecurrenceWeeks] = useState<number>(1)
   const [selectedDays, setSelectedDays] = useState<number[]>([]) // [0-6] for Sun-Sat
+  const [fullyBookedDateSet, setFullyBookedDateSet] = useState<Set<string>>(new Set())
+  const fullyBookedMonthCacheRef = useRef<Map<string, Set<string>>>(new Map())
 
   // Validation state
   const [validationState, setValidationState] = useState<{
@@ -110,6 +118,34 @@ export function AvailabilityModal({
 
     fetchTimeSlots()
   }, [selectedDate, courtId, isOpen])
+
+  // Fetch fully booked days for currently displayed month (for disabled calendar dates)
+  useEffect(() => {
+    async function fetchFullyBookedDates() {
+      if (!isOpen || !courtId || !displayedMonth) return
+
+      try {
+        const monthKey = format(displayedMonth, 'yyyy-MM-01')
+        const cacheKey = `${courtId}:${monthKey}`
+        const cached = fullyBookedMonthCacheRef.current.get(cacheKey)
+
+        if (cached) {
+          setFullyBookedDateSet(cached)
+          return
+        }
+
+        const dates = await getFullyBookedDatesAction(courtId, monthKey)
+        const nextSet = new Set(dates)
+        fullyBookedMonthCacheRef.current.set(cacheKey, nextSet)
+        setFullyBookedDateSet(nextSet)
+      } catch (error) {
+        console.error('Error fetching fully booked dates:', error)
+        setFullyBookedDateSet(new Set())
+      }
+    }
+
+    fetchFullyBookedDates()
+  }, [isOpen, courtId, displayedMonth])
 
   // Fetch venue metadata (down payment percentage)
   useEffect(() => {
@@ -395,7 +431,13 @@ export function AvailabilityModal({
     }
   }
 
-  const disabledDays = { before: new Date() }
+  const disabledDays = (date: Date) => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const dateKey = format(date, 'yyyy-MM-dd')
+    return date < today || fullyBookedDateSet.has(dateKey)
+  }
 
   const additionalBookedDates = (() => {
     if (selectedDays.length <= 1 && recurrenceWeeks === 1) return []
@@ -484,15 +526,19 @@ export function AvailabilityModal({
                     mode="single"
                     selected={selectedDate}
                     onSelect={(date) => date && setSelectedDate(date)}
+                    month={displayedMonth}
+                    onMonthChange={setDisplayedMonth}
                     disabled={disabledDays}
                     className="mx-auto"
                     modifiers={{
-                      additionalBookings: additionalBookedDates
+                      additionalBookings: additionalBookedDates,
+                      fullyBookedDate: (date) => fullyBookedDateSet.has(format(date, 'yyyy-MM-dd')),
                     }}
                     modifiersClassNames={{
                       selected: 'bg-primary text-white hover:bg-primary',
                       today: 'font-bold text-primary',
                       additionalBookings: 'border-2 border-dashed border-primary bg-primary/10 rounded-md text-primary font-medium',
+                      fullyBookedDate: 'bg-gray-100 text-gray-400 line-through opacity-80',
                     }}
                   />
 
@@ -505,6 +551,10 @@ export function AvailabilityModal({
                     <div className="flex items-center gap-2 text-xs">
                       <div className="w-4 h-4 bg-gray-100 text-gray-400 flex items-center justify-center rounded text-[10px]">✕</div>
                       <span className="text-gray-600">Reserved / Unavailable</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <div className="w-4 h-4 bg-gray-100 border border-gray-300 rounded" />
+                      <span className="text-gray-600">Fully Booked Day</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
                       <div className="w-4 h-4 bg-primary rounded" />

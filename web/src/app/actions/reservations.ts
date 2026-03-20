@@ -255,6 +255,37 @@ export async function getAvailableTimeSlotsAction(
 
   return allSlots
 }
+
+/**
+ * Server Action: Get fully booked dates for a court within a month.
+ * A date is fully booked when it has no remaining available hourly slots.
+ */
+export async function getFullyBookedDatesAction(
+  courtId: string,
+  monthDateString: string
+): Promise<string[]> {
+  const monthDate = new Date(monthDateString)
+
+  if (Number.isNaN(monthDate.getTime())) {
+    return []
+  }
+
+  const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1)
+  const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0)
+
+  const checks = Array.from({ length: monthEnd.getDate() }, async (_, index) => {
+    const day = index + 1
+    const currentDate = new Date(monthStart.getFullYear(), monthStart.getMonth(), day)
+    const dateString = format(currentDate, 'yyyy-MM-dd')
+    const slots = await getAvailableTimeSlotsAction(courtId, dateString)
+    const hasAvailableSlot = slots.some((slot) => slot.available)
+
+    return hasAvailableSlot ? null : dateString
+  })
+
+  const results = await Promise.all(checks)
+  return results.filter((value): value is string => Boolean(value))
+}
 /**
  * Server Action: Validate if a booking series is available without creating it
  */
