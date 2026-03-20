@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,7 @@ import { markRescheduleResultSeenAction } from '@/app/actions/reschedule-actions
 
 import { RescheduleModal } from '@/components/booking/reschedule-modal'
 import { CancelBookingModal } from '@/components/booking/cancel-booking-modal'
+import { BookingGroupModal } from '@/components/booking/booking-group-modal'
 import { useServerTime } from '@/hooks/use-server-time'
 import Link from 'next/link'
 
@@ -19,6 +20,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { BookingCard, Booking } from './booking-card'
 import { BookingPreviewCard } from './booking-preview-card'
+import { GroupedBookingPreviewCard } from './grouped-booking-preview-card'
+
+interface BookingGroup {
+  id: string
+  type: 'single' | 'grouped_multi_court' | 'grouped_recurring'
+  reservations: Booking[]
+  totalAmount: number
+  amountPaid: number
+}
 
 // Booking interface moved to booking-card.tsx
 
@@ -32,7 +42,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
   const [bookings, setBookings] = useState(initialBookings)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [reschedulingBooking, setReschedulingBooking] = useState<Booking | null>(null)
-  const [cancelModalBooking, setCancelModalBooking] = useState<Booking | null>(null)
+  const [cancelModalState, setCancelModalState] = useState<{booking: Booking, target: 'reservation' | 'refund_reservation'} | null>(null)
   const [resumingPaymentId, setResumingPaymentId] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'today' | 'week'>('all')
   // activeTab state is now managed by the Tabs component, but we can track it if needed for filtering logic separate from rendering
@@ -41,6 +51,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
   // We will keep `activeTab` and sync it with Tabs onValueChange to keep logic simple without rewriting everything right away.
   const [activeTab, setActiveTab] = useState('upcoming')
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
+  const [selectedGroup, setSelectedGroup] = useState<BookingGroup | null>(null)
   const [outOfOrderWarning, setOutOfOrderWarning] = useState<{
     booking: Booking
     paymentMethod: 'gcash' | 'paymaya'
@@ -111,12 +122,49 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     }
   })
 
-  // Sort Bookings
-  filteredBookings.sort((a, b) => {
-    const timeA = new Date(a.start_time).getTime()
-    const timeB = new Date(b.start_time).getTime()
-    return activeTab === 'upcoming' ? timeA - timeB : timeB - timeA
-  })
+  const groupedBookings = useMemo(() => {
+    const groups: { [key: string]: BookingGroup } = {}
+
+    filteredBookings.forEach(booking => {
+      // Priority 1: booking_id (multi-court/multi-day)
+      // Priority 2: recurrence_group_id (recurring)
+      // Priority 3: individual id (single)
+      const groupId = booking.booking_id || booking.recurrence_group_id || booking.id
+      const groupType = booking.booking_id 
+        ? 'grouped_multi_court' 
+        : (booking.recurrence_group_id ? 'grouped_recurring' : 'single')
+
+      if (!groups[groupId]) {
+        groups[groupId] = {
+          id: groupId,
+          type: groupType,
+          reservations: [],
+          totalAmount: 0,
+          amountPaid: 0
+        }
+      }
+
+      groups[groupId].reservations.push(booking)
+      groups[groupId].totalAmount += booking.total_amount
+      groups[groupId].amountPaid += Math.min(booking.amount_paid, booking.total_amount)
+    })
+
+    // CRITICAL: Post-process to ensure single-reservation groups are treated as single bookings
+    // This handles the case where a booking_id is shared but only 1 reservation remains (e.g. after cancellations)
+    // or if a booking_id was assigned but only 1 court was booked.
+    Object.values(groups).forEach(group => {
+      if (group.reservations.length === 1) {
+        group.type = 'single'
+      }
+    })
+
+    return Object.values(groups).sort((a, b) => {
+      const timeA = new Date(a.reservations[0].start_time).getTime()
+      const timeB = new Date(b.reservations[0].start_time).getTime()
+      return activeTab === 'upcoming' ? timeA - timeB : timeB - timeA
+    })
+  }, [filteredBookings, activeTab])
+
 
   const getUnpaidEarlierDays = (booking: Booking): number[] => {
     if (!booking.recurrence_group_id) return []
@@ -174,12 +222,12 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     }
   }
 
-  const handleCancelBooking = (booking: Booking) => {
-    setCancelModalBooking(booking)
+  const handleCancelBooking = (booking: Booking, target: 'reservation' = 'reservation') => {
+    setCancelModalState({ booking, target })
   }
 
   const handleRefundBooking = (booking: Booking) => {
-    setCancelModalBooking(booking)
+    setCancelModalState({ booking, target: 'refund_reservation' })
   }
 
   const totalConfirmed = filteredBookings.filter((b) => b.status === 'confirmed').length
@@ -691,7 +739,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
               resumingPaymentId={resumingPaymentId}
               cancellingId={cancellingId}
               onResumePayment={handleResumePayment}
-              onCancelBooking={(b) => { setSelectedBooking(null); handleCancelBooking(b) }}
+              onCancelBooking={(b, target) => { setSelectedBooking(null); handleCancelBooking(b, target) }}
               onRefundBooking={(b) => { setSelectedBooking(null); handleRefundBooking(b) }}
               onReschedule={(b) => { setSelectedBooking(null); setReschedulingBooking(b) }}
               setBookings={setBookings}
@@ -712,22 +760,19 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
         />
       )}
 
-      {cancelModalBooking && (
+      {cancelModalState && (
         <CancelBookingModal
-          booking={cancelModalBooking}
-          isOpen={!!cancelModalBooking}
-          onClose={() => setCancelModalBooking(null)}
+          booking={cancelModalState.booking}
+          target={cancelModalState.target}
+          isOpen={!!cancelModalState}
+          onClose={() => setCancelModalState(null)}
           onCancelSuccess={() => {
-            setBookings((prev) => prev.map((b) =>
-              b.id === cancelModalBooking.id ? { ...b, status: 'cancelled' } : b
-            ))
-            setCancelModalBooking(null)
+            router.refresh()
+            setCancelModalState(null)
           }}
           onRefundSuccess={() => {
-            setBookings((prev) => prev.map((b) =>
-              b.id === cancelModalBooking.id ? { ...b, status: 'pending_refund' } : b
-            ))
-            setCancelModalBooking(null)
+            router.refresh()
+            setCancelModalState(null)
           }}
         />
       )}
@@ -780,6 +825,17 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
           </div>
         </DialogContent>
       </Dialog>
+        {/* Group Details Modal */}
+        <BookingGroupModal
+          group={selectedGroup as any}
+          isOpen={!!selectedGroup}
+          onClose={() => setSelectedGroup(null)}
+          onSelectBooking={(b) => {
+            setSelectedGroup(null);
+            handleSelectBooking(b);
+          }}
+          serverDate={serverDate}
+        />
     </div>
   )
 }

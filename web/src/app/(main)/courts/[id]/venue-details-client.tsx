@@ -1,10 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { AvailabilityModal } from '@/components/venue/availability-modal'
 import { QueueSessionModal } from '@/components/venue/queue-session-modal'
+import { VenueScheduleGrid } from '@/components/venue/venue-schedule-grid'
 import { EmptyCourtsState } from '@/components/courts/empty-courts-state'
 import { createClient } from '@/lib/supabase/client'
+
 
 interface Court {
   id: string
@@ -28,10 +31,12 @@ interface VenueDetailsClientProps {
 }
 
 export function VenueDetailsClient({ courts, venueId, venueName, discounts }: VenueDetailsClientProps) {
+  const router = useRouter()
   const [selectedCourt, setSelectedCourt] = useState<Court | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isQueueModalOpen, setIsQueueModalOpen] = useState(false)
   const [isQueueMaster, setIsQueueMaster] = useState(false)
+
 
   // Check if user has queue_master role
   useEffect(() => {
@@ -70,7 +75,9 @@ export function VenueDetailsClient({ courts, venueId, venueName, discounts }: Ve
   return (
     <>
       <div className="mb-6">
-        <h3 className="font-semibold text-gray-900 mb-3">Available Courts</h3>
+        <VenueScheduleGrid courts={courts} venueId={venueId} venueName={venueName} />
+
+        <h3 className="font-semibold text-gray-900 mb-3 mt-6">Available Courts</h3>
         <div className="space-y-3">
           {courts.map((court) => (
             <div

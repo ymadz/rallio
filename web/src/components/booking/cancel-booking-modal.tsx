@@ -10,6 +10,7 @@ import { AlertCircle, X } from 'lucide-react'
 export interface CancelBookingModalProps {
     booking: {
         id: string
+        booking_id?: string | null
         start_time: string
         end_time: string
         total_amount: number
@@ -26,6 +27,7 @@ export interface CancelBookingModalProps {
     onClose: () => void
     onCancelSuccess: () => void
     onRefundSuccess: () => void
+    target?: 'reservation' | 'refund_reservation'
 }
 
 export function CancelBookingModal({
@@ -34,6 +36,7 @@ export function CancelBookingModal({
     onClose,
     onCancelSuccess,
     onRefundSuccess,
+    target = 'reservation',
 }: CancelBookingModalProps) {
     const [mounted, setMounted] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
@@ -41,7 +44,8 @@ export function CancelBookingModal({
     const [error, setError] = useState<string | null>(null)
 
     const isPaid = (booking.status === 'confirmed' || booking.status === 'partially_paid') && booking.amount_paid > 0
-    const mode = isPaid ? 'refund' : 'cancel'
+    const mode = target === 'refund_reservation' ? 'refund' : 'cancel'
+    const requiresReason = mode === 'refund' || (mode === 'cancel' && isPaid)
 
     useEffect(() => {
         setMounted(true)
@@ -55,8 +59,8 @@ export function CancelBookingModal({
     }, [isOpen])
 
     const handleConfirm = async () => {
-        if (mode === 'refund' && !reason.trim()) {
-            setError('Please provide a reason for the refund')
+        if (requiresReason && !reason.trim()) {
+            setError('Please provide a reason')
             return
         }
 
@@ -158,19 +162,23 @@ export function CancelBookingModal({
                     </div>
 
                     {/* Refund Info (paid bookings) */}
-                    {mode === 'refund' && (
+                    {requiresReason && (
                         <>
-                            <div className="bg-green-50 rounded-lg p-4 mb-5 border border-green-200">
-                                <div className="flex justify-between items-center mb-1">
-                                    <span className="text-sm text-green-800">Refund Amount</span>
-                                    <span className="text-lg font-bold text-green-900">
-                                        ₱{booking.amount_paid.toFixed(2)}
-                                    </span>
+                            {isPaid && (
+                                <div className="bg-green-50 rounded-lg p-4 mb-5 border border-green-200">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="text-sm text-green-800">Est. Refundable Amount</span>
+                                        <span className="text-lg font-bold text-green-900">
+                                            ₱{Math.min(booking.amount_paid, booking.total_amount).toFixed(2)}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-green-700">
+                                        Refunds are typically processed within 5-10 business days after admin approval.
+                                        <br/>
+                                        <span className="opacity-75">{mode === 'refund' && isPaid && "The final amount might differ if this is a bulk payment."}</span>
+                                    </p>
                                 </div>
-                                <p className="text-xs text-green-700">
-                                    Refunds are typically processed within 5-10 business days after admin approval.
-                                </p>
-                            </div>
+                            )}
 
                             {/* Reason */}
                             <div className="mb-5">
@@ -215,7 +223,7 @@ export function CancelBookingModal({
                         </Button>
                         <Button
                             onClick={handleConfirm}
-                            disabled={isLoading || (mode === 'refund' && !reason.trim())}
+                            disabled={isLoading || (requiresReason && !reason.trim())}
                             className={`flex-1 ${mode === 'refund'
                                 ? 'bg-primary hover:bg-primary/90'
                                 : 'bg-red-600 hover:bg-red-700'

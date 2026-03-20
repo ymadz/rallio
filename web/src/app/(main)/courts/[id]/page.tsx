@@ -6,6 +6,7 @@ import { ReviewsSection } from '@/components/venue/reviews-section'
 import { VenueDetailsClient } from './venue-details-client'
 import { ImageGallery } from '@/components/venue/image-gallery'
 import { DiscountIndicator } from '@/components/venue/discount-indicator'
+import { CourtHoursTabs } from '@/components/venue/court-hours-tabs'
 
 // Server-side venue fetch
 async function getVenueByIdServer(venueId: string) {
@@ -38,6 +39,7 @@ async function getVenueByIdServer(venueId: string) {
         court_type,
         capacity,
         hourly_rate,
+        opening_hours,
         is_active,
         is_verified,
         metadata,
@@ -159,6 +161,10 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
 
   const openingHours = formatOpeningHours(venue.opening_hours)
 
+  // Detect court-specific overrides
+  const courtsWithOverrides = activeCourts.filter((c: any) => c.opening_hours && Object.keys(c.opening_hours).length > 0)
+  const hasOverrides = courtsWithOverrides.length > 0
+
   // Collect all court images from active courts
   const allCourtImages: string[] = []
   activeCourts.forEach(court => {
@@ -253,81 +259,28 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
           <div className="lg:col-span-1 space-y-6">
             {/* Venue Status Card */}
             <div className="bg-white border border-gray-200 rounded-xl p-4 sticky top-6">
-              {/* Venue Status Banner */}
-              <div className={`rounded-xl p-4 mb-4 ${isOpen
-                ? 'bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200'
-                : 'bg-gradient-to-r from-red-50 to-orange-50 border border-red-200'
-                }`}>
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isOpen ? 'bg-green-100' : 'bg-red-100'
-                    }`}>
-                    {isOpen ? (
-                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    ) : (
-                      <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className={`font-bold text-base ${isOpen ? 'text-green-700' : 'text-red-700'}`}>
-                        {isOpen ? 'Open Now' : 'Currently Closed'}
-                      </span>
-                      <div className={`w-2 h-2 rounded-full animate-pulse ${isOpen ? 'bg-green-500' : 'bg-red-500'
-                        }`} />
-                    </div>
-                    <p className={`text-xs mt-0.5 ${isOpen ? 'text-green-600' : 'text-red-600'}`}>
-                      {isOpen ? 'Ready to accept bookings' : 'Check operating hours below'}
-                    </p>
-                  </div>
-                </div>
-              </div>
+              {/* Venue Status Card - Content starts directly with Operating Hours */}
 
               {/* Operating Hours */}
               {openingHours && (
                 <div className="mb-4 pb-4 border-b border-gray-100">
-                  <div className="flex items-center gap-2 mb-3">
-                    <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <h4 className="font-semibold text-gray-900 text-sm">Operating Hours</h4>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <h4 className="font-semibold text-gray-900 text-sm">Operating Hours</h4>
+                    </div>
                   </div>
-                  {Array.isArray(openingHours) && typeof openingHours[0] === 'object' ? (
-                    <div className="space-y-1.5">
-                      {openingHours.map((schedule: any, index: number) => (
-                        <div
-                          key={index}
-                          className={`flex items-center justify-between px-3 py-2 rounded-lg ${schedule.closed
-                            ? 'bg-gray-50'
-                            : 'bg-primary/5'
-                            }`}
-                        >
-                          <span className={`text-xs font-semibold ${schedule.closed ? 'text-gray-400' : 'text-gray-700'
-                            }`}>
-                            {schedule.day}
-                          </span>
-                          {schedule.closed ? (
-                            <span className="text-xs text-gray-400">Closed</span>
-                          ) : (
-                            <span className="text-xs text-primary font-medium">
-                              {schedule.open} – {schedule.close}
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : Array.isArray(openingHours) ? (
-                    <div className="space-y-1">
-                      {openingHours.map((schedule, index) => (
-                        <p key={index} className="text-gray-600 text-xs">{String(schedule)}</p>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-gray-600 text-xs">{openingHours}</p>
-                  )}
+                  
+                  <div className="space-y-3">
+                    {activeCourts.length > 0 && (
+                      <CourtHoursTabs 
+                        venueOpeningHours={venue.opening_hours} 
+                        courts={activeCourts as any} 
+                      />
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -340,7 +293,7 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
                       <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                       </svg>
-                      <span className="text-gray-600">{venue.phone}</span>
+                      <span className="text-gray-600 font-medium">{venue.phone}</span>
                     </div>
                   )}
                   {venue.email && (

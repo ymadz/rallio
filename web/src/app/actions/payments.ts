@@ -18,6 +18,7 @@ type ReservationWithRelations = {
   payment_type?: string
   num_players?: number
   recurrence_group_id?: string | null
+  booking_id?: string | null
   metadata?: Record<string, any> | null
   payment_method?: string
   courts: {
@@ -122,9 +123,10 @@ export async function initiatePaymentAction(
     const courtName = reservation.courts?.name ?? 'Court'
     let description = `${venueName} - ${courtName}`
 
-    // Check for recurrence group to handle bulk payment
+    // Check for bulk payment group
     let amountToCharge = reservation.total_amount
     let recurrenceGroupId = reservation.recurrence_group_id
+    let bookingId = reservation.booking_id
     let isDownPayment = false
 
     // If reservation is already partially paid, we are charging the remaining balance
@@ -148,6 +150,7 @@ export async function initiatePaymentAction(
 
     console.log('[initiatePaymentAction] 🔍 Down payment debug:', {
       recurrenceGroupId,
+      bookingId,
       isDownPayment,
       amountToCharge,
       reservationStatus: reservation.status,
@@ -157,13 +160,20 @@ export async function initiatePaymentAction(
       reservationPaymentMethod: reservation.payment_method,
     })
 
-    if (recurrenceGroupId) {
+    if (bookingId || recurrenceGroupId) {
       // Fetch all reservations in this group
-      const { data: groupReservations } = await supabase
+      const query = supabase
         .from('reservations')
         .select('total_amount, status, metadata')
-        .eq('recurrence_group_id', recurrenceGroupId)
         .in('status', ['pending_payment'])
+
+      if (bookingId) {
+        query.eq('booking_id', bookingId)
+      } else {
+        query.eq('recurrence_group_id', recurrenceGroupId!)
+      }
+
+      const { data: groupReservations } = await query
 
       if (groupReservations && groupReservations.length > 0) {
         if (isDownPayment) {
@@ -176,10 +186,11 @@ export async function initiatePaymentAction(
         } else {
           // For full payments, sum up the total amount
           amountToCharge = groupReservations.reduce((sum, res) => sum + (res.total_amount || 0), 0)
-          description += ` (Recurring: ${groupReservations.length} sessions)`
+          description += ` (Bulk: ${groupReservations.length} sessions)`
         }
-        console.log('[initiatePaymentAction] 🔄 Detected recurring group:', {
-          groupId: recurrenceGroupId,
+        console.log('[initiatePaymentAction] 🔄 Detected bulk group:', {
+          bookingId,
+          recurrenceGroupId,
           count: groupReservations.length,
           totalBulkAmount: amountToCharge,
           isDownPayment
@@ -192,12 +203,12 @@ export async function initiatePaymentAction(
       singleAmount: reservation.total_amount,
       numPlayers: reservation.num_players,
       amountToCharge,
-      isBulk: !!recurrenceGroupId
+      isBulk: !!(bookingId || recurrenceGroupId)
     })
 
     // Generate success/failed URLs
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    const successUrl = `${baseUrl}/checkout/success?reservation=${reservationId}`
+    const successUrl = `${baseUrl}/checkout/success?reservation=${reservationId}${bookingId ? `&booking=${bookingId}` : ''}`
     const failedUrl = `${baseUrl}/checkout/failed?reservation=${reservationId}`
 
     let checkoutUrl: string
@@ -222,6 +233,7 @@ export async function initiatePaymentAction(
           },
           metadata: {
             reservation_id: reservationId,
+            booking_id: bookingId || undefined,
             user_id: user.id,
             payment_reference: paymentReference,
             payment_type: reservation.payment_type || 'full',
@@ -245,6 +257,7 @@ export async function initiatePaymentAction(
           },
           metadata: {
             reservation_id: reservationId,
+            booking_id: bookingId || undefined,
             user_id: user.id,
             payment_reference: paymentReference,
             payment_type: reservation.payment_type || 'full',
@@ -293,6 +306,7 @@ export async function initiatePaymentAction(
       reference: paymentReference,
       user_id: user.id,
       reservation_id: reservationId,
+      booking_id: bookingId || null,
       amount: amountToCharge, // Use the calculated per-player amount for split payments
       currency: 'PHP',
       payment_method: paymentMethod,
@@ -305,6 +319,7 @@ export async function initiatePaymentAction(
         checkout_url: checkoutUrl,
         source_id: sourceId,
         reservation_id: reservationId,
+        booking_id: bookingId || null,
         payment_reference: paymentReference,
         payment_type: reservation.payment_type || 'full',
         player_count: reservation.num_players || 1,
@@ -578,12 +593,18 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
 
     // Update reservation with comprehensive error handling
     console.log(`Updating reservation to ${newReservationStatus}:`, payment.reservation_id)
-    // Fetch latest reservation first to get current amount_paid
+    // Fetch latest reservation first to get current amount_paid and total_amount
     const { data: currentRes } = await supabase
       .from('reservations')
-      .select('amount_paid')
+      .select('amount_paid, total_amount')
       .eq('id', payment.reservation_id)
       .single()
+
+    // BULK/RECURRING PAYMENT HANDLING
+    // Check if this is part of a booking or recurrence group
+    const recurrenceGroupId = payment.metadata?.recurrence_group_id
+    const bookingId = payment.metadata?.booking_id || payment.booking_id
+    const isBulkPayment = !!(bookingId || recurrenceGroupId)
 
     // For recurring down payments, use per-reservation share, not total payment
     let newAmountPaid: number
@@ -597,6 +618,10 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
       newAmountPaid = firstResForMeta?.metadata?.down_payment_amount
         ? Number(firstResForMeta.metadata.down_payment_amount)
         : payment.amount
+    } else if (isBulkPayment) {
+      // If it's a bulk full payment, this specific reservation only gets its own total_amount
+      // The other reservations in the group are handled in the bulk loop below.
+      newAmountPaid = currentRes?.total_amount || 0
     } else {
       newAmountPaid = (currentRes?.amount_paid || 0) + payment.amount
     }
@@ -661,35 +686,44 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
     }
 
     // BULK/RECURRING PAYMENT HANDLING
-    // Check if this is part of a recurrence group and confirm the rest
-    const recurrenceGroupId = payment.metadata?.recurrence_group_id
-    if (recurrenceGroupId) {
-      console.log('🔄 Bulk Payment detected in processChargeableSourceAction:', recurrenceGroupId)
+    // Check if this is part of a booking or recurrence group and confirm the rest
 
-      // Fetch all other pending reservations in this group
-      const { data: groupReservations, error: groupFetchError } = await supabase
+    if (bookingId || recurrenceGroupId) {
+      console.log('🔄 Bulk Payment detected in processChargeableSourceAction:', { bookingId, recurrenceGroupId })
+
+      // Fetch all other pending reservations in this group/booking
+      const query = supabase
         .from('reservations')
         .select('id, total_amount, metadata')
-        .eq('recurrence_group_id', recurrenceGroupId)
         .neq('id', payment.reservation_id) // Exclude the one we just updated
         .in('status', ['pending_payment'])
 
+      if (bookingId) {
+        query.eq('booking_id', bookingId)
+      } else {
+        query.eq('recurrence_group_id', recurrenceGroupId!)
+      }
+
+      const { data: groupReservations, error: groupFetchError } = await query
+
       if (groupFetchError) {
-        console.error('❌ Failed to fetch recurrence group for bulk update:', groupFetchError)
+        console.error('❌ Failed to fetch bulk group for update:', groupFetchError)
       } else if (groupReservations && groupReservations.length > 0) {
-        console.log(`🔄 Confirming ${groupReservations.length} additional recurring reservations...`)
+        console.log(`🔄 Confirming ${groupReservations.length} additional reservations...`)
 
         for (const res of groupReservations) {
           // If original payment was a down payment, set each reservation to partially_paid
-          // with amount_paid = each reservation's down_payment_amount.
-          // Otherwise, mark as fully confirmed.
+          // with amount_paid = each reservation's down_payment_amount if available, 
+          // or a proportional share of the total payment.
           let resStatus = 'confirmed'
           let resAmountPaid = res.total_amount
 
           if (isDownPayment) {
             const resMeta = (res as any).metadata as any
             resStatus = 'partially_paid'
-            resAmountPaid = Number(resMeta?.down_payment_amount || 0)
+            // Total payment amount should be distributed. 
+            // Preferably we use the pre-calculated item split in metadata.
+            resAmountPaid = Number(resMeta?.down_payment_amount || (payment.amount / (groupReservations.length + 1)))
           }
 
           const { error: bulkUpdateError } = await supabase
@@ -701,7 +735,7 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
             .eq('id', res.id)
 
           if (bulkUpdateError) {
-            console.error(`❌ Failed to confirm recurring reservation ${res.id}:`, bulkUpdateError)
+            console.error(`❌ Failed to confirm reservation ${res.id} in bulk update:`, bulkUpdateError)
           }
         }
         console.log('✅ Bulk confirmation complete')

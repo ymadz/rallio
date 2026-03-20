@@ -14,6 +14,7 @@ export function PromoCodeInput() {
 
     const {
         bookingData,
+        bookingCart,
         getSubtotal,
         promoDiscountAmount,
         promoCode,
@@ -27,6 +28,10 @@ export function PromoCodeInput() {
     // Wait for booking data
     if (!bookingData) return null
 
+    const effectiveCart = bookingCart.length > 0 ? bookingCart : [bookingData]
+
+
+
     // Recalculate all discounts using the unified backend function
     // Defined before early returns so it's available in all code paths
     const recalculateDiscounts = async (promoCodeStr?: string) => {
@@ -39,20 +44,17 @@ export function PromoCodeInput() {
         const startDateTime = `${dateStr}T${bookingData.startTime}:00+08:00`
         const endDateTime = `${dateStr}T${bookingData.endTime}:00+08:00`
 
+        // For target date count, combine recurrence logic and multi-cart unique dates
+        const uniqueDates = new Set(effectiveCart.map(item => new Date(item.date).toDateString()))
+        let actualSlotCount = uniqueDates.size
         const recurrenceWeeks = bookingData.recurrenceWeeks || 1
-        const selectedDays = bookingData.selectedDays || []
-        const initialStartTime = new Date(bookingData.date)
-        const [startH] = bookingData.startTime.split(':')
-        initialStartTime.setHours(parseInt(startH), 0, 0, 0)
-        const startDayIndex = initialStartTime.getDay()
-        const uniqueSelectedDays = selectedDays.length > 0
-            ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
-            : [startDayIndex]
-        let actualSlotCount = 0
-        for (let i = 0; i < recurrenceWeeks; i++) {
-            for (const _dayIndex of uniqueSelectedDays) {
-                actualSlotCount++
-            }
+
+        if (bookingData.recurrenceWeeks && bookingData.recurrenceWeeks > 1) {
+             const selectedDays = bookingData.selectedDays || []
+             const uniqueSelectedDays = selectedDays.length > 0
+                ? Array.from(new Set(selectedDays))
+                : [new Date(bookingData.date).getDay()]
+             actualSlotCount = Math.max(actualSlotCount, uniqueSelectedDays.length * bookingData.recurrenceWeeks)
         }
 
         const unifiedResult = await calculateApplicableDiscounts({

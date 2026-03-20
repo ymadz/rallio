@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { mergeCartItems } from '@/lib/utils/booking-cart'
 
 export type CheckoutStep = 'details' | 'payment' | 'policy' | 'processing'
 export type PaymentMethod = 'e-wallet' | 'cash' | null
@@ -27,6 +28,8 @@ export interface BookingData {
   }
 }
 
+export interface BookingCartItem extends BookingData {}
+
 export interface PlayerPaymentStatus {
   playerNumber: number
   email?: string
@@ -40,6 +43,7 @@ export interface PlayerPaymentStatus {
 interface CheckoutState {
   // Booking details
   bookingData: BookingData | null
+  bookingCart: BookingCartItem[]
 
   // Current step
   currentStep: CheckoutStep
@@ -81,9 +85,14 @@ interface CheckoutState {
   reservationId?: string
   downPaymentPercentage?: number
   customDownPaymentAmount?: number
+  conflictingSlots: Array<{ courtId: string; date: string; startTime: string; endTime: string }>
 
   // Actions
   setBookingData: (data: BookingData) => void
+  setBookingCart: (items: BookingCartItem[]) => void
+  addBookingCartItem: (item: BookingCartItem) => void
+  removeBookingCartItem: (index: number) => void
+  clearBookingCart: () => void
   setCurrentStep: (step: CheckoutStep) => void
   setSplitPayment: (enabled: boolean) => void
   setPlayerCount: (count: number) => void
@@ -98,6 +107,7 @@ interface CheckoutState {
   setBookingReference: (reference: string, reservationId: string) => void
   setDownPaymentPercentage: (percentage: number) => void
   setCustomDownPaymentAmount: (amount: number | undefined) => void
+  setConflictingSlots: (slots: Array<{ courtId: string; date: string; startTime: string; endTime: string }>) => void
   resetCheckout: () => void
 
   // Computed values
@@ -112,6 +122,7 @@ interface CheckoutState {
 
 const initialState = {
   bookingData: null,
+  bookingCart: [] as BookingCartItem[],
   currentStep: 'details' as CheckoutStep,
   isSplitPayment: false,
   playerCount: 2,
@@ -126,7 +137,10 @@ const initialState = {
   platformFeeEnabled: true,
   bookingReference: undefined,
   reservationId: undefined,
+  downPaymentPercentage: 20, // Default 20%
+  conflictingSlots: [],
 }
+
 
 export const useCheckoutStore = create<CheckoutState>()(
   persist(
@@ -134,12 +148,66 @@ export const useCheckoutStore = create<CheckoutState>()(
       ...initialState,
 
       setBookingData: (data) => {
+        const state = get()
         set({
           ...initialState,
           bookingData: data,
+          bookingCart: [data],
           currentStep: 'details',
           playerCount: Math.min(2, data.capacity), // Default to 2 players or capacity
+          downPaymentPercentage: state.downPaymentPercentage, // Preserve existing percentage (e.g. from venue metadata)
         })
+      },
+
+      setBookingCart: (items) => {
+        const state = get()
+        const mergedItems = mergeCartItems(items)
+        const firstItem = mergedItems[0] ?? null
+        set({
+          ...initialState,
+          bookingData: firstItem,
+          bookingCart: mergedItems,
+          currentStep: 'details',
+          playerCount: firstItem ? Math.min(2, firstItem.capacity) : 2,
+          downPaymentPercentage: state.downPaymentPercentage, // Preserve existing percentage
+        })
+      },
+
+      addBookingCartItem: (item) => {
+        set((state) => {
+          const newCart = [...state.bookingCart, item]
+          const mergedCart = mergeCartItems(newCart)
+          const firstItem = mergedCart[0] ?? null
+          return {
+            bookingCart: mergedCart,
+            bookingData: firstItem,
+          }
+        })
+      },
+
+      removeBookingCartItem: (index) => {
+        set((state) => {
+          const newCart = state.bookingCart.filter((_, currentIndex) => currentIndex !== index)
+          const mergedCart = mergeCartItems(newCart)
+          const firstItem = mergedCart[0] ?? null
+          return {
+            bookingCart: mergedCart,
+            bookingData: firstItem,
+          }
+        })
+      },
+
+      clearBookingCart: () => {
+        set((state) => ({
+          bookingCart: [],
+          bookingData: null,
+          discountAmount: 0,
+          promoDiscountAmount: 0,
+          promoCode: undefined,
+          applicableDiscounts: undefined,
+          discountType: undefined,
+          discountReason: undefined,
+        }))
       },
 
       setCurrentStep: (step) => set({ currentStep: step }),
@@ -241,49 +309,64 @@ export const useCheckoutStore = create<CheckoutState>()(
 
       setCustomDownPaymentAmount: (amount) => set({ customDownPaymentAmount: amount }),
 
+      setConflictingSlots: (slots) => set({ conflictingSlots: slots }),
+
       resetCheckout: () => set(initialState),
 
       // Computed values
       getSubtotal: () => {
         const state = get()
-        const bookingData = state.bookingData
-        if (!bookingData) return 0
+        const effectiveCart = state.bookingCart.length > 0
+          ? state.bookingCart
+          : (state.bookingData ? [state.bookingData] : [])
 
-        // Calculate duration in hours from startTime and endTime
-        const startHour = parseInt(bookingData.startTime.split(':')[0])
-        const endHour = parseInt(bookingData.endTime.split(':')[0])
-        const duration = endHour - startHour
-        const recurrenceWeeks = bookingData.recurrenceWeeks || 1
-        const selectedDays = bookingData.selectedDays || []
+        if (effectiveCart.length === 0) return 0
 
-        const baseRate = bookingData.hourlyRate * duration
+        const totalBase = effectiveCart.reduce((cartTotal, bookingData) => {
+          const [startH, startM] = bookingData.startTime.split(':').map(Number)
+          const [endH, endM] = bookingData.endTime.split(':').map(Number)
+          
+          let duration = (endH + (endM || 0) / 60) - (startH + (startM || 0) / 60)
+          if (duration <= 0) duration += 24 // Handle overnight bookings
 
-        // Calculate ACTUAL future slots that will be created (matching reservations.ts logic)
-        const initialStartTime = new Date(bookingData.date)
-        const [startH, startM] = bookingData.startTime.split(':')
-        initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
-        const startDayIndex = initialStartTime.getDay()
+          const recurrenceWeeks = bookingData.recurrenceWeeks || 1
+          const selectedDays = bookingData.selectedDays || []
 
-        // Deduplicate selected days
-        const uniqueSelectedDays = selectedDays.length > 0
-          ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
-          : [startDayIndex]
+          const baseRate = bookingData.hourlyRate * duration
 
-        // Count only FUTURE slots (matching reservation service skip logic)
-        let actualSlotCount = 0
-        for (let i = 0; i < recurrenceWeeks; i++) {
-          for (const dayIndex of uniqueSelectedDays) {
-            const dayOffset = (dayIndex - startDayIndex + 7) % 7
+          const initialStartTime = new Date(bookingData.date)
+          initialStartTime.setHours(startH, startM || 0, 0, 0)
+          const startDayIndex = initialStartTime.getDay()
 
-            const slotStartTime = new Date(initialStartTime.getTime())
-            slotStartTime.setDate(slotStartTime.getDate() + (i * 7) + dayOffset)
+          const uniqueSelectedDays = selectedDays.length > 0
+            ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
+            : [startDayIndex]
 
-            actualSlotCount++
+          let actualSlotCount = 0
+          for (let i = 0; i < recurrenceWeeks; i++) {
+            for (const dayIndex of uniqueSelectedDays) {
+              const dayOffset = (dayIndex - startDayIndex + 7) % 7
+
+              const slotStartTime = new Date(initialStartTime.getTime())
+              slotStartTime.setDate(slotStartTime.getDate() + (i * 7) + dayOffset)
+
+              // Check if this specific slot is in the conflict list
+              const dateStr = slotStartTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+              const isConflicted = state.conflictingSlots.some(c => 
+                c.courtId === bookingData.courtId && 
+                c.date === dateStr && 
+                c.startTime === bookingData.startTime
+              )
+
+              if (!isConflicted) {
+                actualSlotCount++
+              }
+            }
           }
-        }
 
-        // Calculate total based on ACTUAL slots that will be created
-        const totalBase = baseRate * actualSlotCount
+          return cartTotal + (baseRate * actualSlotCount)
+        }, 0)
+
         return Math.max(0, totalBase - state.discountAmount - state.promoDiscountAmount)
       },
 
@@ -341,9 +424,12 @@ export const useCheckoutStore = create<CheckoutState>()(
       name: 'checkout-storage',
       partialize: (state) => ({
         bookingData: state.bookingData,
+        bookingCart: state.bookingCart,
         isSplitPayment: state.isSplitPayment,
         playerCount: state.playerCount,
         customDownPaymentAmount: state.customDownPaymentAmount,
+        downPaymentPercentage: state.downPaymentPercentage,
+        conflictingSlots: state.conflictingSlots,
         // DO NOT persist paymentMethod - user must select it fresh each time
         // paymentMethod: state.paymentMethod,
       }),

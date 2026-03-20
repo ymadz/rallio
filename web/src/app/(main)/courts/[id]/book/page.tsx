@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { BookingForm } from '@/components/booking/booking-form'
 import { PlatformFeeLoader } from '@/components/checkout/platform-fee-loader'
+import { CourtHoursTabs } from '@/components/venue/court-hours-tabs'
 
 export async function generateMetadata({ params, searchParams }: {
   params: Promise<{ id: string }>
@@ -35,7 +36,13 @@ export default async function BookingPage({
   }
 
   // Get active courts
-  const activeCourts = venue.courts?.filter((c) => c.is_active) || []
+  const activeCourts = (venue.courts?.filter((c) => c.is_active) || []).map(court => ({
+    ...court,
+    opening_hours: (court as any).opening_hours || {}
+  }))
+
+  const courtsWithOverrides = activeCourts.filter((c: any) => c.opening_hours && Object.keys(c.opening_hours).length > 0)
+  const hasOverrides = courtsWithOverrides.length > 0
 
   if (activeCourts.length === 0) {
     return (
@@ -127,24 +134,32 @@ export default async function BookingPage({
               {/* Contact */}
               {venue.phone && (
                 <div className="mb-4">
-                  <p className="text-sm text-gray-600 mb-1">Contact</p>
-                  <p className="text-gray-900">{venue.phone}</p>
+                  <p className="text-sm text-gray-600 mb-2">Contact</p>
+                  <div className="flex items-center gap-3 text-sm bg-gray-50/50 p-2 rounded-lg border border-gray-100">
+                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+                      <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                      </svg>
+                    </div>
+                    <span className="text-gray-900 font-medium">{venue.phone}</span>
+                  </div>
                 </div>
               )}
 
               {/* Operating Hours */}
               {venue.opening_hours && (
                 <div>
-                  <p className="text-sm text-gray-600 mb-2">Operating Hours</p>
-                  <div className="space-y-1">
-                    {Object.entries(venue.opening_hours).map(([day, hours]: [string, any]) => (
-                      <div key={day} className="flex justify-between text-sm">
-                        <span className="text-gray-600 capitalize">{day}</span>
-                        <span className="text-gray-900">
-                          {hours.open} - {hours.close}
-                        </span>
-                      </div>
-                    ))}
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm text-gray-600">Operating Hours</p>
+                  </div>
+
+                  <div className="space-y-3">
+                    {activeCourts.length > 0 && (
+                      <CourtHoursTabs 
+                        venueOpeningHours={venue.opening_hours} 
+                        courts={activeCourts as any} 
+                      />
+                    )}
                   </div>
                 </div>
               )}

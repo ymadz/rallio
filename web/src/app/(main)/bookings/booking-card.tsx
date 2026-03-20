@@ -10,6 +10,7 @@ import { StatusBadge } from '@/components/shared/status-badge';
 // Redefining interface to avoid circular deps or complex exports for now
 export interface Booking {
   id: string;
+  booking_id?: string | null;
   start_time: string;
   end_time: string;
   status: string;
@@ -61,7 +62,7 @@ interface BookingCardProps {
   serverDate: Date | null;
   cancellingId: string | null;
   resumingPaymentId: string | null;
-  onCancelBooking: (booking: Booking) => void;
+  onCancelBooking: (booking: Booking, target?: 'reservation') => void;
   onRefundBooking: (booking: Booking) => void;
   onResumePayment: (booking: Booking, paymentMethod?: 'gcash' | 'paymaya') => void;
   onReschedule: (booking: Booking) => void;
@@ -452,7 +453,7 @@ export function BookingCard({
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-gray-500">Down Payment Paid</span>
                       <span className="font-medium text-gray-600">
-                        − ₱{booking.amount_paid.toFixed(2)}
+                        − ₱{Math.min(booking.amount_paid, booking.total_amount).toFixed(2)}
                       </span>
                     </div>
                     <div className="border-t border-dashed border-primary/15 my-1" />
@@ -461,7 +462,7 @@ export function BookingCard({
                         Remaining Balance Due
                       </span>
                       <span className="text-xl font-bold text-amber-700">
-                        ₱{(booking.total_amount - booking.amount_paid).toFixed(2)}
+                        ₱{Math.max(0, booking.total_amount - booking.amount_paid).toFixed(2)}
                       </span>
                     </div>
                   </div>
@@ -487,7 +488,7 @@ export function BookingCard({
                         Refund {booking.status === 'refunded' ? 'Processed' : 'Requested'}
                       </span>
                       <span className="text-xl font-bold text-primary">
-                        ₱{booking.amount_paid.toFixed(2)}
+                        ₱{Math.min(booking.amount_paid, booking.total_amount).toFixed(2)}
                       </span>
                     </div>
                   </div>
@@ -726,7 +727,7 @@ export function BookingCard({
                 </Link>
 
                 {/* Refund button for paid confirmed bookings (>24h) */}
-                {booking.status === 'confirmed' &&
+                {(booking.status === 'confirmed' || booking.status === 'partially_paid') &&
                   booking.amount_paid > 0 &&
                   canCancelBooking(booking) && (
                     <div className="w-full">
@@ -779,11 +780,11 @@ export function BookingCard({
                     </Button>
 
                     {/* Show Cancel for unpaid, nothing extra for paid (refund button is above) */}
-                    {!(booking.status === 'confirmed' && booking.amount_paid > 0) && (
+                    {!((booking.status === 'confirmed' || booking.status === 'partially_paid') && booking.amount_paid > 0) && (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => onCancelBooking(booking)}
+                        onClick={() => onCancelBooking(booking, 'reservation')}
                         disabled={cancellingId === booking.id}
                         className="w-full h-10 rounded-xl text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors"
                       >
@@ -807,11 +808,12 @@ export function BookingCard({
                                 d="M6 18L18 6M6 6l12 12"
                               />
                             </svg>
-                            Cancel
+                            Cancel Slot
                           </>
                         )}
                       </Button>
                     )}
+
                   </>
                 )}
               </>

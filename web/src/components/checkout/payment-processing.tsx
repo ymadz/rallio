@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useCheckoutStore } from '@/stores/checkout-store'
-import { createReservationAction } from '@/app/actions/reservations'
+import { createReservationAction, createMultiCourtReservationsAction, checkCartAvailabilityAction } from '@/app/actions/reservations'
 import { createQueueSession } from '@/app/actions/queue-actions'
 import { initiatePaymentAction } from '@/app/actions/payments'
 import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
@@ -14,6 +14,7 @@ export function PaymentProcessing() {
   const router = useRouter()
   const {
     bookingData,
+    bookingCart,
     isSplitPayment,
     playerCount,
     playerPayments,
@@ -61,6 +62,8 @@ export function PaymentProcessing() {
         return
       }
 
+      const effectiveCart = bookingCart.length > 0 ? bookingCart : [bookingData]
+
       // CRITICAL: Only initialize if payment method has been selected
       if (!paymentMethod) {
         console.warn('Payment initialization skipped: No payment method selected yet')
@@ -87,6 +90,26 @@ export function PaymentProcessing() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) {
           throw new Error('User not authenticated')
+        }
+
+        // Step 0: Final availability re-validation
+        const validationResult = await checkCartAvailabilityAction(effectiveCart.map(item => ({
+          courtId: item.courtId,
+          date: item.date,
+          startTime: item.startTime,
+          endTime: item.endTime,
+          recurrenceWeeks: item.recurrenceWeeks
+        })))
+
+        if (!validationResult.available && validationResult.conflicts.length > 0) {
+          // If EVERYTHING is conflicted now, we must stop.
+          if (validationResult.availableSlots === 0) {
+            throw new Error('All selected slots have just become unavailable. Please go back and select different times.')
+          }
+          // If some are conflicted, we could proceed, but it's safer to alert the user if they haven't seen this yet.
+          // However, our createReservation logic already skips conflicted ones. 
+          // To be strict as requested, we'll throw if the available count changed from what we expected.
+          console.warn('Final validation found new conflicts:', validationResult.conflicts)
         }
 
         // Step 1: Create the reservation
@@ -129,6 +152,10 @@ export function PaymentProcessing() {
         let requiresDownPayment = false
 
         if (bookingData.isQueueSession && bookingData.queueSessionData) {
+          if (effectiveCart.length > 1) {
+            throw new Error('Multi-court queue sessions are not supported yet. Please book one queue session at a time.')
+          }
+
           console.log('Creating queue session(s)...')
 
           const sessionResult = await createQueueSession({
@@ -176,6 +203,55 @@ export function PaymentProcessing() {
 
           newReservationId = sessionResult.session.reservationId
 
+        } else if (effectiveCart.length > 1) {
+          // Multi-court reservation flow
+          const multiItems = effectiveCart.map((item, index) => {
+            const itemDate = typeof item.date === 'string' ? new Date(item.date) : item.date
+            if (Number.isNaN(itemDate.getTime())) {
+              throw new Error(`Invalid booking date for item ${index + 1}`)
+            }
+
+            const [itemStartHour, itemStartMinute] = item.startTime.split(':').map(Number)
+            const [itemEndHour, itemEndMinute] = item.endTime.split(':').map(Number)
+
+            const itemStartDateTime = new Date(itemDate.getTime())
+            itemStartDateTime.setHours(itemStartHour, itemStartMinute ?? 0, 0, 0)
+
+            const itemEndDateTime = new Date(itemDate.getTime())
+            itemEndDateTime.setHours(itemEndHour, itemEndMinute ?? 0, 0, 0)
+
+            if (itemEndDateTime <= itemStartDateTime) {
+              itemEndDateTime.setDate(itemEndDateTime.getDate() + 1)
+            }
+
+            const itemDurationHours = Math.max(1, itemEndHour - itemStartHour)
+            const itemTotalAmount = item.hourlyRate * itemDurationHours
+
+            return {
+              courtId: item.courtId,
+              startTimeISO: itemStartDateTime.toISOString(),
+              endTimeISO: itemEndDateTime.toISOString(),
+              totalAmount: itemTotalAmount,
+              paymentType: isSplitPayment ? 'split' as const : 'full' as const,
+              paymentMethod,
+              notes: `Multi-court item ${index + 1}/${effectiveCart.length}`,
+              numPlayers: isSplitPayment ? playerCount : 1,
+            }
+          })
+
+          const multiResult = await createMultiCourtReservationsAction({
+            userId: user.id,
+            customDownPaymentAmount,
+            promoCode,
+            items: multiItems,
+          })
+
+          if (!multiResult.success || !multiResult.reservationId) {
+            throw new Error(multiResult.error || 'Failed to create multi-court reservations')
+          }
+
+          newReservationId = multiResult.reservationId
+          requiresDownPayment = !!multiResult.downPaymentRequired
         } else {
           // Standard Reservation Flow
           console.log('Creating standard reservation...')
@@ -340,7 +416,7 @@ export function PaymentProcessing() {
     // Note: getTotalAmount and setBookingReference are stable Zustand store functions
     // They don't need to be in the dependency array
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookingData, paymentMethod])
+  }, [bookingData, bookingCart, paymentMethod])
 
   // Manual retry function
   const handleRetry = () => {

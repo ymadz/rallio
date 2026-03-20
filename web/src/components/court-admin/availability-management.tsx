@@ -13,6 +13,7 @@ import {
   X,
   Loader2
 } from 'lucide-react'
+import { formatTo12Hour } from '@/lib/utils'
 import { getVenueAvailability, getBlockedDates, updateOperatingHours, addBlockedDate, removeBlockedDate } from '@/app/actions/court-admin-availability-actions'
 import { getVenueCourts } from '@/app/actions/court-admin-court-actions'
 
@@ -39,8 +40,8 @@ interface AvailabilityManagementProps {
 }
 
 export function AvailabilityManagement({ venueId }: AvailabilityManagementProps) {
+  const [selectedTarget, setSelectedTarget] = useState<'venue' | string>('venue')
   const [activeTab, setActiveTab] = useState<'schedule' | 'blocked'>('schedule')
-  const [timeSlots, setTimeSlots] = useState<any[]>([])
   const [blockedDates, setBlockedDates] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -48,6 +49,15 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
   const [showHoursModal, setShowHoursModal] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [courts, setCourts] = useState<any[]>([])
+  const [venueHours, setVenueHours] = useState<Record<string, { open: string; close: string; isOpen: boolean }>>({
+    monday: { open: '09:00', close: '22:00', isOpen: true },
+    tuesday: { open: '09:00', close: '22:00', isOpen: true },
+    wednesday: { open: '09:00', close: '22:00', isOpen: true },
+    thursday: { open: '09:00', close: '22:00', isOpen: true },
+    friday: { open: '09:00', close: '22:00', isOpen: true },
+    saturday: { open: '09:00', close: '22:00', isOpen: true },
+    sunday: { open: '09:00', close: '22:00', isOpen: true },
+  })
   const [operatingHours, setOperatingHours] = useState<Record<string, { open: string; close: string; isOpen: boolean }>>({
     monday: { open: '09:00', close: '22:00', isOpen: true },
     tuesday: { open: '09:00', close: '22:00', isOpen: true },
@@ -69,41 +79,96 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
     loadData()
   }, [venueId])
 
+  useEffect(() => {
+    // When selectedTarget changes, update the operatingHours display
+    const daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+    if (selectedTarget === 'venue') {
+      setOperatingHours(venueHours)
+    } else {
+      const selectedCourt = courts.find((c: any) => c.id === selectedTarget)
+      if (selectedCourt?.opening_hours) {
+        const courtHours: any = {}
+        daysOfWeek.forEach(day => {
+          const dayData = selectedCourt.opening_hours[day]
+          courtHours[day] = dayData ? {
+            open: dayData.open || '09:00',
+            close: dayData.close || '22:00',
+            isOpen: true
+          } : { open: '09:00', close: '22:00', isOpen: false }
+        })
+        setOperatingHours(courtHours)
+      } else {
+        setOperatingHours(venueHours)
+      }
+    }
+  }, [selectedTarget, courts, venueHours])
+
   const loadData = async () => {
     setIsLoading(true)
     setError(null)
     try {
-      const [availResult, blockedResult, courtsResult] = await Promise.all([
+      const [availResult, blockedResult, allCourtsResult] = await Promise.all([
         getVenueAvailability(venueId),
         getBlockedDates(venueId),
         getVenueCourts(venueId)
       ])
 
       if (availResult.success) {
-        // If venue has opening hours set, use those
-        if (availResult.openingHours && typeof availResult.openingHours === 'object' && !Array.isArray(availResult.openingHours)) {
-          const hours: any = {}
-          const daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
-          daysOfWeek.forEach(day => {
-            const venueDay = availResult.openingHours[day]
-            if (venueDay) {
-              hours[day] = {
-                open: venueDay.open || '09:00',
-                close: venueDay.close || '22:00',
-                isOpen: true
-              }
-            } else {
-              hours[day] = { open: '09:00', close: '22:00', isOpen: false }
+        // Parse venue hours
+        const venueHoursMap: any = {}
+        const daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+        daysOfWeek.forEach(day => {
+          const venueDay = availResult.openingHours?.[day] || null
+          venueHoursMap[day] = venueDay ? {
+            open: venueDay.open || '09:00',
+            close: venueDay.close || '22:00',
+            isOpen: true
+          } : { open: '09:00', close: '22:00', isOpen: false }
+        })
+        setVenueHours(venueHoursMap)
+
+        // Merge and set courts
+        const mergedCourts = availResult.courts || []
+        if (allCourtsResult.success && allCourtsResult.courts) {
+          // Add any courts from allCourtsResult that aren't in mergedCourts
+          allCourtsResult.courts.forEach((c: any) => {
+            if (!mergedCourts.find((mc: any) => mc.id === c.id)) {
+              mergedCourts.push(c)
             }
           })
-          setOperatingHours(hours)
+        }
+        setCourts(mergedCourts)
+
+        // Apply hours based on selectedTarget
+        if (selectedTarget === 'venue') {
+          setOperatingHours(venueHoursMap)
+        } else {
+          const selectedCourt = mergedCourts.find((c: any) => c.id === selectedTarget)
+          if (selectedCourt?.opening_hours) {
+            const courtHours: any = {}
+            daysOfWeek.forEach(day => {
+              const dayData = selectedCourt.opening_hours[day]
+              courtHours[day] = dayData ? {
+                open: dayData.open || '09:00',
+                close: dayData.close || '22:00',
+                isOpen: true
+              } : { open: '09:00', close: '22:00', isOpen: false }
+            })
+            setOperatingHours(courtHours)
+          } else {
+            setOperatingHours(venueHoursMap)
+          }
+        }
+      } else {
+        setError(availResult.error || 'Failed to load availability')
+        // Even if availResult fails, we might still have courts from allCourtsResult
+        if (allCourtsResult.success && allCourtsResult.courts) {
+          setCourts(allCourtsResult.courts)
         }
       }
+
       if (blockedResult.success) {
         setBlockedDates(blockedResult.blockedDates || [])
-      }
-      if (courtsResult.success) {
-        setCourts(courtsResult.courts || [])
       }
     } catch (err: any) {
       setError(err.message || 'Failed to load availability')
@@ -121,7 +186,11 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
         schedule[day] = hours.isOpen ? { open: hours.open, close: hours.close } : null
       })
 
-      const result = await updateOperatingHours(venueId, schedule)
+      const result = await updateOperatingHours(
+        venueId, 
+        schedule, 
+        selectedTarget === 'venue' ? undefined : selectedTarget
+      )
       if (!result.success) {
         throw new Error(result.error)
       }
@@ -276,10 +345,54 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
               <div className="flex-1">
                 <h3 className="font-semibold text-primary/80 mb-1">Operating Hours</h3>
                 <p className="text-sm text-primary/70">
-                  Set your default operating hours for each day of the week. These will apply to all courts unless specified otherwise.
+                  {selectedTarget === 'venue' 
+                    ? "Set your default operating hours for each day of the week. These will apply to all courts unless specified otherwise."
+                    : "Set custom operating hours for this specific court. These will override the venue default hours."
+                  }
                 </p>
+                {selectedTarget !== 'venue' && !courts.find(c => c.id === selectedTarget)?.opening_hours && (
+                  <p className="text-xs text-primary/60 mt-2 font-medium italic">
+                    Currently inheriting default venue hours.
+                  </p>
+                )}
               </div>
             </div>
+          </div>
+
+          {/* Target Selector */}
+          <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl p-4">
+            <span className="text-sm font-medium text-gray-700">Configure for:</span>
+            <select
+              value={selectedTarget}
+              onChange={(e) => setSelectedTarget(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-sm min-w-[200px]"
+            >
+              <option value="venue">Venue Default (All Courts)</option>
+              <optgroup label="Individual Courts">
+                {courts.map(court => (
+                  <option key={court.id} value={court.id}>{court.name}</option>
+                ))}
+              </optgroup>
+            </select>
+            {selectedTarget !== 'venue' && courts.find(c => c.id === selectedTarget)?.opening_hours && (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (confirm('Reset this court to use venue default hours?')) {
+                    setIsSubmitting(true)
+                    try {
+                      await updateOperatingHours(venueId, null as any, selectedTarget)
+                      await loadData()
+                    } finally {
+                      setIsSubmitting(false)
+                    }
+                  }
+                }}
+                className="text-xs text-red-600 hover:text-red-700 font-medium ml-auto"
+              >
+                Reset to Default
+              </button>
+            )}
           </div>
 
           {/* Time Slots Table */}
@@ -325,10 +438,10 @@ export function AvailabilityManagement({ venueId }: AvailabilityManagementProps)
                           <div className="font-medium text-gray-900 capitalize">{day}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{hours.isOpen ? hours.open : '-'}</div>
+                          <div className="text-sm text-gray-900">{hours.isOpen ? formatTo12Hour(hours.open) : '-'}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{hours.isOpen ? hours.close : '-'}</div>
+                          <div className="text-sm text-gray-900">{hours.isOpen ? formatTo12Hour(hours.close) : '-'}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           {hours.isOpen ? (

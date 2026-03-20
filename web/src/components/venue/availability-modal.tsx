@@ -1,4 +1,5 @@
 'use client'
+import { formatTo12Hour } from '@/lib/utils'
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
@@ -86,6 +87,7 @@ export function AvailabilityModal({
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
   const [loading, setLoading] = useState(false)
   const [isBooking, setIsBooking] = useState(false)
+
 
   // Pricing state
   const [calculatedPrice, setCalculatedPrice] = useState<{
@@ -348,12 +350,7 @@ export function AvailabilityModal({
     return () => clearTimeout(timeoutId)
   }, [startSlot, endSlot, recurrenceWeeks, selectedDays, selectedDate, courtId])
 
-  const formatTime = (time: string) => {
-    const [hours, minutes] = time.split(':').map(Number)
-    const period = hours >= 12 ? 'PM' : 'AM'
-    const displayHours = hours % 12 || 12
-    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`
-  }
+  const formatTime = (time: string) => formatTo12Hour(time)
 
   const getNextHour = (time: string) => {
     const [hours, minutes] = time.split(':').map(Number)

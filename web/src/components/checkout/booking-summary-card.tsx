@@ -1,7 +1,10 @@
 'use client';
 
 import { format } from 'date-fns';
+import { formatTo12Hour } from '@/lib/utils';
 import { useCheckoutStore, CheckoutStep } from '@/stores/checkout-store';
+import { useEffect, useState } from 'react';
+import { checkCartAvailabilityAction } from '@/app/actions/reservations';
 
 interface BookingSummaryCardProps {
   onContinue?: () => void;
@@ -22,6 +25,7 @@ export function BookingSummaryCard({
 }: BookingSummaryCardProps) {
   const {
     bookingData,
+    bookingCart,
     isSplitPayment,
     playerCount,
     getSubtotal,
@@ -35,12 +39,67 @@ export function BookingSummaryCard({
     platformFeePercentage,
     platformFeeEnabled,
     paymentMethod,
-    downPaymentPercentage,
+    customDownPaymentAmount,
     getDownPaymentAmount,
     getRemainingBalance,
+    setConflictingSlots,
   } = useCheckoutStore();
 
+  const [availability, setAvailability] = useState<{
+    loading: boolean;
+    available: boolean;
+    conflicts: any[];
+    totalSlots: number;
+    availableSlots: number;
+  }>({
+    loading: false,
+    available: true,
+    conflicts: [],
+    totalSlots: 0,
+    availableSlots: 0,
+  });
+
+  useEffect(() => {
+    if (!bookingData) return;
+
+    const checkAvailability = async () => {
+      setAvailability(prev => ({ ...prev, loading: true }));
+      const effectiveCart = bookingCart.length > 0 ? bookingCart : [bookingData];
+      
+      try {
+        const result = await checkCartAvailabilityAction(effectiveCart.map(item => ({
+          courtId: item.courtId,
+          date: item.date,
+          startTime: item.startTime,
+          endTime: item.endTime,
+          recurrenceWeeks: item.recurrenceWeeks,
+          selectedDays: item.selectedDays
+        })));
+        
+        setAvailability({
+          loading: false,
+          available: result.available,
+          conflicts: result.conflicts,
+          totalSlots: result.totalSlots,
+          availableSlots: result.availableSlots
+        });
+        
+        // Sync with store for price calculation
+        setConflictingSlots(result.conflicts);
+      } catch (error) {
+        console.error('Failed to check availability:', error);
+        setAvailability(prev => ({ ...prev, loading: false }));
+        setConflictingSlots([]);
+      }
+    };
+
+    checkAvailability();
+  }, [bookingData, bookingCart]);
+
   if (!bookingData) return null;
+
+  const effectiveCart = bookingCart.length > 0 ? bookingCart : [bookingData]
+  const isMultiCourt = effectiveCart.length > 1
 
   const subtotal = getSubtotal();
   const platformFee = getPlatformFeeAmount();
@@ -50,24 +109,21 @@ export function BookingSummaryCard({
   const remainingBalance = getRemainingBalance();
   const isCashWithDownpayment =
     paymentMethod === 'cash' &&
-    downPaymentPercentage &&
-    downPaymentPercentage > 0 &&
-    downPaymentAmount > 0;
+    downPaymentAmount > 0 &&
+    downPaymentAmount < total;
 
   let duration = 1;
   try {
-    const startHour = parseInt(bookingData.startTime.split(':')[0]);
-    const endHour = parseInt(bookingData.endTime.split(':')[0]);
-    duration = Math.max(1, endHour - startHour);
+    const [startH, startM] = bookingData.startTime.split(':').map(Number);
+    const [endH, endM] = bookingData.endTime.split(':').map(Number);
+    
+    let calcDuration = (endH + (endM || 0) / 60) - (startH + (startM || 0) / 60);
+    if (calcDuration <= 0) calcDuration += 24; // Handle overnight
+    
+    duration = calcDuration;
   } catch (e) {}
 
-  const formatTime = (timeString: string) => {
-    try {
-      return format(new Date(timeString), 'h:mm a');
-    } catch {
-      return timeString;
-    }
-  };
+  const formatTime = (timeString: string) => formatTo12Hour(timeString);
 
   // Calculate ACTUAL future slots that will be created (matching checkout-store logic)
   const getActualBookedDates = () => {
@@ -110,50 +166,71 @@ export function BookingSummaryCard({
 
       {/* Court Details */}
       <div className="space-y-3 pb-4 border-b border-gray-200">
-        <div>
-          <p className="text-sm text-gray-500">Court</p>
-          <p className="font-medium text-gray-900">{bookingData.courtName}</p>
-          <p className="text-xs text-gray-500">{bookingData.venueName}</p>
-        </div>
-
-        <div>
-          <p className="text-sm text-gray-500">Date & Time</p>
-          <p className="font-medium text-gray-900">
-            {format(new Date(bookingData.date), 'EEEE, MMM d, yyyy')}
-          </p>
-          <p className="text-sm text-gray-600 mb-2">
-            {formatTime(bookingData.startTime)} - {formatTime(bookingData.endTime)}
-          </p>
-
-          {bookedDates.length > 0 && (
-            <div className="mt-2 text-xs">
-              <p className="font-medium text-gray-700 mb-1">Booked Dates ({bookedDates.length}):</p>
-              <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto p-1.5 bg-gray-50 rounded-md border border-gray-100">
-                {bookedDates.map((date, idx) => (
-                  <span
-                    key={idx}
-                    className="bg-white border border-gray-200 text-gray-600 px-2 py-0.5 rounded-md shadow-sm"
-                  >
-                    {format(date, 'MMM d (E)')}
-                  </span>
-                ))}
-              </div>
+        {isMultiCourt ? (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-gray-500">Cart Items</p>
+              <p className="text-sm font-medium text-gray-900">{effectiveCart.length} slots</p>
             </div>
-          )}
+            <div className="max-h-[220px] overflow-y-auto rounded-md border border-gray-100 divide-y divide-gray-100">
+              {effectiveCart.map((item, index) => (
+                <div key={`${item.courtId}-${item.startTime}-${index}`} className="px-2.5 py-2">
+                  <p className="text-sm font-medium text-gray-900 truncate">{item.courtName}</p>
+                  <p className="text-xs text-gray-600 truncate">
+                    {format(new Date(item.date), 'EEE, MMM d')} • {formatTime(item.startTime)} - {formatTime(item.endTime)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <>
+            <div>
+              <p className="text-sm text-gray-500">Court</p>
+              <p className="font-medium text-gray-900">{bookingData.courtName}</p>
+              <p className="text-xs text-gray-500">{bookingData.venueName}</p>
+            </div>
 
-          {bookingData.recurrenceWeeks && bookingData.recurrenceWeeks > 1 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                {bookingData.recurrenceWeeks} Weeks Selection
-              </span>
-              {(bookingData.selectedDays?.length || 0) > 1 && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
-                  {bookingData.selectedDays?.length}x Weekly
-                </span>
+            <div>
+              <p className="text-sm text-gray-500">Date & Time</p>
+              <p className="font-medium text-gray-900">
+                {format(new Date(bookingData.date), 'EEEE, MMM d, yyyy')}
+              </p>
+              <p className="text-sm text-gray-600 mb-2">
+                {formatTime(bookingData.startTime)} - {formatTime(bookingData.endTime)}
+              </p>
+
+              {bookedDates.length > 0 && (
+                <div className="mt-2 text-xs">
+                  <p className="font-medium text-gray-700 mb-1">Booked Dates ({bookedDates.length}):</p>
+                  <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto p-1.5 bg-gray-50 rounded-md border border-gray-100">
+                    {bookedDates.map((date, idx) => (
+                      <span
+                        key={idx}
+                        className="bg-white border border-gray-200 text-gray-600 px-2 py-0.5 rounded-md shadow-sm"
+                      >
+                        {format(date, 'MMM d (E)')}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {bookingData.recurrenceWeeks && bookingData.recurrenceWeeks > 1 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                    {bookingData.recurrenceWeeks} Weeks Selection
+                  </span>
+                  {(bookingData.selectedDays?.length || 0) > 1 && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                      {bookingData.selectedDays?.length}x Weekly
+                    </span>
+                  )}
+                </div>
               )}
             </div>
-          )}
-        </div>
+          </>
+        )}
 
         {isSplitPayment && (
           <div>
@@ -167,9 +244,9 @@ export function BookingSummaryCard({
       <div className="space-y-2 py-4">
         <div className="flex justify-between text-sm">
           <span className="text-gray-600">
-            Court Fee (₱{bookingData.hourlyRate.toFixed(2)} × {duration}{' '}
-            {duration > 1 ? 'hrs' : 'hr'})
-            {bookedDates.length > 1 ? ` × ${bookedDates.length} sessions` : ''}
+            {isMultiCourt
+              ? `Court Fees (${effectiveCart.length} items)`
+              : `Court Fee (₱${bookingData.hourlyRate.toFixed(2)} × ${duration} ${duration > 1 ? 'hrs' : 'hr'})${bookedDates.length > 1 ? ` × ${bookedDates.length} sessions` : ''}`}
           </span>
           <span className="font-medium text-gray-900">
             ₱{(subtotal + discountAmount + promoDiscountAmount).toFixed(2)}
@@ -279,6 +356,38 @@ export function BookingSummaryCard({
 
       {/* Total */}
       <div className="pt-4 border-t border-gray-200">
+        {!availability.loading && !availability.available && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="flex items-start gap-2">
+              <svg className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div>
+                <p className="text-sm font-bold text-amber-800">
+                  {availability.availableSlots === 0 
+                    ? 'All Selected Slots Unavailable' 
+                    : 'Partial Availability Alert'}
+                </p>
+                <p className="text-xs text-amber-700 mt-1">
+                  {availability.availableSlots === 0 
+                    ? 'None of your selected slots are available. Please choose a different date or court.'
+                    : `Only ${availability.availableSlots} of ${availability.totalSlots} slots are available. Conflicted dates will be skipped:`}
+                </p>
+                {availability.availableSlots > 0 && (
+                  <ul className="mt-2 text-xs text-amber-700 list-disc list-inside space-y-0.5">
+                    {availability.conflicts.slice(0, 3).map((c, i) => (
+                      <li key={i}>
+                        <span className="font-semibold">{c.date}</span> • {formatTime(c.startTime)} - {formatTime(c.endTime)}
+                      </li>
+                    ))}
+                    {availability.conflicts.length > 3 && <li>...and {availability.conflicts.length - 3} more</li>}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-between items-center">
           <span className="text-base font-semibold text-gray-900">
             {isSplitPayment ? 'Your Share' : 'Total Amount'}
