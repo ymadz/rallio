@@ -126,7 +126,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     const groups: { [key: string]: BookingGroup } = {}
 
     filteredBookings.forEach(booking => {
-      // Priority 1: booking_id (multi-court)
+      // Priority 1: booking_id (multi-court/multi-day)
       // Priority 2: recurrence_group_id (recurring)
       // Priority 3: individual id (single)
       const groupId = booking.booking_id || booking.recurrence_group_id || booking.id
@@ -147,6 +147,15 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
       groups[groupId].reservations.push(booking)
       groups[groupId].totalAmount += booking.total_amount
       groups[groupId].amountPaid += booking.amount_paid
+    })
+
+    // CRITICAL: Post-process to ensure single-reservation groups are treated as single bookings
+    // This handles the case where a booking_id is shared but only 1 reservation remains (e.g. after cancellations)
+    // or if a booking_id was assigned but only 1 court was booked.
+    Object.values(groups).forEach(group => {
+      if (group.reservations.length === 1) {
+        group.type = 'single'
+      }
     })
 
     return Object.values(groups).sort((a, b) => {
