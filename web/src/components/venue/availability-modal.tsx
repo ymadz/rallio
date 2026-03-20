@@ -612,7 +612,7 @@ export function AvailabilityModal({
                       <span className="text-gray-600">Fully Booked Day</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
-                      <div className="w-[18px] h-[18px] rounded-full bg-primary/10 border border-primary/20 text-[10px] text-primary font-semibold flex items-center justify-center">3</div>
+                      <div className="w-[18px] h-[18px] rounded-full bg-primary border border-primary text-[10px] text-white font-semibold flex items-center justify-center">3</div>
                       <span className="text-gray-600">Slots Left (shown only for partially booked days)</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
@@ -647,7 +647,7 @@ export function AvailabilityModal({
                   </Select>
 
                   {recurrenceWeeks > 1 && (
-                    <div className="mt-2 text-xs text-blue-700 bg-blue-50 px-2 py-1.5 rounded flex items-start gap-1.5 border border-blue-100">
+                    <div className="mt-2 text-xs text-primary bg-primary/10 px-2 py-1.5 rounded flex items-start gap-1.5 border border-primary/20">
                       <span className="mt-0.5">ℹ️</span>
                       <span>
                         Booking will be created for <strong>{recurrenceWeeks} consecutive weeks</strong> at this time.
@@ -723,8 +723,8 @@ export function AvailabilityModal({
                     </div>
                   ) : (
                     <>
-                      <div className="bg-blue-50 border-b border-blue-100 px-4 py-3 shrink-0">
-                        <p className="text-xs text-blue-700">
+                      <div className="bg-primary/10 border-b border-primary/20 px-4 py-3 shrink-0">
+                        <p className="text-xs text-primary">
                           {!startSlot ? (
                             "Tap a time to start your booking"
                           ) : !endSlot ? (
@@ -806,8 +806,8 @@ export function AvailabilityModal({
                   )}
                   {/* Validation Loading */}
                   {validationState.validating && (
-                    <div className="mb-2 text-xs text-blue-600 flex items-center gap-1.5">
-                      <div className="animate-spin rounded-full h-3 w-3 border-2 border-blue-600 border-t-transparent" />
+                    <div className="mb-2 text-xs text-primary flex items-center gap-1.5">
+                      <div className="animate-spin rounded-full h-3 w-3 border-2 border-primary border-t-transparent" />
                       Checking availability...
                     </div>
                   )}
