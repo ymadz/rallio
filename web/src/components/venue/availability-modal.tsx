@@ -857,10 +857,10 @@ export function AvailabilityModal({
                 </div>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-3 w-full sm:w-auto">
+            <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center sm:justify-end sm:gap-3">
               <button
                 onClick={onClose}
-                className="px-4 sm:px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors w-full"
+                className="h-10 px-4 sm:px-6 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors w-full sm:w-auto whitespace-nowrap"
                 disabled={isBooking}
               >
                 Cancel
@@ -869,7 +869,7 @@ export function AvailabilityModal({
                 data-tutorial-step="5"
                 onClick={handleBook}
                 disabled={!startSlot || isBooking || !validationState.valid || validationState.validating || isCalculatingPrice}
-                className="px-4 sm:px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 w-full"
+                className="h-10 px-4 sm:px-6 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 w-full sm:w-auto whitespace-nowrap"
               >
                 {isBooking ? 'Processing...' : `Book (${duration} hr${duration > 1 ? 's' : ''})`}
               </button>
