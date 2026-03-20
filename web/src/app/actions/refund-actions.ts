@@ -172,13 +172,27 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
     // Calculate refundable amount
     const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0)
 
-    const { data: completedRefunds } = await supabase
+    let { data: completedRefunds } = await supabase
       .from('refunds')
       .select('amount')
       .eq('reservation_id', params.reservationId)
       .eq('status', 'succeeded')
 
-    const totalRefunded = completedRefunds?.reduce((sum, r) => r.amount + sum, 0) || 0
+    // FALLBACK for bulk: Sum all refunds for the entire booking/group
+    if (reservation.booking_id || reservation.recurrence_group_id) {
+      const query = supabase
+        .from('refunds')
+        .select('amount')
+        .eq('status', 'succeeded')
+      
+      if (reservation.booking_id) query.eq('metadata->>booking_id', reservation.booking_id)
+      else query.eq('metadata->>recurrence_group_id', reservation.recurrence_group_id)
+
+      const { data: groupRefunds } = await query
+      if (groupRefunds && groupRefunds.length > 0) completedRefunds = groupRefunds
+    }
+
+    const totalRefunded = completedRefunds?.reduce((sum, r) => Number(r.amount) + sum, 0) || 0
 
     // For bulk payments, ensure we don't refund more than the reservation amount
     // reservation.amount_paid is in pesos, refundableAmount is in pesos 
@@ -234,7 +248,9 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
           requested_at: new Date().toISOString(),
           original_payment_amount: paymentToRefund.amount,
           original_reservation_status: reservation.status,
-          is_bulk_partial_refund: !!reservation.recurrence_group_id
+          is_bulk_partial_refund: !!(reservation.recurrence_group_id || reservation.booking_id),
+          booking_id: reservation.booking_id,
+          recurrence_group_id: reservation.recurrence_group_id
         }
       })
       .select()

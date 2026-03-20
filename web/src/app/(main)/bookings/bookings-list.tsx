@@ -146,7 +146,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
 
       groups[groupId].reservations.push(booking)
       groups[groupId].totalAmount += booking.total_amount
-      groups[groupId].amountPaid += booking.amount_paid
+      groups[groupId].amountPaid += Math.min(booking.amount_paid, booking.total_amount)
     })
 
     // CRITICAL: Post-process to ensure single-reservation groups are treated as single bookings

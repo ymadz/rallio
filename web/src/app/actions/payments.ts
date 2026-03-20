@@ -593,12 +593,18 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
 
     // Update reservation with comprehensive error handling
     console.log(`Updating reservation to ${newReservationStatus}:`, payment.reservation_id)
-    // Fetch latest reservation first to get current amount_paid
+    // Fetch latest reservation first to get current amount_paid and total_amount
     const { data: currentRes } = await supabase
       .from('reservations')
-      .select('amount_paid')
+      .select('amount_paid, total_amount')
       .eq('id', payment.reservation_id)
       .single()
+
+    // BULK/RECURRING PAYMENT HANDLING
+    // Check if this is part of a booking or recurrence group
+    const recurrenceGroupId = payment.metadata?.recurrence_group_id
+    const bookingId = payment.metadata?.booking_id || payment.booking_id
+    const isBulkPayment = !!(bookingId || recurrenceGroupId)
 
     // For recurring down payments, use per-reservation share, not total payment
     let newAmountPaid: number
@@ -612,6 +618,10 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
       newAmountPaid = firstResForMeta?.metadata?.down_payment_amount
         ? Number(firstResForMeta.metadata.down_payment_amount)
         : payment.amount
+    } else if (isBulkPayment) {
+      // If it's a bulk full payment, this specific reservation only gets its own total_amount
+      // The other reservations in the group are handled in the bulk loop below.
+      newAmountPaid = currentRes?.total_amount || 0
     } else {
       newAmountPaid = (currentRes?.amount_paid || 0) + payment.amount
     }
@@ -677,8 +687,6 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
 
     // BULK/RECURRING PAYMENT HANDLING
     // Check if this is part of a booking or recurrence group and confirm the rest
-    const recurrenceGroupId = payment.metadata?.recurrence_group_id
-    const bookingId = payment.metadata?.booking_id || payment.booking_id
 
     if (bookingId || recurrenceGroupId) {
       console.log('🔄 Bulk Payment detected in processChargeableSourceAction:', { bookingId, recurrenceGroupId })

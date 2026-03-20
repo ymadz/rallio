@@ -138,8 +138,10 @@ export function BookingGroupModal({ group, isOpen, onClose, onSelectBooking, ser
                            })()}
                         </div>
                         <div>
-                          <div className="font-bold text-gray-800 group-hover:text-primary transition-colors">
-                            {format(bStart, 'h:mm a')} – {format(bEnd, 'h:mm a')}
+                          <div className="font-bold text-gray-800 group-hover:text-primary transition-colors flex items-center gap-2">
+                            <span>{format(bStart, 'MMM d')}</span>
+                            <span className="text-gray-300 font-normal">|</span>
+                            <span>{format(bStart, 'h:mm a')} – {format(bEnd, 'h:mm a')}</span>
                           </div>
                           <div className="text-xs text-gray-500 font-medium">
                             {booking.courts?.name} @ {booking.courts?.venues?.name}
@@ -170,10 +172,12 @@ export function BookingGroupModal({ group, isOpen, onClose, onSelectBooking, ser
                     <p className="text-gray-400 text-xs uppercase font-bold tracking-tighter">Amount Paid</p>
                     <p className="font-bold text-teal-600">₱{group.amountPaid.toFixed(2)}</p>
                   </div>
-                  <div>
-                    <p className="text-gray-400 text-xs uppercase font-bold tracking-tighter">Balance</p>
-                    <p className="font-bold text-amber-600">₱{Math.max(0, group.totalAmount - group.amountPaid).toFixed(2)}</p>
-                  </div>
+                  {!isFullyPaid && (
+                    <div>
+                      <p className="text-gray-400 text-xs uppercase font-bold tracking-tighter">Balance</p>
+                      <p className="font-bold text-amber-600">₱{Math.max(0, group.totalAmount - group.amountPaid).toFixed(2)}</p>
+                    </div>
+                  )}
                </div>
                <Button variant="ghost" className="text-gray-400 hover:text-gray-600 rounded-xl" onClick={onClose}>
                  Close Details

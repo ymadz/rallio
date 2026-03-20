@@ -169,7 +169,7 @@ export function CancelBookingModal({
                                     <div className="flex justify-between items-center mb-1">
                                         <span className="text-sm text-green-800">Est. Refundable Amount</span>
                                         <span className="text-lg font-bold text-green-900">
-                                            ₱{booking.amount_paid.toFixed(2)}
+                                            ₱{Math.min(booking.amount_paid, booking.total_amount).toFixed(2)}
                                         </span>
                                     </div>
                                     <p className="text-xs text-green-700">

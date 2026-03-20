@@ -298,7 +298,19 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
 
   const confirmBooking = (items: any[], conflictList: any[]) => {
     setIsBooking(true)
-    setBookingCart(items)
+    
+    // Filter out items that match a conflict in the conflictList
+    const validItems = items.filter(item => {
+      const itemDateStr = format(item.date, 'yyyy-MM-dd')
+      const hasConflict = conflictList.some(c => 
+        c.courtId === item.courtId && 
+        c.startTime === item.startTime && 
+        (c.dateISO === itemDateStr || c.date === format(item.date, 'MMM d, yyyy'))
+      )
+      return !hasConflict
+    })
+
+    setBookingCart(validItems)
     setConflictingSlots(conflictList)
     setDiscountDetails({ amount: 0, type: undefined, reason: undefined, discounts: [] })
     router.push('/checkout')
@@ -509,7 +521,7 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
                             onClick={() => toggleCell(court.id, time)}
                             disabled={!available}
                             className={[
-                              'w-full rounded-md px-2 py-2 text-xs font-medium transition-colors border flex flex-col items-center justify-center gap-0.5',
+                              'w-full relative rounded-md px-2 py-2 text-xs font-medium transition-colors border flex flex-col items-center justify-center gap-0.5 overflow-hidden',
                               selected
                                 ? conflicted 
                                   ? 'bg-amber-50 text-amber-700 border-amber-300' 
@@ -519,6 +531,12 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
                                   : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed',
                             ].join(' ')}
                           >
+                            {!available && (
+                              <div className="absolute inset-0 pointer-events-none opacity-20 flex items-center justify-center">
+                                <div className="w-[140%] h-[1px] bg-gray-400 rotate-[25deg] transform" />
+                                <div className="w-[140%] h-[1px] bg-gray-400 rotate-[-25deg] transform absolute" />
+                              </div>
+                            )}
                              <span>{selected ? (conflicted ? 'Conflicted' : 'Selected') : available ? 'Available' : (slot ? 'Booked' : 'Closed')}</span>
                           </button>
                         </td>
@@ -548,7 +566,7 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
                         onClick={() => toggleCell(court.id, time)}
                         disabled={!available}
                         className={[
-                          'rounded-md px-2 py-2 text-xs font-medium border text-left flex flex-col',
+                          'rounded-md px-2 py-2 text-xs font-medium border text-left flex flex-col relative overflow-hidden',
                           selected
                             ? conflicted 
                               ? 'bg-amber-50 text-amber-700 border-amber-300' 
@@ -558,6 +576,12 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
                               : 'bg-gray-100 text-gray-400 border-gray-200',
                         ].join(' ')}
                       >
+                        {!available && (
+                          <div className="absolute inset-0 pointer-events-none opacity-20 flex items-center justify-center">
+                            <div className="w-[140%] h-[1px] bg-gray-400 rotate-[25deg] transform" />
+                            <div className="w-[140%] h-[1px] bg-gray-400 rotate-[-25deg] transform absolute" />
+                          </div>
+                        )}
                         <p className="font-semibold truncate">{court.name}</p>
                         <p className="text-[10px] opacity-90">{selected ? (conflicted ? 'Conflicted' : 'Selected') : available ? 'Available' : (slot ? 'Booked' : 'Closed')}</p>
                       </button>

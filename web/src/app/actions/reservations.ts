@@ -541,6 +541,7 @@ export async function checkCartAvailabilityAction(items: Array<{
           allConflicts.push({
             courtId: item.courtId,
             date: slotStart.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+            dateISO: slotStart.toISOString().split('T')[0],
             startTime: item.startTime,
             endTime: item.endTime,
             reason: 'Slot already reserved'
