@@ -3,12 +3,13 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { format } from 'date-fns';
+import { endOfMonth, format, startOfMonth } from 'date-fns';
 import { formatTo12Hour } from '@/lib/utils';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 import logo from '@/assets/logo.png';
 import {
+  getVenueDailyAvailabilitySummaryAction,
   getAvailableTimeSlotsAction,
   checkCartAvailabilityAction,
 } from '@/app/actions/reservations';
@@ -65,6 +66,13 @@ interface VenueScheduleGridProps {
   venueName: string;
 }
 
+interface DailyAvailabilitySummary {
+  totalSlots: number;
+  availableSlots: number;
+}
+
+const LOW_AVAILABILITY_THRESHOLD = 10;
+
 function to12Hour(time: string) {
   return formatTo12Hour(time);
 }
@@ -109,6 +117,9 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
   const [conflictModalOpen, setConflictModalOpen] = useState(false);
   const [conflicts, setConflicts] = useState<any[]>([]);
   const [pendingCartItems, setPendingCartItems] = useState<any[]>([]);
+  const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
+  const [calendarSummary, setCalendarSummary] = useState<Record<string, DailyAvailabilitySummary>>({});
+  const [loadingCalendarSummary, setLoadingCalendarSummary] = useState(false);
 
   const { bookingCart, setBookingCart, setDiscountDetails, setConflictingSlots } =
     useCheckoutStore();
@@ -365,6 +376,55 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const selectedDateLabel = format(new Date(selectedDate + 'T00:00:00'), 'EEE, MMM d');
 
+  useEffect(() => {
+    setCalendarMonth(new Date(selectedDate + 'T00:00:00'));
+  }, [selectedDate]);
+
+  useEffect(() => {
+    async function loadCalendarSummary() {
+      if (!isDatePickerOpen || courts.length === 0) return;
+
+      setLoadingCalendarSummary(true);
+      try {
+        const monthStart = format(startOfMonth(calendarMonth), 'yyyy-MM-dd');
+        const monthEnd = format(endOfMonth(calendarMonth), 'yyyy-MM-dd');
+        const summary = await getVenueDailyAvailabilitySummaryAction({
+          venueId,
+          startDate: monthStart,
+          endDate: monthEnd,
+        });
+        setCalendarSummary(summary || {});
+      } catch (error) {
+        console.error('Failed to load calendar summary:', error);
+        setCalendarSummary({});
+      } finally {
+        setLoadingCalendarSummary(false);
+      }
+    }
+
+    loadCalendarSummary();
+  }, [isDatePickerOpen, calendarMonth, venueId, courts.length]);
+
+  const isDateFullyBooked = (date: Date) => {
+    const dateKey = format(date, 'yyyy-MM-dd');
+    const day = calendarSummary[dateKey];
+    return !!day && day.totalSlots > 0 && day.availableSlots === 0;
+  };
+
+  const getLowAvailabilityCount = (date: Date) => {
+    const dateKey = format(date, 'yyyy-MM-dd');
+    const day = calendarSummary[dateKey];
+    if (!day || day.availableSlots <= 0) return null;
+    if (day.availableSlots > LOW_AVAILABILITY_THRESHOLD) return null;
+    return day.availableSlots;
+  };
+
+  const isCalendarDateDisabled = (date: Date) => {
+    const start = new Date(today + 'T00:00:00');
+    if (date < start) return true;
+    return isDateFullyBooked(date);
+  };
+
   const shiftSelectedDate = (days: number) => {
     const nextDate = addDays(selectedDate, days);
     if (nextDate < today) return;
@@ -419,23 +479,51 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
               <DayPicker
                 mode="single"
                 selected={new Date(selectedDate + 'T00:00:00')}
+                month={calendarMonth}
+                onMonthChange={setCalendarMonth}
                 onSelect={(date) => {
                   if (!date) return;
+                  if (isCalendarDateDisabled(date)) return;
                   const newDate = format(date, 'yyyy-MM-dd');
                   setSelectedDate(newDate);
                   setAdditionalDates((prev) => prev.filter((d) => d !== newDate));
                   setIsDatePickerOpen(false);
                 }}
-                disabled={(date) => {
-                  const start = new Date(today + 'T00:00:00');
-                  return date < start;
-                }}
+                disabled={isCalendarDateDisabled}
                 className="mx-auto"
+                modifiers={{
+                  fullyBooked: (date) => isDateFullyBooked(date),
+                }}
                 modifiersClassNames={{
                   selected: 'bg-primary text-white hover:bg-primary',
                   today: 'font-bold text-primary',
+                  fullyBooked: 'bg-gray-200 text-gray-500 opacity-90 cursor-not-allowed',
+                }}
+                components={{
+                  DayButton: ({ day, className, children, ...props }: any) => {
+                    const date = day.date as Date;
+                    const lowAvailabilityCount = getLowAvailabilityCount(date);
+                    const fullyBooked = isDateFullyBooked(date);
+
+                    return (
+                      <button {...props} className={`${className ?? ''} relative`}>
+                        <span>{children}</span>
+                        {fullyBooked && (
+                          <span className="pointer-events-none absolute left-1/2 top-1/2 h-[2px] w-[72%] -translate-x-1/2 -translate-y-1/2 rotate-[-35deg] bg-gray-600" />
+                        )}
+                        {lowAvailabilityCount !== null && (
+                          <span className="pointer-events-none absolute right-0 top-0 z-10 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold leading-4 text-white">
+                            {lowAvailabilityCount}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  },
                 }}
               />
+              {loadingCalendarSummary && (
+                <p className="mt-2 text-center text-[11px] text-gray-500">Loading date availability...</p>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -467,6 +555,18 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
         <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700">
           <span className="h-2.5 w-2.5 rounded-full border border-gray-300 bg-gray-100" />
           Available
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700">
+          <span className="relative inline-flex h-3.5 w-3.5 items-center justify-center rounded bg-gray-200">
+            <span className="absolute h-[1.5px] w-4 rotate-[-35deg] bg-gray-600" />
+          </span>
+          Fully Booked Day
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700">
+          <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-white">
+            ≤10
+          </span>
+          Low Slots Left
         </span>
         <span className="inline-flex items-center gap-1 rounded-full border border-gray-300 bg-white px-2.5 py-1 text-xs">
           <span className="font-semibold text-gray-900">Open</span>
