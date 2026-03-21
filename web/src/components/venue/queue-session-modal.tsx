@@ -806,31 +806,6 @@ export function QueueSessionModal({
                                     </div>
                                 </div>
 
-                                {/* Game Format */}
-                                <div id="qm-tour-format">
-                                    <label className="block text-sm font-medium text-gray-700 mb-3">
-                                        Game Format <span className="text-red-500">*</span>
-                                    </label>
-                                    <div className="grid grid-cols-3 gap-3">
-                                        {(['singles', 'doubles', 'any'] as const).map((fmt) => (
-                                            <button
-                                                key={fmt}
-                                                type="button"
-                                                onClick={() => setGameFormat(fmt)}
-                                                className={`p-4 border-2 rounded-lg text-center transition-all ${gameFormat === fmt
-                                                    ? 'border-primary bg-primary/5'
-                                                    : 'border-gray-200 hover:border-gray-300'
-                                                    }`}
-                                            >
-                                                <div className="font-semibold text-gray-900 mb-1 capitalize">{fmt}</div>
-                                                <div className="text-xs text-gray-600">
-                                                    {fmt === 'singles' ? '2 players' : fmt === 'any' ? '4 players (any)' : '4 players'}
-                                                </div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
                                 {/* ELO Rating Range (for Competitive Mode) */}
                                 {mode === 'competitive' && (
                                     <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5">
@@ -935,6 +910,31 @@ export function QueueSessionModal({
                                         )}
                                     </div>
                                 )}
+
+                                {/* Game Format */}
+                                <div id="qm-tour-format">
+                                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                                        Game Format <span className="text-red-500">*</span>
+                                    </label>
+                                    <div className="grid grid-cols-3 gap-3">
+                                        {(['singles', 'doubles', 'any'] as const).map((fmt) => (
+                                            <button
+                                                key={fmt}
+                                                type="button"
+                                                onClick={() => setGameFormat(fmt)}
+                                                className={`p-4 border-2 rounded-lg text-center transition-all ${gameFormat === fmt
+                                                    ? 'border-primary bg-primary/5'
+                                                    : 'border-gray-200 hover:border-gray-300'
+                                                    }`}
+                                            >
+                                                <div className="font-semibold text-gray-900 mb-1 capitalize">{fmt}</div>
+                                                <div className="text-xs text-gray-600">
+                                                    {fmt === 'singles' ? '2 players' : fmt === 'any' ? '4 players (any)' : '4 players'}
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
 
                                 {/* Max Players */}
                                 <div id="qm-tour-players">
