@@ -1163,6 +1163,7 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
         is_active,
         venue_id,
         hourly_rate,
+        opening_hours,
         venues!inner (
           id,
           name,
@@ -1246,8 +1247,8 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
     for (const sessionStart of targetDates) {
       const sessionEnd = new Date(sessionStart.getTime() + durationMs)
 
-      // Validate against venue hours
-      const openingHours = venue?.opening_hours as Record<string, { open: string; close: string }> | null
+      // Validate against court hours first, then fallback to venue hours
+      const openingHours = (court.opening_hours || venue?.opening_hours) as Record<string, { open: string; close: string }> | null
 
       // Calculate Manila time instances for this specific session iteration
       const manilaStart = new Date(sessionStart.getTime() + 8 * 60 * 60 * 1000)
