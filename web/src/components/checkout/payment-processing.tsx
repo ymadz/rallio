@@ -158,10 +158,17 @@ export function PaymentProcessing() {
 
           console.log('Creating queue session(s)...')
 
+          // Use explicit Manila (+08:00) date-time strings to avoid local timezone drift
+          // that can incorrectly shift selected times (e.g., to 12:00 AM) in server validation.
+          const pad2 = (n: number) => n.toString().padStart(2, '0')
+          const queueDateStr = `${bookingDate.getFullYear()}-${pad2(bookingDate.getMonth() + 1)}-${pad2(bookingDate.getDate())}`
+          const queueStartTime = `${queueDateStr}T${bookingData.startTime}:00+08:00`
+          const queueEndTime = `${queueDateStr}T${bookingData.endTime}:00+08:00`
+
           const sessionResult = await createQueueSession({
             courtId: bookingData.courtId,
-            startTime: startDateTime,
-            endTime: endDateTime,
+            startTime: queueStartTime,
+            endTime: queueEndTime,
             mode: bookingData.queueSessionData.mode,
             gameFormat: bookingData.queueSessionData.gameFormat,
             maxPlayers: bookingData.queueSessionData.maxPlayers,

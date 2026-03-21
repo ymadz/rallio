@@ -1064,8 +1064,8 @@ export async function getQueueMasterHistory() {
 
 export interface CreateQueueSessionParams {
   courtId: string
-  startTime: Date
-  endTime: Date
+  startTime: Date | string
+  endTime: Date | string
   mode: 'casual' | 'competitive'
   gameFormat: 'singles' | 'doubles' | 'any'
   maxPlayers: number
