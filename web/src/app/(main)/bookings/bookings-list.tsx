@@ -153,6 +153,10 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     // This handles the case where a booking_id is shared but only 1 reservation remains (e.g. after cancellations)
     // or if a booking_id was assigned but only 1 court was booked.
     Object.values(groups).forEach(group => {
+      group.reservations.sort(
+        (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+      )
+
       if (group.reservations.length === 1) {
         group.type = 'single'
       }
@@ -522,7 +526,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
           </div>
 
           {/* Bookings List for Upcoming */}
-          {filteredBookings.length === 0 ? (
+          {groupedBookings.length === 0 ? (
             <div className="rounded-2xl border border-primary/15 bg-gradient-to-br from-primary/5 via-white to-teal-50 p-10 text-center">
               <div className="max-w-sm mx-auto">
                 <div className="w-16 h-16 bg-gradient-to-br from-primary/15 to-teal-100 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-sm">
@@ -550,20 +554,35 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {filteredBookings.map((booking) => (
-                <BookingPreviewCard
-                  key={booking.id}
-                  booking={booking}
-                  serverDate={serverDate}
-                  onClick={() => handleSelectBooking(booking)}
-                />
-              ))}
+              {groupedBookings.map((group) => {
+                if (group.type === 'single') {
+                  const booking = group.reservations[0]
+
+                  return (
+                    <BookingPreviewCard
+                      key={booking.id}
+                      booking={booking}
+                      serverDate={serverDate}
+                      onClick={() => handleSelectBooking(booking)}
+                    />
+                  )
+                }
+
+                return (
+                  <GroupedBookingPreviewCard
+                    key={group.id}
+                    group={group as any}
+                    serverDate={serverDate}
+                    onClick={() => setSelectedGroup(group)}
+                  />
+                )
+              })}
             </div>
           )}
         </TabsContent>
 
         <TabsContent value="history">
-          {filteredBookings.length === 0 ? (
+          {groupedBookings.length === 0 ? (
             <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-gray-50 via-white to-gray-50 p-10 text-center">
               <div className="max-w-sm mx-auto">
                 <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-sm">
@@ -577,20 +596,35 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {filteredBookings.map((booking) => (
-                <BookingPreviewCard
-                  key={booking.id}
-                  booking={booking}
-                  serverDate={serverDate}
-                  onClick={() => handleSelectBooking(booking)}
-                />
-              ))}
+              {groupedBookings.map((group) => {
+                if (group.type === 'single') {
+                  const booking = group.reservations[0]
+
+                  return (
+                    <BookingPreviewCard
+                      key={booking.id}
+                      booking={booking}
+                      serverDate={serverDate}
+                      onClick={() => handleSelectBooking(booking)}
+                    />
+                  )
+                }
+
+                return (
+                  <GroupedBookingPreviewCard
+                    key={group.id}
+                    group={group as any}
+                    serverDate={serverDate}
+                    onClick={() => setSelectedGroup(group)}
+                  />
+                )
+              })}
             </div>
           )}
         </TabsContent>
 
         <TabsContent value="refunds">
-          {filteredBookings.length === 0 ? (
+          {groupedBookings.length === 0 ? (
             <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-gray-50 via-white to-gray-50 p-10 text-center">
               <div className="max-w-sm mx-auto">
                 <div className="w-16 h-16 bg-gradient-to-br from-primary/10 to-teal-100 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-sm">
@@ -604,14 +638,29 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {filteredBookings.map((booking) => (
-                <BookingPreviewCard
-                  key={booking.id}
-                  booking={booking}
-                  serverDate={serverDate}
-                  onClick={() => handleSelectBooking(booking)}
-                />
-              ))}
+              {groupedBookings.map((group) => {
+                if (group.type === 'single') {
+                  const booking = group.reservations[0]
+
+                  return (
+                    <BookingPreviewCard
+                      key={booking.id}
+                      booking={booking}
+                      serverDate={serverDate}
+                      onClick={() => handleSelectBooking(booking)}
+                    />
+                  )
+                }
+
+                return (
+                  <GroupedBookingPreviewCard
+                    key={group.id}
+                    group={group as any}
+                    serverDate={serverDate}
+                    onClick={() => setSelectedGroup(group)}
+                  />
+                )
+              })}
             </div>
           )}
         </TabsContent>

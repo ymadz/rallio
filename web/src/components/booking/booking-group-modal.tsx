@@ -6,7 +6,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 
 interface BookingGroupModalProps {
   group: {
@@ -50,8 +49,8 @@ export function BookingGroupModal({ group, isOpen, onClose, onSelectBooking, ser
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent 
-        overlayClassName="bg-emerald-950/15 backdrop-blur-sm"
-        className="max-w-2xl p-0 bg-white border-2 border-white overflow-hidden rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.1)]"
+        overlayClassName="bg-black/20"
+        className="max-w-2xl p-0 bg-white border border-gray-200 overflow-hidden rounded-2xl"
       >
         <VisuallyHidden>
           <DialogTitle>
@@ -60,20 +59,22 @@ export function BookingGroupModal({ group, isOpen, onClose, onSelectBooking, ser
         </VisuallyHidden>
         <div className="relative">
           {/* Header Theme - Matching Rallio primary green */}
-          <div className="h-28 bg-primary p-6 flex flex-col justify-end shadow-[inset_0_-2px_6px_rgba(0,0,0,0.05)]">
+          <div className="h-24 bg-primary p-5 flex flex-col justify-end border-b border-primary/20">
             <div className="relative z-10 flex justify-between items-end">
               <div>
-                <h2 className="text-2xl font-bold text-white tracking-tight leading-tight">
+                <h2 className="text-xl font-semibold text-white tracking-tight leading-tight">
                   {group.type === 'grouped_recurring' ? 'Recurring Series' : 'Multi-Court Transaction'}
                 </h2>
-                <p className="text-white/80 text-sm font-medium">
+                <p className="text-white/80 text-sm">
                   {format(startDate, 'EEEE, MMMM d, yyyy')}
+                </p>
+                <p className="text-white/85 text-xs mt-1">
+                  Status: {groupStatusLabel}
                 </p>
               </div>
               <div className="text-right">
-                <StatusBadge status={groupStatus} label={groupStatusLabel} size="md" className="mb-2 shadow-lg ring-1 ring-white/20" />
                 <p className="text-xs text-white/60 mb-1">Total Transaction</p>
-                <p className="text-xl font-black text-white">₱{group.totalAmount.toFixed(2)}</p>
+                <p className="text-lg font-semibold text-white">₱{group.totalAmount.toFixed(2)}</p>
               </div>
             </div>
           </div>
@@ -88,73 +89,54 @@ export function BookingGroupModal({ group, isOpen, onClose, onSelectBooking, ser
 
             <div className="max-h-[380px] overflow-y-auto pr-4 -mr-4 custom-scrollbar">
               <div className="space-y-3 pb-4">
-                {group.reservations.map((booking) => {
+                {group.reservations.map((booking, index) => {
                   const bStart = new Date(booking.start_time)
                   const bEnd = new Date(booking.end_time)
+                  const courtImages = booking.courts?.court_images || []
+                  const primaryImage = courtImages.find((img) => img.is_primary)
+                  const imageUrl = primaryImage?.url || courtImages[0]?.url || booking.courts?.venues?.image_url
                   
                   return (
                     <div 
                       key={booking.id}
-                      className="group p-4 bg-white hover:bg-emerald-50/30 transition-all duration-300 rounded-2xl border border-gray-100 flex items-center justify-between cursor-pointer"
+                      className="group p-4 bg-white hover:bg-gray-50 transition-colors rounded-xl border border-gray-200 flex items-center justify-between cursor-pointer"
                       onClick={() => onSelectBooking(booking)}
                     >
                       <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center text-primary font-bold overflow-hidden shrink-0">
-                           {(() => {
-                              const name = booking.courts?.name || "Unit"
-                              const parts = name.split(' ')
-                              const prefixes = ['COURT', 'UNIT', 'GROUND', 'HALL', 'ROOM', 'PADEL', 'TABLE', 'VIP', 'MAIN']
-                              
-                              let header = ''
-                              let identifier = name
-                              
-                              if (parts.length > 1) {
-                                if (prefixes.includes(parts[0].toUpperCase())) {
-                                  header = parts[0].toUpperCase()
-                                  identifier = parts.slice(1).join(' ')
-                                } else if (prefixes.includes(parts[parts.length - 1].toUpperCase())) {
-                                  header = parts[parts.length - 1].toUpperCase()
-                                  identifier = parts.slice(0, parts.length - 1).join(' ')
-                                }
-                              }
-
-                              return (
-                                <>
-                                  {header && (
-                                    <div className="w-full bg-primary/5 text-[9px] text-center py-0.5 border-b border-primary/10 tracking-widest leading-none">
-                                      {header}
-                                    </div>
-                                  )}
-                                  <span className={cn(
-                                    "leading-none uppercase",
-                                    !header ? "mt-0" : "mt-1",
-                                    identifier.length > 3 ? "text-sm px-1 text-center" : 
-                                    identifier.length > 2 ? "text-base" : "text-xl"
-                                  )}>
-                                    {identifier}
-                                  </span>
-                                </>
-                              )
-                           })()}
+                        <div className="w-[10%] min-w-[54px] max-w-[64px] h-14 rounded-lg overflow-hidden border border-gray-200 bg-gray-100 shrink-0">
+                          {imageUrl ? (
+                            <img
+                              src={imageUrl}
+                              alt={booking.courts?.name || 'Court'}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-gray-400">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </div>
+                          )}
                         </div>
                         <div>
-                          <div className="font-bold text-gray-800 group-hover:text-primary transition-colors flex items-center gap-2">
+                          <div className="font-semibold text-gray-800 flex items-center gap-2">
                             <span>{format(bStart, 'MMM d')}</span>
                             <span className="text-gray-300 font-normal">|</span>
                             <span>{format(bStart, 'h:mm a')} – {format(bEnd, 'h:mm a')}</span>
                           </div>
-                          <div className="text-xs text-gray-500 font-medium">
+                          <div className="text-xs text-gray-500 truncate max-w-[220px] sm:max-w-[320px]">
                             {booking.courts?.name} @ {booking.courts?.venues?.name}
                           </div>
+                          <div className="text-[10px] text-gray-400 mt-1">Slot {index + 1}</div>
                         </div>
                       </div>
                       
                       <div className="flex items-center gap-3">
                         <div className="text-right hidden sm:block">
-                          <p className="text-sm font-bold text-gray-700">₱{booking.total_amount.toFixed(2)}</p>
+                          <p className="text-sm font-semibold text-gray-700">₱{booking.total_amount.toFixed(2)}</p>
                           <StatusBadge status={booking.status} label={booking.status.replace('_', ' ')} size="sm" />
                         </div>
-                        <div className="w-8 h-8 rounded-full bg-gray-200/50 group-hover:bg-primary/10 flex items-center justify-center text-gray-400 group-hover:text-primary transition-all">
+                        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 group-hover:text-primary transition-colors">
                           <svg className="w-4 h-4 translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                           </svg>
