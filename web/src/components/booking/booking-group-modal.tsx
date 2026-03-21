@@ -2,7 +2,7 @@
 
 import { format } from 'date-fns'
 import { Booking } from '@/app/(main)/bookings/booking-card'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { Button } from '@/components/ui/button'
@@ -50,16 +50,16 @@ export function BookingGroupModal({ group, isOpen, onClose, onSelectBooking, ser
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent 
         overlayClassName="bg-black/20"
-        className="max-w-2xl p-0 bg-white border border-gray-200 overflow-hidden rounded-2xl"
+        className="inset-0 translate-x-0 translate-y-0 data-[state=open]:slide-in-from-left-0 data-[state=open]:slide-in-from-top-0 data-[state=closed]:slide-out-to-left-0 data-[state=closed]:slide-out-to-top-0 w-screen h-[100dvh] max-w-none max-h-none p-0 bg-white border-0 overflow-hidden rounded-none sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=open]:slide-in-from-top-[48%] sm:data-[state=closed]:slide-out-to-left-1/2 sm:data-[state=closed]:slide-out-to-top-[48%] sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:border sm:border-gray-200 sm:rounded-2xl"
       >
         <VisuallyHidden>
           <DialogTitle>
             {group.type === 'grouped_recurring' ? 'Recurring Series' : 'Multi-Court Transaction'} Details
           </DialogTitle>
         </VisuallyHidden>
-        <div className="relative">
+        <div className="relative h-full min-h-0 flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
           {/* Header Theme - Matching Rallio primary green */}
-          <div className="h-24 bg-primary p-5 flex flex-col justify-end border-b border-primary/20">
+          <div className="h-24 shrink-0 bg-primary p-5 flex flex-col justify-end border-b border-primary/20">
             <div className="relative z-10 flex justify-between items-end">
               <div>
                 <h2 className="text-xl font-semibold text-white tracking-tight leading-tight">
@@ -79,16 +79,16 @@ export function BookingGroupModal({ group, isOpen, onClose, onSelectBooking, ser
             </div>
           </div>
 
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-4">
+          <div className="flex-1 min-h-0 p-4 sm:p-6 flex flex-col">
+            <div className="flex items-center justify-between mb-3 sm:mb-4 shrink-0">
               <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest">
                 Individual Slots ({group.reservations.length})
               </h3>
               <div className="h-px flex-1 bg-gray-100 mx-4" />
             </div>
 
-            <div className="max-h-[380px] overflow-y-auto pr-4 -mr-4 custom-scrollbar">
-              <div className="space-y-3 pb-4">
+            <div className="flex-1 min-h-0 overflow-y-auto pr-2 sm:pr-4 sm:-mr-4 custom-scrollbar">
+              <div className="space-y-3 pb-4 sm:pb-2">
                 {group.reservations.map((booking, index) => {
                   const bStart = new Date(booking.start_time)
                   const bEnd = new Date(booking.end_time)
@@ -148,7 +148,7 @@ export function BookingGroupModal({ group, isOpen, onClose, onSelectBooking, ser
               </div>
             </div>
             
-            <div className="mt-6 pt-6 border-t border-gray-100 flex justify-between items-center text-sm">
+            <div className="mt-3 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-100 flex justify-between items-center text-sm shrink-0 bg-white">
                <div className="flex gap-4">
                   <div>
                     <p className="text-gray-400 text-xs uppercase font-bold tracking-tighter">Amount Paid</p>
