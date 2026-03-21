@@ -25,6 +25,8 @@ export interface BookingData {
     costPerGame: number
     isPublic: boolean
     joinWindowHours: number | null
+    minEloRating?: number
+    maxEloRating?: number
   }
 }
 

@@ -1072,6 +1072,8 @@ export interface CreateQueueSessionParams {
   costPerGame: number
   isPublic?: boolean
   joinWindowHours?: number | null
+  minEloRating?: number
+  maxEloRating?: number
   recurrenceWeeks?: number
   selectedDays?: number[]
   paymentMethod?: 'cash' | 'e-wallet'

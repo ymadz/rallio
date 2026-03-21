@@ -66,6 +66,8 @@ export function QueueSessionModal({
     const [costPerGame, setCostPerGame] = useState(50)
     const [isPublic, setIsPublic] = useState(true)
     const [joinWindowHours, setJoinWindowHours] = useState<number | null>(null)
+    const [minEloRating, setMinEloRating] = useState<number | undefined>(undefined)
+    const [maxEloRating, setMaxEloRating] = useState<number | undefined>(undefined)
 
     // UI step: 'schedule' or 'settings'
     const [step, setStep] = useState<'schedule' | 'settings'>('schedule')
@@ -364,6 +366,8 @@ export function QueueSessionModal({
                     costPerGame,
                     isPublic,
                     joinWindowHours,
+                    minEloRating,
+                    maxEloRating,
                 },
             })
 
@@ -764,6 +768,91 @@ export function QueueSessionModal({
                                     </div>
                                 </div>
 
+                                {/* ELO Rating Range (for Competitive Mode) */}
+                                {mode === 'competitive' && (
+                                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5">
+                                        <div className="flex items-start gap-2 mb-4">
+                                            <div className="mt-1">
+                                                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-semibold text-gray-900 mb-1">
+                                                    Skill Level Requirements (Optional)
+                                                </label>
+                                                <p className="text-xs text-gray-600">
+                                                    Set an ELO rating range to ensure competitive matches. Leave blank for open access.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-700 mb-2">
+                                                    Minimum ELO Rating
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    value={minEloRating ?? ''}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value === '' ? undefined : Math.max(0, parseInt(e.target.value) || 0)
+                                                        setMinEloRating(val)
+                                                        // Auto-adjust max if it's lower
+                                                        if (val !== undefined && maxEloRating !== undefined && val > maxEloRating) {
+                                                            setMaxEloRating(val + 100)
+                                                        }
+                                                    }}
+                                                    placeholder="e.g., 1400"
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                />
+                                                <p className="text-xs text-gray-500 mt-1">Minimum skill level</p>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-700 mb-2">
+                                                    Maximum ELO Rating
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    value={maxEloRating ?? ''}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value === '' ? undefined : Math.max(0, parseInt(e.target.value) || 0)
+                                                        setMaxEloRating(val)
+                                                        // Auto-adjust min if it's higher
+                                                        if (val !== undefined && minEloRating !== undefined && val < minEloRating) {
+                                                            setMinEloRating(Math.max(0, val - 100))
+                                                        }
+                                                    }}
+                                                    placeholder="e.g., 1600"
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                />
+                                                <p className="text-xs text-gray-500 mt-1">Maximum skill level</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Range Display */}
+                                        {(minEloRating !== undefined || maxEloRating !== undefined) && (
+                                            <div className="mt-4 p-3 bg-white/60 rounded-lg border border-blue-200">
+                                                <div className="flex items-center justify-between text-sm">
+                                                    <span className="text-gray-600">ELO Range:</span>
+                                                    <span className="font-semibold text-blue-700">
+                                                        {minEloRating ?? '—'} {' '} to {' '} {maxEloRating ?? '—'}
+                                                    </span>
+                                                </div>
+                                                {minEloRating !== undefined && maxEloRating !== undefined && (
+                                                    <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+                                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                        </svg>
+                                                        Only players with ELO between {minEloRating} and {maxEloRating} can join
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
                                 {/* Game Format */}
                                 <div id="qm-tour-format">
                                     <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -788,6 +877,92 @@ export function QueueSessionModal({
                                         ))}
                                     </div>
                                 </div>
+
+                                {/* ELO Rating Range (for Competitive Mode) */}
+                                {mode === 'competitive' && (
+                                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5">
+                                        <div className="flex items-start gap-2 mb-4">
+                                            <div className="mt-1">
+                                                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-semibold text-gray-900 mb-1">
+                                                    Skill Level Requirements (Optional)
+                                                </label>
+                                                <p className="text-xs text-gray-600">
+                                                    Set an ELO rating range to ensure competitive matches. Leave blank for open access.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-700 mb-2">
+                                                    Minimum ELO Rating
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    value={minEloRating ?? ''}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value === '' ? undefined : Math.max(0, parseInt(e.target.value) || 0)
+                                                        setMinEloRating(val)
+                                                        // Auto-adjust max if it's lower
+                                                        if (val !== undefined && maxEloRating !== undefined && val > maxEloRating) {
+                                                            setMaxEloRating(val + 100)
+                                                        }
+                                                    }}
+                                                    placeholder="e.g., 1400"
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                />
+                                                <p className="text-xs text-gray-500 mt-1">Minimum skill level</p>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-700 mb-2">
+                                                    Maximum ELO Rating
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    value={maxEloRating ?? ''}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value === '' ? undefined : Math.max(0, parseInt(e.target.value) || 0)
+                                                        setMaxEloRating(val)
+                                                        // Auto-adjust min if it's higher
+                                                        if (val !== undefined && minEloRating !== undefined && val < minEloRating) {
+                                                            setMinEloRating(Math.max(0, val - 100))
+                                                        }
+                                                    }}
+                                                    placeholder="e.g., 1600"
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                />
+                                                <p className="text-xs text-gray-500 mt-1">Maximum skill level</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Range Display */}
+                                        {(minEloRating !== undefined || maxEloRating !== undefined) && (
+                                            <div className="mt-4 p-3 bg-white/60 rounded-lg border border-blue-200">
+                                                <div className="flex items-center justify-between text-sm">
+                                                    <span className="text-gray-600">ELO Range:</span>
+                                                    <span className="font-semibold text-blue-700">
+                                                        {minEloRating ?? '—'} {' '} to {' '} {maxEloRating ?? '—'}
+                                                    </span>
+                                                </div>
+                                                {minEloRating !== undefined && maxEloRating !== undefined && (
+                                                    <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+                                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                        </svg>
+                                                        Only players with ELO between {minEloRating} and {maxEloRating} can join
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
 
                                 {/* Max Players */}
                                 <div id="qm-tour-players">
