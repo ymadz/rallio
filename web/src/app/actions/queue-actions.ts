@@ -1161,6 +1161,7 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
         is_active,
         venue_id,
         hourly_rate,
+        opening_hours,
         venues!inner (
           id,
           name,
@@ -1244,8 +1245,11 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
     for (const sessionStart of targetDates) {
       const sessionEnd = new Date(sessionStart.getTime() + durationMs)
 
-      // Validate against venue hours
-      const openingHours = venue?.opening_hours as Record<string, { open: string; close: string }> | null
+      // Validate against court hours first, then fallback to venue hours
+      const courtOpeningHours = (court as any).opening_hours as Record<string, { open: string; close: string }> | null
+      const venueOpeningHours = venue?.opening_hours as Record<string, { open: string; close: string }> | null
+      const openingHours = courtOpeningHours || venueOpeningHours
+      const hoursSourceLabel = courtOpeningHours ? 'Court' : 'Venue'
 
       // Calculate Manila time instances for this specific session iteration
       const manilaStart = new Date(sessionStart.getTime() + 8 * 60 * 60 * 1000)
@@ -1258,7 +1262,7 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
 
         if (!dayHours) {
           const formattedDate = `${manilaStart.getUTCMonth() + 1}/${manilaStart.getUTCDate()}/${manilaStart.getUTCFullYear()}`
-          return { success: false, error: `Venue is closed on ${dayOfWeek} (${formattedDate})` }
+          return { success: false, error: `${hoursSourceLabel} is closed on ${dayOfWeek} (${formattedDate})` }
         }
 
         // Parse open/close times
@@ -1271,16 +1275,26 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
         const sessionEndM = manilaEnd.getUTCMinutes()
 
         const sessionStartMinutes = sessionStartH * 60 + sessionStartM
-        const sessionEndMinutes = sessionEndH * 60 + sessionEndM
+        let sessionEndMinutes = sessionEndH * 60 + sessionEndM
         const openMinutes = openH * 60 + (openM || 0)
-        const closeMinutes = closeH * 60 + (closeM || 0)
+        let closeMinutes = closeH * 60 + (closeM || 0)
+
+        // Treat 00:00 as end-of-day and handle overnight close values.
+        if (closeMinutes === 0 || closeMinutes <= openMinutes) {
+          closeMinutes = 24 * 60
+        }
+
+        // Normalize end time for sessions that cross midnight.
+        if (sessionEndMinutes <= sessionStartMinutes) {
+          sessionEndMinutes += 24 * 60
+        }
 
         // Allow tight fitting? Usually yes.
         if (sessionStartMinutes < openMinutes || sessionEndMinutes > closeMinutes) {
           const timeStr = `${sessionStartH % 12 || 12}:${sessionStartM.toString().padStart(2, '0')} ${sessionStartH >= 12 ? 'PM' : 'AM'}`
           return {
             success: false,
-            error: `Venue is closed at ${timeStr} on ${dayOfWeek}s (Open: ${dayHours.open} - ${dayHours.close})`
+            error: `${hoursSourceLabel} is closed at ${timeStr} on ${dayOfWeek}s (Open: ${dayHours.open} - ${dayHours.close})`
           }
         }
       }
