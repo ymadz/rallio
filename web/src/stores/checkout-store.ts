@@ -26,6 +26,8 @@ export interface BookingData {
     costPerGame: number
     isPublic: boolean
     joinWindowHours: number | null
+    minSkillLevel?: number | null
+    maxSkillLevel?: number | null
   }
 }
 

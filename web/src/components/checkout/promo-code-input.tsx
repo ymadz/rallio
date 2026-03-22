@@ -29,17 +29,14 @@ export function PromoCodeInput() {
         applicableDiscounts,
     } = useCheckoutStore()
 
-    // Wait for booking data
-    if (!bookingData) return null
-
-    const effectiveCart = bookingCart.length > 0 ? bookingCart : [bookingData]
-
-
+    const effectiveCart = useMemo(() => {
+        if (!bookingData) return []
+        return bookingCart.length > 0 ? bookingCart : [bookingData]
+    }, [bookingCart, bookingData])
 
     // Recalculate all discounts using the unified backend function
-    // Defined before early returns so it's available in all code paths
     const recalculateDiscounts = useCallback(async (promoCodeStr?: string) => {
-        if (!bookingData) return
+        if (!bookingData) return null
 
         // Compute the full base price (before any discounts)
         const basePrice = getSubtotal() + discountAmount + promoDiscountAmount
@@ -49,7 +46,6 @@ export function PromoCodeInput() {
         const endDateTime = `${dateStr}T${bookingData.endTime}:00+08:00`
 
         // For target date count, combine recurrence and selected days.
-        // Queue sessions can select multiple days even with 1 recurrence week.
         const uniqueDates = new Set(effectiveCart.map(item => new Date(item.date).toDateString()))
         let actualSlotCount = uniqueDates.size
         const recurrenceWeeks = bookingData.recurrenceWeeks || 1
@@ -94,9 +90,10 @@ export function PromoCodeInput() {
             return { promoDiscounts, venueDiscounts }
         }
         return null
-    }, [bookingData, discountAmount, effectiveCart, getSubtotal, promoDiscountAmount, setDiscountDetails])
+    }, [bookingData, discountAmount, effectiveCart, getSubtotal, promoDiscountAmount, setDiscountDetails, applicableDiscounts, discountReason, discountType])
 
     const discountRecalcKey = useMemo(() => {
+        if (!effectiveCart.length) return 'none'
         const cartSignature = effectiveCart
             .map(item => `${item.courtId}|${new Date(item.date).toISOString()}|${item.startTime}|${item.endTime}|${item.recurrenceWeeks || 1}|${(item.selectedDays || []).join(',')}`)
             .join('||')
@@ -127,6 +124,9 @@ export function PromoCodeInput() {
             isCancelled = true
         }
     }, [bookingData, discountRecalcKey, promoCode, recalculateDiscounts])
+
+    // Wait for booking data
+    if (!bookingData) return null
 
     // If a promotion is already applied, show success state
     if (promoCode && promoDiscountAmount > 0) {

@@ -29,6 +29,8 @@ export interface QueueSessionData {
   mode: 'casual' | 'competitive'
   gameFormat: 'singles' | 'doubles' | 'mixed'
   joinWindowHours?: number | null
+  minSkillLevel?: number | null
+  maxSkillLevel?: number | null
   reservationId?: string
   totalCost?: number
   paymentStatus?: 'pending' | 'paid' | 'failed'
@@ -397,6 +399,8 @@ export async function getQueueDetails(courtId: string) {
       userPosition,
       organizerId: session.organizer_id,
       organizerName,
+      minSkillLevel: session.min_skill_level,
+      maxSkillLevel: session.max_skill_level,
       sessionSummary: session.settings?.summary
         ? {
             totalGames: Number(session.settings.summary.totalGames || 0),
@@ -688,6 +692,8 @@ export async function getMyQueues() {
           mode: p.queue_sessions.mode || 'casual',
           costPerGame: parseFloat(p.queue_sessions.cost_per_game || '0'),
           organizerName,
+          minSkillLevel: p.queue_sessions.min_skill_level,
+          maxSkillLevel: p.queue_sessions.max_skill_level,
         }
       })
     )
@@ -937,6 +943,8 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
         mode: session.mode || 'casual',
         costPerGame: parseFloat(session.cost_per_game || '0'),
         organizerName: organizerNames[session.organizer_id] || 'Unknown Host',
+        minSkillLevel: session.min_skill_level,
+        maxSkillLevel: session.max_skill_level,
       }
       })
 
@@ -1101,6 +1109,8 @@ export interface CreateQueueSessionParams {
   paymentMethod?: 'cash' | 'e-wallet'
   promoCode?: string
   customDownPaymentAmount?: number
+  minSkillLevel?: number | null
+  maxSkillLevel?: number | null
 }
 
 /**
@@ -1525,6 +1535,8 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
           max_players: data.maxPlayers,
           cost_per_game: data.costPerGame,
           is_public: data.isPublic,
+          min_skill_level: data.minSkillLevel ?? null,
+          max_skill_level: data.maxSkillLevel ?? null,
           status: 'pending_payment',
           current_players: 0,
           metadata: {
@@ -1607,6 +1619,8 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
         paymentStatus: session.metadata?.payment_status || 'pending',
         paymentMethod: data.paymentMethod || 'e-wallet',
         totalCost: totalAmountPerSlotTotal,
+        minSkillLevel: session.min_skill_level ?? null,
+        maxSkillLevel: session.max_skill_level ?? null,
       })
     }
 
@@ -1681,6 +1695,8 @@ export async function updateQueueSession(
     maxPlayers: number
     costPerGame: number
     isPublic: boolean
+    minSkillLevel?: number | null
+    maxSkillLevel?: number | null
   }>
 ): Promise<{
   success: boolean
@@ -1750,6 +1766,8 @@ export async function updateQueueSession(
     if (updates.maxPlayers !== undefined) updateData.max_players = updates.maxPlayers
     if (updates.costPerGame !== undefined) updateData.cost_per_game = updates.costPerGame
     if (updates.isPublic !== undefined) updateData.is_public = updates.isPublic
+    if (updates.minSkillLevel !== undefined) updateData.min_skill_level = updates.minSkillLevel
+    if (updates.maxSkillLevel !== undefined) updateData.max_skill_level = updates.maxSkillLevel
 
     // 6. Update session
     const { data: updatedSession, error: updateError } = await supabase
@@ -1788,6 +1806,8 @@ export async function updateQueueSession(
       createdAt: new Date(updatedSession.created_at),
       mode: updatedSession.mode,
       gameFormat: updatedSession.game_format,
+      minSkillLevel: updatedSession.min_skill_level ?? null,
+      maxSkillLevel: updatedSession.max_skill_level ?? null,
     }
 
     // 7b. Sync with linked reservation if time was updated

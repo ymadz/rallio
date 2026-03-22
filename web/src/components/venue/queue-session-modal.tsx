@@ -78,6 +78,8 @@ export function QueueSessionModal({
     const [costPerGame, setCostPerGame] = useState(50)
     const [isPublic, setIsPublic] = useState(true)
     const [joinWindowHours, setJoinWindowHours] = useState<number | null>(null)
+    const [isSkillRestricted, setIsSkillRestricted] = useState(false)
+    const [selectedTiers, setSelectedTiers] = useState<string[]>(['beginner', 'intermediate', 'advanced', 'elite'])
 
     // UI step: 'schedule' or 'settings'
     const [step, setStep] = useState<'schedule' | 'settings'>(preselectedStartTime && preselectedEndTime ? 'settings' : 'schedule')
@@ -405,6 +407,8 @@ export function QueueSessionModal({
                     costPerGame,
                     isPublic,
                     joinWindowHours,
+                    minSkillLevel: isSkillRestricted ? Math.min(...selectedTiers.map(t => t === 'beginner' ? 1 : t === 'intermediate' ? 4 : t === 'advanced' ? 7 : 9)) : null,
+                    maxSkillLevel: isSkillRestricted ? Math.max(...selectedTiers.map(t => t === 'beginner' ? 3 : t === 'intermediate' ? 6 : t === 'advanced' ? 8 : 10)) : null,
                 },
             })
 
@@ -901,6 +905,68 @@ export function QueueSessionModal({
                                         />
                                         <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                                     </label>
+                                </div>
+
+                                {/* Skill Level Restriction */}
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                        <div>
+                                            <p className="font-medium text-gray-900">Skill Level Restricted</p>
+                                            <p className="text-xs text-gray-500">Only allow certain skill levels to join</p>
+                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={isSkillRestricted}
+                                                onChange={(e) => setIsSkillRestricted(e.target.checked)}
+                                                className="sr-only peer"
+                                            />
+                                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                                        </label>
+                                    </div>
+
+                                    {isSkillRestricted && (
+                                        <div className="p-4 border border-gray-200 rounded-xl space-y-4 animate-in fade-in slide-in-from-top-2">
+                                            <Label className="text-sm font-semibold text-gray-900">Allowed Skill Tiers</Label>
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                                {[
+                                                    { id: 'beginner', label: 'Beginner', range: 'L1-3' },
+                                                    { id: 'intermediate', label: 'Intermediate', range: 'L4-6' },
+                                                    { id: 'advanced', label: 'Advanced', range: 'L7-8' },
+                                                    { id: 'elite', label: 'Elite', range: 'L9-10' },
+                                                ].map((tier) => {
+                                                    const isSelected = selectedTiers.includes(tier.id)
+                                                    return (
+                                                        <button
+                                                            key={tier.id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                if (isSelected) {
+                                                                    if (selectedTiers.length > 1) {
+                                                                        setSelectedTiers(prev => prev.filter(t => t !== tier.id))
+                                                                    }
+                                                                } else {
+                                                                    setSelectedTiers(prev => [...prev, tier.id])
+                                                                }
+                                                            }}
+                                                            className={cn(
+                                                                "flex flex-col items-center p-3 rounded-lg border-2 transition-all",
+                                                                isSelected
+                                                                    ? "border-primary bg-primary/5 text-primary"
+                                                                    : "border-gray-100 bg-white text-gray-500 hover:border-gray-200"
+                                                            )}
+                                                        >
+                                                            <span className="text-xs font-bold uppercase tracking-tight">{tier.label}</span>
+                                                            <span className="text-[10px] opacity-70">{tier.range}</span>
+                                                        </button>
+                                                    )
+                                                })}
+                                            </div>
+                                            <p className="text-[11px] text-gray-500 italic">
+                                                Note: A contiguous range will be created between the lowest and highest selected tiers.
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}

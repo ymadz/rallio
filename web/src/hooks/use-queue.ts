@@ -69,6 +69,8 @@ export interface QueueSession {
     startTime: Date
     duration: number
   }
+  minSkillLevel?: number | null
+  maxSkillLevel?: number | null
 }
 
 /**
@@ -173,6 +175,8 @@ export function useQueue(courtId: string) {
         costPerGame: queueData.costPerGame,
         sessionSummary: (queueData as any).sessionSummary,
         matchOutcomes: (queueData as any).matchOutcomes,
+        minSkillLevel: queueData.minSkillLevel,
+        maxSkillLevel: queueData.maxSkillLevel,
       }
 
       setQueue(transformedQueue)
@@ -393,6 +397,8 @@ export function useMyQueues() {
         mode: (q.mode || 'casual') as 'casual' | 'competitive',
         costPerGame: q.costPerGame,
         organizerName: q.organizerName,
+        minSkillLevel: q.minSkillLevel,
+        maxSkillLevel: q.maxSkillLevel,
       }))
 
       sessionIdsRef.current = transformedQueues.map(q => q.id)
@@ -554,6 +560,8 @@ export function useNearbyQueues(latitude?: number, longitude?: number) {
         mode: (q.mode || 'casual') as 'casual' | 'competitive',
         costPerGame: q.costPerGame,
         organizerName: q.organizerName,
+        minSkillLevel: q.minSkillLevel,
+        maxSkillLevel: q.maxSkillLevel,
       }))
 
       setQueues(transformedQueues)

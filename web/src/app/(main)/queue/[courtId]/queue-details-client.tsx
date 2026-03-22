@@ -28,6 +28,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
   const [isLeaving, setIsLeaving] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [participant, setParticipant] = useState<any>(null)
+  const [userSkillLevel, setUserSkillLevel] = useState<number | null>(null)
 
   const [timeUntilOpen, setTimeUntilOpen] = useState<number | null>(null)
 
@@ -96,6 +97,20 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
     }
     getCurrentUser()
   }, [])
+
+  // Fetch user skill level
+  useEffect(() => {
+    if (!currentUserId) return
+    async function fetchUserSkill() {
+      const { data } = await supabase
+        .from('players')
+        .select('skill_level')
+        .eq('user_id', currentUserId)
+        .single()
+      setUserSkillLevel(data?.skill_level || null)
+    }
+    fetchUserSkill()
+  }, [currentUserId])
 
   // Fetch participant details and keep in sync with realtime updates
   useEffect(() => {
@@ -408,6 +423,11 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
   const playersAhead = isUserInQueue ? queue.userPosition! - 1 : 0
   const estimatedWaitTime = Math.max(playersAhead * 15, 0) // ~15 min per game ahead
 
+  const isSkillMismatch = queue && userSkillLevel !== null && (
+    (queue.minSkillLevel != null && userSkillLevel < queue.minSkillLevel) ||
+    (queue.maxSkillLevel != null && userSkillLevel > queue.maxSkillLevel)
+  )
+
 
   return (
     <>
@@ -514,6 +534,15 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
           <div className="bg-white border border-gray-200 rounded-xl p-6">
             <h3 className="font-semibold text-gray-900 mb-3">Join Queue</h3>
 
+            {isSkillMismatch && (
+              <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-700">
+                  Skill level mismatch: Your level ({userSkillLevel}) is outside the required range ({queue.minSkillLevel || 1}-{queue.maxSkillLevel || 10}).
+                </p>
+              </div>
+            )}
+
             {timeUntilOpen !== null && timeUntilOpen > 0 ? (
               <div className="space-y-4">
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
@@ -555,8 +584,8 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                 </div>
                 <button
                   onClick={handleJoinQueue}
-                  disabled={isJoining || queue.players.length >= queue.maxPlayers}
-                  title={queue.players.length >= queue.maxPlayers ? 'Queue is full' : undefined}
+                  disabled={isJoining || queue.players.length >= queue.maxPlayers || isSkillMismatch}
+                  title={isSkillMismatch ? 'Skill level mismatch' : queue.players.length >= queue.maxPlayers ? 'Queue is full' : undefined}
                   className="w-full bg-primary text-white py-3.5 rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {isJoining ? (
@@ -683,7 +712,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
           {!isUserInQueue ? (
             <button
               onClick={handleJoinQueue}
-              disabled={isJoining || queue.players.length >= queue.maxPlayers}
+              disabled={isJoining || queue.players.length >= queue.maxPlayers || isSkillMismatch}
               className="w-full bg-primary text-white py-4 rounded-xl font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg"
             >
               {isJoining ? (
