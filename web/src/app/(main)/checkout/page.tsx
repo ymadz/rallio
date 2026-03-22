@@ -434,6 +434,28 @@ export default function CheckoutPage() {
                                                 <span className="text-gray-600">Mode:</span>
                                                 <span className="font-medium text-gray-900 capitalize">{bookingData.queueSessionData.mode}</span>
                                             </div>
+                                            {(bookingData.queueSessionData.minSkillLevel != null || bookingData.queueSessionData.maxSkillLevel != null) && (
+                                                <div className="flex justify-between py-3 border-b border-gray-100">
+                                                    <span className="text-gray-600">Skill Level:</span>
+                                                    <span className="font-medium text-gray-900">
+                                                        {(() => {
+                                                            const min = bookingData.queueSessionData.minSkillLevel;
+                                                            const max = bookingData.queueSessionData.maxSkillLevel;
+                                                            if (min === 1 && max === 3) return 'Beginner';
+                                                            if (min === 4 && max === 6) return 'Intermediate';
+                                                            if (min === 7 && max === 8) return 'Advanced';
+                                                            if (min === 9 && max === 10) return 'Elite';
+                                                            
+                                                            const getTier = (l: number) => l <= 3 ? 'Beg' : l <= 6 ? 'Int' : l <= 8 ? 'Adv' : 'Elite';
+                                                            if (min != null && max != null) {
+                                                                if (getTier(min) === getTier(max)) return getTier(min);
+                                                                return `${getTier(min)} - ${getTier(max)}`;
+                                                            }
+                                                            return min != null ? `${getTier(min)}+` : `Up to ${getTier(max!)}`;
+                                                        })()}
+                                                    </span>
+                                                </div>
+                                            )}
                                             <div className="flex justify-between py-3 border-b border-gray-100">
                                                 <span className="text-gray-600">Game Format:</span>
                                                 <span className="font-medium text-gray-900 capitalize">{bookingData.queueSessionData.gameFormat}</span>
