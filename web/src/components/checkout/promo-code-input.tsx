@@ -23,7 +23,10 @@ export function PromoCodeInput() {
         setPromoDiscount,
         setDiscountDetails,
         removePromoDiscount,
-        discountAmount
+        discountAmount,
+        discountType,
+        discountReason,
+        applicableDiscounts,
     } = useCheckoutStore()
 
     // Wait for booking data
@@ -45,18 +48,16 @@ export function PromoCodeInput() {
         const startDateTime = `${dateStr}T${bookingData.startTime}:00+08:00`
         const endDateTime = `${dateStr}T${bookingData.endTime}:00+08:00`
 
-        // For target date count, combine recurrence logic and multi-cart unique dates
+        // For target date count, combine recurrence and selected days.
+        // Queue sessions can select multiple days even with 1 recurrence week.
         const uniqueDates = new Set(effectiveCart.map(item => new Date(item.date).toDateString()))
         let actualSlotCount = uniqueDates.size
         const recurrenceWeeks = bookingData.recurrenceWeeks || 1
-
-        if (bookingData.recurrenceWeeks && bookingData.recurrenceWeeks > 1) {
-             const selectedDays = bookingData.selectedDays || []
-             const uniqueSelectedDays = selectedDays.length > 0
-                ? Array.from(new Set(selectedDays))
-                : [new Date(bookingData.date).getDay()]
-             actualSlotCount = Math.max(actualSlotCount, uniqueSelectedDays.length * bookingData.recurrenceWeeks)
-        }
+        const selectedDays = bookingData.selectedDays || []
+        const uniqueSelectedDays = selectedDays.length > 0
+            ? Array.from(new Set(selectedDays))
+            : [new Date(bookingData.date).getDay()]
+        actualSlotCount = Math.max(actualSlotCount, uniqueSelectedDays.length * recurrenceWeeks)
 
         const unifiedResult = await calculateApplicableDiscounts({
             venueId: bookingData.venueId,
@@ -75,12 +76,20 @@ export function PromoCodeInput() {
             const venueDiscounts = unifiedResult.discounts.filter(d => d.type !== 'promo_code')
             const venueTotal = venueDiscounts.reduce((sum, d) => d.isIncrease ? sum - d.amount : sum + d.amount, 0)
 
-            setDiscountDetails({
-                amount: venueTotal,
-                type: venueDiscounts[0]?.name,
-                reason: venueDiscounts.map(d => d.description).join(', '),
-                discounts: venueDiscounts
-            })
+            const hasExistingQueueDiscount =
+                bookingData.isQueueSession &&
+                Math.abs(discountAmount) > 0 &&
+                ((applicableDiscounts && applicableDiscounts.length > 0) || !!discountType || !!discountReason)
+
+            // Do not wipe queue-session non-promo discounts if backend recalc returns only promo entries.
+            if (venueDiscounts.length > 0 || !hasExistingQueueDiscount) {
+                setDiscountDetails({
+                    amount: venueTotal,
+                    type: venueDiscounts[0]?.name,
+                    reason: venueDiscounts.map(d => d.description).join(', '),
+                    discounts: venueDiscounts
+                })
+            }
 
             return { promoDiscounts, venueDiscounts }
         }
