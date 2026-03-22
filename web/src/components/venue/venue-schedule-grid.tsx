@@ -4,10 +4,9 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { endOfMonth, format, startOfMonth } from 'date-fns';
-import { formatTo12Hour } from '@/lib/utils';
+import { formatTo12Hour, cn } from '@/lib/utils';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
-import logo from '@/assets/logo.png';
 import {
   getSameTimeBookingEligibleDatesAction,
   getVenueDailyAvailabilitySummaryAction,
@@ -503,45 +502,45 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
   return (
     <div className="mb-6 rounded-2xl border border-gray-200/90 bg-white p-4 md:p-6">
       {/* 1) Top Control Header */}
-      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center gap-3">
-          <Image src={logo} alt="Rallio" width={40} height={40} className="h-10 w-10 flex-shrink-0" />
-          <h3 className="text-2xl font-bold text-gray-900">Book a Court</h3>
-        </div>
+      <div className="mb-6 border-b border-gray-100 pb-5">
+        <h3 className="text-xl font-bold text-gray-900 tracking-tight text-center">Book a Court</h3>
       </div>
 
-      <div className="mb-4 flex w-full items-center justify-between gap-3">
+      <div className="mb-6 flex w-full items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <CalendarIcon className="h-5 w-5 text-black" />
-          <span className="text-lg font-bold text-black md:text-xl">{selectedDateLabel}</span>
+          <div className="bg-primary/10 p-2 rounded-lg">
+            <CalendarIcon className="h-5 w-5 text-primary" />
+          </div>
+          <span className="text-xl font-bold text-gray-900 md:text-2xl">{selectedDateLabel}</span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-xl border border-gray-100">
           <button
             type="button"
             onClick={() => shiftSelectedDate(-1)}
             disabled={selectedDate <= today}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-gray-200 bg-white text-black hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-all hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
             aria-label="Previous day"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-5 w-5" />
           </button>
 
           <DropdownMenu open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-gray-200 bg-white text-black hover:bg-gray-50"
+                className="inline-flex h-10 px-4 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-all hover:shadow-sm"
                 aria-label="Open date picker"
               >
                 <CalendarIcon className="h-4 w-4" />
+                <span className="text-sm font-semibold">Change Date</span>
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
-              align="end"
+              align="center"
               side="bottom"
-              sideOffset={8}
-              className="w-auto rounded-xl border border-gray-200 bg-white p-4 shadow-lg !max-h-none !overflow-visible"
+              sideOffset={12}
+              className="w-auto rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl !max-h-none !overflow-visible ring-1 ring-black/5"
               onCloseAutoFocus={(event) => event.preventDefault()}
             >
               <DayPicker
@@ -563,9 +562,9 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
                   fullyBooked: (date) => isDateFullyBooked(date),
                 }}
                 modifiersClassNames={{
-                  selected: 'bg-primary text-white hover:bg-primary',
-                  today: 'font-bold text-primary',
-                  fullyBooked: 'bg-gray-200 text-gray-500 opacity-90 cursor-not-allowed',
+                  selected: 'bg-primary text-white hover:bg-primary rounded-lg',
+                  today: 'font-bold text-primary ring-1 ring-primary/30 rounded-lg',
+                  fullyBooked: 'bg-gray-100 text-gray-400 cursor-not-allowed',
                 }}
                 components={{
                   DayButton: ({ day, className, children, ...props }: any) => {
@@ -574,13 +573,13 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
                     const fullyBooked = isDateFullyBooked(date);
 
                     return (
-                      <button {...props} className={`${className ?? ''} relative`}>
+                      <button {...props} className={cn(className, "relative transition-all")}>
                         <span>{children}</span>
                         {fullyBooked && (
-                          <span className="pointer-events-none absolute left-1/2 top-1/2 h-[2px] w-[72%] -translate-x-1/2 -translate-y-1/2 rotate-[-35deg] bg-gray-600" />
+                          <span className="pointer-events-none absolute left-1/2 top-1/2 h-[1px] w-[60%] -translate-x-1/2 -translate-y-1/2 rotate-45 bg-gray-400" />
                         )}
                         {lowAvailabilityCount !== null && (
-                          <span className="pointer-events-none absolute right-0 top-0 z-10 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold leading-4 text-white">
+                          <span className="pointer-events-none absolute right-0 top-0 z-10 inline-flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-amber-500 px-0.5 text-[8px] font-bold text-white shadow-sm ring-1 ring-white">
                             {lowAvailabilityCount}
                           </span>
                         )}
@@ -590,7 +589,7 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
                 }}
               />
               {loadingCalendarSummary && (
-                <p className="mt-2 text-center text-[11px] text-gray-500">Loading date availability...</p>
+                <p className="mt-4 text-center text-[10px] uppercase font-bold tracking-wider text-gray-400 bg-gray-50 py-2 rounded-lg">Loading availability...</p>
               )}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -598,48 +597,43 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
           <button
             type="button"
             onClick={() => shiftSelectedDate(1)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-gray-200 bg-white text-black hover:bg-gray-50"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-all hover:shadow-sm"
             aria-label="Next day"
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-5 w-5" />
           </button>
         </div>
       </div>
 
-      {/* 2) Information / Legend Bar */}
-      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-gray-50/70 px-3 py-2.5">
-        <span className="mr-1 inline-flex items-center gap-1.5 text-sm font-medium text-gray-700">
-          <Info className="h-3.5 w-3.5 text-gray-500" />
-          Guide
-        </span>
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700">
-          <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
-          Selected
-        </span>
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700">
-          <span className="h-2.5 w-2.5 rounded-full bg-gray-300" />
-          Booked
-        </span>
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700">
-          <span className="h-2.5 w-2.5 rounded-full border border-gray-300 bg-gray-100" />
-          Available
-        </span>
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700">
-          <span className="relative inline-flex h-3.5 w-3.5 items-center justify-center rounded bg-gray-200">
-            <span className="absolute h-[1.5px] w-4 rotate-[-35deg] bg-gray-600" />
-          </span>
-          Fully Booked Day
-        </span>
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700">
-          <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-white">
-            ≤10
-          </span>
-          Low Slots Left
-        </span>
-        <span className="inline-flex items-center gap-1 rounded-full border border-gray-300 bg-white px-2.5 py-1 text-xs">
-          <span className="font-semibold text-gray-900">Open</span>
-          <span className="text-gray-500">{availableSlotCount}</span>
-        </span>
+      {/* 2) Information / Legend Bar (SIMPLIFIED) */}
+      <div className="mb-6 flex flex-wrap items-center gap-4 bg-gray-50/50 px-4 py-3 rounded-2xl border border-gray-100">
+        <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white shadow-sm shadow-primary/20">
+                <CheckCircle2 className="h-5 w-5" />
+            </div>
+            <span className="text-xs font-bold text-gray-700 uppercase tracking-tight">Selected</span>
+        </div>
+        
+        <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gray-200 border border-gray-300 relative overflow-hidden flex items-center justify-center">
+                <div className="absolute inset-0 opacity-20">
+                    <div className="w-[140%] h-[1px] bg-gray-600 rotate-[25deg] transform absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                    <div className="w-[140%] h-[1px] bg-gray-600 rotate-[-25deg] transform absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                </div>
+                <span className="text-[8px] font-bold text-gray-500 z-10">B</span>
+            </div>
+            <span className="text-xs font-bold text-gray-700 uppercase tracking-tight">Booked / Closed</span>
+        </div>
+
+        <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gray-100 border border-gray-200 transition-colors hover:border-gray-400" />
+            <span className="text-xs font-bold text-gray-700 uppercase tracking-tight">Available</span>
+        </div>
+
+        <div className="ml-auto hidden sm:flex items-center gap-2 text-xs font-medium text-gray-500 bg-white px-3 py-1.5 rounded-full border border-gray-200 shadow-sm">
+            <Info className="h-3.5 w-3.5 text-primary/60" />
+            <span>{availableSlotCount} Slots Open Today</span>
+        </div>
       </div>
 
       {/* Recurrence options */}

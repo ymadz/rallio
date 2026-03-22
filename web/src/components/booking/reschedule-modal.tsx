@@ -191,35 +191,48 @@ export function RescheduleModal({ booking, isOpen, onClose, onSuccess }: Resched
                                     selected={selectedDate}
                                     onSelect={(date) => date && setSelectedDate(date)}
                                     disabled={disabledDays}
+                                    modifiers={{
+                                        current: startDate
+                                    }}
                                     className="mx-auto"
                                     modifiersClassNames={{
                                         selected: 'bg-primary text-white hover:bg-primary',
                                         today: 'font-bold text-primary',
+                                        current: 'ring-2 ring-primary ring-offset-2 rounded-md',
                                     }}
                                 />
 
                                 {/* Legend */}
-                                <div className="mt-4 pt-4 border-t border-gray-200 space-y-2">
-                                    <div className="flex items-center gap-2 text-xs">
-                                        <div className="w-4 h-4 bg-white border-2 border-gray-300 rounded" />
+                                <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-2 gap-2">
+                                    <div className="flex items-center gap-2 text-[10px]">
+                                        <div className="w-3.5 h-3.5 bg-white border-2 border-gray-300 rounded" />
                                         <span className="text-gray-600">Available</span>
                                     </div>
-                                    <div className="flex items-center gap-2 text-xs">
-                                        <div className="w-4 h-4 bg-gray-100 text-gray-400 flex items-center justify-center rounded text-[10px]">✕</div>
-                                        <span className="text-gray-600">Reserved / Unavailable</span>
+                                    <div className="flex items-center gap-2 text-[10px]">
+                                        <div className="w-3.5 h-3.5 bg-gray-100 text-gray-400 flex items-center justify-center rounded text-[8px]">✕</div>
+                                        <span className="text-gray-600">Reserved</span>
                                     </div>
-                                    <div className="flex items-center gap-2 text-xs">
-                                        <div className="w-4 h-4 bg-primary rounded" />
+                                    <div className="flex items-center gap-2 text-[10px]">
+                                        <div className="w-3.5 h-3.5 bg-primary rounded" />
                                         <span className="text-gray-600">Selected</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-[10px]">
+                                        <div className="w-3.5 h-3.5 ring-2 ring-primary ring-offset-1 rounded-sm" />
+                                        <span className="text-gray-600">Current Booking</span>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="mt-4 p-4 bg-gray-50 rounded-lg text-sm border border-gray-200">
-                                <p className="font-medium text-gray-900 mb-1">Current Booking:</p>
-                                <p className="text-gray-600">
-                                    {format(startDate, 'PPP')} <br />
-                                    {format(startDate, 'h:mm a')} - {format(endDate, 'h:mm a')} ({duration} {duration === 1 ? 'hr' : 'hrs'})
+                            <div className="mt-4 p-4 bg-primary/5 rounded-lg text-sm border border-primary/10">
+                                <p className="font-semibold text-primary mb-1 flex items-center gap-2">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    Current Booking:
+                                </p>
+                                <p className="text-gray-700 font-medium">
+                                    {format(startDate, 'PPPP')} <br />
+                                    <span className="text-primary font-bold">{format(startDate, 'h:mm a')} - {format(endDate, 'h:mm a')}</span> ({duration} {duration === 1 ? 'hr' : 'hrs'})
                                 </p>
                             </div>
                         </div>
@@ -280,6 +293,18 @@ export function RescheduleModal({ booking, isOpen, onClose, onSuccess }: Resched
                                                 // "inRange" means it's part of the duration block but not the start slot
                                                 const isSecondarySlot = isSelectedOrInRange && !isStartSlot
 
+                                                // Check if it's the original booking date and slot
+                                                const isOriginalDate = selectedDate &&
+                                                    selectedDate.getDate() === startDate.getDate() &&
+                                                    selectedDate.getMonth() === startDate.getMonth() &&
+                                                    selectedDate.getFullYear() === startDate.getFullYear();
+
+                                                const startTimeStr = format(startDate, 'HH:mm')
+                                                const endTimeStr = format(endDate, 'HH:mm')
+                                                const isOriginalSlot = isOriginalDate &&
+                                                    slot.time >= startTimeStr &&
+                                                    slot.time < endTimeStr
+
                                                 return (
                                                     <button
                                                         key={`${slot.time}-${index}`}
@@ -288,22 +313,32 @@ export function RescheduleModal({ booking, isOpen, onClose, onSuccess }: Resched
                                                         }}
                                                         disabled={practicallyDisabled}
                                                         className={cn(
-                                                            "w-full px-4 py-3 text-left transition-all",
+                                                            "w-full px-4 py-3 text-left transition-all relative overflow-hidden",
                                                             practicallyDisabled && "bg-gray-100 cursor-not-allowed opacity-60",
                                                             isStartSlot && "bg-primary text-white",
                                                             isSecondarySlot && "bg-primary/10 text-primary-900 border-l-4 border-primary",
-                                                            !practicallyDisabled && !isSelectedOrInRange && "hover:bg-gray-50"
+                                                            !practicallyDisabled && !isSelectedOrInRange && "hover:bg-gray-50",
+                                                            isOriginalSlot && !isStartSlot && !isSecondarySlot && "bg-orange-50/50"
                                                         )}
                                                     >
+                                                        {isOriginalSlot && (
+                                                            <div className="absolute top-0 right-0">
+                                                                <div className="bg-orange-500 text-[8px] text-white px-1.5 py-0.5 rounded-bl-md font-bold uppercase tracking-wider">
+                                                                    Current
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                         <div className="flex items-center justify-between">
                                                             <div className="flex items-center gap-3">
                                                                 <div className={cn(
                                                                     "w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0",
                                                                     practicallyDisabled ? "border-gray-300 bg-gray-200" : isStartSlot ? "border-white bg-white" : "border-gray-300",
-                                                                    isSecondarySlot && "border-primary bg-primary"
+                                                                    isSecondarySlot && "border-primary bg-primary",
+                                                                    isOriginalSlot && !isStartSlot && !isSecondarySlot && "border-orange-500"
                                                                 )}>
                                                                     {isStartSlot && <div className="w-2 h-2 rounded-full bg-primary" />}
                                                                     {isSecondarySlot && <div className="w-2 h-2 rounded-full bg-white" />}
+                                                                    {isOriginalSlot && !isStartSlot && !isSecondarySlot && <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />}
                                                                 </div>
                                                                 <div>
                                                                     <p className={cn(
@@ -312,6 +347,11 @@ export function RescheduleModal({ booking, isOpen, onClose, onSuccess }: Resched
                                                                     )}>
                                                                         {formatTimeStr(slot.time)} - {formatTimeStr(getNextHourStr(slot.time))}
                                                                     </p>
+                                                                    {isOriginalSlot && !isStartSlot && (
+                                                                        <span className="text-[10px] text-orange-600 font-bold block leading-none mt-1">
+                                                                            Original Slot
+                                                                        </span>
+                                                                    )}
                                                                     {practicallyDisabled && !slot.available && (
                                                                         <span className="text-xs text-red-500 font-medium pt-1">Reserved</span>
                                                                     )}
