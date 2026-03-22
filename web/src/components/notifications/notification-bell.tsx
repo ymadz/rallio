@@ -47,7 +47,7 @@ export function NotificationBell() {
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+        <div className="fixed left-3 right-3 top-16 z-50 bg-white rounded-lg shadow-lg border border-gray-200 sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-96">
           <NotificationList onClose={() => setIsOpen(false)} />
         </div>
       )}
