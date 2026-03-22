@@ -404,12 +404,21 @@ export default async function ProfilePage() {
                   </div>
                   <p className="text-gray-500 text-sm font-medium mb-1">No match history yet</p>
                   <p className="text-gray-400 text-xs mb-4">Join a queue to start playing!</p>
-                  <Link
-                    href="/queue"
-                    className="px-5 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium text-sm"
-                  >
-                    Join Queue
-                  </Link>
+                  {player?.skill_level ? (
+                    <Link
+                      href="/queue"
+                      className="px-5 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium text-sm"
+                    >
+                      Join Queue
+                    </Link>
+                  ) : (
+                    <Link
+                      href="/setup-profile?from=profile"
+                      className="px-5 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 font-medium text-sm"
+                    >
+                      Complete Profile Setup
+                    </Link>
+                  )}
                 </div>
               )}
             </div>

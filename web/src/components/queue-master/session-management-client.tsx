@@ -263,6 +263,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         gameFormat: sessionData.game_format,
         players: formattedParticipants,
         metadata: sessionData.metadata,
+        queue_session_courts: sessionData.queue_session_courts,
       };
 
       // Call centralized status auto-advancement to handle upcoming->open->active->completed
@@ -342,7 +343,9 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         .select(
           `
           *,
-          queue_sessions!inner(court_id, courts(name))
+          courts (
+            name
+          )
         `
         )
         .eq('queue_session_id', sessionId)
@@ -733,8 +736,15 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
                           <Trophy className="w-4 h-4 text-white" />
                         </div>
                         <div>
-                          <div className="font-semibold text-gray-900">
-                            Match #{match.match_number}
+                          <div className="flex items-center gap-2">
+                            <div className="font-semibold text-gray-900">
+                              Match #{match.match_number}
+                            </div>
+                            {match.courts?.name && (
+                              <span className="text-xs font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                                {match.courts.name}
+                              </span>
+                            )}
                           </div>
                           <MatchStatusBadge status={match.status} size="sm" />
                         </div>

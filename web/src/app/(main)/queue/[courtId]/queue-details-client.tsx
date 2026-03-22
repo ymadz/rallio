@@ -12,6 +12,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { initiateQueuePaymentAction } from '@/app/actions/payments'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { differenceInSeconds, subHours, isBefore, format } from 'date-fns'
 import { useServerTime } from '@/hooks/use-server-time'
 import { formatCurrency } from '@rallio/shared/utils'
@@ -29,6 +30,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [participant, setParticipant] = useState<any>(null)
   const [userSkillLevel, setUserSkillLevel] = useState<number | null>(null)
+  const [isProfileCompleted, setIsProfileCompleted] = useState<boolean>(false)
 
   const [timeUntilOpen, setTimeUntilOpen] = useState<number | null>(null)
 
@@ -82,6 +84,15 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
 
       if (user?.id) {
         try {
+          // Fetch profile status
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('profile_completed')
+            .eq('id', user.id)
+            .single()
+
+          setIsProfileCompleted(profile?.profile_completed ?? false)
+
           const { data: roles } = await supabase
             .from('user_roles')
             .select('roles(name)')
@@ -90,7 +101,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
           const hasQueueMasterRole = roles?.some((r: any) => r.roles?.name === 'queue_master') || false
           setIsQueueMaster(hasQueueMasterRole)
         } catch (err) {
-          console.error('Error fetching user roles:', err)
+          console.error('Error fetching user roles/profile:', err)
           setIsQueueMaster(false)
         }
       }
@@ -543,7 +554,23 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
               </div>
             )}
 
-            {timeUntilOpen !== null && timeUntilOpen > 0 ? (
+            {!isProfileCompleted || userSkillLevel === null ? (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-5 text-center">
+                <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <AlertCircle className="w-6 h-6 text-amber-600" />
+                </div>
+                <h4 className="font-semibold text-amber-900 mb-2">Complete Your Profile</h4>
+                <p className="text-sm text-amber-700 mb-5">
+                  You need to set up your player profile before you can join any queue sessions.
+                </p>
+                <Link
+                  href="/setup-profile"
+                  className="inline-flex items-center justify-center w-full bg-amber-600 text-white py-3 rounded-lg font-semibold hover:bg-amber-700 transition-colors"
+                >
+                  Set Up Profile Now
+                </Link>
+              </div>
+            ) : timeUntilOpen !== null && timeUntilOpen > 0 ? (
               <div className="space-y-4">
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
                   <Clock className="w-8 h-8 text-blue-500 mx-auto mb-2" />

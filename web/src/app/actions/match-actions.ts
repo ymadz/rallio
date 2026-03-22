@@ -311,8 +311,9 @@ export async function assignMatchFromQueue(
     })
 
     // Revalidate paths
-    revalidatePath(`/queue/${session.court_id}`)
+    revalidatePath(`/queue/${assignedCourtId || session.court_id}`)
     revalidatePath('/queue')
+    revalidatePath(`/queue-master/sessions/${sessionId}`)
 
     return { success: true, match }
   } catch (error: any) {
@@ -591,7 +592,7 @@ export async function recordMatchScore(
 
     console.log('[recordMatchScore] ✅ Match recorded, rpcFailed:', rpcFailed)
 
-    revalidatePath(`/queue/${match.queue_sessions.court_id}`)
+    revalidatePath(`/queue/${match.court_id}`)
     revalidatePath(`/queue-master/sessions/${match.queue_session_id}`)
     revalidatePath('/queue')
     revalidatePath('/queue-master')
