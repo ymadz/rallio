@@ -64,6 +64,14 @@ interface VenueScheduleGridProps {
   courts: Court[];
   venueId: string;
   venueName: string;
+  isQueueMaster?: boolean;
+  onQueueClick?: (
+    selectedCourts: Court[],
+    selectedDate: string,
+    startTime: string,
+    endTime: string,
+    allSelectedDates: string[]
+  ) => void;
 }
 
 interface DailyAvailabilitySummary {
@@ -100,7 +108,7 @@ function getTimeSectionLabel(time: string): string {
   return 'Evening Block';
 }
 
-export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleGridProps) {
+export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, onQueueClick }: VenueScheduleGridProps) {
   const router = useRouter();
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [loading, setLoading] = useState(false);
@@ -365,6 +373,21 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
     }
 
     confirmBooking(cartItems, []);
+  };
+  const handleQueueClick = () => {
+    if (selectedCells.length === 0 || !onQueueClick) return;
+
+    // Group selected cells by court to ensure consistency, or simply extract bounds
+    const uniqueCourtIds = Array.from(new Set(selectedCells.map((c) => c.courtId)));
+    const selectedCourtsObj = courts.filter((c) => uniqueCourtIds.includes(c.id));
+
+    // Get min start time and max end time across all selected cells
+    // (Assuming QueueMaster selects a uniform block)
+    const sortedTimes = selectedCells.map(c => c.time).sort();
+    const startTime = sortedTimes[0];
+    const endTime = nextHour(sortedTimes[sortedTimes.length - 1]);
+
+    onQueueClick(selectedCourtsObj, selectedDate, startTime, endTime, allDatesToBook);
   };
 
   const confirmBooking = (items: any[], conflictList: any[]) => {
@@ -988,6 +1011,16 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {isQueueMaster && onQueueClick && (
+            <button
+              onClick={handleQueueClick}
+              disabled={selectedCells.length === 0 || isChecking}
+              className="px-4 py-2 border-2 border-primary text-primary bg-white rounded-lg text-sm font-semibold hover:bg-primary/5 transition-colors disabled:opacity-50 shadow-sm"
+            >
+              Create Queue Session
+            </button>
+          )}
+
           {validatingConflicts && (
             <span className="text-[10px] text-gray-400 animate-pulse">Checking conflicts...</span>
           )}

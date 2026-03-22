@@ -19,6 +19,7 @@ interface MatchAssignmentModalProps {
     position?: number
   }>
   gameFormat: 'singles' | 'doubles' | 'any'
+  sessionCourts?: { id: string, name: string }[]
   onSuccess?: () => void
 }
 
@@ -28,11 +29,13 @@ export function MatchAssignmentModal({
   sessionId,
   waitingPlayers,
   gameFormat,
+  sessionCourts = [],
   onSuccess,
 }: MatchAssignmentModalProps) {
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>([])
   const [teamA, setTeamA] = useState<string[]>([])
   const [teamB, setTeamB] = useState<string[]>([])
+  const [selectedCourtId, setSelectedCourtId] = useState<string>('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -54,8 +57,12 @@ export function MatchAssignmentModal({
       setError(null)
       // Reset format choice when modal closes (for 'any' sessions)
       if (gameFormat === 'any') setChosenFormat(null)
+    } else {
+      if (sessionCourts.length > 0 && !selectedCourtId) {
+        setSelectedCourtId(sessionCourts[0].id)
+      }
     }
-  }, [isOpen, gameFormat])
+  }, [isOpen, gameFormat, sessionCourts, selectedCourtId])
 
   if (!isOpen) return null
 
@@ -130,7 +137,8 @@ export function MatchAssignmentModal({
         sessionId,
         playersNeeded,
         selectedPlayers,
-        { teamA, teamB }
+        { teamA, teamB },
+        selectedCourtId || undefined
       )
 
       if (!result.success) {
@@ -251,6 +259,22 @@ export function MatchAssignmentModal({
           {waitingPlayers.length === 0 && (
             <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded-lg text-center">
               No players in the waiting queue
+            </div>
+          )}
+
+          {/* Court Selection for Multi-Court Sessions */}
+          {sessionCourts.length > 1 && (
+            <div>
+              <h3 className="font-semibold text-gray-900 mb-3">Target Court</h3>
+              <select
+                value={selectedCourtId}
+                onChange={(e) => setSelectedCourtId(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {sessionCourts.map(court => (
+                  <option key={court.id} value={court.id}>{court.name}</option>
+                ))}
+              </select>
             </div>
           )}
 

@@ -65,6 +65,7 @@ interface Participant {
 
 interface QueueSession {
   id: string;
+  courtId: string;
   courtName: string;
   venueName: string;
   status: string;
@@ -235,6 +236,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
       // Format session data
       const formattedSession: QueueSession = {
         id: sessionData.id,
+        courtId: sessionData.court_id,
         courtName: sessionData.courts?.name || 'Unknown Court',
         venueName: sessionData.courts?.venues?.name || 'Unknown Venue',
         status: sessionData.status,
@@ -1166,6 +1168,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
             isOpen={showMatchAssignModal}
             onClose={() => setShowMatchAssignModal(false)}
             sessionId={sessionId}
+            sessionCourts={session.metadata?.courts || [{ id: session.courtId, name: session.courtName }]}
             waitingPlayers={waitingPlayers.map((p) => ({
               id: p.id,
               userId: p.userId,

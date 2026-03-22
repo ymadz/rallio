@@ -437,7 +437,7 @@ export function CreateSessionForm() {
 
       // Create Session Directly
       const result = await createQueueSession({
-        courtId,
+        courts: [{ id: courtId, name: selectedCourt?.name || 'Court' }],
         startTime: startDateTime,
         endTime: endDateTime,
         mode,

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { AvailabilityModal } from '@/components/venue/availability-modal'
 import { QueueSessionModal } from '@/components/venue/queue-session-modal'
 import { VenueScheduleGrid } from '@/components/venue/venue-schedule-grid'
 import { EmptyCourtsState } from '@/components/courts/empty-courts-state'
@@ -32,9 +31,13 @@ interface VenueDetailsClientProps {
 
 export function VenueDetailsClient({ courts, venueId, venueName, discounts }: VenueDetailsClientProps) {
   const router = useRouter()
-  const [selectedCourt, setSelectedCourt] = useState<Court | null>(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
   const [isQueueModalOpen, setIsQueueModalOpen] = useState(false)
+  const [queueSessionData, setQueueSessionData] = useState<{
+    courts: Court[];
+    date: string;
+    startTime: string;
+    endTime: string;
+  } | null>(null)
   const [isQueueMaster, setIsQueueMaster] = useState(false)
 
 
@@ -57,13 +60,13 @@ export function VenueDetailsClient({ courts, venueId, venueName, discounts }: Ve
     checkRole()
   }, [])
 
-  const handleViewAvailability = (court: Court) => {
-    setSelectedCourt(court)
-    setIsModalOpen(true)
-  }
-
-  const handleOpenQueueModal = (court: Court) => {
-    setSelectedCourt(court)
+  const handleOpenQueueModal = (
+    selectedCourts: Court[],
+    selectedDate: string,
+    startTime: string,
+    endTime: string
+  ) => {
+    setQueueSessionData({ courts: selectedCourts, date: selectedDate, startTime, endTime })
     setIsQueueModalOpen(true)
   }
 
@@ -75,98 +78,31 @@ export function VenueDetailsClient({ courts, venueId, venueName, discounts }: Ve
   return (
     <>
       <div className="mb-6">
-        <VenueScheduleGrid courts={courts} venueId={venueId} venueName={venueName} />
-
-        <h3 className="font-semibold text-gray-900 mb-3 mt-6">Available Courts</h3>
-        <div className="space-y-3">
-          {courts.map((court) => (
-            <div
-              key={court.id}
-              className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <h4 className="font-medium text-gray-900">{court.name}</h4>
-                  {court.description && (
-                    <p className="text-sm text-gray-500 mt-1">{court.description}</p>
-                  )}
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded capitalize">
-                      {court.surface_type}
-                    </span>
-                    <span className={`text-xs px-2 py-1 rounded ${court.court_type === 'indoor'
-                      ? 'bg-primary/10 text-primary'
-                      : 'bg-green-50 text-green-600'
-                      }`}>
-                      {court.court_type}
-                    </span>
-                  </div>
-                </div>
-                <div className="text-right ml-4">
-                  <p className="text-lg font-bold text-primary">₱{court.hourly_rate}</p>
-                  <p className="text-xs text-gray-500">/hour</p>
-                </div>
-              </div>
-
-              {/* Court Actions */}
-              <div className={`mt-4 grid gap-2 ${isQueueMaster ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
-                <button
-                  onClick={() => handleViewAvailability(court)}
-                  className="bg-primary text-white text-center py-2.5 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  Book Now
-                </button>
-                {isQueueMaster && (
-                  <button
-                    onClick={() => handleOpenQueueModal(court)}
-                    className="border border-gray-300 text-gray-700 text-center py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
-                    Queue
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+        <VenueScheduleGrid 
+          courts={courts} 
+          venueId={venueId} 
+          venueName={venueName} 
+          isQueueMaster={isQueueMaster}
+          onQueueClick={handleOpenQueueModal}
+        />
       </div>
 
-      {/* Availability Modal */}
-      {selectedCourt && (
-        <AvailabilityModal
-          isOpen={isModalOpen}
-          onClose={() => {
-            setIsModalOpen(false)
-            setSelectedCourt(null)
-          }}
-          courtId={selectedCourt.id}
-          courtName={selectedCourt.name}
-          hourlyRate={selectedCourt.hourly_rate}
-          venueId={venueId}
-          venueName={venueName}
-          capacity={selectedCourt.capacity}
-        />
-      )}
-
       {/* Queue Session Modal */}
-      {selectedCourt && (
+      {queueSessionData && (
         <QueueSessionModal
           isOpen={isQueueModalOpen}
           onClose={() => {
             setIsQueueModalOpen(false)
-            setSelectedCourt(null)
+            setQueueSessionData(null)
           }}
-          courtId={selectedCourt.id}
-          courtName={selectedCourt.name}
-          hourlyRate={selectedCourt.hourly_rate}
+          courts={queueSessionData.courts}
+          hourlyRate={queueSessionData.courts[0]?.hourly_rate || 0}
           venueId={venueId}
           venueName={venueName}
-          capacity={selectedCourt.capacity}
+          capacity={Math.min(...queueSessionData.courts.map(c => c.capacity))}
+          preselectedDate={queueSessionData.date}
+          preselectedStartTime={queueSessionData.startTime}
+          preselectedEndTime={queueSessionData.endTime}
         />
       )}
     </>

@@ -8,6 +8,7 @@ export type PaymentMethod = 'e-wallet' | 'cash' | null
 export interface BookingData {
   courtId: string
   courtName: string
+  courts?: { id: string; name: string }[] // For multi-court bookings (e.g., Queue Sessions)
   venueId: string
   venueName: string
   date: Date

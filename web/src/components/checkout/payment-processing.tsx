@@ -159,7 +159,7 @@ export function PaymentProcessing() {
           console.log('Creating queue session(s)...')
 
           const sessionResult = await createQueueSession({
-            courtId: bookingData.courtId,
+            courts: [{ id: bookingData.courtId, name: bookingData.courtName || 'Court' }],
             startTime: startDateTime,
             endTime: endDateTime,
             mode: bookingData.queueSessionData.mode,

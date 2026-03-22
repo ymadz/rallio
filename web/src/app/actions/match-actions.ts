@@ -41,7 +41,8 @@ export async function assignMatchFromQueue(
   sessionId: string,
   numPlayers: number = 4,
   selectedPlayers?: string[],
-  teamAssignments?: { teamA: string[], teamB: string[] }
+  teamAssignments?: { teamA: string[], teamB: string[] },
+  assignedCourtId?: string
 ) {
   console.log('[assignMatchFromQueue] 🎯 Assigning match from queue:', { sessionId, numPlayers, selectedPlayers, teamAssignments })
 
@@ -258,7 +259,7 @@ export async function assignMatchFromQueue(
       .from('matches')
       .insert({
         queue_session_id: sessionId,
-        court_id: session.court_id,
+        court_id: assignedCourtId || session.court_id,
         match_number: matchNumber,
         game_format: session.game_format,
         team_a_players: teamA,

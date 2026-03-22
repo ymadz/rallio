@@ -28,12 +28,16 @@ interface TimeSlot {
 interface QueueSessionModalProps {
     isOpen: boolean
     onClose: () => void
-    courtId: string
-    courtName: string
+    courtId?: string // fallback for backward compatibility
+    courtName?: string // fallback
+    courts?: { id: string; name: string }[] // for multi-court queues
     hourlyRate: number
     venueId: string
     venueName: string
     capacity: number
+    preselectedDate?: string
+    preselectedStartTime?: string
+    preselectedEndTime?: string
 }
 
 export function QueueSessionModal({
@@ -41,20 +45,24 @@ export function QueueSessionModal({
     onClose,
     courtId,
     courtName,
+    courts,
     hourlyRate,
     venueId,
     venueName,
-    capacity
+    capacity,
+    preselectedDate,
+    preselectedStartTime,
+    preselectedEndTime
 }: QueueSessionModalProps) {
     const router = useRouter()
     const { setBookingData, setDiscountDetails, setDiscount, setDownPaymentPercentage } = useCheckoutStore()
-    const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+    const [selectedDate, setSelectedDate] = useState<Date>(preselectedDate ? new Date(preselectedDate) : new Date())
     const [recurrenceWeeks, setRecurrenceWeeks] = useState<number>(1)
     const [selectedDays, setSelectedDays] = useState<number[]>([])
 
     // Time slot selection
-    const [startSlot, setStartSlot] = useState<TimeSlot | null>(null)
-    const [endSlot, setEndSlot] = useState<TimeSlot | null>(null)
+    const [startSlot, setStartSlot] = useState<TimeSlot | null>(preselectedStartTime ? { time: preselectedStartTime, available: true } : null)
+    const [endSlot, setEndSlot] = useState<TimeSlot | null>(preselectedEndTime ? { time: preselectedEndTime, available: true } : null)
     const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
     const [loading, setLoading] = useState(false)
     const [isBooking, setIsBooking] = useState(false)
@@ -68,7 +76,11 @@ export function QueueSessionModal({
     const [joinWindowHours, setJoinWindowHours] = useState<number | null>(null)
 
     // UI step: 'schedule' or 'settings'
-    const [step, setStep] = useState<'schedule' | 'settings'>('schedule')
+    const [step, setStep] = useState<'schedule' | 'settings'>(preselectedStartTime && preselectedEndTime ? 'settings' : 'schedule')
+
+    // Derived values for backward compatibility and multi-court support
+    const primaryCourtId = courtId || courts?.[0]?.id || ''
+    const primaryCourtName = courtName || courts?.map(c => c.name).join(', ') || ''
 
     // Pricing state
     const [calculatedPrice, setCalculatedPrice] = useState<{
@@ -101,7 +113,7 @@ export function QueueSessionModal({
             setEndSlot(null)
 
             try {
-                const slots = await getAvailableTimeSlotsAction(courtId, format(selectedDate, 'yyyy-MM-dd'))
+                const slots = await getAvailableTimeSlotsAction(primaryCourtId, format(selectedDate, 'yyyy-MM-dd'))
                 setTimeSlots(slots)
             } catch (error) {
                 console.error('Error fetching time slots:', error)
@@ -112,7 +124,7 @@ export function QueueSessionModal({
         }
 
         fetchTimeSlots()
-    }, [selectedDate, courtId, isOpen])
+    }, [selectedDate, primaryCourtId, isOpen])
 
     // Fetch venue metadata (down payment percentage)
     useEffect(() => {
@@ -203,7 +215,7 @@ export function QueueSessionModal({
 
                 const result = await calculateApplicableDiscounts({
                     venueId,
-                    courtId,
+                    courtId: primaryCourtId,
                     startDate: startDateTimeStr,
                     endDate: endDateTimeStr,
                     recurrenceWeeks: Number(recurrenceWeeks),
@@ -243,7 +255,7 @@ export function QueueSessionModal({
         }
 
         calculatePrice()
-    }, [startSlot, endSlot, recurrenceWeeks, selectedDate, courtId, venueId, hourlyRate, selectedDays])
+    }, [startSlot, endSlot, recurrenceWeeks, selectedDate, primaryCourtId, venueId, hourlyRate, selectedDays])
 
     // Validate recurring availability
     useEffect(() => {
@@ -265,7 +277,7 @@ export function QueueSessionModal({
                 const endDateTime = `${dateStr}T${endTime}:00+08:00`
 
                 const result = await validateBookingAvailabilityAction({
-                    courtId,
+                    courtId: primaryCourtId,
                     startTimeISO: startDateTime,
                     endTimeISO: endDateTime,
                     recurrenceWeeks,
@@ -289,7 +301,7 @@ export function QueueSessionModal({
 
         timeoutId = setTimeout(validateRecurring, 500)
         return () => clearTimeout(timeoutId)
-    }, [startSlot, endSlot, recurrenceWeeks, selectedDays, selectedDate, courtId])
+    }, [startSlot, endSlot, recurrenceWeeks, selectedDays, selectedDate, primaryCourtId])
 
     // Range validation
     const isRangeValid = (start: TimeSlot, end: TimeSlot): boolean => {
@@ -345,8 +357,9 @@ export function QueueSessionModal({
             const endTime = getEndTime()
 
             setBookingData({
-                courtId,
-                courtName,
+                courts,
+                courtId: primaryCourtId,
+                courtName: primaryCourtName,
                 venueId,
                 venueName,
                 date: selectedDate,
@@ -450,7 +463,7 @@ export function QueueSessionModal({
                     <div className="bg-gradient-to-r from-primary to-primary/80 text-white px-6 py-4 flex items-center justify-between shrink-0">
                         <div>
                             <div className="flex items-center gap-2">
-                                <h3 className="text-xl font-bold">{courtName}</h3>
+                                <h3 className="text-xl font-bold">{primaryCourtName}</h3>
                                 <span className="text-[10px] font-bold bg-white/20 px-2 py-0.5 rounded uppercase tracking-wider">
                                     Queue Session
                                 </span>
@@ -683,7 +696,7 @@ export function QueueSessionModal({
                                 <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
                                     <h4 className="font-semibold text-gray-900 mb-2">Session Schedule</h4>
                                     <div className="text-sm text-gray-600 space-y-1">
-                                        <p><strong>Court:</strong> {courtName}</p>
+                                        <p><strong>Court{courts && courts.length > 1 ? 's' : ''}:</strong> {primaryCourtName}</p>
                                         <div>
                                             <strong>Date:</strong>{' '}
                                             {(() => {
