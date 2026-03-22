@@ -134,6 +134,7 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
   const [isAddDatePickerOpen, setIsAddDatePickerOpen] = useState(false);
   const [sameTimeEligibilityByDate, setSameTimeEligibilityByDate] = useState<Record<string, boolean>>({});
   const [loadingSameTimeEligibility, setLoadingSameTimeEligibility] = useState(false);
+  const [isQueueMode, setIsQueueMode] = useState(false);
 
   const { bookingCart, setBookingCart, setDiscountDetails, setConflictingSlots } =
     useCheckoutStore();
@@ -278,12 +279,36 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
   const isCellConflicted = (courtId: string, time: string) =>
     activeConflicts.some((c) => c.courtId === courtId && c.startTime === time);
 
+  const isQueueTimesAligned = useMemo(() => {
+    if (!isQueueMode || selectedCells.length === 0) return true;
+
+    const courtTimes = new Map<string, Set<string>>();
+    selectedCells.forEach((cell) => {
+      if (!courtTimes.has(cell.courtId)) courtTimes.set(cell.courtId, new Set());
+      courtTimes.get(cell.courtId)!.add(cell.time);
+    });
+
+    const courtIds = Array.from(courtTimes.keys());
+    if (courtIds.length <= 1) return true;
+
+    const firstSet = courtTimes.get(courtIds[0])!;
+    for (let i = 1; i < courtIds.length; i++) {
+      const otherSet = courtTimes.get(courtIds[i])!;
+      if (firstSet.size !== otherSet.size) return false;
+      for (const t of firstSet) {
+        if (!otherSet.has(t)) return false;
+      }
+    }
+    return true;
+  }, [selectedCells, isQueueMode]);
+
   const toggleCell = (courtId: string, time: string) => {
     const slot = slotsByCourt[courtId]?.find((s) => s.time === time);
     if (!slot?.available) return;
 
     setSelectedCells((prev) => {
       const exists = prev.some((cell) => cell.courtId === courtId && cell.time === time);
+
       if (exists) {
         return prev.filter((cell) => !(cell.courtId === courtId && cell.time === time));
       }
@@ -782,6 +807,29 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
             </DropdownMenu>
           </div>
         )}
+
+        {isQueueMaster && (
+          <div className="ml-auto flex items-center gap-3 pl-6 border-l border-gray-100 py-1 self-center">
+            <div className="flex flex-col items-end">
+                <span className="text-[10px] font-black text-primary uppercase tracking-[0.1em] leading-none mb-1">Queue Master</span>
+                <span className="text-xs font-bold text-gray-700 uppercase tracking-tight">Queue Mode</span>
+            </div>
+            <button
+              onClick={() => setIsQueueMode(!isQueueMode)}
+              className={cn(
+                "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ring-offset-2 ring-primary/20",
+                isQueueMode ? "bg-primary" : "bg-gray-200"
+              )}
+            >
+              <span
+                className={cn(
+                  "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out",
+                  isQueueMode ? "translate-x-5" : "translate-x-0"
+                )}
+              />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Multi-date info banner */}
@@ -1025,37 +1073,34 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
           >
             Clear
           </button>
-          {isQueueMaster && onQueueClick && (
-            <button
-              onClick={handleQueueClick}
-              disabled={selectedCells.length === 0 || isChecking}
-              className="px-4 py-2 border-2 border-primary text-primary bg-white rounded-lg text-sm font-semibold hover:bg-primary/5 transition-colors disabled:opacity-50 shadow-sm"
-            >
-              Create Queue Session
-            </button>
-          )}
           <button
-            onClick={handleBookNow}
+            onClick={isQueueMode ? handleQueueClick : handleBookNow}
             disabled={
               selectedCells.length === 0 ||
               isBooking ||
               isChecking ||
-              activeConflicts.length === selectedCells.length * allDatesToBook.length
+              (isQueueMode && !isQueueTimesAligned) ||
+              (!isQueueMode && activeConflicts.length === selectedCells.length * allDatesToBook.length)
             }
-            className={[
-              'px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm',
-              activeConflicts.length > 0 &&
-              activeConflicts.length < selectedCells.length * allDatesToBook.length
-                ? 'bg-amber-600 hover:bg-amber-700 text-white'
-                : 'bg-primary text-white hover:bg-primary/90',
-              'disabled:opacity-50 disabled:cursor-not-allowed',
-            ].join(' ')}
+            className={cn(
+              'px-6 py-2 rounded-lg text-sm font-bold transition-all shadow-md active:scale-95',
+              isQueueMode 
+                ? (isQueueTimesAligned ? 'bg-primary hover:bg-primary/90 text-white shadow-primary/20' : 'bg-gray-400 text-white cursor-not-allowed')
+                : (activeConflicts.length > 0 && activeConflicts.length < selectedCells.length * allDatesToBook.length)
+                  ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-200'
+                  : 'bg-primary text-white hover:bg-primary/90 shadow-primary/20',
+              'disabled:opacity-40 disabled:cursor-not-allowed disabled:scale-100'
+            )}
           >
             {isChecking
               ? 'Checking...'
               : isBooking
                 ? 'Booking...'
-                : activeConflicts.length === selectedCells.length * allDatesToBook.length &&
+                : isQueueMode
+                  ? !isQueueTimesAligned
+                    ? 'Times Mismatch'
+                    : `Create Queue Session (${validSlotCount} slots)`
+                  : activeConflicts.length === selectedCells.length * allDatesToBook.length &&
                     selectedCells.length > 0
                   ? 'All Slots Conflicted'
                   : activeConflicts.length > 0

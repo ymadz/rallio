@@ -221,7 +221,7 @@ export function BookingCard({
         <div className="absolute top-3 left-3 flex flex-wrap gap-2 max-w-[calc(100%-3rem)] z-10">
           {bookingStatusBadge(booking.status, booking)}
           {booking.type === 'queue_session' && (
-            <span className="px-3 py-1.5 rounded-full text-[10px] font-extrabold shadow-lg bg-[#0d9488] text-white ring-1 ring-white/20 flex items-center gap-1.5 backdrop-blur-md">
+            <span className="px-3 py-1.5 rounded-full text-[10px] font-extrabold shadow-lg bg-primary text-white ring-1 ring-white/20 flex items-center gap-1.5 backdrop-blur-md">
               <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
               QUEUE SESSION
             </span>
