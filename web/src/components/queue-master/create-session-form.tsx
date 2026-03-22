@@ -117,7 +117,9 @@ export function CreateSessionForm() {
       setValidationState(prev => ({ ...prev, validating: true, valid: true, error: undefined }))
 
       // Calculate end time
-      const [startH, startM] = startTime.split(':').map(Number)
+      const [sh, sm] = startTime.split(':')
+      const startH = Number(sh || 0)
+      const startM = Number(sm || 0)
       const endH = startH + duration
       const endTime = `${endH.toString().padStart(2, '0')}:${startM.toString().padStart(2, '0')}`
 
@@ -170,7 +172,9 @@ export function CreateSessionForm() {
 
       // Get Manila time
       const dateObj = new Date(startDate)
-      const [hours, minutes] = startTime.split(':').map(Number)
+      const [sh, sm] = startTime.split(':')
+      const hours = Number(sh || 0)
+      const minutes = Number(sm || 0)
       dateObj.setHours(hours, minutes, 0, 0)
 
       const startDateTimeStr = dateObj.toISOString()
@@ -236,8 +240,10 @@ export function CreateSessionForm() {
       return
     }
 
-    const startHour = parseInt(startTime.split(':')[0])
-    const clickedHour = parseInt(clickedSlot.time.split(':')[0])
+    const [sh, sm] = startTime.split(':')
+    const startHour = parseInt(sh || '0')
+    const [csh, csm] = clickedSlot.time.split(':')
+    const clickedHour = parseInt(csh || '0')
 
     if (clickedHour < startHour) {
       // New start time
@@ -274,8 +280,10 @@ export function CreateSessionForm() {
   // Helpers for styling matching AvailabilityModal
   const isSlotSelected = (slot: TimeSlot) => {
     if (!startTime) return false
-    const startHour = parseInt(startTime.split(':')[0])
-    const slotHour = parseInt(slot.time.split(':')[0])
+    const [sh, sm] = startTime.split(':')
+    const startHour = parseInt(sh || '0')
+    const [ssh, ssm] = slot.time.split(':')
+    const slotHour = parseInt(ssh || '0')
 
     // Start slot is selected
     if (slot.time === startTime) return true
@@ -289,22 +297,30 @@ export function CreateSessionForm() {
 
   const isSlotInRange = (slot: TimeSlot) => {
     if (!startTime || duration <= 2) return false
-    const startHour = parseInt(startTime.split(':')[0])
+    const [sh, sm] = startTime.split(':')
+    const startHour = parseInt(sh || '0')
     const endHour = startHour + duration - 1
-    const slotHour = parseInt(slot.time.split(':')[0])
+    const [ssh, ssm] = slot.time.split(':')
+    const slotHour = parseInt(ssh || '0')
 
     return slotHour > startHour && slotHour < endHour
   }
 
   const formatSlotTime = (time: string) => {
-    const [hours, minutes] = time.split(':').map(Number)
+    if (!time) return ''
+    const [hs, ms] = time.split(':')
+    const hours = Number(hs || 0)
+    const minutes = Number(ms || 0)
     const period = hours >= 12 ? 'PM' : 'AM'
     const displayHours = hours % 12 || 12
     return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`
   }
 
   const getNextHour = (time: string) => {
-    const [hours, minutes] = time.split(':').map(Number)
+    if (!time) return ''
+    const [hs, ms] = time.split(':')
+    const hours = Number(hs || 0)
+    const minutes = Number(ms || 0)
     const nextHour = hours + 1
     return `${nextHour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
   }
@@ -409,7 +425,9 @@ export function CreateSessionForm() {
 
       // Create Date objects for start and end
       const startDateTime = new Date(startDate)
-      const [hours, minutes] = startTime.split(':').map(Number)
+      const [sh, sm] = startTime.split(':')
+      const hours = Number(sh || 0)
+      const minutes = Number(sm || 0)
       startDateTime.setHours(hours, minutes, 0, 0)
 
       const endDateTime = new Date(startDate)
@@ -1088,7 +1106,7 @@ export function CreateSessionForm() {
                         <Clock className="w-4 h-4 text-gray-400 shrink-0" />
                         {startTime ? (
                           <span>
-                            {formatSlotTime(startTime)} - {formatSlotTime(`${parseInt(startTime.split(':')[0]) + duration}:${startTime.split(':')[1]}`)}
+                            {formatSlotTime(startTime)} - {formatSlotTime(`${(parseInt(startTime.split(':')[0]) || 0) + duration}:${startTime.split(':')[1] || '00'}`)}
                           </span>
                         ) : (
                           '--:--'

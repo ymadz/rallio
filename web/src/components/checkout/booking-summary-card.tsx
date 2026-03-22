@@ -99,7 +99,23 @@ export function BookingSummaryCard({
   if (!bookingData) return null;
 
   const effectiveCart = bookingCart.length > 0 ? bookingCart : [bookingData]
-  const isMultiCourt = effectiveCart.length > 1
+  const isMultiCourt = effectiveCart.length > 1 || (effectiveCart[0]?.courts && effectiveCart[0].courts.length > 1)
+
+  const displayCart = effectiveCart.flatMap((item, itemIdx) => {
+    if (item.courts && item.courts.length > 1) {
+      return item.courts.map((court, courtIdx) => ({
+        ...item,
+        courtId: court.id,
+        courtName: court.name,
+        courts: [court],
+        displayKey: `summary-${item.venueId}-${item.startTime}-${court.id}-${itemIdx}-${courtIdx}`
+      }));
+    }
+    return [{
+      ...item,
+      displayKey: `summary-${item.courtId}-${item.startTime}-${itemIdx}`
+    }];
+  });
 
   const subtotal = getSubtotal();
   const platformFee = getPlatformFeeAmount();
@@ -170,11 +186,11 @@ export function BookingSummaryCard({
           <div>
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm text-gray-500">Cart Items</p>
-              <p className="text-sm font-medium text-gray-900">{effectiveCart.length} slots</p>
+              <p className="text-sm font-medium text-gray-900">{displayCart.length} slots</p>
             </div>
             <div className="max-h-[220px] overflow-y-auto rounded-md border border-gray-100 divide-y divide-gray-100">
-              {effectiveCart.map((item, index) => (
-                <div key={`${item.courtId}-${item.startTime}-${index}`} className="px-2.5 py-2">
+              {displayCart.map((item, index) => (
+                <div key={item.displayKey} className="px-2.5 py-2">
                   <p className="text-sm font-medium text-gray-900 truncate">{item.courtName}</p>
                   <p className="text-xs text-gray-600 truncate">
                     {format(new Date(item.date), 'EEE, MMM d')} • {formatTime(item.startTime)} - {formatTime(item.endTime)}
@@ -245,8 +261,8 @@ export function BookingSummaryCard({
         <div className="flex justify-between text-sm">
           <span className="text-gray-600">
             {isMultiCourt
-              ? `Court Fees (${effectiveCart.length} items)`
-              : `Court Fee (₱${bookingData.hourlyRate.toFixed(2)} × ${duration} ${duration > 1 ? 'hrs' : 'hr'})${bookedDates.length > 1 ? ` × ${bookedDates.length} sessions` : ''}`}
+              ? `Court Fees (${displayCart.length} items)`
+              : `Court Fee (₱${bookingData.hourlyRate.toFixed(2)} × ${duration} ${duration > 1 ? 'hrs' : 'hr'})${bookingData.courts && bookingData.courts.length > 1 ? ` × ${bookingData.courts.length} courts` : ''}${bookedDates.length > 1 ? ` × ${bookedDates.length} sessions` : ''}`}
           </span>
           <span className="font-medium text-gray-900">
             ₱{(subtotal + discountAmount + promoDiscountAmount).toFixed(2)}

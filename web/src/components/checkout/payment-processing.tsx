@@ -92,53 +92,38 @@ export function PaymentProcessing() {
           throw new Error('User not authenticated')
         }
 
-        // Step 0: Final availability re-validation
-        const validationResult = await checkCartAvailabilityAction(effectiveCart.map(item => ({
-          courtId: item.courtId,
-          date: item.date,
-          startTime: item.startTime,
-          endTime: item.endTime,
-          recurrenceWeeks: item.recurrenceWeeks
-        })))
+        // STEP 1: CREATE RESERVATION (Only if not already created)
+        let confirmedReservationId = reservationId;
+        let requiresDownPaymentResult = false;
 
-        if (!validationResult.available && validationResult.conflicts.length > 0) {
-          // If EVERYTHING is conflicted now, we must stop.
-          if (validationResult.availableSlots === 0) {
-            throw new Error('All selected slots have just become unavailable. Please go back and select different times.')
+        if (!confirmedReservationId) {
+          console.log('[initializePayment] 🆕 Step 1: Creating reservation...')
+          
+          // Final availability re-validation (ONLY during creation)
+          const validationResult = await checkCartAvailabilityAction(effectiveCart.map((item: any) => ({
+            courtId: item.courtId,
+            date: item.date,
+            startTime: item.startTime,
+            endTime: item.endTime,
+            recurrenceWeeks: item.recurrenceWeeks
+          })))
+
+          if (!validationResult.available && validationResult.conflicts.length > 0) {
+            if (validationResult.availableSlots === 0) {
+              throw new Error('All selected slots have just become unavailable. Please go back and select different times.')
+            }
           }
-          // If some are conflicted, we could proceed, but it's safer to alert the user if they haven't seen this yet.
-          // However, our createReservation logic already skips conflicted ones. 
-          // To be strict as requested, we'll throw if the available count changed from what we expected.
-          console.warn('Final validation found new conflicts:', validationResult.conflicts)
-        }
 
-        // Step 1: Create the reservation
-        // Ensure date is a Date object (might be string from localStorage)
-        const bookingDate = typeof bookingData.date === 'string'
-          ? new Date(bookingData.date)
-          : bookingData.date
+          const bookingDate = typeof bookingData.date === 'string' ? new Date(bookingData.date) : bookingData.date
+          if (Number.isNaN(bookingDate.getTime())) throw new Error('Invalid booking date.')
 
-        if (Number.isNaN(bookingDate.getTime())) {
-          console.error('Invalid booking date detected:', bookingData.date)
-          throw new Error('Invalid booking date. Please select your time slot again.')
-        }
-
-        const [startHour, startMinute] = bookingData.startTime.split(':').map(Number)
-        const [endHour, endMinute] = bookingData.endTime.split(':').map(Number)
-
-        const startDateTime = new Date(bookingDate.getTime())
-        startDateTime.setHours(startHour, startMinute ?? 0, 0, 0)
-
-        const endDateTime = new Date(bookingDate.getTime())
-        endDateTime.setHours(endHour, endMinute ?? 0, 0, 0)
-
-        // Handle overnight bookings gracefully (should not typically happen but avoids zero-length ranges)
-        if (endDateTime <= startDateTime) {
-          endDateTime.setDate(endDateTime.getDate() + 1)
-        }
-
-        const startTimeISO = startDateTime.toISOString()
-        const endTimeISO = endDateTime.toISOString()
+          const [startHour, startMinute] = bookingData.startTime.split(':').map(Number)
+          const [endHour, endMinute] = bookingData.endTime.split(':').map(Number)
+          const startDateTime = new Date(bookingDate.getTime()); startDateTime.setHours(startHour, startMinute ?? 0, 0, 0)
+          const endDateTime = new Date(bookingDate.getTime()); endDateTime.setHours(endHour, endMinute ?? 0, 0, 0)
+          if (endDateTime <= startDateTime) endDateTime.setDate(endDateTime.getDate() + 1)
+          const startTimeISO = startDateTime.toISOString()
+          const endTimeISO = endDateTime.toISOString()
 
         console.log('Creating reservation with data:', {
           courtId: bookingData.courtId,
@@ -148,8 +133,6 @@ export function PaymentProcessing() {
           totalAmount: getTotalAmount(),
         })
 
-        let newReservationId: string | null = null
-        let requiresDownPayment = false
 
         if (bookingData.isQueueSession && bookingData.queueSessionData) {
           if (effectiveCart.length > 1) {
@@ -159,7 +142,9 @@ export function PaymentProcessing() {
           console.log('Creating queue session(s)...')
 
           const sessionResult = await createQueueSession({
-            courts: [{ id: bookingData.courtId, name: bookingData.courtName || 'Court' }],
+            courts: (bookingData.courts && bookingData.courts.length > 0)
+              ? bookingData.courts.map((c: any) => ({ id: c.id, name: c.name }))
+              : [{ id: bookingData.courtId, name: bookingData.courtName || 'Court' }],
             startTime: startDateTime,
             endTime: endDateTime,
             mode: bookingData.queueSessionData.mode,
@@ -197,160 +182,76 @@ export function PaymentProcessing() {
             throw new Error('Failed to retrieve reservation details for payment')
           }
 
-          if (sessionResult.downPaymentRequired) {
-            requiresDownPayment = true
-          }
-
-          newReservationId = sessionResult.session.reservationId
-
-        } else if (effectiveCart.length > 1) {
-          // Multi-court reservation flow
-          const multiItems = effectiveCart.map((item, index) => {
-            const itemDate = typeof item.date === 'string' ? new Date(item.date) : item.date
-            if (Number.isNaN(itemDate.getTime())) {
-              throw new Error(`Invalid booking date for item ${index + 1}`)
+            if (sessionResult.downPaymentRequired) {
+              requiresDownPaymentResult = true
             }
 
-            const [itemStartHour, itemStartMinute] = item.startTime.split(':').map(Number)
-            const [itemEndHour, itemEndMinute] = item.endTime.split(':').map(Number)
+            confirmedReservationId = sessionResult.session.reservationId
 
-            const itemStartDateTime = new Date(itemDate.getTime())
-            itemStartDateTime.setHours(itemStartHour, itemStartMinute ?? 0, 0, 0)
-
-            const itemEndDateTime = new Date(itemDate.getTime())
-            itemEndDateTime.setHours(itemEndHour, itemEndMinute ?? 0, 0, 0)
-
-            if (itemEndDateTime <= itemStartDateTime) {
-              itemEndDateTime.setDate(itemEndDateTime.getDate() + 1)
-            }
-
-            const itemDurationHours = Math.max(1, itemEndHour - itemStartHour)
-            const itemTotalAmount = item.hourlyRate * itemDurationHours
-
-            return {
-              courtId: item.courtId,
-              startTimeISO: itemStartDateTime.toISOString(),
-              endTimeISO: itemEndDateTime.toISOString(),
-              totalAmount: itemTotalAmount,
-              paymentType: isSplitPayment ? 'split' as const : 'full' as const,
-              paymentMethod,
-              notes: `Multi-court item ${index + 1}/${effectiveCart.length}`,
-              numPlayers: isSplitPayment ? playerCount : 1,
-            }
-          })
-
-          const multiResult = await createMultiCourtReservationsAction({
-            userId: user.id,
-            customDownPaymentAmount,
-            promoCode,
-            items: multiItems,
-          })
-
-          if (!multiResult.success || !multiResult.reservationId) {
-            throw new Error(multiResult.error || 'Failed to create multi-court reservations')
-          }
-
-          newReservationId = multiResult.reservationId
-          requiresDownPayment = !!multiResult.downPaymentRequired
-        } else {
-          // Standard Reservation Flow
-          console.log('Creating standard reservation...')
-
-          // Server-side discount re-verification
-          let verifiedDiscountAmount = Math.abs(discountAmount)
-          let verifiedDiscountType = discountType
-          let verifiedDiscountReason = discountReason
-
-          if (discountAmount !== 0) {
-            try {
-              const sessionPrice = bookingData.hourlyRate * Math.max(1, endHour - startHour)
-              const totalBasePrice = sessionPrice * (bookingData.recurrenceWeeks || 1)
-
-              const discountResult = await calculateApplicableDiscounts({
-                venueId: bookingData.venueId,
-                courtId: bookingData.courtId,
-                startDate: startTimeISO,
-                endDate: endTimeISO,
-                recurrenceWeeks: bookingData.recurrenceWeeks || 1,
-                basePrice: totalBasePrice,
-                promoCode,
-              })
-
-              if (discountResult.success) {
-                const serverTotalDiscount = discountResult.totalDiscount
-                const clientTotalDiscount = Math.abs(discountAmount)
-
-                if (Math.abs(serverTotalDiscount - clientTotalDiscount) > 0.01) {
-                  console.warn('[Discount Verification] Mismatch detected!', {
-                    client: clientTotalDiscount,
-                    server: serverTotalDiscount,
-                  })
-                  verifiedDiscountAmount = serverTotalDiscount
-                }
-
-                // Use server-side discount details
-                if (discountResult.discounts.length > 0) {
-                  verifiedDiscountType = discountResult.discounts.map(d => d.type).join(', ')
-                  verifiedDiscountReason = discountResult.discounts.map(d => d.name).join(', ')
-                }
+          } else if (effectiveCart.length > 1) {
+            const multiItems = effectiveCart.map((item: any, index: number) => {
+              const itemDate = typeof item.date === 'string' ? new Date(item.date) : item.date
+              const [iStartH, iStartM] = item.startTime.split(':').map(Number)
+              const [iEndH, iEndM] = item.endTime.split(':').map(Number)
+              const iStartDT = new Date(itemDate.getTime()); iStartDT.setHours(iStartH, iStartM ?? 0, 0, 0)
+              const iEndDT = new Date(itemDate.getTime()); iEndDT.setHours(iEndH, iEndM ?? 0, 0, 0)
+              if (iEndDT <= iStartDT) iEndDT.setDate(iEndDT.getDate() + 1)
+              
+              const itemDurationHours = (iEndDT.getTime() - iStartDT.getTime()) / (1000 * 60 * 60)
+              return {
+                courtId: item.courtId,
+                startTimeISO: iStartDT.toISOString(),
+                endTimeISO: iEndDT.toISOString(),
+                totalAmount: (item.hourlyRate || 0) * itemDurationHours,
+                paymentType: isSplitPayment ? 'split' as const : 'full' as const,
+                paymentMethod,
+                notes: `Multi-court item ${index + 1}/${effectiveCart.length}`,
+                numPlayers: isSplitPayment ? playerCount : 1,
               }
-            } catch (verifyErr) {
-              console.error('[Discount Verification] Failed, using client value:', verifyErr)
-            }
-          }
-
-          const reservationResult = await createReservationAction({
-            courtId: bookingData.courtId,
-            userId: user.id,
-            startTimeISO,
-            endTimeISO,
-            totalAmount: getTotalAmount(),
-            numPlayers: isSplitPayment ? playerCount : 1,
-            paymentType: isSplitPayment ? 'split' : 'full',
-            paymentMethod,
-            notes: isSplitPayment ? `Split payment with ${playerCount} players` : undefined,
-            discountApplied: verifiedDiscountAmount,
-            discountType: verifiedDiscountType,
-            discountReason: verifiedDiscountReason,
-            recurrenceWeeks: bookingData.recurrenceWeeks,
-            selectedDays: bookingData.selectedDays,
-            customDownPaymentAmount,
-            promoCode,
-          })
-
-          if (!reservationResult.success || !reservationResult.reservationId) {
-            console.error('Reservation creation failed:', {
-              error: reservationResult.error,
-              bookingData: {
-                courtId: bookingData.courtId,
-                courtName: bookingData.courtName,
-                venueName: bookingData.venueName,
-                startTime: startTimeISO,
-                endTime: endTimeISO,
-              },
-              userId: user.id,
             })
-            throw new Error(reservationResult.error || 'Failed to create reservation')
+
+            const multiResult = await createMultiCourtReservationsAction({
+              userId: user.id,
+              customDownPaymentAmount,
+              promoCode,
+              items: multiItems,
+            })
+
+            if (!multiResult.success || !multiResult.reservationId) throw new Error(multiResult.error || 'Failed to create multi-court reservations')
+            confirmedReservationId = multiResult.reservationId
+            requiresDownPaymentResult = !!multiResult.downPaymentRequired
+          } else {
+            const reservationResult = await createReservationAction({
+              courtId: bookingData.courtId,
+              userId: user.id,
+              startTimeISO,
+              endTimeISO,
+              totalAmount: getTotalAmount(),
+              numPlayers: isSplitPayment ? playerCount : 1,
+              paymentType: isSplitPayment ? 'split' : 'full',
+              paymentMethod,
+              notes: isSplitPayment ? `Split payment with ${playerCount} players` : undefined,
+              recurrenceWeeks: bookingData.recurrenceWeeks,
+              selectedDays: bookingData.selectedDays,
+              customDownPaymentAmount,
+              promoCode,
+            })
+
+            if (!reservationResult.success || !reservationResult.reservationId) throw new Error(reservationResult.error || 'Failed to create reservation')
+            confirmedReservationId = reservationResult.reservationId
+            requiresDownPaymentResult = !!reservationResult.downPaymentRequired
           }
 
-          if (reservationResult.downPaymentRequired) {
-            requiresDownPayment = true
-          }
-
-          newReservationId = reservationResult.reservationId
+          setReservationId(confirmedReservationId)
+          console.log('[initializePayment] ✅ Reservation created:', confirmedReservationId)
+        } else {
+          console.log('[initializePayment] ➡️ Reservation already exists, skipping creation:', confirmedReservationId)
+          requiresDownPaymentResult = true 
         }
-
-        const confirmedReservationId = newReservationId
-        setReservationId(confirmedReservationId)
-        console.log('Reservation created successfully:', confirmedReservationId)
-
-        // For cash payments, skip payment initiation and redirect to receipt ONLY IF no down payment is required
-        if (paymentMethod === 'cash' && !requiresDownPayment) {
+        // STEP 2: HANDLE REDIRECTS FOR CASH (NO DOWN PAYMENT)
+        if (paymentMethod === 'cash' && !requiresDownPaymentResult) {
           setLoading(false)
-          setPaymentStatus('processing')
-          setBookingReference(confirmedReservationId.slice(0, 8), confirmedReservationId)
-
-          // Redirect cash bookings directly to the receipt page
+          setPaymentStatus('success')
           router.push(`/bookings/${confirmedReservationId}/receipt`)
           return
         }

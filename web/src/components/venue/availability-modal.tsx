@@ -208,7 +208,9 @@ export function AvailabilityModal({
     const targetSlot = endSlot || startSlot
     if (!targetSlot) return ''
 
-    const [hours, minutes] = targetSlot.time.split(':').map(Number)
+    const [hs, ms] = targetSlot.time.split(':')
+    const hours = Number(hs || 0)
+    const minutes = Number(ms || 0)
     const endHour = hours + 1
     return `${endHour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
   }
@@ -227,8 +229,10 @@ export function AvailabilityModal({
 
       // Calculate actual slots that will be created (matching checkout-store logic)
       const initialStartTime = new Date(selectedDate)
-      const [startH, startM] = startSlot.time.split(':')
-      initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
+      const [sh, sm] = startSlot.time.split(':')
+      const startH = parseInt(sh || '0')
+      const startM = parseInt(sm || '0')
+      initialStartTime.setHours(startH, startM, 0, 0)
       const startDayIndex = initialStartTime.getDay()
 
       // Deduplicate selected days
@@ -353,7 +357,10 @@ export function AvailabilityModal({
   const formatTime = (time: string) => formatTo12Hour(time)
 
   const getNextHour = (time: string) => {
-    const [hours, minutes] = time.split(':').map(Number)
+    if (!time) return ''
+    const [hs, ms] = time.split(':')
+    const hours = Number(hs || 0)
+    const minutes = Number(ms || 0)
     const nextHour = hours + 1
     return `${nextHour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
   }

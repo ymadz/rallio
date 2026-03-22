@@ -221,16 +221,9 @@ export function BookingCard({
         <div className="absolute top-3 left-3 flex flex-wrap gap-2 max-w-[calc(100%-3rem)] z-10">
           {bookingStatusBadge(booking.status, booking)}
           {booking.type === 'queue_session' && (
-            <span className="px-3 py-1.5 rounded-full text-xs font-bold shadow-lg bg-white text-green-700 border border-green-300 flex items-center gap-1">
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-                />
-              </svg>
-              Queue Session
+            <span className="px-3 py-1.5 rounded-full text-[10px] font-extrabold shadow-lg bg-[#0d9488] text-white ring-1 ring-white/20 flex items-center gap-1.5 backdrop-blur-md">
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+              QUEUE SESSION
             </span>
           )}
           {booking.metadata?.weeks_total && booking.metadata.weeks_total > 1 && (

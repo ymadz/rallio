@@ -97,6 +97,12 @@ export async function getQueueDetails(courtId: string) {
           id,
           name
         )
+      ),
+      queue_session_courts (
+        court_id,
+        courts (
+          name
+        )
       )
     `
 
@@ -372,7 +378,9 @@ export async function getQueueDetails(courtId: string) {
     } = {
       id: session.id,
       courtId: session.court_id,
-      courtName: session.courts?.name || 'Unknown Court',
+      courtName: session.queue_session_courts?.length > 0 
+        ? session.queue_session_courts.map((qsc: any) => qsc.courts?.name).filter(Boolean).join(', ') 
+        : session.metadata?.courts?.map((c: any) => c.name).join(', ') || session.courts?.name || 'Unknown Court',
       venueName: session.courts?.venues?.name || 'Unknown Venue',
       venueId: session.courts?.venues?.id || '',
       status: session.status,
@@ -804,6 +812,12 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
             latitude,
             longitude
           )
+        ),
+        queue_session_courts (
+          court_id,
+          courts (
+            name
+          )
         )
       `)
       .in('status', ['open', 'active'])
@@ -906,7 +920,9 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
       return {
         id: session.id,
         courtId: session.court_id,
-        courtName: session.courts?.name || 'Unknown Court',
+        courtName: session.queue_session_courts?.length > 0 
+          ? session.queue_session_courts.map((qsc: any) => qsc.courts?.name).filter(Boolean).join(', ') 
+          : session.metadata?.courts?.map((c: any) => c.name).join(', ') || session.courts?.name || 'Unknown Court',
         venueName: session.courts?.venues?.name || 'Unknown Venue',
         venueId: session.courts?.venues?.id || '',
         status: session.status,
@@ -1025,6 +1041,12 @@ export async function getQueueMasterHistory() {
           venues (
             name
           )
+        ),
+        queue_session_courts (
+          court_id,
+          courts (
+            name
+          )
         )
       `)
       .eq('organizer_id', user.id)
@@ -1036,7 +1058,9 @@ export async function getQueueMasterHistory() {
     // Format for display
     const history = sessions?.map(session => ({
       id: session.id,
-      courtName: session.courts?.name || 'Unknown Court',
+      courtName: session.queue_session_courts?.length > 0 
+        ? session.queue_session_courts.map((qsc: any) => qsc.courts?.name).filter(Boolean).join(', ') 
+        : session.metadata?.courts?.map((c: any) => c.name).join(', ') || session.courts?.name || 'Unknown Court',
       venueName: session.courts?.venues?.name || 'Unknown Venue',
       status: session.status,
       startTime: new Date(session.start_time),
@@ -1470,7 +1494,8 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
               duration_hours: durationHours,
               total_with_fee: courtReservationTotal,
               intended_payment_method: data.paymentMethod,
-              promo_code: data.promoCode || undefined
+              promo_code: data.promoCode || undefined,
+              down_payment_amount: downPaymentAmountTotal ? Math.round(downPaymentAmountTotal * ratio * 100) / 100 : undefined,
             },
             notes: `Queue Session (${data.mode}) - ${sessionStart.toLocaleDateString()}${data.paymentMethod === 'cash' ? ' (Cash Payment)' : ''}`,
           })
@@ -1506,7 +1531,6 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
             reservation_ids: reservationIds, // Link to all reservations via array
             reservation_id: reservationIds[0], // primary fallback
             booking_id: bookingId,
-            courts: data.courts, // Include all chosen courts directly here for UI
             venue: { id: venue?.id, name: venue?.name },
             recurrence_group_id: recurrenceGroupId,
             payment_required: totalAmountPerSlotTotal,
@@ -1529,6 +1553,37 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
           }
         } catch (rollbackError) {}
         return { success: false, error: `Failed to create session for ${sessionStart.toLocaleDateString()}: ${insertError?.message || 'Unknown error'}` }
+      }
+
+      // Insert into junction table
+      const junctionInserts = data.courts.map(c => ({
+        queue_session_id: session.id,
+        court_id: c.id
+      }))
+      const { error: junctionError } = await supabase.from('queue_session_courts').insert(junctionInserts)
+      if (junctionError) {
+        console.error('[createQueueSession] ❌ Junction Insert Error:', junctionError)
+      }
+
+      // Final Step: Update all reservations in this bundle to have the queue_session_id in their metadata
+      // This is important so the "My Bookings" page and detail modals can correctly identify all court partners as queue sessions.
+      try {
+        const { data: currentReservations } = await supabase
+          .from('reservations')
+          .select('id, metadata')
+          .in('id', reservationIds)
+        
+        if (currentReservations) {
+          for (const res of currentReservations) {
+             const updatedMetadata = {
+               ...(res.metadata as object || {}),
+               queue_session_id: session.id
+             }
+             await supabase.from('reservations').update({ metadata: updatedMetadata }).eq('id', res.id)
+          }
+        }
+      } catch (e) {
+        console.error('[createQueueSession] ⚠️ Warning: Failed to link reservations to queue_session_id:', e)
       }
 
       createdSessions.push({
@@ -2507,6 +2562,12 @@ export async function getMyQueueMasterSessions(filter?: {
             id,
             name
           )
+        ),
+        queue_session_courts (
+          court_id,
+          courts (
+            name
+          )
         )
       `)
       .eq('organizer_id', user.id)
@@ -2617,10 +2678,14 @@ export async function getMyQueueMasterSessions(filter?: {
 
         // Status corrections are already handled above in the for-loop
 
+        const courtName = session.queue_session_courts?.length > 0 
+          ? session.queue_session_courts.map((qsc: any) => qsc.courts?.name).filter(Boolean).join(', ') 
+          : session.metadata?.courts?.map((c: any) => c.name).join(', ') || session.courts?.name || 'Unknown Court'
+        
         return {
           id: session.id,
           courtId: session.court_id,
-          courtName: session.courts?.name || 'Unknown Court',
+          courtName,
           venueName: session.courts?.venues?.name || 'Unknown Venue',
           venueId: session.courts?.venues?.id || '',
           status: session.status,
@@ -2872,6 +2937,12 @@ export async function getQueueSessionSummary(sessionId: string): Promise<{
             name
           )
         ),
+        queue_session_courts (
+          court_id,
+          courts (
+            name
+          )
+        ),
         organizer:organizer_id (
           display_name,
           first_name,
@@ -3052,7 +3123,9 @@ export async function getQueueSessionSummary(sessionId: string): Promise<{
         costPerGame: session.cost_per_game,
         startTime: session.start_time,
         endTime: session.end_time,
-        courtName: session.courts?.name || 'Unknown Court',
+        courtName: session.queue_session_courts?.length > 0 
+          ? session.queue_session_courts.map((qsc: any) => qsc.courts?.name).filter(Boolean).join(', ') 
+          : session.metadata?.courts?.map((c: any) => c.name).join(', ') || session.courts?.name || 'Unknown Court',
         venueName: session.courts?.venues?.name || 'Unknown Venue',
         venueId: session.courts?.venues?.id || '',
         organizerName:

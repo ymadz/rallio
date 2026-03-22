@@ -8,7 +8,7 @@ export type PaymentMethod = 'e-wallet' | 'cash' | null
 export interface BookingData {
   courtId: string
   courtName: string
-  courts?: { id: string; name: string }[] // For multi-court bookings (e.g., Queue Sessions)
+  courts?: { id: string; name: string; hourly_rate?: number }[] // For multi-court bookings (e.g., Queue Sessions)
   venueId: string
   venueName: string
   date: Date
@@ -333,7 +333,10 @@ export const useCheckoutStore = create<CheckoutState>()(
           const recurrenceWeeks = bookingData.recurrenceWeeks || 1
           const selectedDays = bookingData.selectedDays || []
 
-          const baseRate = bookingData.hourlyRate * duration
+          const totalHourlyRate = (bookingData.courts && bookingData.courts.length > 0)
+            ? bookingData.courts.reduce((sum, c) => sum + (Number(c.hourly_rate) || bookingData.hourlyRate), 0)
+            : bookingData.hourlyRate;
+          const baseRate = totalHourlyRate * duration;
 
           const initialStartTime = new Date(bookingData.date)
           initialStartTime.setHours(startH, startM || 0, 0, 0)

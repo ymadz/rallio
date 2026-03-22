@@ -141,22 +141,29 @@ export async function initiatePaymentAction(
         paymentMethod === 'cash'
 
       // If it's a cash booking but requires a down payment, charge the down payment amount online.
-      if (isIntendedCash && reservation.metadata?.down_payment_amount && reservation.status === 'pending_payment') {
-        amountToCharge = Number(reservation.metadata.down_payment_amount)
-        isDownPayment = true
-        description += ' (Down Payment)'
+      if (isIntendedCash && reservation.status === 'pending_payment') {
+        const metadataDownPayment = reservation.metadata?.down_payment_amount
+        if (metadataDownPayment) {
+          amountToCharge = Number(metadataDownPayment)
+          isDownPayment = true
+          description += ' (Down Payment)'
+        } else if (reservation.payment_type === 'cash' || reservation.payment_method === 'cash') {
+          // Fallback: If it's explicitly marked as cash but metadata is missing the amount for some reason,
+          // still treat it as a down payment situation to avoid the "not supported" error
+          isDownPayment = true
+        }
       }
     }
 
     console.log('[initiatePaymentAction] 🔍 Down payment debug:', {
-      recurrenceGroupId,
+      reservationId,
       bookingId,
+      recurrenceGroupId,
       isDownPayment,
       amountToCharge,
       reservationStatus: reservation.status,
       paymentMethod,
-      intendedMethod: reservation.metadata?.intended_payment_method,
-      downPaymentInMeta: reservation.metadata?.down_payment_amount,
+      metadata: reservation.metadata,
       reservationPaymentMethod: reservation.payment_method,
     })
 
@@ -177,10 +184,15 @@ export async function initiatePaymentAction(
 
       if (groupReservations && groupReservations.length > 0) {
         if (isDownPayment) {
-          // For down payments, sum the down_payment_amount from each reservation's metadata
+          // For down payments, sum the down_payment_amount from each reservation's metadata.
+          // Fallback to 20% of total_amount if metadata is missing.
           amountToCharge = groupReservations.reduce((sum, res) => {
             const meta = res.metadata as any
-            return sum + Number(meta?.down_payment_amount || 0)
+            const downPayment = Number(meta?.down_payment_amount || 0)
+            if (downPayment > 0) return sum + downPayment
+            
+            // Fallback: use 20% of total_amount as a safe default for down payment
+            return sum + ((res.total_amount || 0) * 0.2)
           }, 0)
           description += ` (Down Payment - ${groupReservations.length} sessions)`
         } else {

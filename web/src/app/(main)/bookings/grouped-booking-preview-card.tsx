@@ -26,6 +26,7 @@ export function GroupedBookingPreviewCard({ group, serverDate, onClick }: Groupe
   const imageUrl = primaryImage?.url || courtImages[0]?.url || firstBooking.courts?.venues?.image_url
 
   const isPastBooking = group.reservations.every(b => new Date(b.end_time) < (serverDate || new Date()))
+  const isQueueSession = group.reservations.some(b => b.type === 'queue_session')
 
   // Determine aggregate display status
   const statuses = new Set(group.reservations.map(b => b.status))
@@ -84,7 +85,13 @@ export function GroupedBookingPreviewCard({ group, serverDate, onClick }: Groupe
       {/* Status badge - top right */}
       <div className="absolute top-2.5 right-2.5 z-10 flex flex-wrap gap-1.5 justify-end max-w-[70%]">
         <StatusBadge status={displayStatus} label={displayLabel} size="sm" />
-        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary text-white shadow-sm ring-1 ring-white/20 whitespace-nowrap">
+        {isQueueSession && (
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#0d9488] text-white shadow-sm ring-1 ring-white/20 whitespace-nowrap flex items-center gap-1">
+            <span className="w-1 h-1 rounded-full bg-white animate-pulse" />
+            QUEUE SESSION
+          </span>
+        )}
+        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/20 backdrop-blur-md text-white shadow-sm ring-1 ring-white/10 whitespace-nowrap">
           {group.reservations.length} Slots
         </span>
       </div>

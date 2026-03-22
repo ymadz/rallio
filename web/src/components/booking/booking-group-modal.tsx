@@ -36,6 +36,7 @@ export function BookingGroupModal({ group, isOpen, onClose, onSelectBooking, ser
   const isFullyPaid = group.amountPaid >= group.totalAmount
   const anyPartiallyPaid = group.reservations.some(b => b.status === 'partially_paid')
   const anyPendingPayment = group.reservations.some(b => b.status === 'pending_payment')
+  const isQueueSession = group.reservations.some(b => b.type === 'queue_session')
 
   let groupStatus = 'confirmed'
   let groupStatusLabel = 'Confirmed'
@@ -95,7 +96,7 @@ export function BookingGroupModal({ group, isOpen, onClose, onSelectBooking, ser
                     <div className="max-w-[70%]">
                         <div className="flex items-center gap-2 mb-1">
                             <h2 className="text-xl font-bold text-white tracking-tight leading-tight">
-                                {group.type === 'grouped_recurring' ? 'Recurring Series' : 'Multi-Court Transaction'}
+                                {isQueueSession ? 'Queue Session' : (group.type === 'grouped_recurring' ? 'Recurring Series' : 'Multi-Court Transaction')}
                             </h2>
                         </div>
                         <div className="flex items-center gap-2">

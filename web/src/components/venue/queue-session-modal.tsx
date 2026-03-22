@@ -30,7 +30,7 @@ interface QueueSessionModalProps {
     onClose: () => void
     courtId?: string // fallback for backward compatibility
     courtName?: string // fallback
-    courts?: { id: string; name: string }[] // for multi-court queues
+    courts?: { id: string; name: string; hourly_rate?: number }[] // for multi-court queues
     hourlyRate: number
     venueId: string
     venueName: string
@@ -62,7 +62,11 @@ export function QueueSessionModal({
 
     // Time slot selection
     const [startSlot, setStartSlot] = useState<TimeSlot | null>(preselectedStartTime ? { time: preselectedStartTime, available: true } : null)
-    const [endSlot, setEndSlot] = useState<TimeSlot | null>(preselectedEndTime ? { time: preselectedEndTime, available: true } : null)
+    const [endSlot, setEndSlot] = useState<TimeSlot | null>(
+        preselectedEndTime && preselectedEndTime !== preselectedStartTime 
+            ? { time: preselectedEndTime, available: true } 
+            : null
+    )
     const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
     const [loading, setLoading] = useState(false)
     const [isBooking, setIsBooking] = useState(false)
@@ -109,8 +113,15 @@ export function QueueSessionModal({
         async function fetchTimeSlots() {
             if (!selectedDate || !isOpen) return
             setLoading(true)
-            setStartSlot(null)
-            setEndSlot(null)
+
+            // Special case: if we have preselected values and we're on the same date, 
+            // don't clear them immediately to avoid a flicker or duration loss
+            const isPreselectedDate = preselectedDate && format(new Date(preselectedDate), 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd')
+            
+            if (!isPreselectedDate) {
+                setStartSlot(null)
+                setEndSlot(null)
+            }
 
             try {
                 const slots = await getAvailableTimeSlotsAction(primaryCourtId, format(selectedDate, 'yyyy-MM-dd'))
@@ -158,20 +169,28 @@ export function QueueSessionModal({
     const getEndTime = (): string => {
         const targetSlot = endSlot || startSlot
         if (!targetSlot) return ''
-        const [hours, minutes] = targetSlot.time.split(':').map(Number)
+        const [hs, ms] = targetSlot.time.split(':')
+        const hours = Number(hs || 0)
+        const minutes = Number(ms || 0)
         const endHour = hours + 1
         return `${endHour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
     }
 
     const formatTime = (time: string) => {
-        const [hours, minutes] = time.split(':').map(Number)
+        if (!time) return ''
+        const [hs, ms] = time.split(':')
+        const hours = Number(hs || 0)
+        const minutes = Number(ms || 0)
         const period = hours >= 12 ? 'PM' : 'AM'
         const displayHours = hours % 12 || 12
         return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`
     }
 
     const getNextHour = (time: string) => {
-        const [hours, minutes] = time.split(':').map(Number)
+        if (!time) return ''
+        const [hs, ms] = time.split(':')
+        const hours = Number(hs || 0)
+        const minutes = Number(ms || 0)
         const nextHour = hours + 1
         return `${nextHour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
     }
@@ -190,8 +209,10 @@ export function QueueSessionModal({
 
             // Calculate actual slots that will be created
             const initialStartTime = new Date(selectedDate)
-            const [startH, startM] = startSlot.time.split(':')
-            initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
+            const [sh, sm] = startSlot.time.split(':')
+            const startH = parseInt(sh || '0')
+            const startM = parseInt(sm || '0')
+            initialStartTime.setHours(startH, startM, 0, 0)
             const startDayIndex = initialStartTime.getDay()
 
             const uniqueSelectedDays = selectedDays.length > 0
@@ -205,7 +226,14 @@ export function QueueSessionModal({
                 }
             }
 
-            const basePrice = (startSlot.price || hourlyRate) * duration * actualSlotCount
+            // Calculate total hourly rate for all courts
+            const fallbackRate = Number(hourlyRate) || 0
+            const totalCourtRate = courts && courts.length > 0 
+                ? courts.reduce((sum, c) => sum + (Number(c.hourly_rate) || fallbackRate), 0)
+                : fallbackRate || 300 // Absolute fallback to 300 if everything is 0
+
+            const courtCount = courts?.length || 1
+            const basePrice = (startSlot.price ? (startSlot.price * courtCount) : totalCourtRate) * duration * actualSlotCount
 
             try {
                 const dateStr = format(selectedDate, 'yyyy-MM-dd')
@@ -909,8 +937,10 @@ export function QueueSessionModal({
 
                                             // Generate exact dates
                                             const initialStartTime = new Date(selectedDate)
-                                            const [startH, startM] = startSlot.time.split(':')
-                                            initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
+                                            const [sh, sm] = startSlot.time.split(':')
+                                            const startH = parseInt(sh || '0')
+                                            const startM = parseInt(sm || '0')
+                                            initialStartTime.setHours(startH, startM, 0, 0)
                                             const startDayIndex = initialStartTime.getDay()
 
                                             const uniqueSelectedDays = selectedDays.length > 0
@@ -948,7 +978,7 @@ export function QueueSessionModal({
                                                 <span className="animate-spin inline-block w-3 h-3 border-2 border-gray-300 border-t-primary rounded-full" />
                                                 Calculating price...
                                             </span>
-                                        ) : calculatedPrice ? (
+                                        ) : (calculatedPrice && (calculatedPrice.final > 0 || calculatedPrice.original > 0)) ? (
                                             <>
                                                 {Number(calculatedPrice.discount) !== 0 && (
                                                     <span className="text-sm text-gray-400 line-through">₱{Number(calculatedPrice.original || 0).toLocaleString()}</span>
@@ -973,9 +1003,12 @@ export function QueueSessionModal({
                                         ) : (
                                             (() => {
                                                 const getDisplayBasePrice = () => {
+                                                    if (!startSlot) return "0"
                                                     const initialStartTime = new Date(selectedDate)
-                                                    const [startH, startM] = startSlot.time.split(':')
-                                                    initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
+                                                    const [sh, sm] = (startSlot.time || "").split(':')
+                                                    const startH = parseInt(sh || '0')
+                                                    const startM = parseInt(sm || '0')
+                                                    initialStartTime.setHours(startH, startM, 0, 0)
                                                     const startDayIndex = initialStartTime.getDay()
                                                     const uniqueSelectedDays = selectedDays.length > 0
                                                         ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
@@ -987,7 +1020,14 @@ export function QueueSessionModal({
                                                             actualSlotCount++
                                                         }
                                                     }
-                                                    return Number(hourlyRate * duration * actualSlotCount).toLocaleString()
+
+                                                    const fallbackRate = Number(hourlyRate) || 0
+                                                    const totalRate = courts && courts.length > 0 
+                                                        ? courts.reduce((sum, c) => sum + (Number(c.hourly_rate) || fallbackRate), 0)
+                                                        : fallbackRate || 300
+                                                    
+                                                    const price = Number(totalRate * duration * actualSlotCount)
+                                                    return price.toLocaleString()
                                                 }
                                                 return <span className="text-lg font-bold text-primary">₱{getDisplayBasePrice()}</span>
                                             })()

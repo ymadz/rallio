@@ -291,7 +291,7 @@ export async function assignMatchFromQueue(
     const { data: court } = await supabase
       .from('courts')
       .select('name')
-      .eq('id', session.court_id)
+      .eq('id', assignedCourtId || session.court_id)
       .single()
 
     const courtName = court?.name || 'Court'

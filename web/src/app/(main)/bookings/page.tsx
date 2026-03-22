@@ -140,8 +140,11 @@ async function getUserQueueSessions(userId: string) {
     const actualTotalAmount = linkedReservation?.total_amount || qs.metadata?.payment_required || 0
     const actualAmountPaid = linkedReservation?.amount_paid || (qs.metadata?.payment_status === 'paid' ? actualTotalAmount : 0)
 
+    const reservationIds = qs.metadata?.reservation_ids || (reservationId ? [reservationId] : [])
+
     return {
       id: reservationId || qs.id,
+      booking_id: qs.metadata?.booking_id || null,
       start_time: qs.start_time,
       end_time: qs.end_time,
       status: actualStatus,
@@ -205,7 +208,7 @@ export default async function BookingsPage() {
   ])
 
   // Process queue sessions to ensure they have unique IDs if needed, but we use the reservation ID to deduplicate
-  const queueSessionReservationIds = new Set(queueSessions.map(qs => qs.id))
+  const queueSessionPrimaryReservationIds = new Set(queueSessions.map(qs => qs.id))
 
   // Enrich queue sessions with payments from the main reservations query
   const enrichedQueueSessions = queueSessions.map(qs => {
@@ -216,8 +219,25 @@ export default async function BookingsPage() {
     }
   })
 
-  // Filter out reservations that already exist as queue sessions
-  const regularBookings = bookings.filter(b => !queueSessionReservationIds.has(b.id))
+  // Filter out primary reservations that are already represented as queue sessions
+  const filteredRegularBookings = bookings.filter(b => !queueSessionPrimaryReservationIds.has(b.id))
+
+  // Propagate queue session properties to secondary court reservations in the same group
+  const regularBookings = filteredRegularBookings.map(b => {
+    if (b.booking_id) {
+       const matchingQS = enrichedQueueSessions.find(qs => qs.booking_id === b.booking_id)
+       if (matchingQS) {
+          return {
+             ...b,
+             type: 'queue_session' as const,
+             queue_session_id: matchingQS.queue_session_id,
+             game_format: (matchingQS as any).game_format,
+             mode: (matchingQS as any).mode,
+          }
+       }
+    }
+    return b
+  })
 
   // Merge and sort by start_time descending
   const allBookings = [...regularBookings, ...enrichedQueueSessions].sort(

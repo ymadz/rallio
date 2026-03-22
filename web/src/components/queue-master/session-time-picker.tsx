@@ -31,7 +31,8 @@ export function SessionTimePicker({
 
     // Helper to check if a range starting at 'time' is fully available
     const isRangeAvailable = (startTime: string) => {
-        const startHour = parseInt(startTime.split(':')[0])
+        const [sh, sm] = startTime.split(':')
+        const startHour = parseInt(sh || '0')
         for (let i = 0; i < duration; i++) {
             const h = startHour + i
             const timeString = `${h.toString().padStart(2, '0')}:00`
@@ -53,12 +54,14 @@ export function SessionTimePicker({
         <div className={cn("space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar", className)}>
             {slots.map((slot) => {
                 // Calculate logic for range highlighting
-                const slotHour = parseInt(slot.time.split(':')[0])
+                const [sh, sm] = slot.time.split(':')
+                const slotHour = parseInt(sh || '0')
                 let isInRange = false
                 let isStart = false
 
                 if (selectedTime) {
-                    const startHour = parseInt(selectedTime.split(':')[0])
+                    const [sh, sm] = selectedTime.split(':')
+                    const startHour = parseInt(sh || '0')
                     const endHour = startHour + duration
 
                     if (slotHour === startHour) isStart = true

@@ -80,6 +80,12 @@ interface QueueSession {
   requiresApproval?: boolean;
   approvalStatus?: string;
   metadata?: any;
+  queue_session_courts?: Array<{
+    court_id: string;
+    courts?: {
+      name: string;
+    };
+  }>;
 }
 
 export function SessionManagementClient({ sessionId }: SessionManagementClientProps) {
@@ -170,6 +176,12 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
               id,
               name
             )
+          ),
+          queue_session_courts (
+            court_id,
+            courts (
+              name
+            )
           )
         `
         )
@@ -237,7 +249,9 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
       const formattedSession: QueueSession = {
         id: sessionData.id,
         courtId: sessionData.court_id,
-        courtName: sessionData.courts?.name || 'Unknown Court',
+        courtName: sessionData.queue_session_courts?.length > 0
+          ? sessionData.queue_session_courts.map((qsc: any) => qsc.courts?.name).filter(Boolean).join(', ')
+          : sessionData.metadata?.courts?.map((c: any) => c.name).join(', ') || sessionData.courts?.name || 'Unknown Court',
         venueName: sessionData.courts?.venues?.name || 'Unknown Venue',
         status: sessionData.status,
         currentPlayers: sessionData.current_players || formattedParticipants.length,
@@ -1168,7 +1182,14 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
             isOpen={showMatchAssignModal}
             onClose={() => setShowMatchAssignModal(false)}
             sessionId={sessionId}
-            sessionCourts={session.metadata?.courts || [{ id: session.courtId, name: session.courtName }]}
+            sessionCourts={
+              session.queue_session_courts && session.queue_session_courts.length > 0
+                ? session.queue_session_courts.map((qsc: any) => ({
+                    id: qsc.court_id,
+                    name: qsc.courts?.name || 'Unknown Court',
+                  }))
+                : session.metadata?.courts || [{ id: session.courtId, name: session.courtName }]
+            }
             waitingPlayers={waitingPlayers.map((p) => ({
               id: p.id,
               userId: p.userId,

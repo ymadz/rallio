@@ -86,7 +86,10 @@ function to12Hour(time: string) {
 }
 
 function nextHour(time: string) {
-  const [hours, minutes] = time.split(':').map(Number);
+  if (!time) return '';
+  const [hs, ms] = time.split(':');
+  const hours = Number(hs || 0);
+  const minutes = Number(ms || 0);
   const next = hours + 1;
   return `${next.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
 }
@@ -385,7 +388,7 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
     // (Assuming QueueMaster selects a uniform block)
     const sortedTimes = selectedCells.map(c => c.time).sort();
     const startTime = sortedTimes[0];
-    const endTime = nextHour(sortedTimes[sortedTimes.length - 1]);
+    const endTime = sortedTimes[sortedTimes.length - 1]; // Let modal calculate exclusive end
 
     onQueueClick(selectedCourtsObj, selectedDate, startTime, endTime, allDatesToBook);
   };
@@ -1011,15 +1014,7 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {isQueueMaster && onQueueClick && (
-            <button
-              onClick={handleQueueClick}
-              disabled={selectedCells.length === 0 || isChecking}
-              className="px-4 py-2 border-2 border-primary text-primary bg-white rounded-lg text-sm font-semibold hover:bg-primary/5 transition-colors disabled:opacity-50 shadow-sm"
-            >
-              Create Queue Session
-            </button>
-          )}
+
 
           {validatingConflicts && (
             <span className="text-[10px] text-gray-400 animate-pulse">Checking conflicts...</span>
@@ -1030,6 +1025,15 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
           >
             Clear
           </button>
+          {isQueueMaster && onQueueClick && (
+            <button
+              onClick={handleQueueClick}
+              disabled={selectedCells.length === 0 || isChecking}
+              className="px-4 py-2 border-2 border-primary text-primary bg-white rounded-lg text-sm font-semibold hover:bg-primary/5 transition-colors disabled:opacity-50 shadow-sm"
+            >
+              Create Queue Session
+            </button>
+          )}
           <button
             onClick={handleBookNow}
             disabled={
