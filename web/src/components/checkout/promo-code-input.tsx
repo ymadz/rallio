@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Tag, X, CheckCircle, Loader2 } from 'lucide-react'
 import { useCheckoutStore } from '@/stores/checkout-store'
 import { validatePromoCode } from '@/app/actions/promo-code-actions'
@@ -11,6 +11,7 @@ export function PromoCodeInput() {
     const [code, setCode] = useState('')
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const lastDiscountRecalcKeyRef = useRef<string | null>(null)
 
     const {
         bookingData,
@@ -34,7 +35,7 @@ export function PromoCodeInput() {
 
     // Recalculate all discounts using the unified backend function
     // Defined before early returns so it's available in all code paths
-    const recalculateDiscounts = async (promoCodeStr?: string) => {
+    const recalculateDiscounts = useCallback(async (promoCodeStr?: string) => {
         if (!bookingData) return
 
         // Compute the full base price (before any discounts)
@@ -84,7 +85,39 @@ export function PromoCodeInput() {
             return { promoDiscounts, venueDiscounts }
         }
         return null
-    }
+    }, [bookingData, discountAmount, effectiveCart, getSubtotal, promoDiscountAmount, setDiscountDetails])
+
+    const discountRecalcKey = useMemo(() => {
+        const cartSignature = effectiveCart
+            .map(item => `${item.courtId}|${new Date(item.date).toISOString()}|${item.startTime}|${item.endTime}|${item.recurrenceWeeks || 1}|${(item.selectedDays || []).join(',')}`)
+            .join('||')
+
+        return `${cartSignature}|promo:${promoCode || ''}`
+    }, [effectiveCart, promoCode])
+
+    useEffect(() => {
+        if (!bookingData) return
+        if (lastDiscountRecalcKeyRef.current === discountRecalcKey) return
+
+        let isCancelled = false
+        lastDiscountRecalcKeyRef.current = discountRecalcKey
+
+        const run = async () => {
+            try {
+                await recalculateDiscounts(promoCode)
+            } catch (recalcError) {
+                if (!isCancelled) {
+                    console.error('Failed to recalculate checkout discounts:', recalcError)
+                }
+            }
+        }
+
+        run()
+
+        return () => {
+            isCancelled = true
+        }
+    }, [bookingData, discountRecalcKey, promoCode, recalculateDiscounts])
 
     // If a promotion is already applied, show success state
     if (promoCode && promoDiscountAmount > 0) {
