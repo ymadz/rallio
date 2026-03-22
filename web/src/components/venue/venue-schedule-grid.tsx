@@ -824,7 +824,10 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
                             <div key={`mobile-cell-${court.id}-${time}`} className="space-y-1">
                               <div className="text-[11px] leading-tight">
                                 <p className="truncate font-semibold text-gray-700">{court.name}</p>
-                                <p className="font-semibold text-primary">PHP {Number(court.hourly_rate || 0).toFixed(0)}/hr</p>
+                                <p className="text-[10px] text-gray-500 capitalize mt-0.5">
+                                  {court.surface_type} • {court.court_type}
+                                </p>
+                                <p className="font-semibold text-primary mt-0.5">PHP {Number(court.hourly_rate || 0).toFixed(0)}/hr</p>
                               </div>
 
                               <button
@@ -876,7 +879,10 @@ export function VenueScheduleGrid({ courts, venueId, venueName }: VenueScheduleG
                     >
                       <div className="flex flex-col items-center leading-tight">
                         <span>{court.name}</span>
-                        <span className="text-xs font-semibold text-primary">PHP {Number(court.hourly_rate || 0).toFixed(0)}/hr</span>
+                        <span className="text-[10px] font-medium text-gray-500 capitalize mt-0.5">
+                          {court.surface_type} • {court.court_type}
+                        </span>
+                        <span className="text-xs font-semibold text-primary mt-0.5">PHP {Number(court.hourly_rate || 0).toFixed(0)}/hr</span>
                       </div>
                     </th>
                   ))}
