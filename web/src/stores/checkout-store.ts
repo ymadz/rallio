@@ -4,6 +4,7 @@ import { mergeCartItems } from '@/lib/utils/booking-cart'
 
 export type CheckoutStep = 'details' | 'payment' | 'policy' | 'processing'
 export type PaymentMethod = 'e-wallet' | 'cash' | null
+export type CashPaymentOption = 'downpayment' | 'full_cash'
 
 export interface BookingData {
   courtId: string
@@ -58,6 +59,7 @@ interface CheckoutState {
 
   // Payment
   paymentMethod: PaymentMethod
+  cashPaymentOption: CashPaymentOption
   policyAccepted: boolean
 
   // Discount (if applicable)
@@ -100,6 +102,7 @@ interface CheckoutState {
   setSplitPayment: (enabled: boolean) => void
   setPlayerCount: (count: number) => void
   setPaymentMethod: (method: PaymentMethod) => void
+  setCashPaymentOption: (option: CashPaymentOption) => void
   setPolicyAccepted: (accepted: boolean) => void
   updatePlayerPayment: (playerNumber: number, updates: Partial<PlayerPaymentStatus>) => void
   setDiscount: (amount: number, code?: string) => void
@@ -131,6 +134,7 @@ const initialState = {
   playerCount: 2,
   playerPayments: [],
   paymentMethod: null,
+  cashPaymentOption: 'downpayment' as CashPaymentOption,
   policyAccepted: false,
   discountAmount: 0,
   discountCode: undefined,
@@ -265,6 +269,8 @@ export const useCheckoutStore = create<CheckoutState>()(
 
       setPaymentMethod: (method) => set({ paymentMethod: method }),
 
+      setCashPaymentOption: (option) => set({ cashPaymentOption: option }),
+
       setPolicyAccepted: (accepted) => set({ policyAccepted: accepted }),
 
       updatePlayerPayment: (playerNumber, updates) => {
@@ -393,6 +399,7 @@ export const useCheckoutStore = create<CheckoutState>()(
       getDownPaymentAmount: () => {
         const state = get()
         if (state.paymentMethod !== 'cash') return 0
+        if (state.cashPaymentOption === 'full_cash') return 0
         
         const total = state.getTotalAmount()
         const dpPercent = (state.downPaymentPercentage && state.downPaymentPercentage > 0)

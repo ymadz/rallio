@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { format, differenceInHours } from 'date-fns';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -45,6 +46,7 @@ export interface Booking {
   }>;
   recurrence_group_id?: string | null;
   cancellation_reason?: string | null;
+  cash_payment_deadline?: string | null;
   metadata?: {
     recurrence_total?: number;
     recurrence_index?: number;
@@ -156,8 +158,8 @@ export function BookingCard({
     } else if (status === 'pending_payment') {
       const paymentMethod = b.metadata?.intended_payment_method || b.payments?.[0]?.payment_method;
       if (paymentMethod === 'cash') {
-        displayStatus = 'confirmed'; // Map to confirmed style
-        displayLabel = 'Reserved';
+        displayStatus = 'pending_payment';
+        displayLabel = 'Awaiting Cash Payment';
       } else {
         displayLabel = 'Pending Payment';
       }
@@ -179,6 +181,37 @@ export function BookingCard({
   };
 
   const paymentStatus = getExtendedPaymentStatus(booking);
+  const cashDeadline = booking.cash_payment_deadline || booking.metadata?.cash_payment_deadline || null
+  const shouldShowCashTimer = isCashBooking(booking) && booking.status === 'pending_payment' && !!cashDeadline
+  const [nowMs, setNowMs] = useState(Date.now())
+
+  useEffect(() => {
+    if (!shouldShowCashTimer) return
+
+    const timerId = setInterval(() => setNowMs(Date.now()), 1000)
+    return () => clearInterval(timerId)
+  }, [shouldShowCashTimer])
+
+  const formatCountdown = (msRemaining: number) => {
+    if (msRemaining <= 0) return '00:00:00'
+
+    const totalSeconds = Math.floor(msRemaining / 1000)
+    const days = Math.floor(totalSeconds / 86400)
+    const hours = Math.floor((totalSeconds % 86400) / 3600)
+    const minutes = Math.floor((totalSeconds % 3600) / 60)
+    const seconds = totalSeconds % 60
+
+    const hh = String(hours).padStart(2, '0')
+    const mm = String(minutes).padStart(2, '0')
+    const ss = String(seconds).padStart(2, '0')
+
+    if (days > 0) return `${days}d ${hh}:${mm}:${ss}`
+    return `${hh}:${mm}:${ss}`
+  }
+
+  const deadlineMs = cashDeadline ? new Date(cashDeadline).getTime() : 0
+  const remainingMs = deadlineMs - nowMs
+  const isCashDeadlineExpired = shouldShowCashTimer && remainingMs <= 0
 
   return (
     <div className="overflow-hidden flex flex-col max-h-[90vh]">
@@ -526,6 +559,33 @@ export function BookingCard({
                     </div>
                   )}
                 </>
+              )}
+
+              {shouldShowCashTimer && (
+                <div
+                  className={`col-span-2 rounded-xl p-4 mt-1 border ${isCashDeadlineExpired ? 'border-red-200' : 'border-amber-200'}`}
+                  style={{
+                    background: isCashDeadlineExpired
+                      ? 'linear-gradient(135deg, rgba(254, 226, 226, 0.45) 0%, rgba(254, 242, 242, 0.45) 100%)'
+                      : 'linear-gradient(135deg, rgba(254, 243, 199, 0.45) 0%, rgba(255, 251, 235, 0.45) 100%)',
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className={`text-xs font-semibold uppercase tracking-wider ${isCashDeadlineExpired ? 'text-red-700' : 'text-amber-700'}`}>
+                        Cash Payment Deadline
+                      </p>
+                      <p className={`text-xs mt-1 ${isCashDeadlineExpired ? 'text-red-600' : 'text-amber-700'}`}>
+                        {isCashDeadlineExpired
+                          ? 'Deadline passed. This booking will be cancelled if still unpaid.'
+                          : `Pay cash at venue before ${format(new Date(cashDeadline as string), 'MMM d, yyyy • h:mm a')}`}
+                      </p>
+                    </div>
+                    <div className={`rounded-lg px-3 py-2 text-sm font-bold tabular-nums ${isCashDeadlineExpired ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>
+                      {formatCountdown(remainingMs)}
+                    </div>
+                  </div>
+                </div>
               )}
             </>
           )}

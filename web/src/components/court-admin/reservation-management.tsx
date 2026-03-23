@@ -50,6 +50,7 @@ interface Reservation {
   num_players: number
   notes?: string
   created_at: string
+  cash_payment_deadline?: string | null
   metadata?: any
   queue_session?: Array<{
     id: string
@@ -76,6 +77,7 @@ export function ReservationManagement() {
   // Modal
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
+  const [nowMs, setNowMs] = useState(Date.now())
 
   // Routing (query param based modal opening + status filter)
   const router = useRouter()
@@ -106,6 +108,19 @@ export function ReservationManagement() {
   useEffect(() => {
     applyFilters()
   }, [reservations, statusFilter, searchQuery, dateFilter])
+
+  useEffect(() => {
+    const hasCashDeadlineTimers = filteredReservations.some((reservation) => {
+      const paymentMethod = reservation.metadata?.intended_payment_method || reservation.metadata?.payment_method
+      const cashDeadline = reservation.cash_payment_deadline || reservation.metadata?.cash_payment_deadline
+      return reservation.status === 'pending_payment' && paymentMethod === 'cash' && !!cashDeadline
+    })
+
+    if (!hasCashDeadlineTimers) return
+
+    const timerId = setInterval(() => setNowMs(Date.now()), 1000)
+    return () => clearInterval(timerId)
+  }, [filteredReservations])
 
   const loadReservations = async () => {
     setIsLoading(true)
@@ -240,9 +255,26 @@ export function ReservationManagement() {
 
   // getStatusColor and getStatusIcon removed in favor of generic StatusBadge
 
+  const formatCountdown = (msRemaining: number) => {
+    if (msRemaining <= 0) return '00:00:00'
+
+    const totalSeconds = Math.floor(msRemaining / 1000)
+    const days = Math.floor(totalSeconds / 86400)
+    const hours = Math.floor((totalSeconds % 86400) / 3600)
+    const minutes = Math.floor((totalSeconds % 3600) / 60)
+    const seconds = totalSeconds % 60
+
+    const hh = String(hours).padStart(2, '0')
+    const mm = String(minutes).padStart(2, '0')
+    const ss = String(seconds).padStart(2, '0')
+
+    if (days > 0) return `${days}d ${hh}:${mm}:${ss}`
+    return `${hh}:${mm}:${ss}`
+  }
+
   /**
    * Get display-friendly status key and label for a reservation.
-   * Cash pending_payment → 'reserved' / 'Reserved'
+    * Cash pending_payment → 'pending_payment' / 'Awaiting Cash Payment'
    * E-wallet pending_payment → 'pending_payment' / 'Pending Payment'
    */
   const getDisplayStatus = (reservation: Reservation): { key: string, label: string } => {
@@ -256,7 +288,7 @@ export function ReservationManagement() {
       const paymentMethod = reservation.metadata?.intended_payment_method ||
         reservation.metadata?.payment_method
       if (paymentMethod === 'cash') {
-        return { key: 'reserved', label: 'Reserved' }
+        return { key: 'pending_payment', label: 'Awaiting Cash Payment' }
       }
       return { key: 'pending_payment', label: 'Pending Payment' }
     }
@@ -512,6 +544,11 @@ export function ReservationManagement() {
                     const customerName = reservation.user?.display_name ||
                       `${reservation.user?.first_name || ''} ${reservation.user?.last_name || ''}`.trim() ||
                       'Unknown'
+                    const paymentMethod = reservation.metadata?.intended_payment_method || reservation.metadata?.payment_method
+                    const cashDeadline = reservation.cash_payment_deadline || reservation.metadata?.cash_payment_deadline || null
+                    const shouldShowCashTimer = reservation.status === 'pending_payment' && paymentMethod === 'cash' && !!cashDeadline
+                    const remainingMs = shouldShowCashTimer ? new Date(cashDeadline as string).getTime() - nowMs : 0
+                    const isCashDeadlineExpired = shouldShowCashTimer && remainingMs <= 0
 
                     return (
                       <tr key={reservation.id} className="hover:bg-gray-50 transition-colors">
@@ -555,13 +592,32 @@ export function ReservationManagement() {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             {(() => {
                               const { key, label } = getDisplayStatus(reservation)
                               return (
                                 <StatusBadge status={key} label={label} />
                               )
                             })()}
+                            {shouldShowCashTimer && (
+                              <span
+                                className={`px-2 py-1 text-xs font-semibold rounded-md tabular-nums border ${isCashDeadlineExpired
+                                  ? 'bg-red-50 text-red-700 border-red-200'
+                                  : 'bg-amber-50 text-amber-700 border-amber-200'
+                                  }`}
+                                title={isCashDeadlineExpired
+                                  ? 'Cash deadline passed. Reservation will be cancelled if still unpaid.'
+                                  : `Cash deadline: ${new Date(cashDeadline as string).toLocaleString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric',
+                                    hour: 'numeric',
+                                    minute: '2-digit'
+                                  })}`}
+                              >
+                                {formatCountdown(remainingMs)}
+                              </span>
+                            )}
                             {reservation.metadata?.is_queue_session_reservation && (
                               <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-50 text-green-700 border border-green-200">
                                 Queue

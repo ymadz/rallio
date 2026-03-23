@@ -7,6 +7,8 @@ export function PaymentMethodSelector() {
   const {
     paymentMethod,
     setPaymentMethod,
+    cashPaymentOption,
+    setCashPaymentOption,
     downPaymentPercentage,
     getTotalAmount,
     setCustomDownPaymentAmount,
@@ -21,9 +23,11 @@ export function PaymentMethodSelector() {
 
   const [inputValue, setInputValue] = useState('')
 
-  // Auto-set down payment to minimum when cash is selected
+  const shouldUseDownPayment = paymentMethod === 'cash' && cashPaymentOption === 'downpayment' && isDownPaymentRequired
+
+  // Auto-set down payment to minimum when cash + down payment is selected
   useEffect(() => {
-    if (paymentMethod === 'cash' && isDownPaymentRequired) {
+    if (shouldUseDownPayment) {
       if (!customDownPaymentAmount || customDownPaymentAmount <= 0) {
         setCustomDownPaymentAmount(minimumDownPayment)
         setInputValue(minimumDownPayment.toFixed(2))
@@ -31,7 +35,7 @@ export function PaymentMethodSelector() {
         setInputValue(customDownPaymentAmount.toFixed(2))
       }
     }
-  }, [paymentMethod, isDownPaymentRequired])
+  }, [shouldUseDownPayment, customDownPaymentAmount, minimumDownPayment, setCustomDownPaymentAmount])
 
   const handleAmountChange = (value: string) => {
     setInputValue(value)
@@ -153,9 +157,7 @@ export function PaymentMethodSelector() {
 
           <h4 className="font-semibold text-gray-900 mb-2">Cash</h4>
           <p className="text-sm text-gray-600">
-            {isDownPaymentRequired
-              ? `Pay a minimum ${downPaymentPercentage}% down payment online to secure your slot. Pay the rest at the venue.`
-              : 'Pay in cash at the venue. Booking will be pending until payment is verified.'}
+            Choose between online down payment or full cash at the venue.
           </p>
 
           {paymentMethod === 'cash' && (
@@ -179,8 +181,74 @@ export function PaymentMethodSelector() {
         </button>
       </div>
 
+      {/* Cash sub-option toggle */}
+      {paymentMethod === 'cash' && (
+        <div className="rounded-xl border border-gray-200 p-4 space-y-3">
+          <p className="text-sm font-semibold text-gray-900">Cash Booking Option</p>
+          <div className="grid md:grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setCashPaymentOption('downpayment')}
+              className={`rounded-lg border p-3 text-left transition-colors ${
+                cashPaymentOption === 'downpayment'
+                  ? 'border-primary bg-primary/5'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <p className="text-sm font-semibold text-gray-900">Pay Down Payment Online</p>
+              <p className="text-xs text-gray-600 mt-1">
+                {isDownPaymentRequired
+                  ? `Pay minimum ${downPaymentPercentage}% now via e-wallet, then settle remaining cash at venue.`
+                  : 'No venue down payment rule configured. Full amount will be paid at venue.'}
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setCashPaymentOption('full_cash')
+                setCustomDownPaymentAmount(undefined)
+              }}
+              className={`rounded-lg border p-3 text-left transition-colors ${
+                cashPaymentOption === 'full_cash'
+                  ? 'border-primary bg-primary/5'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <p className="text-sm font-semibold text-gray-900">Pay Full Cash at Venue</p>
+              <p className="text-xs text-gray-600 mt-1">
+                Reservation stays pending and must be paid in person within 24 hours.
+              </p>
+            </button>
+          </div>
+
+          {cashPaymentOption === 'full_cash' && (
+            <div className="rounded-lg border border-amber-300 bg-gradient-to-br from-amber-50 via-yellow-50 to-amber-100 p-4 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="h-9 w-9 rounded-full bg-amber-100 border border-amber-300 flex items-center justify-center shrink-0">
+                  <svg className="w-5 h-5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-amber-900">Pay-at-Venue Rules</p>
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    For advance bookings, you must pay in cash at the venue within <strong>24 hours</strong> after checkout.
+                  </p>
+                  <ul className="text-xs text-amber-900/90 space-y-1 list-disc pl-4">
+                    <li>If unpaid after 24 hours, the booking is auto-cancelled.</li>
+                    <li>Same-day bookings are exempt from the 24-hour deadline.</li>
+                    <li>Exempt bookings remain as pay-at-venue (no deadline timer).</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Down Payment Section */}
-      {paymentMethod === 'cash' && isDownPaymentRequired && (
+      {shouldUseDownPayment && (
         <div className={`mt-2 rounded-xl overflow-hidden transition-colors bg-gradient-to-br from-primary via-primary/90 to-primary/70 ${isBelowMinimum ? 'ring-2 ring-red-400' : ''}`}>
           {/* Header */}
           <div className="px-5 py-3 backdrop-blur-md bg-white/15 border-b border-white/20">

@@ -64,6 +64,25 @@ export async function GET(req: NextRequest) {
             throw new Error(`Failed to revert games: ${revertResult.error.message}`)
         }
 
+        // 3b. Expire pending cash reservations that missed their payment deadline
+        const expiredCashResult = await supabase
+            .from('reservations')
+            .update({
+                status: 'cancelled',
+                cancelled_at: nowIso,
+                cancellation_reason: 'Cash payment deadline expired',
+                updated_at: nowIso,
+            })
+            .eq('status', 'pending_payment')
+            .eq('payment_method', 'cash')
+            .not('cash_payment_deadline', 'is', null)
+            .lte('cash_payment_deadline', nowIso)
+            .select('id')
+
+        if (expiredCashResult.error) {
+            throw new Error(`Failed to expire cash reservations: ${expiredCashResult.error.message}`)
+        }
+
         // =========================
         // QUEUE SESSION LIFECYCLE
         // =========================
@@ -155,6 +174,7 @@ export async function GET(req: NextRequest) {
             started: startResult.data.length,
             ended: endResult.data.length + (completedConfirmedResult.data?.length || 0),
             reverted: revertResult.data.length,
+            expiredCash: expiredCashResult.data?.length || 0,
             // Queue Sessions
             sessionsCompleted: completeSessionsResult.data?.length || 0,
             sessionsActivated: activateSessionsResult.data?.length || 0,

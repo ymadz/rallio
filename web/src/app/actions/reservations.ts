@@ -901,6 +901,7 @@ export async function createReservationAction(data: {
   numPlayers?: number
   paymentType?: 'full' | 'split'
   paymentMethod?: 'cash' | 'e-wallet'
+  cashPaymentOption?: 'downpayment' | 'full_cash'
   notes?: string
   discountApplied?: number
   discountType?: string
@@ -939,6 +940,7 @@ export async function createMultiCourtReservationsAction(data: {
     totalAmount: number
     paymentType?: 'full' | 'split'
     paymentMethod?: 'cash' | 'e-wallet'
+    cashPaymentOption?: 'downpayment' | 'full_cash'
     notes?: string
     numPlayers?: number
   }>
@@ -1017,6 +1019,7 @@ export async function createMultiCourtReservationsAction(data: {
       totalAmount: item.totalAmount,
       paymentType: item.paymentType || 'full',
       paymentMethod: item.paymentMethod || 'e-wallet',
+      cashPaymentOption: item.cashPaymentOption,
       notes: item.notes,
       numPlayers: item.numPlayers || 1,
       recurrenceWeeks: 1,

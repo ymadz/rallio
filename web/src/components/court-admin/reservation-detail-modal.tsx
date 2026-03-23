@@ -47,6 +47,7 @@ interface ReservationDetailModalProps {
     num_players: number
     notes?: string
     created_at: string
+    cash_payment_deadline?: string | null
     metadata?: any
     queue_session?: Array<{
       id: string
@@ -70,6 +71,7 @@ export function ReservationDetailModal({
   const [isRejectingReschedule, setIsRejectingReschedule] = useState(false)
   const [showRescheduleRejectForm, setShowRescheduleRejectForm] = useState(false)
   const [rescheduleRejectReason, setRescheduleRejectReason] = useState('')
+  const [nowMs, setNowMs] = useState(Date.now())
 
   const rejectFormRef = useRef<HTMLDivElement>(null)
 
@@ -81,6 +83,17 @@ export function ReservationDetailModal({
     }
   }, [showRejectForm])
 
+  const paymentMethod = reservation.metadata?.intended_payment_method || reservation.metadata?.payment_method
+  const cashDeadline = reservation.cash_payment_deadline || reservation.metadata?.cash_payment_deadline || null
+  const shouldShowCashTimer = reservation.status === 'pending_payment' && paymentMethod === 'cash' && !!cashDeadline
+
+  useEffect(() => {
+    if (!shouldShowCashTimer) return
+
+    const timerId = setInterval(() => setNowMs(Date.now()), 1000)
+    return () => clearInterval(timerId)
+  }, [shouldShowCashTimer])
+
   if (!isOpen) return null
 
   const customerName = reservation.user?.display_name ||
@@ -88,6 +101,25 @@ export function ReservationDetailModal({
     'Unknown Customer'
 
   const duration = (new Date(reservation.end_time).getTime() - new Date(reservation.start_time).getTime()) / (1000 * 60 * 60)
+  const remainingMs = shouldShowCashTimer ? new Date(cashDeadline as string).getTime() - nowMs : 0
+  const isCashDeadlineExpired = shouldShowCashTimer && remainingMs <= 0
+
+  const formatCountdown = (msRemaining: number) => {
+    if (msRemaining <= 0) return '00:00:00'
+
+    const totalSeconds = Math.floor(msRemaining / 1000)
+    const days = Math.floor(totalSeconds / 86400)
+    const hours = Math.floor((totalSeconds % 86400) / 3600)
+    const minutes = Math.floor((totalSeconds % 3600) / 60)
+    const seconds = totalSeconds % 60
+
+    const hh = String(hours).padStart(2, '0')
+    const mm = String(minutes).padStart(2, '0')
+    const ss = String(seconds).padStart(2, '0')
+
+    if (days > 0) return `${days}d ${hh}:${mm}:${ss}`
+    return `${hh}:${mm}:${ss}`
+  }
 
   const handleApprove = async () => {
     setIsApproving(true)
@@ -149,6 +181,14 @@ export function ReservationDetailModal({
       return 'rejected'
     }
     return reservation.status
+  }
+
+  const getDisplayStatusLabel = () => {
+    const displayStatus = getDisplayStatus()
+    if (displayStatus === 'pending_payment' && paymentMethod === 'cash') {
+      return 'awaiting cash payment'
+    }
+    return displayStatus.replace(/_/g, ' ')
   }
 
   const getStatusColor = (status: string) => {
@@ -250,7 +290,7 @@ export function ReservationDetailModal({
                 {(getDisplayStatus() === 'cancelled' || getDisplayStatus() === 'rejected') && <XCircle className="w-4 h-4" />}
                 {getDisplayStatus() === 'pending_refund' && <Clock className="w-4 h-4" />}
                 {getDisplayStatus() === 'refunded' && <Banknote className="w-4 h-4" />}
-                <span className="capitalize">{getDisplayStatus().replace(/_/g, ' ')}</span>
+                <span className="capitalize">{getDisplayStatusLabel()}</span>
               </span>
               {reservation.metadata?.is_queue_session_reservation && (
                 <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-green-50 text-green-700 border border-green-200 text-sm font-medium">
@@ -266,6 +306,39 @@ export function ReservationDetailModal({
               })}
             </span>
           </div>
+
+          {shouldShowCashTimer && (
+            <div
+              className={`rounded-xl p-4 border ${isCashDeadlineExpired ? 'border-red-200' : 'border-amber-200'}`}
+              style={{
+                background: isCashDeadlineExpired
+                  ? 'linear-gradient(135deg, rgba(254, 226, 226, 0.45) 0%, rgba(254, 242, 242, 0.45) 100%)'
+                  : 'linear-gradient(135deg, rgba(254, 243, 199, 0.45) 0%, rgba(255, 251, 235, 0.45) 100%)',
+              }}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className={`text-xs font-semibold uppercase tracking-wider ${isCashDeadlineExpired ? 'text-red-700' : 'text-amber-700'}`}>
+                    Cash Payment Deadline
+                  </p>
+                  <p className={`text-xs mt-1 ${isCashDeadlineExpired ? 'text-red-600' : 'text-amber-700'}`}>
+                    {isCashDeadlineExpired
+                      ? 'Deadline passed. This booking will be cancelled if still unpaid.'
+                      : `Pay cash at venue before ${new Date(cashDeadline as string).toLocaleString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit'
+                      })}`}
+                  </p>
+                </div>
+                <div className={`rounded-lg px-3 py-2 text-sm font-bold tabular-nums ${isCashDeadlineExpired ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>
+                  {formatCountdown(remainingMs)}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Pending Reschedule Request — shown at top for visibility */}
           {hasPendingReschedule() && (

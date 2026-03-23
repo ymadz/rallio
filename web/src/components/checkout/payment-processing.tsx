@@ -19,6 +19,7 @@ export function PaymentProcessing() {
     playerCount,
     playerPayments,
     paymentMethod,
+    cashPaymentOption,
     getPerPlayerAmount,
     getTotalAmount,
     getDownPaymentAmount,
@@ -207,6 +208,7 @@ export function PaymentProcessing() {
                 totalAmount: (item.hourlyRate || 0) * itemDurationHours,
                 paymentType: isSplitPayment ? 'split' as const : 'full' as const,
                 paymentMethod,
+                cashPaymentOption,
                 notes: `Multi-court item ${index + 1}/${effectiveCart.length}`,
                 numPlayers: isSplitPayment ? playerCount : 1,
               }
@@ -232,6 +234,7 @@ export function PaymentProcessing() {
               numPlayers: isSplitPayment ? playerCount : 1,
               paymentType: isSplitPayment ? 'split' : 'full',
               paymentMethod,
+              cashPaymentOption,
               notes: isSplitPayment ? `Split payment with ${playerCount} players` : undefined,
               recurrenceWeeks: bookingData.recurrenceWeeks,
               selectedDays: bookingData.selectedDays,
