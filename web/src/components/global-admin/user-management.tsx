@@ -54,6 +54,9 @@ interface User {
   banned_reason?: string
   banned_until?: string
   user_roles: Array<{ roles: { id: string; name: string } }>
+  player_profile?: {
+    skill_level: number | null
+  } | null
 }
 
 const roleFilters = [
@@ -77,6 +80,7 @@ export default function UserManagement() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [roleFilter, setRoleFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'banned'>('all')
+  const [skillLevelFilter, setSkillLevelFilter] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
@@ -92,7 +96,8 @@ export default function UserManagement() {
       pageSize: 20,
       search: searchQuery,
       roleFilter,
-      statusFilter
+      statusFilter,
+      skillLevelFilter
     })
 
     if (result.success) {
@@ -115,7 +120,7 @@ export default function UserManagement() {
     }, 300)
 
     return () => clearTimeout(debounce)
-  }, [currentPage, searchQuery, roleFilter, statusFilter])
+  }, [currentPage, searchQuery, roleFilter, statusFilter, skillLevelFilter])
 
   const getRoleBadgeColor = (roleName: string) => {
     switch (roleName) {
@@ -378,6 +383,28 @@ export default function UserManagement() {
               </option>
             ))}
           </select>
+
+          {/* Player Skill Level Filter */}
+          {roleFilter === 'player' && (
+            <select
+              value={skillLevelFilter}
+              onChange={(e) => {
+                setSkillLevelFilter(e.target.value)
+                setCurrentPage(1)
+              }}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+            >
+              <option value="all">All Skill Levels</option>
+              {Array.from({ length: 10 }, (_, index) => {
+                const level = index + 1
+                return (
+                  <option key={level} value={String(level)}>
+                    Skill Level {level}
+                  </option>
+                )
+              })}
+            </select>
+          )}
         </div>
       </div>
 
