@@ -107,7 +107,7 @@ export function CancelBookingModal({
     const endDate = new Date(booking.end_time)
 
     return createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[99999] flex items-end justify-center p-0 sm:items-center sm:p-4">
             {/* Backdrop */}
             <div
                 className="fixed inset-0 bg-black/70"
@@ -117,9 +117,9 @@ export function CancelBookingModal({
             />
 
             {/* Modal */}
-            <div className="relative z-10 w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden">
+            <div className="relative z-10 w-full h-[100dvh] max-w-none bg-white rounded-none shadow-2xl overflow-hidden flex flex-col sm:w-full sm:h-auto sm:max-w-md sm:max-h-[85dvh] sm:rounded-2xl">
                 {/* Header */}
-                <div className={`px-6 py-4 flex items-center justify-between ${mode === 'refund'
+                <div className={`px-4 py-3 sm:px-6 sm:py-4 flex items-center justify-between ${mode === 'refund'
                     ? 'bg-gradient-to-r from-primary to-primary/90'
                     : 'bg-gradient-to-r from-red-500 to-red-600'
                     } text-white`}>
@@ -135,26 +135,26 @@ export function CancelBookingModal({
                     </button>
                 </div>
 
-                <div className="p-6">
+                <div className="p-4 sm:p-6 overflow-y-auto">
                     {/* Booking Summary */}
-                    <div className="bg-gray-50 rounded-lg p-4 mb-5 border border-gray-200">
+                    <div className="bg-gray-50 rounded-lg p-3 sm:p-4 mb-4 sm:mb-5 border border-gray-200">
                         <h4 className="font-semibold text-gray-900 text-sm mb-2">Booking Details</h4>
                         <div className="space-y-1 text-sm">
-                            <div className="flex justify-between">
+                            <div className="flex items-start justify-between gap-3">
                                 <span className="text-gray-500">Court</span>
-                                <span className="font-medium text-gray-900">{booking.courts.name}</span>
+                                <span className="font-medium text-gray-900 text-right break-words">{booking.courts.name}</span>
                             </div>
-                            <div className="flex justify-between">
+                            <div className="flex items-start justify-between gap-3">
                                 <span className="text-gray-500">Venue</span>
-                                <span className="font-medium text-gray-900">{booking.courts.venues.name}</span>
+                                <span className="font-medium text-gray-900 text-right break-words">{booking.courts.venues.name}</span>
                             </div>
-                            <div className="flex justify-between">
+                            <div className="flex items-start justify-between gap-3">
                                 <span className="text-gray-500">Date</span>
-                                <span className="font-medium text-gray-900">{format(startDate, 'EEE, MMM d, yyyy')}</span>
+                                <span className="font-medium text-gray-900 text-right">{format(startDate, 'EEE, MMM d, yyyy')}</span>
                             </div>
-                            <div className="flex justify-between">
+                            <div className="flex items-start justify-between gap-3">
                                 <span className="text-gray-500">Time</span>
-                                <span className="font-medium text-gray-900">
+                                <span className="font-medium text-gray-900 text-right">
                                     {format(startDate, 'h:mm a')} - {format(endDate, 'h:mm a')}
                                 </span>
                             </div>
@@ -165,7 +165,7 @@ export function CancelBookingModal({
                     {requiresReason && (
                         <>
                             {isPaid && (
-                                <div className="bg-green-50 rounded-lg p-4 mb-5 border border-green-200">
+                                <div className="bg-green-50 rounded-lg p-3 sm:p-4 mb-4 sm:mb-5 border border-green-200">
                                     <div className="flex justify-between items-center mb-1">
                                         <span className="text-sm text-green-800">Est. Refundable Amount</span>
                                         <span className="text-lg font-bold text-green-900">
@@ -181,14 +181,14 @@ export function CancelBookingModal({
                             )}
 
                             {/* Reason */}
-                            <div className="mb-5">
+                            <div className="mb-4 sm:mb-5">
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Reason for Refund <span className="text-red-500">*</span>
+                                    {mode === 'refund' ? 'Reason for Refund' : 'Reason for Cancellation'} <span className="text-red-500">*</span>
                                 </label>
                                 <textarea
                                     value={reason}
                                     onChange={(e) => setReason(e.target.value)}
-                                    placeholder="Please explain why you're requesting a refund..."
+                                    placeholder={mode === 'refund' ? "Please explain why you're requesting a refund..." : 'Please explain why you are cancelling this booking...'}
                                     className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                                     rows={3}
                                 />
@@ -198,7 +198,7 @@ export function CancelBookingModal({
 
                     {/* Cancel Info (unpaid bookings) */}
                     {mode === 'cancel' && (
-                        <p className="text-sm text-gray-600 mb-5">
+                        <p className="text-sm text-gray-600 mb-4 sm:mb-5">
                             Are you sure you want to cancel this booking? This action cannot be undone.
                         </p>
                     )}
@@ -212,19 +212,19 @@ export function CancelBookingModal({
                     )}
 
                     {/* Actions */}
-                    <div className="flex gap-3">
+                    <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3">
                         <Button
                             variant="outline"
                             onClick={onClose}
                             disabled={isLoading}
-                            className="flex-1"
+                            className="w-full sm:flex-1"
                         >
                             Go Back
                         </Button>
                         <Button
                             onClick={handleConfirm}
                             disabled={isLoading || (requiresReason && !reason.trim())}
-                            className={`flex-1 ${mode === 'refund'
+                            className={`w-full sm:flex-1 ${mode === 'refund'
                                 ? 'bg-primary hover:bg-primary/90'
                                 : 'bg-red-600 hover:bg-red-700'
                                 }`}

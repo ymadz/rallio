@@ -20,11 +20,23 @@ interface BookingGroupModalProps {
   } | null
   isOpen: boolean
   onClose: () => void
-  onSelectBooking: (booking: Booking) => void
+  onRescheduleBooking: (booking: Booking) => void
+  onCancelBooking: (booking: Booking, target?: 'reservation') => void
+  onRefundBooking: (booking: Booking) => void
+  onResumePayment: (booking: Booking, paymentMethod?: 'gcash' | 'paymaya') => void
   serverDate: Date | null
 }
 
-export function BookingGroupModal({ group, isOpen, onClose, onSelectBooking, serverDate }: BookingGroupModalProps) {
+export function BookingGroupModal({
+  group,
+  isOpen,
+  onClose,
+  onRescheduleBooking,
+  onCancelBooking,
+  onRefundBooking,
+  onResumePayment,
+  serverDate,
+}: BookingGroupModalProps) {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
 
   if (!group) return null
@@ -215,10 +227,10 @@ export function BookingGroupModal({ group, isOpen, onClose, onSelectBooking, ser
                             booking={selectedBooking}
                             serverDate={serverDate}
                             setBookings={() => {}} 
-                            onReschedule={(b) => { setSelectedBooking(null); onSelectBooking(b); }}
-                            onCancelBooking={(b) => { setSelectedBooking(null); handleClose(); onSelectBooking(b); }}
-                            onRefundBooking={(b) => { setSelectedBooking(null); handleClose(); onSelectBooking(b); }}
-                            onResumePayment={(b) => { setSelectedBooking(null); handleClose(); onSelectBooking(b); }}
+                          onReschedule={(b) => { setSelectedBooking(null); handleClose(); onRescheduleBooking(b); }}
+                          onCancelBooking={(b) => { setSelectedBooking(null); handleClose(); onCancelBooking(b); }}
+                          onRefundBooking={(b) => { setSelectedBooking(null); handleClose(); onRefundBooking(b); }}
+                          onResumePayment={(b, paymentMethod) => { onResumePayment(b, paymentMethod); }}
                             resumingPaymentId={null}
                             cancellingId={null}
                         />

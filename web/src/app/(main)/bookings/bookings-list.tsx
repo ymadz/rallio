@@ -879,9 +879,20 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
           group={selectedGroup as any}
           isOpen={!!selectedGroup}
           onClose={() => setSelectedGroup(null)}
-          onSelectBooking={(b) => {
-            setSelectedGroup(null);
-            handleSelectBooking(b);
+          onRescheduleBooking={(b) => {
+            setSelectedGroup(null)
+            setReschedulingBooking(b)
+          }}
+          onCancelBooking={(b) => {
+            setSelectedGroup(null)
+            handleCancelBooking(b)
+          }}
+          onRefundBooking={(b) => {
+            setSelectedGroup(null)
+            handleRefundBooking(b)
+          }}
+          onResumePayment={(b, paymentMethod) => {
+            handleResumePayment(b, paymentMethod)
           }}
           serverDate={serverDate}
         />

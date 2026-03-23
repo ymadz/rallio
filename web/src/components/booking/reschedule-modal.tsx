@@ -160,7 +160,7 @@ export function RescheduleModal({ booking, isOpen, onClose, onSuccess }: Resched
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-4xl p-0 overflow-hidden border-0 bg-white rounded-2xl shadow-2xl [&>button]:hidden max-h-[calc(100vh-2rem)] md:max-h-[90vh] flex flex-col">
+            <DialogContent className="inset-0 translate-x-0 translate-y-0 data-[state=open]:slide-in-from-left-0 data-[state=open]:slide-in-from-top-0 data-[state=closed]:slide-out-to-left-0 data-[state=closed]:slide-out-to-top-0 w-screen h-[100dvh] max-w-none max-h-none p-0 overflow-hidden border-0 bg-white rounded-none shadow-2xl [&>button]:hidden flex flex-col sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=open]:slide-in-from-top-[48%] sm:data-[state=closed]:slide-out-to-left-1/2 sm:data-[state=closed]:slide-out-to-top-[48%] sm:max-w-4xl sm:h-auto sm:max-h-[90vh] sm:rounded-2xl">
                 <VisuallyHidden>
                     <DialogTitle>Reschedule Booking</DialogTitle>
                 </VisuallyHidden>
@@ -245,7 +245,7 @@ export function RescheduleModal({ booking, isOpen, onClose, onSuccess }: Resched
                                 </h4>
                             </div>
 
-                            <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col h-[400px]">
+                            <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col h-[55dvh] sm:h-[400px]">
                                 {!selectedDate ? (
                                     <div className="flex-1 flex flex-col items-center justify-center p-8">
                                         <p className="text-sm text-gray-400">Please select a date first</p>
@@ -384,7 +384,7 @@ export function RescheduleModal({ booking, isOpen, onClose, onSuccess }: Resched
                 </div>
 
                 {/* Footer matching availability modal */}
-                <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex items-center justify-between shrink-0 rounded-b-2xl">
+                <div className="border-t border-gray-200 px-4 py-4 sm:px-6 bg-gray-50 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between shrink-0 sm:rounded-b-2xl">
                     <div className="text-sm">
                         {selectedDate && selectedTime ? (
                             <>
@@ -403,10 +403,10 @@ export function RescheduleModal({ booking, isOpen, onClose, onSuccess }: Resched
                             </p>
                         )}
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex w-full sm:w-auto flex-col-reverse sm:flex-row gap-2 sm:gap-3">
                         <button
                             onClick={onClose}
-                            className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors focus:outline-none"
+                            className="w-full sm:w-auto px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors focus:outline-none"
                             disabled={isSubmitting}
                         >
                             Cancel
@@ -414,7 +414,7 @@ export function RescheduleModal({ booking, isOpen, onClose, onSuccess }: Resched
                         <button
                             onClick={handleConfirm}
                             disabled={!selectedDate || !selectedTime || isSubmitting}
-                            className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                            className="w-full sm:w-auto px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
                         >
                             {isSubmitting ? (
                                 <>
