@@ -74,6 +74,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'gcash' | 'paymaya' | null>(null)
   const [paymentError, setPaymentError] = useState<string | null>(null)
   const [isQueueMaster, setIsQueueMaster] = useState(false)
+  const [showPlayerView, setShowPlayerView] = useState(false)
   const supabase = createClient()
 
   // Get current user ID and check if queue master
@@ -425,9 +426,14 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
     )
   }
 
-  // If the current user is the organizer, show the full session management UI
-  if (queue.organizerId === currentUserId) {
-    return <SessionManagementClient sessionId={queue.id} />
+  // If the current user is the organizer, show the full session management UI by default
+  if (queue.organizerId === currentUserId && !showPlayerView) {
+    return (
+      <SessionManagementClient
+        sessionId={queue.id}
+        onSwitchToPlayerView={() => setShowPlayerView(true)}
+      />
+    )
   }
 
   const isUserInQueue = queue.userPosition !== null
@@ -443,6 +449,27 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
   return (
     <>
       <div className="space-y-6">
+        {/* Organizer View Toggle - only shown when in player view as an organizer */}
+        {queue.organizerId === currentUserId && showPlayerView && (
+          <div className="bg-teal-600 text-white px-4 py-3 rounded-xl flex items-center justify-between shadow-lg animate-in fade-in slide-in-from-top-4 duration-300">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                <Activity className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="font-semibold">Organizer Mode</p>
+                <p className="text-xs text-teal-100">You are viewing this session as a player.</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowPlayerView(false)}
+              className="px-4 py-2 bg-white text-teal-600 rounded-lg text-sm font-bold hover:bg-teal-50 transition-colors shadow-sm"
+            >
+              Switch to Manager View
+            </button>
+          </div>
+        )}
+
         {/* Event Details Card */}
         <QueueEventCard queue={queue} onBack={() => router.back()} />
 
@@ -585,7 +612,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                   You need to set up your player profile before you can join any queue sessions.
                 </p>
                 <Link
-                  href="/setup-profile"
+                  href="/setup-profile?from=queue&step=welcome"
                   className="inline-flex items-center justify-center w-full bg-amber-600 text-white py-3 rounded-lg font-semibold hover:bg-amber-700 transition-colors"
                 >
                   Set Up Profile Now

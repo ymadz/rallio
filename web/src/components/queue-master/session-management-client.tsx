@@ -45,6 +45,7 @@ import { useServerTime } from '@/hooks/use-server-time';
 
 interface SessionManagementClientProps {
   sessionId: string;
+  onSwitchToPlayerView?: () => void;
 }
 
 interface Participant {
@@ -133,7 +134,7 @@ const getSkillRequirementLabel = (min?: number | null, max?: number | null) => {
   return `Level ${low}-${high}`;
 };
 
-export function SessionManagementClient({ sessionId }: SessionManagementClientProps) {
+export function SessionManagementClient({ sessionId, onSwitchToPlayerView }: SessionManagementClientProps) {
   const router = useRouter();
   const { date: serverDate } = useServerTime();
   const supabase = createClient();
@@ -633,18 +634,27 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
           actionSlot={
             <>
               {session.status !== 'completed' && session.status !== 'cancelled' && (
-                <button
-                  onClick={handleClose}
-                  disabled={actionLoading === 'close'}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-50 bg-red-500/60 text-white/90 hover:bg-red-500/40 hover:text-white backdrop-blur-sm"
-                >
-                  {actionLoading === 'close' ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <StopCircle className="w-3.5 h-3.5" />
-                  )}
-                  Close Session
-                </button>
+                <>
+                  <button
+                    onClick={onSwitchToPlayerView}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold bg-white text-teal-600 hover:bg-teal-50 shadow-sm transition-all"
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    Player View
+                  </button>
+                  <button
+                    onClick={handleClose}
+                    disabled={actionLoading === 'close'}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-50 bg-red-500/60 text-white/90 hover:bg-red-500/40 hover:text-white backdrop-blur-sm"
+                  >
+                    {actionLoading === 'close' ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <StopCircle className="w-3.5 h-3.5" />
+                    )}
+                    Close Session
+                  </button>
+                </>
               )}
               {(session.status === 'completed' || session.status === 'cancelled') && (
                 <Link
