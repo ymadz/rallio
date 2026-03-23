@@ -1,4 +1,4 @@
-  {
+{
   "name": "web",
   "version": "0.1.0",
   "private": true,
@@ -15,7 +15,10 @@
     "cap:open:android": "npx cap open android",
     "cap:sync": "npm run cap:prepare:android && npx cap sync android",
     "cap:refresh:android": "npm run cap:sync && npm run cap:open:android",
-    "cap:refresh:android:prod": "CAPACITOR_SERVER_URL=https://rallio-amad.vercel.app npm run cap:refresh:android"
+    "cap:refresh:android:prod": "CAPACITOR_SERVER_URL=https://rallio-amad.vercel.app npm run cap:refresh:android",
+    "assets:generate": "npx @capacitor/assets generate --android",
+    "build:native": "npm run build && mkdir -p out && touch out/index.html && npx cap sync android",
+    "run:android": "npx cap run android"
   },
   "dependencies": {
     "@capacitor/android": "^7.0.0",
@@ -63,6 +66,7 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@tailwindcss/postcss": "^4",
     "@types/canvas-confetti": "^1.9.0",
     "@types/google.maps": "^3.58.1",

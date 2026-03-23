@@ -809,10 +809,10 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
         )}
 
         {isQueueMaster && (
-          <div className="flex w-full items-center justify-between gap-3 border-t border-gray-100 pt-3 sm:ml-auto sm:w-auto sm:self-center sm:justify-start sm:border-t-0 sm:border-l sm:py-1 sm:pl-6 sm:pt-0">
+          <div className="flex items-center gap-3 sm:ml-auto pl-6 border-l border-gray-100 h-8 self-center">
             <div className="flex flex-col items-end">
-                <span className="text-[10px] font-black text-primary uppercase tracking-[0.1em] leading-none mb-1">Queue Master</span>
-                <span className="text-xs font-bold text-gray-700 uppercase tracking-tight">Queue Mode</span>
+                <span className="text-[10px] font-black text-primary uppercase tracking-[0.1em] leading-none mb-0.5">Queue Master</span>
+                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-tight">Queue Mode</span>
             </div>
             <button
               onClick={() => setIsQueueMode(!isQueueMode)}
