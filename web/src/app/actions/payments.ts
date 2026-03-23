@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { createGCashCheckout, createMayaCheckout, getSource, createPayment } from '@/lib/paymongo'
 import { revalidatePath } from 'next/cache'
+import { headers } from 'next/headers'
 import { getServerNow } from '@/lib/time-server'
 
 export type PaymentMethod = 'gcash' | 'paymaya' | 'cash'
@@ -219,7 +220,11 @@ export async function initiatePaymentAction(
     })
 
     // Generate success/failed URLs
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const headersList = await headers()
+    const host = headersList.get('host')
+    const proto = headersList.get('x-forwarded-proto') || 'http'
+    const baseUrl = host ? `${proto}://${host}` : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000')
+    
     const successUrl = `${baseUrl}/checkout/success?reservation=${reservationId}${bookingId ? `&booking=${bookingId}` : ''}`
     const failedUrl = `${baseUrl}/checkout/failed?reservation=${reservationId}`
 
@@ -1226,7 +1231,11 @@ export async function initiateQueuePaymentAction(
     const description = `${venueName} - ${courtName} (${gamesPlayed} games)`
 
     // Generate success/failed URLs
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const headersList = await headers()
+    const host = headersList.get('host')
+    const proto = headersList.get('x-forwarded-proto') || 'http'
+    const baseUrl = host ? `${proto}://${host}` : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000')
+
     const successUrl = `${baseUrl}/queue/payment/success?session=${sessionId}&participant=${participant.id}`
     const failedUrl = `${baseUrl}/queue/payment/failed?session=${sessionId}`
 
