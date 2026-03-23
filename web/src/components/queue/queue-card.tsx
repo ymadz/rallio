@@ -8,6 +8,7 @@ import { format, differenceInHours } from 'date-fns'
 interface QueueCardProps {
   queue: QueueSession
   variant?: 'active' | 'available'
+  userSkillLevel?: number | null
 }
 
 /* ── Gradient presets for visual variety (lighter teal tones) ── */
@@ -51,7 +52,7 @@ const CARD_GRADIENTS: string[][] = [
 ]
 
 const modeLabel = (mode: string) =>
-  mode === 'competitive' ? 'Competitive' : 'All Levels'
+  mode === 'competitive' ? 'Competitive' : 'Casual'
 
 const modeColor = (mode: string) =>
   mode === 'competitive'
@@ -60,7 +61,7 @@ const modeColor = (mode: string) =>
 
 let cardCounter = 0
 
-export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
+export function QueueCard({ queue, variant = 'available', userSkillLevel = null }: QueueCardProps) {
   const startTime = queue.startTime ? new Date(queue.startTime) : new Date()
   const endTime = queue.endTime
     ? new Date(queue.endTime)
@@ -72,8 +73,16 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
   const requiredMinSkill = queue.minSkillLevel ?? 1
   const requiredMaxSkill = queue.maxSkillLevel ?? 10
   const requiredSkillLabel = hasSkillRestriction
-    ? `Skill ${requiredMinSkill}-${requiredMaxSkill}`
-    : 'Skill All Levels'
+    ? `Skill Required ${requiredMinSkill}-${requiredMaxSkill}`
+    : 'Open to All Skills'
+  const requiredSkillTierLabel = (() => {
+    if (!hasSkillRestriction) return 'Open to All'
+    if (requiredMinSkill === 1 && requiredMaxSkill === 3) return 'Beginner'
+    if (requiredMinSkill === 4 && requiredMaxSkill === 6) return 'Intermediate'
+    if (requiredMinSkill === 7 && requiredMaxSkill === 8) return 'Advanced'
+    if (requiredMinSkill === 9 && requiredMaxSkill === 10) return 'Elite'
+    return `Lvl ${requiredMinSkill}-${requiredMaxSkill}`
+  })()
   const durationHrs = Math.round(differenceInHours(endTime, startTime))
   const isFull = remaining === 0
 
@@ -87,6 +96,9 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
   const isActive = variant === 'active'
   const isOpen = queue.status === 'waiting' || queue.status === 'active'
   const isUpcoming = !isActive && !isOpen && startTime > new Date()
+  const isSkillMismatch = hasSkillRestriction
+    && userSkillLevel != null
+    && (userSkillLevel < requiredMinSkill || userSkillLevel > requiredMaxSkill)
 
   return (
     <>
@@ -121,10 +133,10 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
                   </span>
                   <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border backdrop-blur-sm ${
                     hasSkillRestriction
-                      ? 'bg-cyan-400/20 border-cyan-300/30 text-cyan-100'
+                      ? 'bg-white/18 border-white/28 text-white'
                       : 'bg-white/10 border-white/15 text-teal-100'
                   }`}>
-                    <Users className="w-2.5 h-2.5" />
+                    <span className={`w-1.5 h-1.5 rounded-full ${hasSkillRestriction ? 'bg-amber-200' : 'bg-teal-200'}`} />
                     {requiredSkillLabel}
                   </span>
                   <span className="inline-flex items-center gap-1 text-[11px] text-teal-300/70">
@@ -211,15 +223,20 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
                 Payment Required
               </div>
             ) : (
-              <div className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${isUpcoming && queue.status !== 'waiting'
-                ? 'bg-gradient-to-r from-[#006666] to-[#008080] text-white group-hover:from-[#008080] group-hover:to-[#66b2b2] group-hover:shadow-[0_4px_14px_rgba(0,102,102,0.35)]'
-                : 'bg-gradient-to-r from-teal-600 to-teal-500 text-white group-hover:from-teal-500 group-hover:to-teal-400 group-hover:shadow-[0_4px_14px_rgba(13,148,136,0.35)]'
-                }`}>
+              <div className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${
+                isUpcoming && queue.status !== 'waiting'
+                  ? 'bg-gradient-to-r from-[#006666] to-[#008080] text-white group-hover:from-[#008080] group-hover:to-[#66b2b2] group-hover:shadow-[0_4px_14px_rgba(0,102,102,0.35)]'
+                  : isSkillMismatch && !isActive
+                    ? 'bg-slate-100 text-slate-500 border border-slate-200 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-teal-600 to-teal-500 text-white group-hover:from-teal-500 group-hover:to-teal-400 group-hover:shadow-[0_4px_14px_rgba(13,148,136,0.35)]'
+              }`}>
                 {isUpcoming && queue.status !== 'waiting' ? (
                   <>
                     <Clock className="w-4 h-4" />
                     <span>OPENING SOON</span>
                   </>
+                ) : isSkillMismatch && !isActive ? (
+                  <span>{requiredSkillTierLabel.toUpperCase()} ONLY</span>
                 ) : (
                   <span>{isActive ? 'VIEW SESSION' : isFull ? 'JOIN WAITLIST' : 'JOIN NOW'}</span>
                 )}

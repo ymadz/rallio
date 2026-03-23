@@ -20,20 +20,15 @@ const modeLabel = (mode: string) =>
 
 const skillBadgeLabel = (mode: string, min?: number | null, max?: number | null) => {
   if (min != null || max != null) {
-    if (min === 1 && max === 3) return 'Beginner'
-    if (min === 4 && max === 6) return 'Intermediate'
-    if (min === 7 && max === 8) return 'Advanced'
-    if (min === 9 && max === 10) return 'Elite'
-    
-    const getTier = (l: number) => l <= 3 ? 'Beg' : l <= 6 ? 'Int' : l <= 8 ? 'Adv' : 'Elite'
-    
-    if (min != null && max != null) {
-      if (getTier(min) === getTier(max)) return getTier(min)
-      return `${getTier(min)}-${getTier(max)}`
-    }
-    return min != null ? `${getTier(min)}+` : `Max ${getTier(max!)}`
+    const low = min ?? 1
+    const high = max ?? 10
+    if (low === 1 && high === 3) return 'Beginner Only'
+    if (low === 4 && high === 6) return 'Intermediate Only'
+    if (low === 7 && high === 8) return 'Advanced Only'
+    if (low === 9 && high === 10) return 'Elite Only'
+    return `Skill ${low}-${high}`
   }
-  return mode === 'competitive' ? 'Intermediate+' : 'All Levels'
+  return mode === 'competitive' ? 'Competitive (No Bracket Set)' : 'Open to All'
 }
 
 /* ── Glass-gradient styles (matches "Your Performance" card) ── */

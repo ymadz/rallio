@@ -446,6 +446,36 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
         {/* Event Details Card */}
         <QueueEventCard queue={queue} onBack={() => router.back()} />
 
+        {/* Skill restriction warning should appear directly below event header */}
+        {!isUserInQueue && isSkillMismatch && (
+          <div className="rounded-xl border border-red-200 bg-gradient-to-br from-red-50 to-rose-50 p-4 shadow-[0_4px_16px_rgba(239,68,68,0.10)]">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full bg-red-100 border border-red-200 flex items-center justify-center flex-shrink-0">
+                <AlertCircle className="w-5 h-5 text-red-600" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-red-800">Bracket Mismatch</p>
+                <p className="text-sm text-red-700 mt-1">
+                  Your current level does not match this queue&apos;s bracket.
+                </p>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center rounded-full border border-red-200 bg-white text-red-700 text-xs font-semibold px-2.5 py-1">
+                    Your Level: {userSkillLevel}
+                  </span>
+                  <span className="inline-flex items-center rounded-full border border-red-200 bg-white text-red-700 text-xs font-semibold px-2.5 py-1">
+                    Required Bracket: {queue.minSkillLevel || 1}-{queue.maxSkillLevel || 10}
+                  </span>
+                </div>
+
+                <p className="text-xs text-red-600 mt-3">
+                  Tip: Join a bracket closer to your level for more balanced and enjoyable games.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
 
         {/* Queue Position Tracker (if in queue) */}
         {isUserInQueue && participant && (
@@ -544,15 +574,6 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
         {!isUserInQueue ? (
           <div className="bg-white border border-gray-200 rounded-xl p-6">
             <h3 className="font-semibold text-gray-900 mb-3">Join Queue</h3>
-
-            {isSkillMismatch && (
-              <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-                <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-red-700">
-                  Skill level mismatch: Your level ({userSkillLevel}) is outside the required range ({queue.minSkillLevel || 1}-{queue.maxSkillLevel || 10}).
-                </p>
-              </div>
-            )}
 
             {!isProfileCompleted || userSkillLevel === null ? (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-5 text-center">
