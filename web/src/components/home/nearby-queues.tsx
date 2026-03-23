@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useNearbyQueues } from '@/hooks/use-queue';
 import { Spinner } from '@/components/ui/spinner';
+import { createClient } from '@/lib/supabase/client';
+import { useEffect, useState } from 'react';
 
 function formatQueueDate(date: Date) {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date);
@@ -25,8 +27,44 @@ const AVATAR_COLORS = [
   'bg-violet-400',
 ];
 
+const getSkillTierLabel = (min?: number | null, max?: number | null) => {
+  if (min == null && max == null) return 'Open to All';
+  const low = min ?? 1;
+  const high = max ?? 10;
+  if (low === 1 && high === 3) return 'Beginner Only';
+  if (low === 4 && high === 6) return 'Intermediate Only';
+  if (low === 7 && high === 8) return 'Advanced Only';
+  if (low === 9 && high === 10) return 'Elite Only';
+  return `Skill ${low}-${high}`;
+};
+
 export function NearbyQueues() {
   const { queues, isLoading } = useNearbyQueues();
+  const [userSkillLevel, setUserSkillLevel] = useState<number | null>(null);
+  const supabase = createClient();
+
+  useEffect(() => {
+    const loadUserSkill = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user?.id) {
+        setUserSkillLevel(null);
+        return;
+      }
+
+      const { data } = await supabase
+        .from('players')
+        .select('skill_level')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      setUserSkillLevel(data?.skill_level ?? null);
+    };
+
+    loadUserSkill();
+  }, []);
 
   if (isLoading) {
     return (
@@ -130,6 +168,12 @@ export function NearbyQueues() {
             const startDate = new Date(queue.startTime);
             const isUpcoming = !isLive && !isOpen && startDate > new Date();
             const endDate = new Date(queue.endTime);
+            const hasSkillRestriction = queue.minSkillLevel != null || queue.maxSkillLevel != null;
+            const requiredMinSkill = queue.minSkillLevel ?? 1;
+            const requiredMaxSkill = queue.maxSkillLevel ?? 10;
+            const isSkillMismatch = hasSkillRestriction
+              && userSkillLevel != null
+              && (userSkillLevel < requiredMinSkill || userSkillLevel > requiredMaxSkill);
             const avatarCount = Math.min(queue.players?.length || queue.currentPlayers || 0, 4);
             const totalPlayers = queue.players?.length || queue.currentPlayers || 0;
             const overflow = totalPlayers - avatarCount;
@@ -244,6 +288,7 @@ export function NearbyQueues() {
                       </svg>
                       <span className="capitalize">{queue.mode}</span>
                     </div>
+
                   </div>
                 </div>
 
@@ -310,37 +355,46 @@ export function NearbyQueues() {
                   </div>
 
                   {/* Glass CTA button - full width */}
-                  <Link
-                    href={`/queue/${queue.id}`}
-                    className="flex items-center justify-center gap-1 w-full py-1.5 rounded-full text-[11px] font-bold text-white border border-white/20 backdrop-blur-md transition-all duration-200 hover:border-white/30 hover:shadow-lg hover:shadow-teal-700/20"
-                    style={{
-                      background: isUpcoming && !isOpen
-                        ? 'linear-gradient(135deg, rgba(0,102,102,0.9) 0%, rgba(0,128,128,0.9) 50%, rgba(0,76,76,0.85) 100%)'
-                        : 'linear-gradient(135deg, rgba(13,148,136,0.85) 0%, rgba(15,118,110,0.9) 50%, rgba(8,70,64,0.85) 100%)',
-                      textShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                    }}
-                  >
-                    {isUpcoming && !isOpen ? (
-                      <>
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        Opening Soon
-                      </>
-                    ) : (
-                      <>
-                        {isLive ? 'Watch' : 'Join Queue'}
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2.5}
-                            d="M9 5l7 7-7 7"
-                          />
-                        </svg>
-                      </>
-                    )}
-                  </Link>
+                  {isSkillMismatch ? (
+                    <div
+                      className="flex items-center justify-center gap-1 w-full py-1.5 rounded-full text-[11px] font-bold border border-slate-200 text-slate-500 bg-slate-100 cursor-not-allowed"
+                      style={{ textShadow: 'none' }}
+                    >
+                      {getSkillTierLabel(queue.minSkillLevel, queue.maxSkillLevel).toUpperCase()}
+                    </div>
+                  ) : (
+                    <Link
+                      href={`/queue/${queue.id}`}
+                      className="flex items-center justify-center gap-1 w-full py-1.5 rounded-full text-[11px] font-bold text-white border border-white/20 backdrop-blur-md transition-all duration-200 hover:border-white/30 hover:shadow-lg hover:shadow-teal-700/20"
+                      style={{
+                        background: isUpcoming && !isOpen
+                          ? 'linear-gradient(135deg, rgba(0,102,102,0.9) 0%, rgba(0,128,128,0.9) 50%, rgba(0,76,76,0.85) 100%)'
+                          : 'linear-gradient(135deg, rgba(13,148,136,0.85) 0%, rgba(15,118,110,0.9) 50%, rgba(8,70,64,0.85) 100%)',
+                        textShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                      }}
+                    >
+                      {isUpcoming && !isOpen ? (
+                        <>
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Opening Soon
+                        </>
+                      ) : (
+                        <>
+                          {isLive ? 'Watch' : 'JOIN NOW'}
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2.5}
+                              d="M9 5l7 7-7 7"
+                            />
+                          </svg>
+                        </>
+                      )}
+                    </Link>
+                  )}
                 </div>
               </div>
             );

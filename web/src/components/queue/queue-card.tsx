@@ -8,6 +8,7 @@ import { format, differenceInHours } from 'date-fns'
 interface QueueCardProps {
   queue: QueueSession
   variant?: 'active' | 'available'
+  userSkillLevel?: number | null
 }
 
 /* ── Gradient presets for visual variety (lighter teal tones) ── */
@@ -50,17 +51,17 @@ const CARD_GRADIENTS: string[][] = [
   ],
 ]
 
-const skillLabel = (mode: string) =>
-  mode === 'competitive' ? 'Competitive' : 'All Levels'
+const modeLabel = (mode: string) =>
+  mode === 'competitive' ? 'Competitive' : 'Casual'
 
-const skillColor = (mode: string) =>
+const modeColor = (mode: string) =>
   mode === 'competitive'
     ? 'bg-amber-400/20 border-amber-400/30 text-amber-200'
     : 'bg-white/10 border-white/15 text-teal-200'
 
 let cardCounter = 0
 
-export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
+export function QueueCard({ queue, variant = 'available', userSkillLevel = null }: QueueCardProps) {
   const startTime = queue.startTime ? new Date(queue.startTime) : new Date()
   const endTime = queue.endTime
     ? new Date(queue.endTime)
@@ -68,6 +69,20 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
   const remaining = Math.max(0, queue.maxPlayers - (queue.currentPlayers || 0))
   const price = queue.costPerGame ?? 0
   const mode = queue.mode || 'casual'
+  const hasSkillRestriction = queue.minSkillLevel != null || queue.maxSkillLevel != null
+  const requiredMinSkill = queue.minSkillLevel ?? 1
+  const requiredMaxSkill = queue.maxSkillLevel ?? 10
+  const requiredSkillLabel = hasSkillRestriction
+    ? `Skill Required ${requiredMinSkill}-${requiredMaxSkill}`
+    : 'Open to All Skills'
+  const requiredSkillTierLabel = (() => {
+    if (!hasSkillRestriction) return 'Open to All'
+    if (requiredMinSkill === 1 && requiredMaxSkill === 3) return 'Beginner'
+    if (requiredMinSkill === 4 && requiredMaxSkill === 6) return 'Intermediate'
+    if (requiredMinSkill === 7 && requiredMaxSkill === 8) return 'Advanced'
+    if (requiredMinSkill === 9 && requiredMaxSkill === 10) return 'Elite'
+    return `Lvl ${requiredMinSkill}-${requiredMaxSkill}`
+  })()
   const durationHrs = Math.round(differenceInHours(endTime, startTime))
   const isFull = remaining === 0
 
@@ -81,6 +96,9 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
   const isActive = variant === 'active'
   const isOpen = queue.status === 'waiting' || queue.status === 'active'
   const isUpcoming = !isActive && !isOpen && startTime > new Date()
+  const isSkillMismatch = hasSkillRestriction
+    && userSkillLevel != null
+    && (userSkillLevel < requiredMinSkill || userSkillLevel > requiredMaxSkill)
 
   return (
     <>
@@ -107,11 +125,19 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
                   {queue.courtName}
                 </h3>
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
-                  <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border backdrop-blur-sm ${skillColor(mode)}`}>
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border backdrop-blur-sm ${modeColor(mode)}`}>
                     {mode === 'competitive' && (
                       <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
                     )}
-                    {skillLabel(mode)}
+                    {modeLabel(mode)}
+                  </span>
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border backdrop-blur-sm ${
+                    hasSkillRestriction
+                      ? 'bg-white/18 border-white/28 text-white'
+                      : 'bg-white/10 border-white/15 text-teal-100'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${hasSkillRestriction ? 'bg-amber-200' : 'bg-teal-200'}`} />
+                    {requiredSkillLabel}
                   </span>
                   <span className="inline-flex items-center gap-1 text-[11px] text-teal-300/70">
                     <MapPin className="w-3 h-3 flex-shrink-0" />
@@ -197,15 +223,20 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
                 Payment Required
               </div>
             ) : (
-              <div className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${isUpcoming && queue.status !== 'waiting'
-                ? 'bg-gradient-to-r from-[#006666] to-[#008080] text-white group-hover:from-[#008080] group-hover:to-[#66b2b2] group-hover:shadow-[0_4px_14px_rgba(0,102,102,0.35)]'
-                : 'bg-gradient-to-r from-teal-600 to-teal-500 text-white group-hover:from-teal-500 group-hover:to-teal-400 group-hover:shadow-[0_4px_14px_rgba(13,148,136,0.35)]'
-                }`}>
+              <div className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${
+                isUpcoming && queue.status !== 'waiting'
+                  ? 'bg-gradient-to-r from-[#006666] to-[#008080] text-white group-hover:from-[#008080] group-hover:to-[#66b2b2] group-hover:shadow-[0_4px_14px_rgba(0,102,102,0.35)]'
+                  : isSkillMismatch && !isActive
+                    ? 'bg-slate-100 text-slate-500 border border-slate-200 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-teal-600 to-teal-500 text-white group-hover:from-teal-500 group-hover:to-teal-400 group-hover:shadow-[0_4px_14px_rgba(13,148,136,0.35)]'
+              }`}>
                 {isUpcoming && queue.status !== 'waiting' ? (
                   <>
                     <Clock className="w-4 h-4" />
                     <span>OPENING SOON</span>
                   </>
+                ) : isSkillMismatch && !isActive ? (
+                  <span>{requiredSkillTierLabel.toUpperCase()} ONLY</span>
                 ) : (
                   <span>{isActive ? 'VIEW SESSION' : isFull ? 'JOIN WAITLIST' : 'JOIN NOW'}</span>
                 )}

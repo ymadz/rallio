@@ -557,15 +557,15 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
         <h3 className="text-xl font-bold text-gray-900 tracking-tight text-center">Book a Court</h3>
       </div>
 
-      <div className="mb-6 flex w-full items-center justify-between gap-3">
+      <div className="mb-6 flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <div className="bg-primary/10 p-2 rounded-lg">
             <CalendarIcon className="h-5 w-5 text-primary" />
           </div>
-          <span className="text-xl font-bold text-gray-900 md:text-2xl">{selectedDateLabel}</span>
+          <span className="text-lg font-bold text-gray-900 sm:text-xl md:text-2xl">{selectedDateLabel}</span>
         </div>
 
-        <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-xl border border-gray-100">
+        <div className="flex w-full items-center justify-between gap-2 rounded-xl border border-gray-100 bg-gray-50 p-1 sm:w-auto sm:justify-start">
           <button
             type="button"
             onClick={() => shiftSelectedDate(-1)}
@@ -580,7 +580,7 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="inline-flex h-10 px-4 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-all hover:shadow-sm"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-gray-700 transition-all hover:bg-gray-50 hover:shadow-sm sm:px-4"
                 aria-label="Open date picker"
               >
                 <CalendarIcon className="h-4 w-4" />
@@ -809,7 +809,7 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
         )}
 
         {isQueueMaster && (
-          <div className="ml-auto flex items-center gap-3 pl-6 border-l border-gray-100 py-1 self-center">
+          <div className="flex w-full items-center justify-between gap-3 border-t border-gray-100 pt-3 sm:ml-auto sm:w-auto sm:self-center sm:justify-start sm:border-t-0 sm:border-l sm:py-1 sm:pl-6 sm:pt-0">
             <div className="flex flex-col items-end">
                 <span className="text-[10px] font-black text-primary uppercase tracking-[0.1em] leading-none mb-1">Queue Master</span>
                 <span className="text-xs font-bold text-gray-700 uppercase tracking-tight">Queue Mode</span>

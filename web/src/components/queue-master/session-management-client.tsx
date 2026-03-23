@@ -76,6 +76,8 @@ interface QueueSession {
   endTime: Date;
   mode: string;
   gameFormat: string;
+  minSkillLevel?: number | null;
+  maxSkillLevel?: number | null;
   players: Participant[];
   requiresApproval?: boolean;
   approvalStatus?: string;
@@ -87,6 +89,49 @@ interface QueueSession {
     };
   }>;
 }
+
+const resolveSkillRange = (sessionRow: any): { minSkillLevel: number | null; maxSkillLevel: number | null } => {
+  const meta = sessionRow?.metadata || {};
+
+  let minSkillLevel = sessionRow?.min_skill_level ?? meta.min_skill_level ?? meta.minSkillLevel ?? null;
+  let maxSkillLevel = sessionRow?.max_skill_level ?? meta.max_skill_level ?? meta.maxSkillLevel ?? null;
+
+  // Fallback for older payload shapes that stored selected tiers in metadata.
+  const tiers = Array.isArray(meta.allowed_skill_tiers) ? meta.allowed_skill_tiers : null;
+  if ((minSkillLevel == null || maxSkillLevel == null) && tiers && tiers.length > 0) {
+    const tierMap: Record<string, { min: number; max: number }> = {
+      beginner: { min: 1, max: 3 },
+      intermediate: { min: 4, max: 6 },
+      advanced: { min: 7, max: 8 },
+      elite: { min: 9, max: 10 },
+    };
+
+    const ranges = tiers
+      .map((tier: string) => tierMap[String(tier).toLowerCase()])
+      .filter(Boolean);
+
+    if (ranges.length > 0) {
+      minSkillLevel = Math.min(...ranges.map((r: { min: number; max: number }) => r.min));
+      maxSkillLevel = Math.max(...ranges.map((r: { min: number; max: number }) => r.max));
+    }
+  }
+
+  return {
+    minSkillLevel: minSkillLevel != null ? Number(minSkillLevel) : null,
+    maxSkillLevel: maxSkillLevel != null ? Number(maxSkillLevel) : null,
+  };
+};
+
+const getSkillRequirementLabel = (min?: number | null, max?: number | null) => {
+  if (min == null && max == null) return 'Open to All';
+  const low = min ?? 1;
+  const high = max ?? 10;
+  if (low === 1 && high === 3) return 'Beginner Only';
+  if (low === 4 && high === 6) return 'Intermediate Only';
+  if (low === 7 && high === 8) return 'Advanced Only';
+  if (low === 9 && high === 10) return 'Elite Only';
+  return `Level ${low}-${high}`;
+};
 
 export function SessionManagementClient({ sessionId }: SessionManagementClientProps) {
   const router = useRouter();
@@ -245,6 +290,8 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         })
       );
 
+      const { minSkillLevel, maxSkillLevel } = resolveSkillRange(sessionData);
+
       // Format session data
       const formattedSession: QueueSession = {
         id: sessionData.id,
@@ -261,6 +308,8 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         endTime: new Date(sessionData.end_time),
         mode: sessionData.mode,
         gameFormat: sessionData.game_format,
+        minSkillLevel,
+        maxSkillLevel,
         players: formattedParticipants,
         metadata: sessionData.metadata,
         queue_session_courts: sessionData.queue_session_courts,
@@ -576,6 +625,8 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
             endTime: session.endTime,
             mode: session.mode as 'casual' | 'competitive',
             costPerGame: session.costPerGame,
+            minSkillLevel: session.minSkillLevel ?? null,
+            maxSkillLevel: session.maxSkillLevel ?? null,
             organizerName: 'You',
           }}
           onBack={() => router.push('/bookings')}
@@ -1050,6 +1101,18 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-500">Format</span>
                 <span className="font-medium text-gray-900 capitalize">{session.gameFormat}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">Skill Requirement</span>
+                {session.minSkillLevel != null || session.maxSkillLevel != null ? (
+                  <span className="px-2.5 py-1 text-xs font-bold rounded-full border bg-amber-50 text-amber-700 border-amber-200">
+                    {getSkillRequirementLabel(session.minSkillLevel, session.maxSkillLevel)}
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-1 text-xs font-bold rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
+                    Open to All
+                  </span>
+                )}
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-500">Cost/Game</span>
