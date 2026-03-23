@@ -50,10 +50,10 @@ const CARD_GRADIENTS: string[][] = [
   ],
 ]
 
-const skillLabel = (mode: string) =>
+const modeLabel = (mode: string) =>
   mode === 'competitive' ? 'Competitive' : 'All Levels'
 
-const skillColor = (mode: string) =>
+const modeColor = (mode: string) =>
   mode === 'competitive'
     ? 'bg-amber-400/20 border-amber-400/30 text-amber-200'
     : 'bg-white/10 border-white/15 text-teal-200'
@@ -68,6 +68,12 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
   const remaining = Math.max(0, queue.maxPlayers - (queue.currentPlayers || 0))
   const price = queue.costPerGame ?? 0
   const mode = queue.mode || 'casual'
+  const hasSkillRestriction = queue.minSkillLevel != null || queue.maxSkillLevel != null
+  const requiredMinSkill = queue.minSkillLevel ?? 1
+  const requiredMaxSkill = queue.maxSkillLevel ?? 10
+  const requiredSkillLabel = hasSkillRestriction
+    ? `Skill ${requiredMinSkill}-${requiredMaxSkill}`
+    : 'Skill All Levels'
   const durationHrs = Math.round(differenceInHours(endTime, startTime))
   const isFull = remaining === 0
 
@@ -107,11 +113,19 @@ export function QueueCard({ queue, variant = 'available' }: QueueCardProps) {
                   {queue.courtName}
                 </h3>
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
-                  <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border backdrop-blur-sm ${skillColor(mode)}`}>
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border backdrop-blur-sm ${modeColor(mode)}`}>
                     {mode === 'competitive' && (
                       <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
                     )}
-                    {skillLabel(mode)}
+                    {modeLabel(mode)}
+                  </span>
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border backdrop-blur-sm ${
+                    hasSkillRestriction
+                      ? 'bg-cyan-400/20 border-cyan-300/30 text-cyan-100'
+                      : 'bg-white/10 border-white/15 text-teal-100'
+                  }`}>
+                    <Users className="w-2.5 h-2.5" />
+                    {requiredSkillLabel}
                   </span>
                   <span className="inline-flex items-center gap-1 text-[11px] text-teal-300/70">
                     <MapPin className="w-3 h-3 flex-shrink-0" />
