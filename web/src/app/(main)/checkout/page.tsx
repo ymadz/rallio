@@ -415,7 +415,7 @@ export default function CheckoutPage() {
                                 <PromoCodeInput />
 
                                 {/* Split Payment Controls (hidden for queue sessions) */}
-                                {!bookingData.isQueueSession && <SplitPaymentControls />}
+                                {/* {!bookingData.isQueueSession && <SplitPaymentControls />} */}
 
                                 {/* Queue Session Settings Card */}
                                 {bookingData.isQueueSession && bookingData.queueSessionData && (
@@ -486,8 +486,8 @@ export default function CheckoutPage() {
                                     </div>
                                 )}
 
-                                {/* Split Payment Breakdown */}
-                                {!bookingData.isQueueSession && isSplitPayment && (
+                                {/* Split Payment Breakdown (hidden for now) */}
+                                {/* {!bookingData.isQueueSession && isSplitPayment && (
                                     <div className="bg-gradient-to-br from-primary to-primary/80 rounded-xl p-6 text-white">
                                         <div className="grid grid-cols-3 gap-4">
                                             <div>
@@ -504,7 +504,7 @@ export default function CheckoutPage() {
                                             </div>
                                         </div>
                                     </div>
-                                )}
+                                )} */}
                             </>
                         )}
 
@@ -583,38 +583,6 @@ export default function CheckoutPage() {
                                         </div>
                                     </div>
                                 </div>
-
-                                {/* Split Payment Info */}
-                                {isSplitPayment && (
-                                    <div className="bg-white border border-gray-200 rounded-xl p-6">
-                                        <div className="flex items-center gap-3 mb-4">
-                                            <h4 className="font-semibold text-gray-900">Play Together, Pay Together!</h4>
-                                            <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-primary text-white text-xs font-bold">
-                                                {playerCount}
-                                            </span>
-                                        </div>
-                                        <p className="text-sm text-gray-600 mb-4">
-                                            Divide the total fee among your group — fair and simple.
-                                        </p>
-
-                                        <div className="bg-gradient-to-br from-primary to-primary/80 rounded-xl p-6 text-white">
-                                            <div className="grid grid-cols-3 gap-4">
-                                                <div>
-                                                    <p className="text-white/80 text-sm mb-1">Booking Fee:</p>
-                                                    <p className="text-xl font-bold">₱{totalBookingFee.toFixed(2)}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-white/80 text-sm mb-1">Player(s) Fee:</p>
-                                                    <p className="text-xl font-bold">₱{(totalBookingFee / playerCount).toFixed(2)}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-white/80 text-sm mb-1">Total Amount Due:</p>
-                                                    <p className="text-xl font-bold">₱{(totalBookingFee / playerCount).toFixed(2)}</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
 
                                 {/* Payment Method Selector */}
                                 <div className="bg-white border border-gray-200 rounded-xl p-6">
