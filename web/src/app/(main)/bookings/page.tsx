@@ -25,6 +25,7 @@ async function getUserBookings(userId: string) {
       payment_type,
       notes,
       created_at,
+      cash_payment_deadline,
       recurrence_group_id,
       booking_id,
       metadata,
@@ -123,7 +124,7 @@ async function getUserQueueSessions(userId: string) {
 
   const { data: linkedReservations } = await supabase
     .from('reservations')
-    .select('id, status, total_amount, amount_paid, payment_method')
+    .select('id, status, total_amount, amount_paid, payment_method, cash_payment_deadline')
     .in('id', reservationIds)
 
   const reservationMap = new Map(
@@ -158,12 +159,14 @@ async function getUserQueueSessions(userId: string) {
       payments: [],
       recurrence_group_id: null,
       cancellation_reason: null,
+      cash_payment_deadline: linkedReservation?.cash_payment_deadline || null,
       metadata: {
         queue_mode: qs.mode,
         queue_game_format: qs.game_format,
         queue_cost_per_game: qs.cost_per_game,
         queue_is_public: qs.is_public,
         intended_payment_method: linkedReservation?.payment_method || qs.metadata?.payment_method || 'cash',
+        cash_payment_deadline: linkedReservation?.cash_payment_deadline || null,
         is_queue_session_reservation: true,
       },
       // Queue session specific fields

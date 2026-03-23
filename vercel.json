@@ -1,5 +1,11 @@
 {
     "framework": "nextjs",
     "buildCommand": "npm run build:web",
-    "outputDirectory": "web/.next"
+    "outputDirectory": "web/.next",
+    "crons": [
+        {
+            "path": "/api/cron/process-bookings",
+            "schedule": "*/5 * * * *"
+        }
+    ]
 }

@@ -186,7 +186,9 @@ export default function CheckoutPage() {
         if (currentStep === 'payment') {
             if (!paymentMethod) return false
             if (paymentMethod === 'cash') {
-                const { getTotalAmount, downPaymentPercentage, customDownPaymentAmount } = useCheckoutStore.getState()
+                const { getTotalAmount, downPaymentPercentage, customDownPaymentAmount, cashPaymentOption } = useCheckoutStore.getState()
+                if (cashPaymentOption === 'full_cash') return true
+
                 const finalTotal = getTotalAmount()
                 const isDownPaymentRequired = downPaymentPercentage ? downPaymentPercentage > 0 : false
 

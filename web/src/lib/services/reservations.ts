@@ -15,6 +15,7 @@ export async function createReservation(
         numPlayers?: number
         paymentType?: 'full' | 'split'
         paymentMethod?: 'cash' | 'e-wallet'
+        cashPaymentOption?: 'downpayment' | 'full_cash'
         notes?: string
         discountApplied?: number
         discountType?: string
@@ -313,13 +314,18 @@ export async function createReservation(
         ? data.customDownPaymentAmount! / finalSlots.length
         : undefined
 
-    const downPaymentAmount = data.paymentMethod === 'cash'
+    const shouldRequireDownPayment =
+        data.paymentMethod === 'cash' &&
+        data.cashPaymentOption !== 'full_cash' &&
+        downPaymentPercentage > 0
+
+    const downPaymentAmount = shouldRequireDownPayment
         ? Math.round((hasCustomDownPayment
             ? Math.min(Math.max(customDownPaymentPerSlot!, minimumDownPaymentPerSlot), perInstanceAmount)
             : minimumDownPaymentPerSlot) * 100) / 100
         : undefined
 
-    const isCustomDownPayment = data.paymentMethod === 'cash' && hasCustomDownPayment && downPaymentAmount !== minimumDownPaymentPerSlot
+    const isCustomDownPayment = shouldRequireDownPayment && hasCustomDownPayment && downPaymentAmount !== minimumDownPaymentPerSlot
 
     for (let i = 0; i < finalSlots.length; i++) {
         const slot = finalSlots[i]
@@ -330,15 +336,24 @@ export async function createReservation(
         // E-wallet bookings get confirmed automatically via PayMongo webhook.
         const status = 'pending_payment'
 
-        // Calculate cash payment deadline: 2 hours before start_time
-        // This gives players time to go to the venue and pay in person.
-        // If start_time is less than 2 hours from now, deadline = now + 30 min (minimum window).
+        // Full-cash bookings get a strict 24-hour payment window from booking creation.
+        // If unpaid after the deadline, background jobs cancel the reservation.
         let cashPaymentDeadline: string | null = null
         if (data.paymentMethod === 'cash') {
-            const twoHoursBefore = new Date(slot.start.getTime() - 2 * 60 * 60 * 1000)
-            const minimumDeadline = new Date(Date.now() + 30 * 60 * 1000) // 30 min from now
-            const deadline = twoHoursBefore > minimumDeadline ? twoHoursBefore : minimumDeadline
-            cashPaymentDeadline = deadline.toISOString()
+            if (data.cashPaymentOption === 'full_cash' || !shouldRequireDownPayment) {
+                // For same-day / within-24h bookings, do not enforce the 24-hour cash deadline.
+                // These stay as pay-at-venue with no auto-cancel deadline timer.
+                const isWithin24Hours = (slot.start.getTime() - Date.now()) <= (24 * 60 * 60 * 1000)
+                if (!isWithin24Hours) {
+                    const deadline = new Date(Date.now() + 24 * 60 * 60 * 1000)
+                    cashPaymentDeadline = deadline.toISOString()
+                }
+            } else {
+                const twoHoursBefore = new Date(slot.start.getTime() - 2 * 60 * 60 * 1000)
+                const minimumDeadline = new Date(Date.now() + 30 * 60 * 1000)
+                const deadline = twoHoursBefore > minimumDeadline ? twoHoursBefore : minimumDeadline
+                cashPaymentDeadline = deadline.toISOString()
+            }
         }
 
         // Use USER SCOPED Client for INSERT to respect RLS
@@ -365,11 +380,12 @@ export async function createReservation(
                 metadata: {
                     booking_origin: 'web_checkout',
                     intended_payment_method: data.paymentMethod ?? null,
+                    cash_payment_option: data.paymentMethod === 'cash' ? (data.cashPaymentOption ?? 'downpayment') : undefined,
                     court_amount: courtAmountPerSlot,
                     platform_fee: platformFeePerSlot,
                     platform_fee_percentage: platformFeeEnabled ? platformFeePercentage : 0,
-                    down_payment_percentage: data.paymentMethod === 'cash' ? downPaymentPercentage : undefined,
-                    down_payment_amount: data.paymentMethod === 'cash' ? downPaymentAmount : undefined,
+                    down_payment_percentage: shouldRequireDownPayment ? downPaymentPercentage : undefined,
+                    down_payment_amount: shouldRequireDownPayment ? downPaymentAmount : undefined,
                     is_custom_down_payment: isCustomDownPayment,
                     promo_code: data.promoCode || undefined,
                     applied_discounts: discountResult.discounts.map(d => ({
@@ -431,7 +447,7 @@ export async function createReservation(
         reservationId: primaryReservationId,
         recurrenceGroupId: recurrenceGroupId || undefined,
         count: createdReservationIds.length,
-        downPaymentRequired: downPaymentAmount !== undefined && downPaymentAmount > 0,
+        downPaymentRequired: shouldRequireDownPayment && downPaymentAmount !== undefined && downPaymentAmount > 0,
         downPaymentAmount: downPaymentAmount
     }
 }
