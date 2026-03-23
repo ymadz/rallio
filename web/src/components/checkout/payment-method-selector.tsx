@@ -217,7 +217,7 @@ export function PaymentMethodSelector() {
             >
               <p className="text-sm font-semibold text-gray-900">Pay Full Cash at Venue</p>
               <p className="text-xs text-gray-600 mt-1">
-                Reservation stays pending and must be paid in person within 24 hours.
+                Reservation stays pending and must be paid in person within 48 hours.
               </p>
             </button>
           </div>
@@ -233,11 +233,11 @@ export function PaymentMethodSelector() {
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-amber-900">Pay-at-Venue Rules</p>
                   <p className="text-xs text-amber-800 leading-relaxed">
-                    For advance bookings, you must pay in cash at the venue within <strong>24 hours</strong> after checkout.
+                    For advance bookings, you must pay in cash at the venue within <strong>48 hours</strong> after checkout.
                   </p>
                   <ul className="text-xs text-amber-900/90 space-y-1 list-disc pl-4">
-                    <li>If unpaid after 24 hours, the booking is auto-cancelled.</li>
-                    <li>Same-day bookings are exempt from the 24-hour deadline.</li>
+                    <li>If unpaid after 48 hours, the booking is auto-cancelled.</li>
+                    <li>Same-day bookings are exempt from the 48-hour deadline.</li>
                     <li>Exempt bookings remain as pay-at-venue (no deadline timer).</li>
                   </ul>
                 </div>

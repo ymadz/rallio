@@ -181,8 +181,15 @@ export function BookingCard({
   };
 
   const paymentStatus = getExtendedPaymentStatus(booking);
-  const cashDeadline = booking.cash_payment_deadline || booking.metadata?.cash_payment_deadline || null
-  const shouldShowCashTimer = isCashBooking(booking) && booking.status === 'pending_payment' && !!cashDeadline
+  // Determine if this is a downpayment (partial payment)
+  const isDownPayment = booking.payment_type === 'downpayment' || booking.metadata?.is_down_payment === true || booking.metadata?.is_down_payment === 'true';
+  const isFullPayment = booking.payment_type === 'full' || booking.payment_type === undefined || booking.payment_type === null;
+  // Only show timer for full payment bookings
+  const shouldShowCashTimer = isCashBooking(booking) && booking.status === 'pending_payment' && isFullPayment;
+  // For full payment, set deadline to 48 hours from booking creation
+  const cashDeadline = shouldShowCashTimer
+    ? (booking.cash_payment_deadline || booking.metadata?.cash_payment_deadline || new Date(new Date(booking.created_at).getTime() + 48 * 60 * 60 * 1000).toISOString())
+    : null;
   const [nowMs, setNowMs] = useState(Date.now())
 
   useEffect(() => {

@@ -341,11 +341,11 @@ export async function createReservation(
         let cashPaymentDeadline: string | null = null
         if (data.paymentMethod === 'cash') {
             if (data.cashPaymentOption === 'full_cash' || !shouldRequireDownPayment) {
-                // For same-day / within-24h bookings, do not enforce the 24-hour cash deadline.
+                // For same-day / within-48h bookings, do not enforce the 48-hour cash deadline.
                 // These stay as pay-at-venue with no auto-cancel deadline timer.
-                const isWithin24Hours = (slot.start.getTime() - Date.now()) <= (24 * 60 * 60 * 1000)
-                if (!isWithin24Hours) {
-                    const deadline = new Date(Date.now() + 24 * 60 * 60 * 1000)
+                const isWithin48Hours = (slot.start.getTime() - Date.now()) <= (48 * 60 * 60 * 1000)
+                if (!isWithin48Hours) {
+                    const deadline = new Date(Date.now() + 48 * 60 * 60 * 1000)
                     cashPaymentDeadline = deadline.toISOString()
                 }
             } else {
