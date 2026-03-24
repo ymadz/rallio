@@ -22,11 +22,17 @@ const skillBadgeLabel = (mode: string, min?: number | null, max?: number | null)
   if (min != null || max != null) {
     const low = min ?? 1
     const high = max ?? 10
+    const getTierName = (l: number) => l <= 3 ? 'Beginner' : l <= 6 ? 'Intermediate' : l <= 8 ? 'Advanced' : 'Elite'
+    
     if (low === 1 && high === 3) return 'Beginner Only'
     if (low === 4 && high === 6) return 'Intermediate Only'
     if (low === 7 && high === 8) return 'Advanced Only'
     if (low === 9 && high === 10) return 'Elite Only'
-    return `Skill ${low}-${high}`
+    
+    const minTier = getTierName(low)
+    const maxTier = getTierName(high)
+    if (minTier === maxTier) return `${minTier} Only`
+    return `${minTier} - ${maxTier}`
   }
   return mode === 'competitive' ? 'Competitive (No Bracket Set)' : 'Open to All'
 }

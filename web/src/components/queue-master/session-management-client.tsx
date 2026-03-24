@@ -40,6 +40,7 @@ import { ScoreRecordingModal } from './score-recording-modal';
 import { PaymentManagementModal } from './payment-management-modal';
 import { MatchAssignmentModal } from './match-assignment-modal';
 import { MatchTimer } from './match-timer';
+import { MatchHistoryViewer } from '@/components/queue/match-history-viewer';
 import { MatchStatusBadge } from './match-status-badge';
 import { useServerTime } from '@/hooks/use-server-time';
 
@@ -127,11 +128,24 @@ const getSkillRequirementLabel = (min?: number | null, max?: number | null) => {
   if (min == null && max == null) return 'Open to All';
   const low = min ?? 1;
   const high = max ?? 10;
+
+  const getTierName = (l: number) => {
+    if (l <= 3) return 'Beginner';
+    if (l <= 6) return 'Intermediate';
+    if (l <= 8) return 'Advanced';
+    return 'Elite';
+  };
+
   if (low === 1 && high === 3) return 'Beginner Only';
   if (low === 4 && high === 6) return 'Intermediate Only';
   if (low === 7 && high === 8) return 'Advanced Only';
   if (low === 9 && high === 10) return 'Elite Only';
-  return `Level ${low}-${high}`;
+
+  const minTier = getTierName(low);
+  const maxTier = getTierName(high);
+
+  if (minTier === maxTier) return `${minTier} Only`;
+  return `${minTier} - ${maxTier}`;
 };
 
 export function SessionManagementClient({ sessionId, onSwitchToPlayerView }: SessionManagementClientProps) {
@@ -148,6 +162,7 @@ export function SessionManagementClient({ sessionId, onSwitchToPlayerView }: Ses
   const [showMatchAssignModal, setShowMatchAssignModal] = useState(false);
   const [showScoreModal, setShowScoreModal] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<'participants' | 'matches'>('participants');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
   const [activeMatches, setActiveMatches] = useState<any[]>([]);
@@ -596,7 +611,7 @@ export function SessionManagementClient({ sessionId, onSwitchToPlayerView }: Ses
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="w-full">
       {actionError && (
         <div className="flex items-center justify-between bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
           <div className="flex items-center gap-2">
@@ -635,13 +650,6 @@ export function SessionManagementClient({ sessionId, onSwitchToPlayerView }: Ses
             <>
               {session.status !== 'completed' && session.status !== 'cancelled' && (
                 <>
-                  <button
-                    onClick={onSwitchToPlayerView}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold bg-white text-teal-600 hover:bg-teal-50 shadow-sm transition-all"
-                  >
-                    <Users className="w-3.5 h-3.5" />
-                    Player View
-                  </button>
                   <button
                     onClick={handleClose}
                     disabled={actionLoading === 'close'}
@@ -763,328 +771,381 @@ export function SessionManagementClient({ sessionId, onSwitchToPlayerView }: Ses
 
       {/* Two Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Participants List */}
+        {/* Left Content Area */}
         <div className="lg:col-span-2 space-y-4">
-          {/* Active Matches */}
-          {activeMatches.length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-xl p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">
-                Active Matches ({activeMatches.length})
-              </h2>
-              <div className="space-y-3">
-                {activeMatches.map((match) => (
-                  <div
-                    key={match.id}
-                    className={`border-2 rounded-lg p-4 ${
-                      match.status === 'scheduled'
-                        ? 'border-gray-200 bg-gray-50'
-                        : match.status === 'in_progress'
-                          ? 'border-green-200 bg-green-50'
-                          : 'border-blue-200 bg-blue-50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                            match.status === 'scheduled'
-                              ? 'bg-gray-600'
-                              : match.status === 'in_progress'
-                                ? 'bg-green-600'
-                                : 'bg-blue-600'
-                          }`}
-                        >
-                          <Trophy className="w-4 h-4 text-white" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <div className="font-semibold text-gray-900">
-                              Match #{match.match_number}
+          {/* Tab Switcher */}
+          <div className="flex items-center gap-1 p-1 bg-gray-100/50 border border-gray-200 rounded-xl w-fit">
+            <button
+              onClick={() => setActiveTab('participants')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === 'participants'
+                  ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Participants
+            </button>
+            <button
+              onClick={() => setActiveTab('matches')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === 'matches'
+                  ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Match History
+            </button>
+          </div>
+
+          {activeTab === 'participants' ? (
+            <>
+              {/* Active Matches */}
+              {activeMatches.length > 0 && (
+                <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">
+                    Active Matches ({activeMatches.length})
+                  </h2>
+                  <div className="space-y-3">
+                    {activeMatches.map((match) => (
+                      <div
+                        key={match.id}
+                        className={`border-2 rounded-lg p-4 transition-all ${
+                          match.status === 'scheduled'
+                            ? 'border-gray-200 bg-gray-50'
+                            : match.status === 'in_progress'
+                              ? 'border-green-200 bg-green-50 shadow-sm'
+                              : 'border-blue-200 bg-blue-50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`w-8 h-8 rounded-full flex items-center justify-center shadow-sm ${
+                                match.status === 'scheduled'
+                                  ? 'bg-gray-600'
+                                  : match.status === 'in_progress'
+                                    ? 'bg-green-600 animate-pulse'
+                                    : 'bg-blue-600'
+                              }`}
+                            >
+                              <Trophy className="w-4 h-4 text-white" />
                             </div>
-                            {match.courts?.name && (
-                              <span className="text-xs font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
-                                {match.courts.name}
-                              </span>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <div className="font-semibold text-gray-900">
+                                  Match #{match.match_number}
+                                </div>
+                                {match.courts?.name && (
+                                  <span className="text-xs font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                                    {match.courts.name}
+                                  </span>
+                                )}
+                              </div>
+                              <MatchStatusBadge status={match.status} size="sm" />
+                            </div>
+                            {(match.status === 'in_progress' || match.status === 'completed') && (
+                              <MatchTimer
+                                startedAt={match.started_at}
+                                completedAt={match.completed_at}
+                                className="text-gray-600"
+                              />
                             )}
                           </div>
-                          <MatchStatusBadge status={match.status} size="sm" />
-                        </div>
-                        {(match.status === 'in_progress' || match.status === 'completed') && (
-                          <MatchTimer
-                            startedAt={match.started_at}
-                            completedAt={match.completed_at}
-                            className="text-gray-600"
-                          />
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {match.status === 'scheduled' && (
-                          <button
-                            onClick={() => handleStartMatch(match.id)}
-                            disabled={actionLoading === `start-${match.id}`}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                          >
-                            {actionLoading === `start-${match.id}` ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Play className="w-4 h-4" />
+                          <div className="flex items-center gap-2">
+                            {match.status === 'scheduled' && (
+                              <button
+                                onClick={() => handleStartMatch(match.id)}
+                                disabled={actionLoading === `start-${match.id}`}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 shadow-sm"
+                              >
+                                {actionLoading === `start-${match.id}` ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Play className="w-4 h-4" />
+                                )}
+                                <span>Start Match</span>
+                              </button>
                             )}
-                            <span>Start Match</span>
-                          </button>
-                        )}
-                        {match.status === 'in_progress' && (
-                          <button
-                            onClick={() => handleOpenScoreModal(match)}
-                            className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors"
-                          >
-                            Record Winner
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <div className="text-xs text-gray-600 mb-1">Team A</div>
-                        <div className="space-y-1">
-                          {match.teamAPlayers?.map((p: any) => (
-                            <div key={p.id} className="text-sm text-gray-900">
-                              {p.name}
+                            {match.status === 'in_progress' && (
+                              <button
+                                onClick={() => handleOpenScoreModal(match)}
+                                className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors shadow-sm"
+                              >
+                                Record Winner
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 border-t border-gray-100 pt-3 mt-1">
+                          <div>
+                            <div className="text-xs text-gray-500 font-medium mb-1.5 uppercase tracking-wider">Team A</div>
+                            <div className="space-y-1">
+                              {match.teamAPlayers?.map((p: any) => (
+                                <div key={p.id} className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                                  {p.name}
+                                </div>
+                              ))}
                             </div>
-                          ))}
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-500 font-medium mb-1.5 uppercase tracking-wider">Team B</div>
+                            <div className="space-y-1">
+                              {match.teamBPlayers?.map((p: any) => (
+                                <div key={p.id} className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                  {p.name}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      <div>
-                        <div className="text-xs text-gray-600 mb-1">Team B</div>
-                        <div className="space-y-1">
-                          {match.teamBPlayers?.map((p: any) => (
-                            <div key={p.id} className="text-sm text-gray-900">
-                              {p.name}
-                            </div>
-                          ))}
-                        </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-gray-900">
+                    Participants ({session.players.length})
+                  </h2>
+                  {(() => {
+                    const now = serverDate || new Date();
+                    const isStarted = new Date(session.startTime) <= now;
+                    return (
+                      <button
+                        onClick={handleAssignMatch}
+                        disabled={
+                          !isStarted ||
+                          waitingPlayers.length < (session.gameFormat === 'doubles' ? 4 : 2)
+                        }
+                        title={!isStarted ? 'Session has not started yet' : undefined}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm font-medium"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Assign Match</span>
+                      </button>
+                    );
+                  })()}
+                </div>
+
+                {/* Pre-start reminder */}
+                {(() => {
+                  const now = serverDate || new Date();
+                  const sessionStart = new Date(session.startTime);
+                  if (sessionStart > now) {
+                    return (
+                      <div className="mb-4 flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm shadow-sm">
+                        <Clock className="w-5 h-5 flex-shrink-0" />
+                        <p>
+                          Match assignments will be available once the session starts at{' '}
+                          <span className="font-semibold">
+                            {sessionStart.toLocaleTimeString('en-US', {
+                              hour: 'numeric',
+                              minute: '2-digit',
+                              hour12: true,
+                            })}
+                          </span>
+                          . Players can join the queue in the meantime.
+                        </p>
                       </div>
+                    );
+                  }
+                  return null;
+                })()}
+
+                {/* Doubles minimum-player notice */}
+                {session.gameFormat === 'doubles' && waitingPlayers.length < 4 && (
+                  <div className="mb-4 flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 text-sm shadow-sm">
+                    <Users className="w-5 h-5 flex-shrink-0 mt-0.5 text-blue-500" />
+                    <div>
+                      <p className="font-semibold">Doubles — Minimum Players Required</p>
+                      <p className="text-blue-700 mt-0.5">
+                        A match cannot start until at least{' '}
+                        <span className="font-semibold">4 players</span> are in the waiting queue (
+                        {waitingPlayers.length} of 4 players joined).
+                      </p>
                     </div>
                   </div>
-                ))}
+                )}
+
+                {/* Waiting Players */}
+                {waitingPlayers.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wider flex items-center gap-2">
+                       <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                       Waiting ({waitingPlayers.length})
+                    </h3>
+                    <div className="space-y-2">
+                      {waitingPlayers.map((player) => (
+                        <div
+                          key={player.id}
+                          className="flex items-center justify-between p-4 bg-gray-50 border border-gray-100 rounded-lg hover:bg-white hover:border-primary/20 hover:shadow-md transition-all duration-200 group"
+                        >
+                          <div className="flex items-center gap-3 flex-1">
+                            <div className="relative inline-block w-10 h-10 shrink-0">
+                              {player.avatarUrl ? (
+                                <img
+                                  src={player.avatarUrl}
+                                  alt={player.playerName}
+                                  className="w-10 h-10 rounded-full object-cover border-2 border-primary group-hover:scale-105 transition-transform"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white font-bold group-hover:scale-105 transition-transform">
+                                  {player.playerName.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-green-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border border-white shadow-sm z-10">
+                                {player.position}
+                              </div>
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <div className="font-semibold text-gray-900 group-hover:text-primary transition-colors">{player.playerName}</div>
+                                {player.rating && (
+                                  <span className="px-2 py-0.5 bg-white text-gray-700 text-[10px] font-bold rounded-full border border-gray-200 shadow-sm">
+                                    {player.rating} ELO
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-sm text-gray-600 flex items-center gap-1.5">
+                                <span className="font-medium text-primary/80">{player.gamesPlayed} played</span>
+                                <span className="text-gray-300">•</span>
+                                <span className="font-semibold text-emerald-600">₱{player.amountOwed.toFixed(0)} owed</span>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleOpenPaymentModal(player)}
+                              className={`px-3 py-1 text-xs font-bold rounded-full border shadow-sm transition-all hover:scale-105 active:scale-95 ${
+                                player.paymentStatus === 'paid'
+                                  ? 'bg-green-100 text-green-700 border-green-200'
+                                  : player.paymentStatus === 'partial'
+                                    ? 'bg-yellow-100 text-yellow-700 border-yellow-200'
+                                    : 'bg-red-100 text-red-700 border-red-200 hover:bg-red-600 hover:text-white'
+                              }`}
+                              title="Manage payment"
+                            >
+                              <PhilippinePeso className="w-3 h-3 inline mr-0.5" />
+                              {player.paymentStatus}
+                            </button>
+                          </div>
+                          <button
+                            onClick={() => handleRemovePlayer(player.userId, player.playerName)}
+                            disabled={actionLoading === `remove-${player.userId}`}
+                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all disabled:opacity-50 ml-2"
+                            title="Remove player"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Playing Players */}
+                {playingPlayers.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                        Playing ({playingPlayers.length})
+                      </h3>
+                      <button
+                        onClick={() => setShowResetConfirm(true)}
+                        className="text-xs px-2.5 py-1 rounded bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors font-bold shadow-sm"
+                      >
+                        Reset All to Queue
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      {playingPlayers.map((player) => (
+                        <div
+                          key={player.id}
+                          className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg shadow-sm group hover:bg-white hover:border-green-400 transition-all duration-200"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="relative">
+                              {player.avatarUrl ? (
+                                <img
+                                  src={player.avatarUrl}
+                                  alt={player.playerName}
+                                  className="w-10 h-10 rounded-full object-cover border-2 border-green-500 group-hover:scale-105 transition-transform"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center text-white font-bold group-hover:scale-105 transition-transform">
+                                  {player.playerName.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 text-white rounded-full flex items-center justify-center border border-white shadow-sm">
+                                <Play className="w-2 h-2 fill-current" />
+                              </div>
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <div className="font-semibold text-gray-900 group-hover:text-green-700">{player.playerName}</div>
+                                {player.rating && (
+                                  <span className="px-2 py-0.5 bg-white text-gray-700 text-[10px] font-bold rounded-full border border-gray-200 shadow-sm">
+                                    {player.rating} ELO
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-sm text-green-700 font-medium flex items-center gap-1.5">
+                                <span>Currently playing</span>
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={async () => {
+                              const result = await resetPlayerToWaiting(player.id, session.id);
+                              if (result.success) {
+                                loadSession();
+                              } else {
+                                setActionError('Reset failed: ' + result.error);
+                              }
+                            }}
+                            title="Return this player to the waiting queue"
+                            className="text-xs px-3 py-1.5 rounded-lg bg-white border border-amber-200 text-amber-700 hover:bg-amber-50 transition-colors font-bold shadow-sm"
+                          >
+                            Reset
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {session.players.length === 0 && (
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 bg-gray-50 border border-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
+                      <Users className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <h3 className="font-bold text-gray-900 mb-2">No Participants Yet</h3>
+                    <p className="text-sm text-gray-500 max-w-[200px] mx-auto">Players will appear here as they join the queue.</p>
+                  </div>
+                )}
               </div>
+            </>
+          ) : (
+            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900">
+                  Completed Matches
+                </h2>
+                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                   <Trophy className="w-5 h-5 text-primary" />
+                </div>
+              </div>
+              <MatchHistoryViewer
+                sessionId={session.id}
+                userId=""
+                courtId=""
+                isManager={true}
+              />
             </div>
           )}
-
-          <div className="bg-white border border-gray-200 rounded-xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-900">
-                Participants ({session.players.length})
-              </h2>
-              {(() => {
-                const now = serverDate || new Date();
-                const isStarted = new Date(session.startTime) <= now;
-                return (
-                  <button
-                    onClick={handleAssignMatch}
-                    disabled={
-                      !isStarted ||
-                      waitingPlayers.length < (session.gameFormat === 'doubles' ? 4 : 2)
-                    }
-                    title={!isStarted ? 'Session has not started yet' : undefined}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Assign Match</span>
-                  </button>
-                );
-              })()}
-            </div>
-
-            {/* Pre-start reminder */}
-            {(() => {
-              const now = serverDate || new Date();
-              const sessionStart = new Date(session.startTime);
-              if (sessionStart > now) {
-                return (
-                  <div className="mb-4 flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
-                    <Clock className="w-5 h-5 flex-shrink-0" />
-                    <p>
-                      Match assignments will be available once the session starts at{' '}
-                      <span className="font-semibold">
-                        {sessionStart.toLocaleTimeString('en-US', {
-                          hour: 'numeric',
-                          minute: '2-digit',
-                          hour12: true,
-                        })}
-                      </span>
-                      . Players can join the queue in the meantime.
-                    </p>
-                  </div>
-                );
-              }
-              return null;
-            })()}
-
-            {/* Doubles minimum-player notice */}
-            {session.gameFormat === 'doubles' && waitingPlayers.length < 4 && (
-              <div className="mb-4 flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 text-sm">
-                <Users className="w-5 h-5 flex-shrink-0 mt-0.5 text-blue-500" />
-                <div>
-                  <p className="font-semibold">Doubles — Minimum Players Required</p>
-                  <p className="text-blue-700 mt-0.5">
-                    A match cannot start until at least{' '}
-                    <span className="font-semibold">4 players</span> are in the waiting queue (
-                    {waitingPlayers.length} of 4 players joined).
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Waiting Players */}
-            {waitingPlayers.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wider">
-                  Waiting ({waitingPlayers.length})
-                </h3>
-                <div className="space-y-2">
-                  {waitingPlayers.map((player) => (
-                    <div
-                      key={player.id}
-                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                    >
-                      <div className="flex items-center gap-3 flex-1">
-                        <div className="relative inline-block w-10 h-10 shrink-0">
-                          {player.avatarUrl ? (
-                            <img
-                              src={player.avatarUrl}
-                              alt={player.playerName}
-                              className="w-10 h-10 rounded-full object-cover border-2 border-primary"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white font-bold">
-                              {player.playerName.charAt(0).toUpperCase()}
-                            </div>
-                          )}
-                          <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-green-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border border-white shadow-sm z-10">
-                            {player.position}
-                          </div>
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <div className="font-semibold text-gray-900">{player.playerName}</div>
-                            {player.rating && (
-                              <span className="px-2 py-0.5 bg-gray-100 text-gray-700 text-[10px] font-semibold rounded-full border border-gray-200">
-                                {player.rating} ELO
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-sm text-gray-600">
-                            {player.gamesPlayed} played • ₱{player.amountOwed.toFixed(0)} owed
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => handleOpenPaymentModal(player)}
-                          className={`px-3 py-1 text-xs font-medium rounded-full border ${
-                            player.paymentStatus === 'paid'
-                              ? 'bg-green-100 text-green-700 border-green-200'
-                              : player.paymentStatus === 'partial'
-                                ? 'bg-yellow-100 text-yellow-700 border-yellow-200'
-                                : 'bg-red-100 text-red-700 border-red-200 hover:bg-red-200'
-                          }`}
-                          title="Manage payment"
-                        >
-                          <PhilippinePeso className="w-3 h-3 inline mr-0.5" />
-                          {player.paymentStatus}
-                        </button>
-                      </div>
-                      <button
-                        onClick={() => handleRemovePlayer(player.userId, player.playerName)}
-                        disabled={actionLoading === `remove-${player.userId}`}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 ml-2"
-                        title="Remove player"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Playing Players */}
-            {playingPlayers.length > 0 && (
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
-                    Playing ({playingPlayers.length})
-                  </h3>
-                  <button
-                    onClick={() => setShowResetConfirm(true)}
-                    className="text-xs px-2.5 py-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors font-medium"
-                  >
-                    Reset All to Queue
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {playingPlayers.map((player) => (
-                    <div
-                      key={player.id}
-                      className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="relative">
-                          {player.avatarUrl ? (
-                            <img
-                              src={player.avatarUrl}
-                              alt={player.playerName}
-                              className="w-10 h-10 rounded-full object-cover border-2 border-green-500"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center text-white font-bold">
-                              {player.playerName.charAt(0).toUpperCase()}
-                            </div>
-                          )}
-                          <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 text-white rounded-full flex items-center justify-center border border-white">
-                            <Play className="w-2 h-2 fill-current" />
-                          </div>
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <div className="font-semibold text-gray-900">{player.playerName}</div>
-                            {player.rating && (
-                              <span className="px-2 py-0.5 bg-gray-100 text-gray-700 text-[10px] font-semibold rounded-full border border-gray-200">
-                                {player.rating} ELO
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-sm text-gray-600">Currently playing</div>
-                        </div>
-                      </div>
-                      <button
-                        onClick={async () => {
-                          const result = await resetPlayerToWaiting(player.id, session.id);
-                          if (result.success) {
-                            loadSession();
-                          } else {
-                            setActionError('Reset failed: ' + result.error);
-                          }
-                        }}
-                        title="Return this player to the waiting queue"
-                        className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors font-medium"
-                      >
-                        Reset
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {session.players.length === 0 && (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Users className="w-8 h-8 text-gray-400" />
-                </div>
-                <h3 className="font-semibold text-gray-900 mb-2">No Participants Yet</h3>
-                <p className="text-sm text-gray-500">Waiting for players to join this session</p>
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Right: Session Details */}

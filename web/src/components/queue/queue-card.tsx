@@ -72,17 +72,15 @@ export function QueueCard({ queue, variant = 'available', userSkillLevel = null 
   const hasSkillRestriction = queue.minSkillLevel != null || queue.maxSkillLevel != null
   const requiredMinSkill = queue.minSkillLevel ?? 1
   const requiredMaxSkill = queue.maxSkillLevel ?? 10
-  const requiredSkillLabel = hasSkillRestriction
-    ? `Skill Required ${requiredMinSkill}-${requiredMaxSkill}`
-    : 'Open to All Skills'
-  const requiredSkillTierLabel = (() => {
-    if (!hasSkillRestriction) return 'Open to All'
-    if (requiredMinSkill === 1 && requiredMaxSkill === 3) return 'Beginner'
-    if (requiredMinSkill === 4 && requiredMaxSkill === 6) return 'Intermediate'
-    if (requiredMinSkill === 7 && requiredMaxSkill === 8) return 'Advanced'
-    if (requiredMinSkill === 9 && requiredMaxSkill === 10) return 'Elite'
-    return `Lvl ${requiredMinSkill}-${requiredMaxSkill}`
+  const getTierName = (l: number) => l <= 3 ? 'Beginner' : l <= 6 ? 'Intermediate' : l <= 8 ? 'Advanced' : 'Elite'
+  const requiredSkillLabel = (() => {
+    if (!hasSkillRestriction) return 'Open to All Skills'
+    const minTier = getTierName(requiredMinSkill)
+    const maxTier = getTierName(requiredMaxSkill)
+    if (minTier === maxTier) return `${minTier} Only`
+    return `${minTier} - ${maxTier}`
   })()
+  const requiredSkillTierLabel = requiredSkillLabel // Reuse the same logic for consistency
   const durationHrs = Math.round(differenceInHours(endTime, startTime))
   const isFull = remaining === 0
 

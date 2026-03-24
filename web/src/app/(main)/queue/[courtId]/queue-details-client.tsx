@@ -429,16 +429,34 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
   // If the current user is the organizer, show the full session management UI by default
   if (queue.organizerId === currentUserId && !showPlayerView) {
     return (
-      <SessionManagementClient
-        sessionId={queue.id}
-        onSwitchToPlayerView={() => setShowPlayerView(true)}
-      />
+      <div className="space-y-6">
+        <div className="bg-teal-600 text-white px-4 py-3 rounded-xl flex items-center justify-between shadow-lg animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+              <Activity className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="font-semibold">Manager Mode</p>
+              <p className="text-xs text-teal-100">You are managing this session as an organizer.</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowPlayerView(true)}
+            className="px-4 py-2 bg-white text-teal-600 rounded-lg text-sm font-bold hover:bg-teal-50 transition-colors shadow-sm"
+          >
+            Switch to Player View
+          </button>
+        </div>
+        <SessionManagementClient
+          sessionId={queue.id}
+          onSwitchToPlayerView={() => setShowPlayerView(true)}
+        />
+      </div>
     )
   }
 
   const isUserInQueue = queue.userPosition !== null
   const playersAhead = isUserInQueue ? queue.userPosition! - 1 : 0
-  const estimatedWaitTime = Math.max(playersAhead * 15, 0) // ~15 min per game ahead
 
   const isSkillMismatch = queue && userSkillLevel !== null && (
     (queue.minSkillLevel != null && userSkillLevel < queue.minSkillLevel) ||
@@ -495,9 +513,6 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                   </span>
                 </div>
 
-                <p className="text-xs text-red-600 mt-3">
-                  Tip: Join a bracket closer to your level for more balanced and enjoyable games.
-                </p>
               </div>
             </div>
           </div>
@@ -509,7 +524,6 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
           <QueuePositionTracker
             position={queue.userPosition!}
             totalPlayers={queue.currentPlayers}
-            estimatedWaitTime={estimatedWaitTime}
             gamesPlayed={participant.games_played || 0}
             status={participant.status || 'waiting'}
           />
@@ -649,12 +663,6 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <span>Cancel anytime without penalty</span>
-                  </div>
-                  <div className="flex items-start gap-2 text-sm text-gray-600">
-                    <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span>Estimated wait: ~{estimatedWaitTime} minutes</span>
                   </div>
                 </div>
                 <button

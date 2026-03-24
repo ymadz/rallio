@@ -448,7 +448,7 @@ export default function CheckoutPage() {
                                                             if (min === 7 && max === 8) return 'Advanced';
                                                             if (min === 9 && max === 10) return 'Elite';
                                                             
-                                                            const getTier = (l: number) => l <= 3 ? 'Beg' : l <= 6 ? 'Int' : l <= 8 ? 'Adv' : 'Elite';
+                                                            const getTier = (l: number) => l <= 3 ? 'Beginner' : l <= 6 ? 'Intermediate' : l <= 8 ? 'Advanced' : 'Elite';
                                                             if (min != null && max != null) {
                                                                 if (getTier(min) === getTier(max)) return getTier(min);
                                                                 return `${getTier(min)} - ${getTier(max)}`;

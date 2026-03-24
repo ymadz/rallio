@@ -25,9 +25,10 @@ interface MatchHistoryViewerProps {
   sessionId: string
   userId: string
   courtId: string
+  isManager?: boolean
 }
 
-export function MatchHistoryViewer({ sessionId, userId, courtId }: MatchHistoryViewerProps) {
+export function MatchHistoryViewer({ sessionId, userId, courtId, isManager = false }: MatchHistoryViewerProps) {
   const supabase = createClient()
   const [matches, setMatches] = useState<Match[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -133,7 +134,7 @@ export function MatchHistoryViewer({ sessionId, userId, courtId }: MatchHistoryV
   return (
     <div className="space-y-4">
       {/* User Stats Card */}
-      {userStats.totalGames > 0 && (
+      {!isManager && userStats.totalGames > 0 && (
         <div className="bg-gradient-to-br from-primary/10 to-blue-50 border border-primary/20 rounded-xl p-6">
           <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-primary" />
@@ -162,11 +163,13 @@ export function MatchHistoryViewer({ sessionId, userId, courtId }: MatchHistoryV
       )}
 
       {/* Match History List */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
-        <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <Trophy className="w-5 h-5 text-primary" />
-          Match History ({matches.length})
-        </h3>
+      <div className={`${isManager ? '' : 'bg-white border border-gray-200 rounded-xl p-6'}`}>
+        {!isManager && (
+          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Trophy className="w-5 h-5 text-primary" />
+            Match History ({matches.length})
+          </h3>
+        )}
 
         <div className="space-y-3">
           {matches.map((match) => {
@@ -189,13 +192,13 @@ export function MatchHistoryViewer({ sessionId, userId, courtId }: MatchHistoryV
             return (
               <div
                 key={match.id}
-                className={`block p-4 border-2 rounded-lg transition-all ${isUserMatch
+                className={`block p-4 border-2 rounded-lg transition-all ${!isManager && isUserMatch
                   ? userWon
                     ? 'border-green-200 bg-green-50'
                     : isDraw
                       ? 'border-gray-200 bg-gray-50'
                       : 'border-red-200 bg-red-50'
-                  : 'border-gray-200 bg-white'
+                  : 'border-gray-200 bg-white shadow-sm hover:shadow-md'
                   }`}
               >
                 <div className="flex items-center justify-between">
@@ -207,7 +210,7 @@ export function MatchHistoryViewer({ sessionId, userId, courtId }: MatchHistoryV
 
                     {/* Match Result / ELO */}
                     <div>
-                      {isUserMatch ? (
+                      {!isManager && isUserMatch ? (
                         <>
                           <div className="flex items-center gap-2 mb-1">
                             <span className={`text-xl font-bold ${userWon ? 'text-green-600' : isDraw ? 'text-gray-600' : 'text-red-500'
@@ -235,12 +238,19 @@ export function MatchHistoryViewer({ sessionId, userId, courtId }: MatchHistoryV
                         </>
                       ) : (
                         <>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-lg font-bold text-gray-800">
+                          <div className="flex items-center gap-2 mb-1 text-primary">
+                            <span className="text-lg font-bold">
                               {match.winner === 'team_a' ? 'Team A Won' : match.winner === 'team_b' ? 'Team B Won' : 'Draw'}
                             </span>
+                            <span className="text-xl font-black text-gray-900 ml-2">
+                              {match.score_a} - {match.score_b}
+                            </span>
                           </div>
-                          <div className="text-xs text-gray-500 capitalize">{match.game_format}</div>
+                          <div className="flex items-center gap-2 text-xs text-gray-500 capitalize">
+                            <span>{match.game_format}</span>
+                            <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                            <span>{new Date(match.completed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
                         </>
                       )}
                     </div>

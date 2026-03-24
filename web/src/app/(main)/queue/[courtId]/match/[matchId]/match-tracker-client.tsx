@@ -4,13 +4,15 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { startMatch as startMatchAction, recordMatchScore } from '@/app/actions/match-actions'
 import { useRouter } from 'next/navigation'
-import { Clock, Trophy, Users, Play, CheckCircle, Loader2, AlertCircle, Star } from 'lucide-react'
+import { Clock, Trophy, Users, Play, CheckCircle, Loader2, AlertCircle, Star, MapPin } from 'lucide-react'
 import Link from 'next/link'
 
 interface Player {
   id: string
   name: string
   avatar_url?: string
+  rating: number | null
+  skill_level: number | null
 }
 
 interface Match {
@@ -92,35 +94,63 @@ export function MatchTrackerClient({ courtId, matchId }: MatchTrackerClientProps
       if (matchData.winner) setSelectedWinner(matchData.winner)
 
       // Fetch player details for Team A
-      const { data: teamAData } = await supabase
-        .from('profiles')
-        .select('id, first_name, last_name, avatar_url')
-        .in('id', matchData.team_a_players)
+      if (matchData.team_a_players && matchData.team_a_players.length > 0) {
+        // Fetch profiles
+        const { data: profilesA } = await supabase
+          .from('profiles')
+          .select('id, first_name, last_name, avatar_url')
+          .in('id', matchData.team_a_players)
 
-      if (teamAData) {
-        setTeamAPlayers(
-          teamAData.map(p => ({
-            id: p.id,
-            name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Player',
-            avatar_url: p.avatar_url,
-          }))
-        )
+        // Fetch player stats (rating, skill_level) from players table
+        const { data: statsA } = await supabase
+          .from('players')
+          .select('user_id, rating, skill_level')
+          .in('user_id', matchData.team_a_players)
+
+        if (profilesA) {
+          setTeamAPlayers(
+            profilesA.map(p => {
+              const stats = statsA?.find(s => s.user_id === p.id)
+              return {
+                id: p.id,
+                name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Player',
+                avatar_url: p.avatar_url,
+                rating: stats?.rating ?? 0,
+                skill_level: stats?.skill_level ?? 1,
+              }
+            })
+          )
+        }
       }
 
       // Fetch player details for Team B
-      const { data: teamBData } = await supabase
-        .from('profiles')
-        .select('id, first_name, last_name, avatar_url')
-        .in('id', matchData.team_b_players)
+      if (matchData.team_b_players && matchData.team_b_players.length > 0) {
+        // Fetch profiles
+        const { data: profilesB } = await supabase
+          .from('profiles')
+          .select('id, first_name, last_name, avatar_url')
+          .in('id', matchData.team_b_players)
 
-      if (teamBData) {
-        setTeamBPlayers(
-          teamBData.map(p => ({
-            id: p.id,
-            name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Player',
-            avatar_url: p.avatar_url,
-          }))
-        )
+        // Fetch player stats
+        const { data: statsB } = await supabase
+          .from('players')
+          .select('user_id, rating, skill_level')
+          .in('user_id', matchData.team_b_players)
+
+        if (profilesB) {
+          setTeamBPlayers(
+            profilesB.map(p => {
+              const stats = statsB?.find(s => s.user_id === p.id)
+              return {
+                id: p.id,
+                name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Player',
+                avatar_url: p.avatar_url,
+                rating: stats?.rating ?? 0,
+                skill_level: stats?.skill_level ?? 1,
+              }
+            })
+          )
+        }
       }
 
       // Check if current user is queue master
@@ -256,93 +286,190 @@ export function MatchTrackerClient({ courtId, matchId }: MatchTrackerClientProps
   const isUserPlaying =
     match.team_a_players.includes(currentUser?.id) || match.team_b_players.includes(currentUser?.id)
 
+  const getTierName = (l: number | null) => {
+    if (l === null) return 'Unranked'
+    if (l <= 3) return 'Beginner'
+    if (l <= 6) return 'Intermediate'
+    if (l <= 8) return 'Advanced'
+    return 'Elite'
+  }
+
   return (
     <div className="space-y-6">
-      {/* Match Header */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Match #{match.match_number}</h1>
-            <p className="text-gray-600 mt-1">
-              {match.queue_sessions?.courts?.venues?.name} • {match.queue_sessions?.courts?.name}
-            </p>
-          </div>
-          <div className="text-right">
-            <div className="px-4 py-2 bg-primary/10 text-primary rounded-lg font-semibold capitalize">
-              {match.status === 'scheduled' && 'Scheduled'}
-              {match.status === 'in_progress' && '🔴 Live'}
-              {match.status === 'completed' && '✅ Completed'}
-              {match.status === 'cancelled' && 'Cancelled'}
+      <style>{matchStyles}</style>
+      
+      {/* Premium Header */}
+      <div className="match-header relative overflow-hidden rounded-2xl p-8 text-white shadow-xl mb-6">
+        <div className="match-noise" />
+        <div className="match-highlight" />
+        
+        <div className="relative z-10">
+          <Link
+            href={`/queue/${courtId}`}
+            className="inline-flex items-center gap-2 text-white/80 hover:text-white mb-6 font-medium transition-colors group"
+          >
+            <div className="p-1.5 rounded-lg bg-white/10 group-hover:bg-white/20 transition-all">
+               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
             </div>
-            {match.game_format && (
-              <p className="text-sm text-gray-500 mt-2 capitalize">{match.game_format}</p>
-            )}
-          </div>
-        </div>
-
-        {/* Timer */}
-        {match.status === 'in_progress' && (
-          <div className="flex items-center gap-2 text-gray-700 bg-gray-50 px-4 py-3 rounded-lg">
-            <Clock className="w-5 h-5" />
-            <span className="font-mono text-lg font-semibold">{formatTime(elapsedTime)}</span>
-            <span className="text-sm text-gray-500">elapsed</span>
-          </div>
-        )}
-      </div>
-
-      {/* Scoreboard */}
-      <div className="bg-gradient-to-br from-primary/5 to-blue-50 border-2 border-primary/20 rounded-xl p-8">
-        <div className="grid grid-cols-3 gap-6 items-center">
-          {/* Team A */}
-          <div className="text-center">
-            <div className="text-sm font-semibold text-gray-700 mb-3">TEAM A</div>
-            <div className="space-y-2">
-              {teamAPlayers.map((player, index) => (
-                <div key={player.id} className="flex items-center gap-2 justify-center">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full" />
-                  <span className={`text-sm ${currentUser?.id === player.id ? 'font-bold text-primary' : 'text-gray-700'}`}>
-                    {player.name}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Winner Display */}
-          <div className="text-center">
-            {match.winner ? (
-              <div className="flex items-center justify-center gap-2 text-green-700">
-                <Trophy className="w-8 h-8" />
-                <span className="text-2xl font-bold">
-                  {match.winner === 'team_a' ? 'Team A Wins!' : match.winner === 'team_b' ? 'Team B Wins!' : 'Draw!'}
+            <span>Back to Queue</span>
+          </Link>
+          
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <span className="px-3 py-1 bg-white/10 backdrop-blur-md border border-white/20 rounded-full text-xs font-bold uppercase tracking-widest text-teal-100">
+                  {match.game_format}
                 </span>
-                <Trophy className="w-8 h-8" />
+                <span className={`px-3 py-1 backdrop-blur-md border rounded-full text-xs font-bold uppercase tracking-widest ${
+                  match.status === 'in_progress' 
+                    ? 'bg-red-500/20 border-red-500/30 text-red-200 animate-pulse'
+                    : 'bg-white/10 border-white/20 text-white'
+                }`}>
+                  {match.status === 'in_progress' ? '🔴 Match in Progress' : match.status}
+                </span>
               </div>
-            ) : (
-              <div className="text-lg text-gray-500 font-medium">
-                {match.status === 'scheduled' && 'Match not started yet'}
-                {match.status === 'in_progress' && 'Match in progress...'}
-                {match.status === 'cancelled' && 'Match cancelled'}
+              <h1 className="text-4xl font-black tracking-tight" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.2)' }}>
+                Match #{match.match_number}
+              </h1>
+              <p className="text-teal-50/70 mt-2 font-medium flex items-center gap-2">
+                <MapPin className="w-4 h-4" />
+                {match.queue_sessions?.courts?.venues?.name} • {match.queue_sessions?.courts?.name}
+              </p>
+            </div>
+            
+            {match.status === 'in_progress' && (
+              <div className="bg-black/20 backdrop-blur-xl border border-white/10 px-6 py-4 rounded-2xl flex items-center gap-4 shadow-inner">
+                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                  <Clock className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-0.5">Elapsed Time</p>
+                  <p className="font-mono text-2xl font-black text-white">{formatTime(elapsedTime)}</p>
+                </div>
               </div>
             )}
           </div>
+        </div>
+      </div>
 
-          {/* Team B */}
-          <div className="text-center">
-            <div className="text-sm font-semibold text-gray-700 mb-3">TEAM B</div>
-            <div className="space-y-2">
-              {teamBPlayers.map((player, index) => (
-                <div key={player.id} className="flex items-center gap-2 justify-center">
-                  <div className="w-2 h-2 bg-red-500 rounded-full" />
-                  <span className={`text-sm ${currentUser?.id === player.id ? 'font-bold text-primary' : 'text-gray-700'}`}>
-                    {player.name}
-                  </span>
+      {/* Scoreboard / Teams */}
+      <div className="grid grid-cols-1 md:grid-cols-7 gap-4 items-stretch">
+        {/* Team A */}
+        <div className="md:col-span-3 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+          <div className="text-[10px] font-black tracking-[0.2em] text-gray-400 uppercase mb-6 text-center border-b border-gray-50 pb-3">Team A</div>
+          <div className="space-y-4">
+            {teamAPlayers.map((player) => (
+              <div key={player.id} className="flex items-center gap-4 p-3 rounded-xl bg-gray-50/50 hover:bg-white hover:shadow-sm border border-transparent hover:border-primary/20 transition-all group">
+                <div className="relative">
+                  {player.avatar_url ? (
+                    <img src={player.avatar_url} alt={player.name} className="w-12 h-12 rounded-full object-cover border-2 border-primary/20 group-hover:border-primary transition-colors" />
+                  ) : (
+                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-primary font-black group-hover:bg-primary group-hover:text-white transition-all">
+                      {player.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-primary rounded-full border-2 border-white" />
                 </div>
-              ))}
-            </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-gray-900 truncate flex items-center gap-2">
+                    {player.name}
+                    {currentUser?.id === player.id && (
+                      <span className="px-1.5 py-0.5 bg-primary/10 text-primary text-[8px] font-black rounded uppercase tracking-wider">You</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                      {player.rating || 0} ELO
+                    </span>
+                    <span className="text-[10px] font-bold text-primary bg-primary/5 px-1.5 py-0.5 rounded">
+                      Lvl {player.skill_level || 1} - {getTierName(player.skill_level)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Center: Match Control / Status */}
+        <div className="md:col-span-1 flex flex-col items-center justify-center py-6 md:py-0">
+          <div className="w-12 h-12 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center mb-4">
+            <span className="text-xs font-black text-gray-400">VS</span>
+          </div>
+          <div className="h-full w-px bg-gradient-to-b from-transparent via-gray-100 to-transparent hidden md:block" />
+        </div>
+
+        {/* Team B */}
+        <div className="md:col-span-3 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+          <div className="text-[10px] font-black tracking-[0.2em] text-gray-400 uppercase mb-6 text-center border-b border-gray-50 pb-3">Team B</div>
+          <div className="space-y-4">
+            {teamBPlayers.map((player) => (
+              <div key={player.id} className="flex items-center gap-4 flex-row-reverse p-3 rounded-xl bg-gray-50/50 hover:bg-white hover:shadow-sm border border-transparent hover:border-red-200 transition-all group">
+                <div className="relative">
+                  {player.avatar_url ? (
+                    <img src={player.avatar_url} alt={player.name} className="w-12 h-12 rounded-full object-cover border-2 border-red-500/20 group-hover:border-red-500 transition-colors" />
+                  ) : (
+                    <div className="w-12 h-12 bg-red-500/10 rounded-full flex items-center justify-center text-red-500 font-black group-hover:bg-red-500 group-hover:text-white transition-all">
+                      {player.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="absolute -top-1 -left-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white" />
+                </div>
+                <div className="flex-1 min-w-0 text-right">
+                  <div className="font-bold text-gray-900 truncate flex items-center gap-2 flex-row-reverse">
+                    {player.name}
+                    {currentUser?.id === player.id && (
+                      <span className="px-1.5 py-0.5 bg-primary/10 text-primary text-[8px] font-black rounded uppercase tracking-wider">You</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1 flex-row-reverse">
+                    <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                      {player.rating || 0} ELO
+                    </span>
+                    <span className="text-[10px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">
+                      Lvl {player.skill_level || 1} - {getTierName(player.skill_level)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
+
+      {/* Status Overlay for Completed Match */}
+      {match.status === 'completed' && (
+        <div className="bg-emerald-600 rounded-2xl p-8 text-center text-white shadow-xl relative overflow-hidden">
+          <div className="match-noise opacity-10" />
+          <div className="relative z-10 flex flex-col items-center">
+             <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mb-6 backdrop-blur-xl border border-white/30">
+                <Trophy className="w-10 h-10 text-white" />
+             </div>
+             <h2 className="text-3xl font-black mb-2 text-white">Match Completed!</h2>
+             <p className="text-emerald-50/80 mb-6 font-medium">Final outcome recorded by Queue Master</p>
+             
+             {match.winner && (
+               <div className="bg-white/10 border border-white/20 backdrop-blur-md px-8 py-4 rounded-xl mb-8">
+                 <p className="text-xs font-black uppercase tracking-[0.3em] text-emerald-200 mb-2">Winners</p>
+                 <p className="text-2xl font-black">
+                   {match.winner === 'team_a' ? 'Team A Wins!' : match.winner === 'team_b' ? 'Team B Wins!' : 'It\'s a Draw!'}
+                 </p>
+               </div>
+             )}
+             
+             <div className="flex flex-wrap gap-4 justify-center">
+                <Link
+                  href={`/queue/${courtId}`}
+                  className="px-8 py-3 bg-white text-emerald-700 rounded-xl hover:bg-emerald-50 transition-all font-bold shadow-lg"
+                >
+                  Return to Queue
+                </Link>
+             </div>
+          </div>
+        </div>
+      )}
 
       {/* Queue Master Controls */}
       {isQueueMaster && match.status !== 'completed' && (
@@ -457,32 +584,6 @@ export function MatchTrackerClient({ courtId, matchId }: MatchTrackerClientProps
         </div>
       )}
 
-      {/* Player View - Match Completed */}
-      {match.status === 'completed' && isUserPlaying && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
-          <CheckCircle className="w-16 h-16 text-green-600 mx-auto mb-4" />
-          <h3 className="text-xl font-bold text-gray-900 mb-2">Match Completed!</h3>
-          <p className="text-gray-700 mb-6">
-            Final Score: {match.score_a} - {match.score_b}
-          </p>
-          <div className="flex gap-3 justify-center">
-            <Link
-              href={`/queue/${courtId}`}
-              className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-            >
-              Back to Queue
-            </Link>
-            {/* TODO: Add rating button - will be implemented in post-match rating interface */}
-            <button
-              disabled
-              className="px-6 py-3 bg-primary text-white rounded-lg opacity-50 cursor-not-allowed font-medium flex items-center gap-2"
-            >
-              <Star className="w-4 h-4" />
-              Rate Opponents (Coming Soon)
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Error Display */}
       {error && match && (
@@ -494,3 +595,26 @@ export function MatchTrackerClient({ courtId, matchId }: MatchTrackerClientProps
     </div>
   )
 }
+
+const matchStyles = `
+  .match-header {
+    background: linear-gradient(135deg, #14b8a6 0%, #0d9488 42%, #0f766e 100%);
+  }
+  .match-noise {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.12;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='qc'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23qc)' opacity='1'/%3E%3C/svg%3E");
+    background-size: 150px 150px;
+    mix-blend-mode: overlay;
+  }
+  .match-highlight {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+    background: radial-gradient(ellipse at 5% 8%, rgba(255,255,255,0.3) 0%, transparent 60%);
+  }
+`

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Activity, X, Trophy } from 'lucide-react'
 import Link from 'next/link'
 import { MatchTimer } from './queue-master/match-timer'
+import { usePathname } from 'next/navigation'
 
 interface ActiveMatchInfo {
     id: string
@@ -30,6 +31,7 @@ export function ActiveMatchBanner() {
     const [match, setMatch] = useState<ActiveMatchInfo | null>(null)
     const [dismissed, setDismissed] = useState<string | null>(null)
     const [userId, setUserId] = useState<string | null>(null)
+    const pathname = usePathname()
     const supabase = createClient()
     const fetchRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
@@ -149,7 +151,7 @@ export function ActiveMatchBanner() {
     }, [userId])
 
     // Don't show if no match or dismissed
-    if (!match || dismissed === match.id) return null
+    if (!match || dismissed === match.id || pathname.includes(`/match/${match.id}`)) return null
 
     const isInProgress = match.status === 'in_progress'
     const isCompleted = match.status === 'completed'

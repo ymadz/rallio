@@ -254,28 +254,6 @@ export function BookingSummaryCard({
             <p className="font-medium text-gray-900">{playerCount} players</p>
           </div>
         )}
-        {bookingData.isQueueSession && bookingData.queueSessionData && (
-          <div>
-            <p className="text-sm text-gray-500">Skill Level</p>
-            <p className="font-medium text-gray-900">
-                {(() => {
-                    const min = bookingData.queueSessionData.minSkillLevel;
-                    const max = bookingData.queueSessionData.maxSkillLevel;
-                    if (min === 1 && max === 3) return 'Beginner';
-                    if (min === 4 && max === 6) return 'Intermediate';
-                    if (min === 7 && max === 8) return 'Advanced';
-                    if (min === 9 && max === 10) return 'Elite';
-                    
-                    const getTier = (l: number) => l <= 3 ? 'Beg' : l <= 6 ? 'Int' : l <= 8 ? 'Adv' : 'Elite';
-                    if (min != null && max != null) {
-                        if (getTier(min) === getTier(max)) return getTier(min);
-                        return `${getTier(min)} - ${getTier(max)}`;
-                    }
-                    return min != null ? `${getTier(min)}+` : (max != null ? `Up to ${getTier(max)}` : 'All Levels');
-                })()}
-            </p>
-          </div>
-        )}
       </div>
 
       {/* Price Breakdown */}
