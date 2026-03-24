@@ -380,8 +380,8 @@ export function PaymentProcessing() {
       ? getPerPlayerAmount()
       : getTotalAmount()
 
-  // Show loading/redirecting state for e-wallet payments AND cash+down payment (both redirect to PayMongo)
-  if (loading && (paymentMethod === 'e-wallet' || isCashWithDownPayment)) {
+  // Unified loading state for all payment methods during initialization
+  if (loading) {
     return (
       <div className="space-y-6">
         <div className="bg-white border border-primary/20 rounded-xl p-6">
@@ -395,7 +395,9 @@ export function PaymentProcessing() {
                 ? isCashWithDownPayment
                   ? 'Redirecting you to pay your down payment...'
                   : 'Redirecting you to secure payment...'
-                : 'Creating your reservation and preparing payment checkout...'
+                : (paymentMethod === 'cash' && !isCashWithDownPayment)
+                  ? 'Creating your reservation and preparing your instructions...'
+                  : 'Creating your reservation and preparing payment checkout...'
               }
             </p>
             {reservationId && (
@@ -688,9 +690,10 @@ export function PaymentProcessing() {
                 router.push(`/bookings`)
               }
             }}
-            disabled={paymentMethod === 'e-wallet' && paymentStatus !== 'success'}
-            className="px-8 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={(paymentMethod === 'e-wallet' && paymentStatus !== 'success') || loading || !reservationId}
+            className="px-8 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
+            {loading && <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/20 border-t-white" />}
             {paymentMethod === 'e-wallet' ? 'Complete Booking' : isCashWithDownPayment ? 'Pay Down Payment' : 'Confirm Booking'}
           </button>
         </div>
