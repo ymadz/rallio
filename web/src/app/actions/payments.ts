@@ -44,12 +44,19 @@ export interface InitiatePaymentResult {
  */
 export async function initiatePaymentAction(
   reservationId: string,
-  paymentMethod: PaymentMethod
+  paymentMethod: PaymentMethod,
+  options: { isMobile?: boolean } = {}
 ): Promise<InitiatePaymentResult> {
-  console.log('[initiatePaymentAction] 🚀 Starting payment initiation')
+  const headersList = await headers()
+  const userAgent = headersList.get('user-agent') || ''
+  const isCapacitorUserAgent = userAgent.includes('Capacitor')
+  
+  const { isMobile = isCapacitorUserAgent } = options
+  console.log('[initiatePaymentAction] 🚀 Starting payment initiation', { isMobile, userAgent })
   console.log('[initiatePaymentAction] Input:', {
     reservationId,
-    paymentMethod
+    paymentMethod,
+    isMobile
   })
 
   try {
@@ -225,8 +232,14 @@ export async function initiatePaymentAction(
     const proto = headersList.get('x-forwarded-proto') || 'http'
     const baseUrl = host ? `${proto}://${host}` : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000')
     
-    const successUrl = `${baseUrl}/checkout/success?reservation=${reservationId}${bookingId ? `&booking=${bookingId}` : ''}`
-    const failedUrl = `${baseUrl}/checkout/failed?reservation=${reservationId}`
+    let successUrl = `${baseUrl}/checkout/success?reservation=${reservationId}${bookingId ? `&booking=${bookingId}` : ''}`
+    let failedUrl = `${baseUrl}/checkout/failed?reservation=${reservationId}`
+
+    if (isMobile) {
+      // Use the bridge callback URL to trigger deep link back to app
+      successUrl = `${baseUrl}/mobile-payment/callback?status=success&reservation=${reservationId}${bookingId ? `&booking=${bookingId}` : ''}`
+      failedUrl = `${baseUrl}/mobile-payment/callback?status=failed&reservation=${reservationId}`
+    }
 
     let checkoutUrl: string
     let sourceId: string

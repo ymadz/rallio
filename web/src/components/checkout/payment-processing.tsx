@@ -263,10 +263,13 @@ export function PaymentProcessing() {
           return
         }
 
-        // Step 2: Initiate payment for e-wallet or cash down payment
         // Pass the actual payment method so initiatePaymentAction can detect
         // cash + down payment and charge only the deposit amount.
-        const paymentResult = await initiatePaymentAction(confirmedReservationId, paymentMethod === 'cash' ? 'cash' : 'gcash')
+        const paymentResult = await initiatePaymentAction(
+          confirmedReservationId,
+          paymentMethod === 'cash' ? 'cash' : 'gcash',
+          { isMobile: Capacitor.isNativePlatform() }
+        )
 
         if (!paymentResult.success || !paymentResult.checkoutUrl) {
           throw new Error(paymentResult.error || 'Failed to initiate payment')

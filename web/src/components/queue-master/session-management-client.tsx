@@ -15,6 +15,8 @@ import {
 } from '@/app/actions/match-actions';
 import { PayMongoError } from '@/lib/paymongo/client';
 import { initiatePaymentAction } from '@/app/actions/payments';
+import { Capacitor } from '@capacitor/core'
+import { Browser } from '@capacitor/browser'
 import { StatusBadge } from '@/components/shared/status-badge';
 import { QueueEventCard } from '@/components/queue/queue-event-card';
 import type { QueueSession as QueueSessionHook } from '@/hooks/use-queue';
@@ -540,11 +542,20 @@ export function SessionManagementClient({ sessionId, onSwitchToPlayerView }: Ses
     setActionLoading('pay');
     try {
       const paymentMethod = session.metadata?.payment_method === 'paymaya' ? 'paymaya' : 'gcash';
-      const result = await initiatePaymentAction(session.metadata.reservation_id, paymentMethod);
+      const result = await initiatePaymentAction(
+        session.metadata.reservation_id, 
+        paymentMethod,
+        { isMobile: Capacitor.isNativePlatform() }
+      );
       if (!result.success || !result.checkoutUrl) {
         throw new Error(result.error || 'Failed to initiate payment');
       }
-      window.location.href = result.checkoutUrl;
+      
+      if (Capacitor.isNativePlatform()) {
+        await Browser.open({ url: result.checkoutUrl });
+      } else {
+        window.location.href = result.checkoutUrl;
+      }
     } catch (err: any) {
       setActionError(err.message || 'Payment initiation failed');
     } finally {

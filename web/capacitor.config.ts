@@ -1,6 +1,6 @@
 import type { CapacitorConfig } from '@capacitor/cli'
 
-const serverUrl = process.env.CAPACITOR_SERVER_URL
+const serverUrl = process.env.CAPACITOR_SERVER_URL || 'https://rallio-amad.vercel.app'
 const usesLocalServer =
   typeof serverUrl === 'string' &&
   (serverUrl.startsWith('http://') ||

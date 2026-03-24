@@ -12,6 +12,8 @@ import { CancelBookingModal } from '@/components/booking/cancel-booking-modal'
 import { BookingGroupModal } from '@/components/booking/booking-group-modal'
 import { useServerTime } from '@/hooks/use-server-time'
 import Link from 'next/link'
+import { Capacitor } from '@capacitor/core'
+import { Browser } from '@capacitor/browser'
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
@@ -211,10 +213,18 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
 
     try {
       const { initiatePaymentAction } = await import('@/app/actions/payments')
-      const result = await initiatePaymentAction(booking.id, paymentMethod)
+      const result = await initiatePaymentAction(
+        booking.id, 
+        paymentMethod,
+        { isMobile: Capacitor.isNativePlatform() }
+      )
 
       if (result.success && result.checkoutUrl) {
-        window.location.href = result.checkoutUrl
+        if (Capacitor.isNativePlatform()) {
+          await Browser.open({ url: result.checkoutUrl })
+        } else {
+          window.location.href = result.checkoutUrl
+        }
       } else {
         alert(result.error || 'Failed to initiate payment. Please try again.')
         setResumingPaymentId(null)

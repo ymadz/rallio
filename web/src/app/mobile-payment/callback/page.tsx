@@ -11,25 +11,36 @@ function CallbackContent() {
     const [message, setMessage] = useState('Processing payment...')
 
     useEffect(() => {
-        // Determine deep link based on status
-        // Redirect to callback route safely handling existing query params
-        let target = `rallio://checkout/callback?status=${status === 'success' ? 'success' : 'failed'}`;
-
+        const params = new URLSearchParams(searchParams.toString());
+        const statusValue = params.get('status') || 'failed';
+        let target = '';
+        
+        // Remove appLink from the target URL's own params if we are using it as the base
         if (appLink) {
+            params.delete('appLink');
             const separator = appLink.includes('?') ? '&' : '?';
-            target = `${appLink}${separator}status=${status === 'success' ? 'success' : 'failed'}`;
+            const queryString = params.toString();
+            target = `${appLink}${separator}${queryString}`;
+        } else {
+            // Default to rallio:// scheme
+            const queryString = params.toString();
+            target = `rallio://checkout/callback?${queryString}`;
         }
 
-        setMessage(status === 'success' ? 'Payment Successful!' : 'Payment Cancelled')
+        setMessage(statusValue === 'success' ? 'Payment Successful!' : 'Payment Cancelled')
+
+        console.log('[MobilePaymentCallback] 🔄 Redirecting to:', target)
 
         // Attempt deep link redirect
         // Use a small timeout to allow rendering
         const timer = setTimeout(() => {
-            window.location.href = target
+            if (target) {
+                window.location.href = target
+            }
         }, 1000)
 
         return () => clearTimeout(timer)
-    }, [status, appLink])
+    }, [status, appLink, searchParams])
 
     return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 p-4">
@@ -47,8 +58,14 @@ function CallbackContent() {
 
                 <button
                     onClick={() => {
-                        const target = appLink ? `${appLink}?status=${status === 'success' ? 'success' : 'failed'}` : `rallio://checkout/callback?status=${status === 'success' ? 'success' : 'failed'}`
-                        window.location.href = target
+                        const params = new URLSearchParams(searchParams.toString());
+                        if (appLink) {
+                            params.delete('appLink');
+                            const separator = appLink.includes('?') ? '&' : '?';
+                            window.location.href = `${appLink}${separator}${params.toString()}`;
+                        } else {
+                            window.location.href = `rallio://checkout/callback?${params.toString()}`;
+                        }
                     }}
                     className="mt-6 w-full rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
                 >

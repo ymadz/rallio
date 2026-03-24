@@ -20,7 +20,10 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "typecheck": "tsc --noEmit",
     "cap:android": "npm run cap:refresh:android:prod --workspace=web",
-    "cap:build": "npm run build:native --workspace=web"
+    "cap:build": "npm run build:native --workspace=web",
+    "cap:assets": "npm run assets:generate --workspace=web",
+    "cap:open": "npm run cap:open:android --workspace=web",
+    "cap:sync": "npm run cap:sync --workspace=web"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.0.0",

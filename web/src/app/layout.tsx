@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { DevTimeToolbar } from "@/components/dev/dev-time-toolbar";
+import { DeepLinkHandler } from "@/components/mobile/deep-link-handler"
 import "./globals.css";
 
 const geistSans = Geist({
@@ -29,6 +30,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white min-h-screen`}
       >
+        <DeepLinkHandler />
         {children}
         <Toaster
           position="top-center"
