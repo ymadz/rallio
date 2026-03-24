@@ -78,40 +78,77 @@ export function CartDrawer() {
   }
 
   const handleCheckout = async () => {
-    const availableItems = items.filter(i => !i.isUnavailable)
-    const venueIds = new Set(availableItems.map(i => i.court?.venue?.id).filter(Boolean))
-
-    if (venueIds.size === 1) {
-      setLoading(true)
-      const mappedCart = availableItems.map(item => {
-        const start = new Date(item.start_time)
-        const end = new Date(item.end_time)
-        const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60)
-        
-        return {
-          courtId: item.court_id,
-          courtName: item.court?.name || 'Court',
-          venueId: item.court?.venue?.id || '',
-          venueName: item.court?.venue?.name || 'Venue',
-          date: start,
-          startTime: start.toTimeString().substring(0,5),
-          endTime: end.toTimeString().substring(0,5),
-          hourlyRate: Number(item.price) / Math.max(0.5, durationHours),
-          capacity: item.num_players || 4,
-          recurrenceWeeks: 1,
-          selectedDays: []
-        }
-      })
+    try {
+      const availableItems = items.filter(i => !i.isUnavailable)
+      if (availableItems.length === 0) return;
       
-      setBookingCart(mappedCart)
-      if (cartId) {
-        await clearCartAction(cartId)
-        setCartData(cartId, [])
+      const venueIds = new Set(availableItems.map(i => {
+        const venueData = i.court?.venue;
+        if (Array.isArray(venueData)) {
+          return venueData[0]?.id;
+        }
+        return venueData?.id;
+      }).filter(Boolean))
+
+      // Calculate distinct courts as a fallback check
+      const courtIds = new Set(availableItems.map(i => i.court_id))
+
+      // If we clearly have 1 venue, OR if venue resolution failed but we only selected slots from 1 court.
+      if (venueIds.size === 1 || (venueIds.size === 0 && courtIds.size === 1)) {
+        setLoading(true)
+        const mappedCart = availableItems.map(item => {
+          const start = new Date(item.start_time)
+          const end = new Date(item.end_time)
+          const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60)
+          
+          const venueData = item.court?.venue;
+          const resolvedVenueId = Array.isArray(venueData) ? venueData[0]?.id : venueData?.id;
+          const resolvedVenueName = Array.isArray(venueData) ? venueData[0]?.name : venueData?.name;
+          
+          const startH = String(start.getHours()).padStart(2, '0')
+          const startM = String(start.getMinutes()).padStart(2, '0')
+          const endH = String(end.getHours()).padStart(2, '0')
+          const endM = String(end.getMinutes()).padStart(2, '0')
+          
+          return {
+            courtId: item.court_id,
+            courtName: item.court?.name || 'Court',
+            venueId: resolvedVenueId || '',
+            venueName: resolvedVenueName || 'Venue',
+            date: start,
+            startTime: `${startH}:${startM}`,
+            endTime: `${endH}:${endM}`,
+            hourlyRate: Number(item.price) / Math.max(0.5, durationHours),
+            capacity: item.num_players || 4,
+            recurrenceWeeks: 1,
+            selectedDays: []
+          }
+        })
+        
+        setBookingCart(mappedCart)
+        
+        if (cartId) {
+          try {
+            await clearCartAction(cartId)
+          } catch (e) {
+            console.error("Cart clear failed, ignoring", e)
+          }
+          setCartData(cartId, [])
+        }
+        
+        setLoading(false)
+        setIsOpen(false)
+        
+        // Give Zustand a moment to flush to localStorage before hard reload
+        setTimeout(() => {
+          window.location.href = '/checkout'
+        }, 100)
+      } else {
+        setIsOpen(false)
+        router.push('/cart/checkout')
       }
-      setLoading(false)
-      setIsOpen(false)
-      router.push('/checkout')
-    } else {
+    } catch (err) {
+      console.error("Checkout dispatch error", err)
       setIsOpen(false)
       router.push('/cart/checkout')
     }

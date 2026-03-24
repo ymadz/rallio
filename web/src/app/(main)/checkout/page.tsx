@@ -17,8 +17,7 @@ import { createClient } from '@/lib/supabase/client'
 
 export default function CheckoutPage() {
     const router = useRouter()
-    const [showCancelModal, setShowCancelModal] = useState(false)
-    const [courtImageUrl, setCourtImageUrl] = useState<string | null>(null)
+    const [isHydrated, setIsHydrated] = useState(false)
     const {
         bookingData,
         bookingCart,
@@ -40,8 +39,14 @@ export default function CheckoutPage() {
         platformFeePercentage,
     } = useCheckoutStore()
 
+    // Hydration check
+    useEffect(() => {
+        setIsHydrated(true)
+    }, [])
+
     // Guard: detect stale checkout state (e.g. page revisited after completed booking)
     useEffect(() => {
+        if (!isHydrated) return
         if (currentStep === 'processing') {
             // If we have a stored reservationId, redirect to receipt
             if (storeReservationId) {
@@ -53,18 +58,21 @@ export default function CheckoutPage() {
                 router.push('/courts')
             }
         }
-    }, []) // Only run on mount
+    }, [isHydrated, currentStep, storeReservationId]) 
 
-    // Redirect if no booking data
+    // Redirect if no booking data (after hydration)
     useEffect(() => {
-        if (!bookingData) {
+        if (isHydrated && !bookingData) {
             router.push('/courts')
         }
-    }, [bookingData, router])
+    }, [isHydrated, bookingData, router])
+
+    const [showCancelModal, setShowCancelModal] = useState(false)
+    const [courtImageUrl, setCourtImageUrl] = useState<string | null>(null)
 
     // Fetch court image
     useEffect(() => {
-        if (!bookingData) return
+        if (!isHydrated || !bookingData) return
         const supabase = createClient()
         async function fetchImage() {
             // Try court-specific image first
@@ -91,9 +99,9 @@ export default function CheckoutPage() {
             }
         }
         fetchImage()
-    }, [bookingData?.courtId, bookingData?.venueId])
+    }, [isHydrated, bookingData?.courtId, bookingData?.venueId])
 
-    if (!bookingData) {
+    if (!isHydrated || !bookingData) {
         return (
             <div className="min-h-screen flex items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-primary" />
