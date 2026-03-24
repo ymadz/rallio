@@ -9,6 +9,8 @@ import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
 import { createClient } from '@/lib/supabase/client'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import { Capacitor } from '@capacitor/core'
+import { Browser } from '@capacitor/browser'
 
 export function PaymentProcessing() {
   const router = useRouter()
@@ -275,12 +277,14 @@ export function PaymentProcessing() {
         setPaymentStatus('processing')
         setBookingReference(confirmedReservationId.slice(0, 8), confirmedReservationId)
 
-        // Store checkout URL for manual redirect
-        sessionStorage.setItem('paymongoCheckoutUrl', paymentResult.checkoutUrl)
-
         // Immediate redirect to prevent any state update issues
         // The 2-second delay was causing potential error flashes
-        window.location.href = paymentResult.checkoutUrl
+        if (Capacitor.isNativePlatform()) {
+          console.log('[PaymentProcessing] Mobile platform detected, using Capacitor Browser')
+          await Browser.open({ url: paymentResult.checkoutUrl })
+        } else {
+          window.location.href = paymentResult.checkoutUrl
+        }
       } catch (err) {
         console.error('Payment initialization error:', err)
         const errorMessage = err instanceof Error ? err.message : 'Payment initialization failed'

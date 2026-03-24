@@ -17,6 +17,11 @@ const config: CapacitorConfig = {
         url: serverUrl,
         cleartext: usesLocalServer,
         androidScheme: usesLocalServer ? 'http' : 'https',
+        allowNavigation: [
+          'checkout.paymongo.com',
+          '*.paymongo.com',
+          '*.gcash.com'
+        ]
       }
     : undefined,
   android: {
