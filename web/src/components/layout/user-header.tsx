@@ -3,6 +3,27 @@
 import { usePathname } from 'next/navigation'
 import { NotificationBell } from '@/components/notifications/notification-bell'
 import { UserNav } from '@/components/layout/user-nav'
+import { ShoppingCart } from 'lucide-react'
+import { useCartStore } from '@/stores/cart-store'
+
+function CartButton() {
+    const { getItemCount, setIsOpen } = useCartStore()
+    const count = getItemCount()
+
+    return (
+        <button 
+            onClick={() => setIsOpen(true)}
+            className="relative p-2 text-gray-500 hover:text-gray-700 transition-colors"
+        >
+            <ShoppingCart className="h-6 w-6" />
+            {count > 0 && (
+                <span className="absolute top-0 right-0 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white transform translate-x-1/4 -translate-y-1/4 bg-primary rounded-full">
+                    {count}
+                </span>
+            )}
+        </button>
+    )
+}
 
 interface UserHeaderProps {
     user: {
@@ -80,6 +101,7 @@ export function UserHeader({ user }: UserHeaderProps) {
                 <p className="text-sm text-gray-600">{subtitle}</p>
             </div>
             <div className="flex items-center gap-4">
+                <CartButton />
                 <NotificationBell />
                 <UserNav user={user} />
             </div>

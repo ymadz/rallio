@@ -13,6 +13,8 @@ import {
   getAvailableTimeSlotsAction,
   checkCartAvailabilityAction,
 } from '@/app/actions/reservations';
+import { useCartStore } from '@/stores/cart-store';
+import { addToCartAction } from '@/app/actions/cart-actions';
 import { useCheckoutStore } from '@/stores/checkout-store';
 import {
   Dialog,
@@ -138,6 +140,7 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
 
   const { bookingCart, setBookingCart, setDiscountDetails, setConflictingSlots } =
     useCheckoutStore();
+  const { setIsOpen: setCartDrawerOpen, setLoading: setCartLoading } = useCartStore();
 
   useEffect(() => {
     async function load() {
@@ -418,25 +421,52 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
     onQueueClick(selectedCourtsObj, selectedDate, startTime, endTime, allDatesToBook);
   };
 
-  const confirmBooking = (items: any[], conflictList: any[]) => {
+  const confirmBooking = async (items: any[], conflictList: any[]) => {
     setIsBooking(true);
+    setCartLoading(true);
 
-    // Filter out items that match a conflict in the conflictList
-    const validItems = items.filter((item) => {
-      const itemDateStr = format(item.date, 'yyyy-MM-dd');
-      const hasConflict = conflictList.some(
-        (c) =>
-          c.courtId === item.courtId &&
-          c.startTime === item.startTime &&
-          (c.dateISO === itemDateStr || c.date === format(item.date, 'MMM d, yyyy'))
-      );
-      return !hasConflict;
-    });
+    try {
+      const validItems = items.filter((item) => {
+        const itemDateStr = format(item.date, 'yyyy-MM-dd');
+        const hasConflict = conflictList.some(
+          (c) =>
+            c.courtId === item.courtId &&
+            c.startTime === item.startTime &&
+            (c.dateISO === itemDateStr || c.date === format(item.date, 'MMM d, yyyy'))
+        );
+        return !hasConflict;
+      });
 
-    setBookingCart(validItems);
-    setConflictingSlots(conflictList);
-    setDiscountDetails({ amount: 0, type: undefined, reason: undefined, discounts: [] });
-    router.push('/checkout');
+      for (const item of validItems) {
+        const [startHour, startMinute] = item.startTime.split(':').map(Number);
+        const [endHour, endMinute] = item.endTime.split(':').map(Number);
+        const startDate = new Date(item.date);
+        startDate.setHours(startHour, startMinute || 0, 0, 0);
+        const endDate = new Date(item.date);
+        endDate.setHours(endHour, endMinute || 0, 0, 0);
+        if (endDate <= startDate) endDate.setDate(endDate.getDate() + 1);
+        
+        const durationHours = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
+
+        const res = await addToCartAction({
+          courtId: item.courtId,
+          startTime: startDate.toISOString(),
+          endTime: endDate.toISOString(),
+          price: (item.hourlyRate || 0) * durationHours,
+        });
+
+        if (!res.success) {
+          alert("Could not add to cart: " + res.error);
+          console.error("Cart insertion failed:", res.error);
+        }
+      }
+
+      setCartDrawerOpen(true);
+      setSelectedCells([]);
+    } finally {
+      setIsBooking(false);
+      setCartLoading(false);
+    }
   };
 
   const today = format(new Date(), 'yyyy-MM-dd');
@@ -1105,7 +1135,7 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
                   ? 'All Slots Conflicted'
                   : activeConflicts.length > 0
                     ? 'Review Conflicts'
-                    : `Book Now (${validSlotCount} slot${validSlotCount !== 1 ? 's' : ''})`}
+                    : `Add to Cart (${validSlotCount} item${validSlotCount !== 1 ? 's' : ''})`}
           </button>
         </div>
       </div>
@@ -1163,7 +1193,7 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
               disabled={validSlotCount === 0}
               className="flex-1 px-4 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50"
             >
-              Confirm & Book Now
+              Add to Cart
             </button>
           </DialogFooter>
         </DialogContent>

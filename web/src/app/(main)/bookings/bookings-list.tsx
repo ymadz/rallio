@@ -128,13 +128,10 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     const groups: { [key: string]: BookingGroup } = {}
 
     filteredBookings.forEach(booking => {
-      // Priority 1: booking_id (multi-court/multi-day)
-      // Priority 2: recurrence_group_id (recurring)
-      // Priority 3: individual id (single)
-      const groupId = booking.booking_id || booking.recurrence_group_id || booking.id
-      const groupType = booking.booking_id 
-        ? 'grouped_multi_court' 
-        : (booking.recurrence_group_id ? 'grouped_recurring' : 'single')
+      // Priority 1: recurrence_group_id (recurring)
+      // Priority 2: individual id (single)
+      const groupId = booking.recurrence_group_id || booking.id
+      const groupType = booking.recurrence_group_id ? 'grouped_recurring' : 'single'
 
       if (!groups[groupId]) {
         groups[groupId] = {

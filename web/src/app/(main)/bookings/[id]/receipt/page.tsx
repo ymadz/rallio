@@ -3,7 +3,6 @@ import { notFound, redirect } from 'next/navigation';
 import { format } from 'date-fns';
 import Link from 'next/link';
 import { DownloadReceiptButton } from '@/components/shared/download-receipt-button';
-import { calculateApplicableDiscounts } from '@/app/actions/discount-actions';
 
 export default async function BookingReceiptPage({ params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient();
@@ -17,8 +16,8 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
 
   const { id } = await params;
 
-  // Fetch booking details
-  const { data: booking, error } = await supabase
+  // Fetch booking details. Match either the reservation ID or the master booking_id
+  const { data: bookings, error } = await supabase
     .from('reservations')
     .select(
       `
@@ -42,22 +41,20 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
       )
     `
     )
-    .eq('id', id)
-    .single();
+    .or(`id.eq.${id},booking_id.eq.${id}`)
+    .order('start_time', { ascending: true });
 
-  if (error || !booking) {
+  if (error || !bookings || bookings.length === 0) {
     notFound();
   }
 
   // Verify ownership
-  if (booking.user_id !== user.id) {
-    // Ideally use RLS, but double check here
+  if (bookings.some((b) => b.user_id !== user.id)) {
     notFound();
   }
 
   const formatTime = (timeString: string) => {
     try {
-      // Use explicit Asia/Manila timezone to avoid server-side UTC rendering issues
       return new Date(timeString).toLocaleString('en-US', {
         hour: 'numeric',
         minute: '2-digit',
@@ -82,42 +79,14 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
     }
   };
 
-  const isQueueSession = booking.metadata?.is_queue_session_reservation === true;
-  const durationHours =
-    (new Date(booking.end_time).getTime() - new Date(booking.start_time).getTime()) / 3600000;
-
-  // For legacy bookings without itemized applied_discounts metadata,
-  // reconstruct individual discount amounts by re-running the calculation
-  let reconstructedDiscounts: Array<{ name: string; amount: number; isIncrease: boolean }> | null = null;
-  if (
-    !booking.metadata?.applied_discounts &&
-    booking.discount_applied > 0 &&
-    booking.court_id
-  ) {
-    try {
-      const basePrice = booking.courts.hourly_rate * durationHours;
-      const result = await calculateApplicableDiscounts({
-        venueId: booking.courts.venue_id,
-        courtId: booking.court_id,
-        startDate: booking.start_time,
-        endDate: booking.end_time,
-        recurrenceWeeks: booking.metadata?.weeks_total || 1,
-        targetDateCount: booking.metadata?.recurrence_total || 1,
-        basePrice: basePrice * (booking.metadata?.recurrence_total || 1),
-        promoCode: booking.metadata?.promo_code,
-      });
-      if (result.success && result.discounts.length > 0) {
-        const slotCount = booking.metadata?.recurrence_total || 1;
-        reconstructedDiscounts = result.discounts.map(d => ({
-          name: d.name,
-          amount: d.amount / slotCount,
-          isIncrease: d.isIncrease,
-        }));
-      }
-    } catch {
-      // Reconstruction failed, fall back to legacy display
-    }
-  }
+  const isQueueSession = bookings[0].metadata?.is_queue_session_reservation === true;
+  
+  // Aggregate totals
+  const totalAmount = bookings.reduce((sum, b) => sum + Number(b.total_amount), 0);
+  const amountPaid = bookings.reduce((sum, b) => sum + Number(b.amount_paid), 0);
+  const allConfirmed = bookings.every(b => b.status === 'confirmed');
+  const sharedStatus = allConfirmed ? 'CONFIRMED' : bookings[0].status.toUpperCase();
+  const paymentMethod = bookings[0].payments?.[0]?.payment_method || bookings[0].payment_type || 'Cash';
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -144,211 +113,77 @@ export default async function BookingReceiptPage({ params }: { params: Promise<{
             <div className="text-center mb-8 pb-8 border-b border-gray-100">
               <p className="text-sm text-gray-500 mb-1">Booking Reference</p>
               <p className="text-2xl font-mono font-bold text-gray-900 uppercase">
-                {booking.id.slice(0, 8)}
+                {id.slice(0, 8)}
               </p>
               <div className="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                {booking.status.toUpperCase()}
+                {sharedStatus}
               </div>
             </div>
 
             {/* Details */}
             <div className="space-y-6">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-1">Venue</h3>
-                  <p className="font-semibold text-gray-900">{booking.courts.venues.name}</p>
-                  <p className="text-sm text-gray-600">{booking.courts.venues.address}</p>
-                </div>
-                <div className="text-right">
-                  <h3 className="text-sm font-medium text-gray-500 mb-1">Court</h3>
-                  <p className="font-semibold text-gray-900">{booking.courts.name}</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg print:bg-gray-50/50 print:border print:border-gray-100">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-1">Date</h3>
-                  <p className="font-semibold text-gray-900">
-                    {formatDate(booking.start_time)}
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-1">Time</h3>
-                  <p className="font-semibold text-gray-900">
-                    {formatTime(booking.start_time)} - {formatTime(booking.end_time)}
-                  </p>
-                </div>
-              </div>
-
-              {/* Queue Session Info */}
-              {isQueueSession && (
-                <div className="p-4 bg-indigo-50/50 rounded-lg border border-indigo-100/50 space-y-2">
-                  <div className="flex justify-between py-1">
-                    <span className="text-gray-500">Mode</span>
-                    <span className="font-medium capitalize text-gray-900">
-                      {booking.notes?.match(/Queue Session \((.*?)\)/)?.[1] || 'Casual'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-1">
-                    <span className="text-gray-500">Max Players</span>
-                    <span className="font-medium text-gray-900">
-                      {booking.num_players} players
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Order Summary */}
+              
+              {/* Order Summary Line Items */}
               <div>
                 <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-3">
-                  Order Summary
+                  Reserved Courts
                 </h3>
-                <div className="text-sm">
-                  <div className="flex justify-between py-2">
-                    <span className="text-gray-600">
-                      Court Rental ({durationHours}h × ₱{booking.courts.hourly_rate.toFixed(2)}/hr)
-                    </span>
-                    <span className="text-gray-900">₱{(booking.courts.hourly_rate * durationHours).toFixed(2)}</span>
-                  </div>
-
-                  {booking.metadata?.platform_fee > 0 && (
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-600">
-                        Service Fee ({booking.metadata.platform_fee_percentage || 5}%)
-                      </span>
-                      <span className="text-gray-900">₱{parseFloat(booking.metadata.platform_fee).toFixed(2)}</span>
-                    </div>
-                  )}
-
-                  {booking.metadata?.applied_discounts && booking.metadata.applied_discounts.length > 0 ? (
-                    booking.metadata.applied_discounts.map((discount: any, idx: number) => (
-                      <div key={idx} className="flex justify-between py-2">
-                        <span className={discount.isIncrease ? 'text-orange-600' : 'text-green-600'}>
-                          {discount.name}
-                        </span>
-                        <span className={discount.isIncrease ? 'text-orange-600' : 'text-green-600'}>
-                          {discount.isIncrease ? '+' : '-'}₱{parseFloat(discount.amount).toFixed(2)}
-                        </span>
+                <div className="space-y-3">
+                  {bookings.map((booking, idx) => {
+                    const durationHours = (new Date(booking.end_time).getTime() - new Date(booking.start_time).getTime()) / 3600000;
+                    const basePrice = booking.courts.hourly_rate * durationHours;
+                    return (
+                      <div key={idx} className="flex flex-col py-3 border-b border-gray-100 last:border-0 relative">
+                         <div className="flex justify-between items-start">
+                            <div>
+                               <p className="font-semibold text-gray-900">{booking.courts.venues.name} - {booking.courts.name}</p>
+                               <p className="text-sm text-gray-500 mt-1">
+                                {formatDate(booking.start_time)} • {formatTime(booking.start_time)} - {formatTime(booking.end_time)}
+                               </p>
+                            </div>
+                            <div className="text-right">
+                               <p className="font-semibold text-gray-900">₱{basePrice.toFixed(2)}</p>
+                               {(booking.discount_applied > 0) && (
+                                  <p className="text-sm text-green-600">-₱{Number(booking.discount_applied).toFixed(2)}</p>
+                               )}
+                               <p className="text-xs text-gray-500 mt-0.5 font-medium">Net: ₱{Number(booking.total_amount).toFixed(2)}</p>
+                            </div>
+                         </div>
                       </div>
-                    ))
-                  ) : reconstructedDiscounts && reconstructedDiscounts.length > 0 ? (
-                    reconstructedDiscounts.map((discount, idx) => (
-                      <div key={idx} className="flex justify-between py-2">
-                        <span className={discount.isIncrease ? 'text-orange-600' : 'text-green-600'}>
-                          {discount.name}
-                        </span>
-                        <span className={discount.isIncrease ? 'text-orange-600' : 'text-green-600'}>
-                          {discount.isIncrease ? '+' : '-'}₱{discount.amount.toFixed(2)}
-                        </span>
-                      </div>
-                    ))
-                  ) : booking.discount_applied > 0 ? (
-                    <div className="flex justify-between py-2">
-                      <span className="text-green-600">
-                        {booking.discount_reason
-                          ? `Discounts (${booking.discount_reason})`
-                          : (booking.discount_type || 'Discount')}
-                      </span>
-                      <span className="text-green-600">-₱{booking.discount_applied.toFixed(2)}</span>
-                    </div>
-                  ) : null}
+                    )
+                  })}
+                </div>
+              </div>
 
-                  <div className="flex justify-between py-3 mt-1 border-t-2 border-gray-900">
-                    <span className="text-base font-bold text-gray-900">Total</span>
-                    <span className="text-base font-bold text-gray-900">₱{booking.total_amount.toFixed(2)}</span>
-                  </div>
+              {/* Aggregated Totals */}
+              <div className="pt-4 mt-4 border-t-2 border-gray-900">
+                <div className="flex justify-between py-1">
+                  <span className="text-base font-bold text-gray-900">Grand Total</span>
+                  <span className="text-base font-bold text-gray-900">₱{totalAmount.toFixed(2)}</span>
                 </div>
               </div>
 
               {/* Payment Info */}
-              <div>
+              <div className="pt-6">
                 <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-3">
                   Payment Info
                 </h3>
                 <div className="text-sm space-y-2">
                   <div className="flex justify-between py-1">
                     <span className="text-gray-600">Method</span>
-                    <span className="font-medium text-gray-900">
-                      {booking.payments?.[0]?.payment_method === 'gcash'
-                        ? 'GCash'
-                        : booking.payments?.[0]?.payment_method === 'paymaya'
-                          ? 'Maya'
-                          : booking.payment_type === 'cash'
-                            ? 'Cash'
-                            : booking.payments?.[0]?.payment_method || booking.payment_type || 'Cash'}
+                    <span className="font-medium text-gray-900 capitalize">
+                      {paymentMethod}
                     </span>
                   </div>
                   <div className="flex justify-between py-1">
-                    <span className="text-gray-600">Promo Code</span>
-                    <span className="font-medium">
-                      {booking.metadata?.promo_code ? (
-                        <span className="text-green-600">{booking.metadata.promo_code}</span>
-                      ) : (
-                        <span className="text-gray-400">None</span>
-                      )}
-                    </span>
+                    <span className="text-gray-600">Total Amount Paid</span>
+                    <span className="font-medium text-gray-900">₱{amountPaid.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between py-1">
-                    <span className="text-gray-600">Amount Paid</span>
-                    <span className="font-medium text-gray-900">₱{booking.amount_paid.toFixed(2)}</span>
+                    <span className="text-gray-600">Remaining Balance</span>
+                    <span className="font-bold text-amber-900">₱{Math.max(0, totalAmount - amountPaid).toFixed(2)}</span>
                   </div>
                 </div>
-
-                {/* Down Payment / Partially Paid Info */}
-                {booking.metadata?.down_payment_amount && (
-                  <div className="mt-3 p-4 bg-amber-50 rounded-lg border border-amber-200 space-y-2">
-                    <div className="flex justify-between py-1">
-                      <span className="text-amber-800 font-medium">
-                        Down Payment{booking.metadata.is_custom_down_payment
-                          ? ` (${Math.round((parseFloat(booking.metadata.down_payment_amount) / booking.total_amount) * 100)}%)`
-                          : ` (${booking.metadata.down_payment_percentage || 20}%)`}
-                      </span>
-                      <span className="font-bold text-amber-900">
-                        ₱{parseFloat(booking.metadata.down_payment_amount).toFixed(2)}
-                      </span>
-                    </div>
-
-                    {booking.status === 'partially_paid' ? (
-                      <>
-                        <div className="flex justify-between py-1">
-                          <span className="text-amber-800 font-medium">
-                            Remaining ({booking.payment_type === 'cash' ? 'Pay at Venue' : 'Pending'})
-                          </span>
-                          <span className="font-bold text-amber-900">
-                            ₱{(booking.total_amount - booking.amount_paid).toFixed(2)}
-                          </span>
-                        </div>
-                        <p className="text-xs text-amber-700 mt-1">
-                          Please pay the remaining balance in cash at the venue before your session.
-                        </p>
-                      </>
-                    ) : booking.status === 'confirmed' &&
-                      booking.amount_paid >= booking.total_amount ? (
-                      <>
-                        <div className="flex justify-between py-1">
-                          <span className="text-green-800 font-medium">
-                            Remaining (Paid)
-                          </span>
-                          <span className="font-bold text-green-900">
-                            ₱{(booking.total_amount - parseFloat(booking.metadata.down_payment_amount)).toFixed(2)}
-                          </span>
-                        </div>
-                        <p className="text-xs text-green-700 mt-1">
-                          ✅ Full payment received.
-                          {booking.metadata?.cash_balance_paid_at &&
-                            ` Balance paid at venue on ${format(new Date(booking.metadata.cash_balance_paid_at), 'MMM d, yyyy h:mm a')}.`}
-                        </p>
-                      </>
-                    ) : (
-                      <div className="flex justify-between py-1">
-                        <span className="text-amber-800 font-medium">Remaining Balance</span>
-                        <span className="font-bold text-amber-900">
-                          ₱{(booking.total_amount - booking.amount_paid).toFixed(2)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
 

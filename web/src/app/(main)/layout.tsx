@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { SidebarNav } from '@/components/layout/sidebar-nav'
 import { UserHeader } from '@/components/layout/user-header'
 import { ActiveMatchBanner } from '@/components/active-match-banner'
+import { CartDrawer } from '@/components/cart/cart-drawer'
 
 export default async function MainLayout({
   children,
@@ -32,6 +33,7 @@ export default async function MainLayout({
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <CartDrawer />
       <SidebarNav
         user={{
           email: user.email || '',
