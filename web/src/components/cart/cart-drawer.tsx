@@ -166,7 +166,7 @@ export function CartDrawer() {
       />
       
       {/* Drawer */}
-      <div className="fixed inset-y-0 right-0 z-[101] w-full max-w-sm bg-white shadow-xl flex flex-col transform transition-transform duration-300">
+      <div className="fixed inset-y-0 right-0 z-[101] w-full max-w-sm bg-white shadow-2xl flex flex-col transform transition-transform duration-300 rounded-l-3xl border-l border-gray-100">
         <div className="flex items-center justify-between p-4 border-b">
           <h2 className="text-xl font-semibold flex items-center gap-2">
             <ShoppingCart className="w-5 h-5 text-primary" />
@@ -180,7 +180,7 @@ export function CartDrawer() {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 bg-gray-50">
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5 bg-gray-50 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
           {isLoading && items.length === 0 ? (
             <div className="flex justify-center py-8">
               <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
@@ -192,44 +192,43 @@ export function CartDrawer() {
             </div>
           ) : (
             items.map(item => (
-              <div 
-                key={item.id} 
-                className={`bg-white border rounded-xl p-4 shadow-sm relative ${item.isUnavailable ? 'border-red-300 bg-red-50 opacity-80' : 'border-gray-200'}`}
+              <div
+                key={item.id}
+                className={`group bg-white border rounded-2xl p-4 shadow-md relative flex flex-col min-h-[110px] transition-all duration-200 ${item.isUnavailable ? 'border-red-300 bg-red-50 opacity-80' : 'border-gray-100 hover:shadow-lg active:scale-[0.98]'} overflow-hidden`}
+                style={{ boxShadow: '0 4px 24px 0 rgba(0,0,0,0.06)' }}
               >
                 {item.isUnavailable && (
-                  <div className="absolute -top-3 left-4 bg-red-100 text-red-700 text-xs px-2 py-1 rounded border border-red-200 flex items-center gap-1 font-medium">
+                  <div className="absolute -top-3 left-4 bg-red-100 text-red-700 text-xs px-2 py-1 rounded border border-red-200 flex items-center gap-1 font-medium z-10">
                     <AlertCircle className="w-3 h-3" />
                     Slot Taken
                   </div>
                 )}
-                
-                <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <h3 className="font-semibold text-gray-900 truncate pr-4">
-                      {item.court?.venue?.name || 'Venue'} - {item.court?.name || 'Court'}
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      {new Date(item.start_time).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                    </p>
-                    <p className="text-sm text-gray-600 font-medium">
-                      {new Date(item.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - 
-                      {new Date(item.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  </div>
-                  <button 
-                    onClick={() => handleRemove(item.id)}
-                    className="text-gray-400 hover:text-red-500 transition-colors p-1"
-                    disabled={isLoading}
+                <button
+                  onClick={() => handleRemove(item.id)}
+                  className="absolute top-3 right-3 text-gray-300 hover:text-red-500 transition-colors p-1 rounded-full bg-white/80 shadow-sm z-20"
+                  disabled={isLoading}
+                  aria-label="Remove from cart"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+                <div className="flex flex-col gap-1 pr-8">
+                  <h3 className="font-semibold text-gray-900 text-base leading-tight max-w-full truncate" title={`${item.court?.venue?.name || 'Venue'} - ${item.court?.name || 'Court'}`}
                   >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                    {item.court?.venue?.name || 'Venue'} - {item.court?.name || 'Court'}
+                  </h3>
+                  <p className="text-xs text-gray-500 max-w-full truncate">
+                    {new Date(item.start_time).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                  </p>
+                  <p className="text-xs text-gray-600 font-medium max-w-full truncate">
+                    {new Date(item.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} -
+                    {new Date(item.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
                 </div>
-                
-                <div className="flex justify-between items-end mt-4">
+                <div className="flex justify-between items-end mt-3">
                   <div className="text-xs text-gray-500">
                     {item.num_players} Player{item.num_players > 1 ? 's' : ''}
                   </div>
-                  <div className="font-bold text-primary">
+                  <div className="font-bold text-primary text-base">
                     ₱{Number(item.price).toFixed(2)}
                   </div>
                 </div>
