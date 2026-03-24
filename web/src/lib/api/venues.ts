@@ -297,7 +297,7 @@ export async function getVenues(filters: VenueFilters = {}, retries = 2): Promis
         metadata,
         created_at,
         image_url,
-        courts (
+        courts!inner (
           id,
           name,
           court_type,
@@ -507,7 +507,7 @@ async function processVenuesList(supabase: any, rawVenues: any[], latitude?: num
 
   // Process and filter venues (attach computed average ratings)
   return rawVenues.map((venue: any) => {
-    const activeCourts = venue.courts.filter((c: any) => c.is_active && c.is_verified)
+    const activeCourts = (venue.courts || []).filter((c: any) => c.is_active && c.is_verified)
 
     // Calculate min/max price from active courts
     const prices = activeCourts.map((c: any) => c.hourly_rate)
@@ -568,7 +568,7 @@ async function processVenuesList(supabase: any, rawVenues: any[], latitude?: num
       )
     }
     return v;
-  })
+  }).filter(v => v.activeCourtCount > 0);
 }
 
 /**

@@ -372,6 +372,19 @@ export async function toggleVenueVerified(venueId: string, isVerified: boolean) 
     return { success: false, error: error.message }
   }
 
+  // Also verify all courts belonging to this venue
+  if (isVerified) {
+    const { error: courtError } = await supabase
+      .from('courts')
+      .update({ is_verified: true, updated_at: new Date().toISOString() })
+      .eq('venue_id', venueId)
+
+    if (courtError) {
+      console.error(`Failed to verify courts for venue ${venueId}:`, courtError)
+      // We don't return error here because the venue was already verified successfully
+    }
+  }
+
   await logAdminAction({
     actionType: isVerified ? 'verify_venue' : 'unverify_venue',
     targetType: 'venue',
@@ -741,6 +754,18 @@ export async function batchUpdateVenues(
       .in('id', targetVenueIds)
 
     if (error) throw error
+
+    // Also verify all courts belonging to these venues if the action is verify
+    if (action === 'verify') {
+      const { error: courtError } = await supabase
+        .from('courts')
+        .update({ is_verified: true, updated_at: new Date().toISOString() })
+        .in('venue_id', targetVenueIds)
+
+      if (courtError) {
+        console.error(`Failed to verify courts for venues ${targetVenueIds.join(', ')}:`, courtError)
+      }
+    }
 
     for (const venueId of targetVenueIds) {
       await logAdminAction({
