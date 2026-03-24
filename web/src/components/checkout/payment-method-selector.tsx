@@ -25,17 +25,24 @@ export function PaymentMethodSelector() {
 
   const shouldUseDownPayment = paymentMethod === 'cash' && cashPaymentOption === 'downpayment' && isDownPaymentRequired
 
-  // Auto-set down payment to minimum when cash + down payment is selected
+  // Synchronize input value only when payment method changes or if empty
   useEffect(() => {
     if (shouldUseDownPayment) {
-      if (!customDownPaymentAmount || customDownPaymentAmount <= 0) {
-        setCustomDownPaymentAmount(minimumDownPayment)
-        setInputValue(minimumDownPayment.toFixed(2))
-      } else {
-        setInputValue(customDownPaymentAmount.toFixed(2))
+      // Only initialize if input is empty (e.g., on mount or when first selected)
+      if (!inputValue) {
+        const initial = customDownPaymentAmount && customDownPaymentAmount > 0 
+          ? customDownPaymentAmount 
+          : minimumDownPayment
+        
+        if (initial > 0) {
+          setInputValue(initial.toFixed(2))
+          if (!customDownPaymentAmount) {
+            setCustomDownPaymentAmount(initial)
+          }
+        }
       }
     }
-  }, [shouldUseDownPayment, customDownPaymentAmount, minimumDownPayment, setCustomDownPaymentAmount])
+  }, [shouldUseDownPayment, minimumDownPayment])
 
   const handleAmountChange = (value: string) => {
     setInputValue(value)
