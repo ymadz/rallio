@@ -16,10 +16,10 @@ export function PromoCodeInput() {
     const {
         bookingData,
         bookingCart,
-        getSubtotal,
         promoDiscountAmount,
         promoCode,
         promoDiscountType,
+        promoTargetVenueId,
         setPromoDiscount,
         setDiscountDetails,
         removePromoDiscount,
@@ -34,30 +34,61 @@ export function PromoCodeInput() {
         return bookingCart.length > 0 ? bookingCart : [bookingData]
     }, [bookingCart, bookingData])
 
-    // Recalculate all discounts using the unified backend function
-    const recalculateDiscounts = useCallback(async (promoCodeStr?: string) => {
+    const getItemBasePrice = useCallback((item: typeof effectiveCart[number]) => {
+        const [startH, startM] = item.startTime.split(':').map(Number)
+        const [endH, endM] = item.endTime.split(':').map(Number)
+
+        let duration = (endH + (endM || 0) / 60) - (startH + (startM || 0) / 60)
+        if (duration <= 0) duration += 24
+
+        const recurrenceWeeks = item.recurrenceWeeks || 1
+        const selectedDays = item.selectedDays || []
+        const baseSessions = selectedDays.length > 0 ? selectedDays.length : 1
+        const totalSessions = Math.max(1, recurrenceWeeks * baseSessions)
+
+        const totalHourlyRate = (item.courts && item.courts.length > 0)
+            ? item.courts.reduce((sum, c) => sum + (Number(c.hourly_rate) || item.hourlyRate), 0)
+            : item.hourlyRate
+
+        return totalHourlyRate * duration * totalSessions
+    }, [effectiveCart])
+
+    const getVenueBasePrice = useCallback((venueId: string) => {
+        return effectiveCart
+            .filter(item => item.venueId === venueId)
+            .reduce((sum, item) => sum + getItemBasePrice(item), 0)
+    }, [effectiveCart, getItemBasePrice])
+
+    // Recalculate all discounts using the unified backend function, scoped to a single venue.
+    const recalculateDiscounts = useCallback(async (promoCodeStr?: string, targetVenueId?: string) => {
         if (!bookingData) return null
 
-        // Compute the full base price (before any discounts)
-        const basePrice = getSubtotal() + discountAmount + promoDiscountAmount
+        const venueId = targetVenueId || promoTargetVenueId || bookingData.venueId
+        const scopedItems = effectiveCart.filter(item => item.venueId === venueId)
+        const anchorItem = scopedItems[0]
+        if (!anchorItem) return null
 
-        const dateStr = format(new Date(bookingData.date), 'yyyy-MM-dd')
-        const startDateTime = `${dateStr}T${bookingData.startTime}:00+08:00`
-        const endDateTime = `${dateStr}T${bookingData.endTime}:00+08:00`
+        // Compute scoped base price so promo applies only to the chosen venue.
+        const basePrice = getVenueBasePrice(venueId)
+        if (basePrice <= 0) return null
+
+        const dateStr = format(new Date(anchorItem.date), 'yyyy-MM-dd')
+        const startDateTime = `${dateStr}T${anchorItem.startTime}:00+08:00`
+        const endDateTime = `${dateStr}T${anchorItem.endTime}:00+08:00`
 
         // For target date count, combine recurrence and selected days.
-        const uniqueDates = new Set(effectiveCart.map(item => new Date(item.date).toDateString()))
+        const uniqueDates = new Set(scopedItems.map(item => new Date(item.date).toDateString()))
         let actualSlotCount = uniqueDates.size
-        const recurrenceWeeks = bookingData.recurrenceWeeks || 1
-        const selectedDays = bookingData.selectedDays || []
+        const recurrenceWeeks = anchorItem.recurrenceWeeks || 1
+        const selectedDays = anchorItem.selectedDays || []
         const uniqueSelectedDays = selectedDays.length > 0
             ? Array.from(new Set(selectedDays))
-            : [new Date(bookingData.date).getDay()]
+            : [new Date(anchorItem.date).getDay()]
         actualSlotCount = Math.max(actualSlotCount, uniqueSelectedDays.length * recurrenceWeeks)
 
         const unifiedResult = await calculateApplicableDiscounts({
-            venueId: bookingData.venueId,
-            courtId: bookingData.courtId,
+            venueId,
+            courtId: anchorItem.courtId,
             startDate: startDateTime,
             endDate: endDateTime,
             recurrenceWeeks,
@@ -87,10 +118,10 @@ export function PromoCodeInput() {
                 })
             }
 
-            return { promoDiscounts, venueDiscounts }
+            return { promoDiscounts, venueDiscounts, venueId }
         }
         return null
-    }, [bookingData, discountAmount, effectiveCart, getSubtotal, promoDiscountAmount, setDiscountDetails, applicableDiscounts, discountReason, discountType])
+    }, [bookingData, promoTargetVenueId, effectiveCart, getVenueBasePrice, setDiscountDetails, applicableDiscounts, discountAmount, discountReason, discountType])
 
     const discountRecalcKey = useMemo(() => {
         if (!effectiveCart.length) return 'none'
@@ -98,8 +129,8 @@ export function PromoCodeInput() {
             .map(item => `${item.courtId}|${new Date(item.date).toISOString()}|${item.startTime}|${item.endTime}|${item.recurrenceWeeks || 1}|${(item.selectedDays || []).join(',')}`)
             .join('||')
 
-        return `${cartSignature}|promo:${promoCode || ''}`
-    }, [effectiveCart, promoCode])
+        return `${cartSignature}|promo:${promoCode || ''}|promoVenue:${promoTargetVenueId || ''}`
+    }, [effectiveCart, promoCode, promoTargetVenueId])
 
     useEffect(() => {
         if (!bookingData) return
@@ -110,7 +141,7 @@ export function PromoCodeInput() {
 
         const run = async () => {
             try {
-                await recalculateDiscounts(promoCode)
+                await recalculateDiscounts(promoCode, promoTargetVenueId)
             } catch (recalcError) {
                 if (!isCancelled) {
                     console.error('Failed to recalculate checkout discounts:', recalcError)
@@ -123,13 +154,14 @@ export function PromoCodeInput() {
         return () => {
             isCancelled = true
         }
-    }, [bookingData, discountRecalcKey, promoCode, recalculateDiscounts])
+    }, [bookingData, discountRecalcKey, promoCode, promoTargetVenueId, recalculateDiscounts])
 
     // Wait for booking data
     if (!bookingData) return null
 
     // If a promotion is already applied, show success state
     if (promoCode && promoDiscountAmount > 0) {
+        const promoVenueName = effectiveCart.find(item => item.venueId === promoTargetVenueId)?.venueName
         return (
             <div className="bg-white border border-gray-200 rounded-xl p-5">
                 <div className="flex items-center justify-between">
@@ -144,6 +176,9 @@ export function PromoCodeInput() {
                             <p className="text-xs text-gray-500 mt-0.5">
                                 {promoDiscountType === 'percent' ? 'Percentage' : 'Fixed amount'} discount
                             </p>
+                            {promoVenueName && (
+                                <p className="text-xs text-gray-500 mt-0.5">Applied to: {promoVenueName}</p>
+                            )}
                         </div>
                     </div>
                     <button
@@ -171,21 +206,31 @@ export function PromoCodeInput() {
         setError(null)
 
         try {
-            // First validate the promo code (checks validity, dates, usage limits)
-            const discountedSubtotal = getSubtotal() + promoDiscountAmount
-            const result = await validatePromoCode(
-                code,
-                bookingData.venueId,
-                discountedSubtotal
-            )
+            // Validate against venue subtotals and bind promo to the matching venue only.
+            const uniqueVenueIds = Array.from(new Set(effectiveCart.map(item => item.venueId).filter(Boolean)))
 
-            if (!result.valid || !result.promoCode) {
-                setError(result.error || 'Invalid promo code')
+            let result: Awaited<ReturnType<typeof validatePromoCode>> | null = null
+            let matchedVenueId: string | null = null
+
+            for (const venueId of uniqueVenueIds) {
+                const venueSubtotal = getVenueBasePrice(venueId)
+                if (venueSubtotal <= 0) continue
+
+                const validation = await validatePromoCode(code, venueId, venueSubtotal)
+                if (validation.valid && validation.promoCode) {
+                    result = validation
+                    matchedVenueId = venueId
+                    break
+                }
+            }
+
+            if (!result || !result.valid || !result.promoCode || !matchedVenueId) {
+                setError(result?.error || 'Invalid promo code for selected venues')
                 return
             }
 
             // Recalculate ALL discounts together (matching backend priority logic)
-            const recalcResult = await recalculateDiscounts(code)
+            const recalcResult = await recalculateDiscounts(code, matchedVenueId)
 
             if (recalcResult) {
                 const promoTotal = recalcResult.promoDiscounts.reduce((sum, d) => sum + d.amount, 0)
@@ -200,7 +245,8 @@ export function PromoCodeInput() {
                     amount: effectivePromoAmount,
                     code: result.promoCode.code,
                     type: result.promoCode.discount_type,
-                    reason: result.promoCode.description || undefined
+                    reason: result.promoCode.description || undefined,
+                    venueId: recalcResult.venueId || matchedVenueId,
                 })
             } else {
                 // Fallback: use the validation result amount
@@ -212,7 +258,8 @@ export function PromoCodeInput() {
                     amount: result.discountAmount!,
                     code: result.promoCode.code,
                     type: result.promoCode.discount_type,
-                    reason: result.promoCode.description || undefined
+                    reason: result.promoCode.description || undefined,
+                    venueId: matchedVenueId,
                 })
             }
             setCode('')

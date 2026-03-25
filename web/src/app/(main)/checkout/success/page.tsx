@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { processChargeableSourceAction, processPaymentByReservationAction } from '@/app/actions/payments'
+import { clearActiveCartAfterPaymentAction } from '@/app/actions/cart-actions'
 import Link from 'next/link'
 
 export default function PaymentSuccessPage() {
@@ -21,6 +22,14 @@ export default function PaymentSuccessPage() {
   useEffect(() => {
     // Process the payment when PayMongo redirects back
     async function processPayment() {
+      const clearCartAfterConfirmedPayment = async () => {
+        try {
+          await clearActiveCartAfterPaymentAction()
+        } catch (clearErr) {
+          console.warn('[PaymentSuccessPage] Failed to clear active cart after payment:', clearErr)
+        }
+      }
+
       try {
         // Get the source_id from URL (PayMongo adds this on redirect)
         const sourceId = searchParams.get('source_id')
@@ -39,9 +48,12 @@ export default function PaymentSuccessPage() {
             const retryResult = await processChargeableSourceAction(sourceId)
             if (!retryResult.success) {
               setError(retryResult.error || 'Failed to process payment. Please contact support if payment was deducted.')
+            } else {
+              await clearCartAfterConfirmedPayment()
             }
           } else {
             console.log('[PaymentSuccessPage] Payment processed successfully via source_id')
+            await clearCartAfterConfirmedPayment()
           }
           setProcessing(false)
           return
@@ -66,11 +78,16 @@ export default function PaymentSuccessPage() {
             if (!retryResult.success && retryResult.error) {
               // Don't show error for pending payments - just show success and let user check bookings
               console.warn('[PaymentSuccessPage] Payment may still be processing:', retryResult.error)
+            } else if (retryResult.success && (retryResult.status === 'confirmed' || retryResult.status === 'partially_paid')) {
+              await clearCartAfterConfirmedPayment()
             }
           } else if (!result.success && result.error) {
             setError(result.error)
           } else {
             console.log('[PaymentSuccessPage] Payment processed successfully via reservation')
+            if (result.status === 'confirmed' || result.status === 'partially_paid') {
+              await clearCartAfterConfirmedPayment()
+            }
           }
           setProcessing(false)
           return

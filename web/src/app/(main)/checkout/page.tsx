@@ -14,6 +14,7 @@ import { CancellationPolicy } from '@/components/checkout/cancellation-policy'
 import { PaymentProcessing } from '@/components/checkout/payment-processing'
 import { CancelBookingModal } from '@/components/checkout/cancel-booking-modal'
 import { createClient } from '@/lib/supabase/client'
+import { getUserCartAction } from '@/app/actions/cart-actions'
 
 export default function CheckoutPage() {
     const router = useRouter()
@@ -26,6 +27,7 @@ export default function CheckoutPage() {
         paymentMethod,
         policyAccepted,
         playerCount,
+        setBookingCart,
         setCurrentStep,
         resetCheckout,
         getSubtotal,
@@ -38,6 +40,10 @@ export default function CheckoutPage() {
         platformFeeEnabled,
         platformFeePercentage,
     } = useCheckoutStore()
+    const [showCancelModal, setShowCancelModal] = useState(false)
+    const [courtImageUrl, setCourtImageUrl] = useState<string | null>(null)
+    const [isRecoveringFromCart, setIsRecoveringFromCart] = useState(false)
+    const [hasRecoveryAttempted, setHasRecoveryAttempted] = useState(false)
 
     // Hydration check
     useEffect(() => {
@@ -62,13 +68,72 @@ export default function CheckoutPage() {
 
     // Redirect if no booking data (after hydration)
     useEffect(() => {
-        if (isHydrated && !bookingData) {
+        if (isHydrated && !bookingData && hasRecoveryAttempted && !isRecoveringFromCart) {
             router.push('/courts')
         }
-    }, [isHydrated, bookingData, router])
+    }, [isHydrated, bookingData, hasRecoveryAttempted, isRecoveringFromCart, router])
 
-    const [showCancelModal, setShowCancelModal] = useState(false)
-    const [courtImageUrl, setCourtImageUrl] = useState<string | null>(null)
+    // Recovery path: restore checkout data from active cart if store is empty.
+    useEffect(() => {
+        if (!isHydrated || bookingData || hasRecoveryAttempted || isRecoveringFromCart) return
+
+        let isCancelled = false
+
+        async function recoverFromCart() {
+            setIsRecoveringFromCart(true)
+
+            try {
+                const res = await getUserCartAction()
+                if (!res.success || !res.data?.items?.length) return
+
+                const availableItems = res.data.items.filter((item: any) => !item.isUnavailable)
+                if (availableItems.length === 0) return
+
+                const mappedCart = availableItems.map((item: any) => {
+                    const start = new Date(item.start_time)
+                    const end = new Date(item.end_time)
+                    const durationHours = Math.max((end.getTime() - start.getTime()) / (1000 * 60 * 60), 0.5)
+
+                    const venueData = item.court?.venue
+                    const resolvedVenue = Array.isArray(venueData) ? venueData[0] : venueData
+
+                    const startH = String(start.getHours()).padStart(2, '0')
+                    const startM = String(start.getMinutes()).padStart(2, '0')
+                    const endH = String(end.getHours()).padStart(2, '0')
+                    const endM = String(end.getMinutes()).padStart(2, '0')
+
+                    return {
+                        courtId: item.court_id,
+                        courtName: item.court?.name || 'Court',
+                        venueId: resolvedVenue?.id || '',
+                        venueName: resolvedVenue?.name || 'Venue',
+                        date: start,
+                        startTime: `${startH}:${startM}`,
+                        endTime: `${endH}:${endM}`,
+                        hourlyRate: Number(item.price) / durationHours,
+                        capacity: item.num_players || 4,
+                        recurrenceWeeks: 1,
+                        selectedDays: [],
+                    }
+                })
+
+                if (!isCancelled && mappedCart.length > 0) {
+                    setBookingCart(mappedCart)
+                }
+            } finally {
+                if (!isCancelled) {
+                    setIsRecoveringFromCart(false)
+                    setHasRecoveryAttempted(true)
+                }
+            }
+        }
+
+        recoverFromCart()
+
+        return () => {
+            isCancelled = true
+        }
+    }, [isHydrated, bookingData, hasRecoveryAttempted, isRecoveringFromCart, setBookingCart])
 
     // Fetch court image
     useEffect(() => {
@@ -101,7 +166,7 @@ export default function CheckoutPage() {
         fetchImage()
     }, [isHydrated, bookingData?.courtId, bookingData?.venueId])
 
-    if (!isHydrated || !bookingData) {
+    if (!isHydrated || (!bookingData && (!hasRecoveryAttempted || isRecoveringFromCart))) {
         return (
             <div className="min-h-screen flex items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-primary" />

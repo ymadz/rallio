@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { createMultiCourtReservationsAction } from './reservations'
+import { createMultiCourtReservationsAction, checkCartAvailabilityAction } from './reservations'
 import { initiatePaymentAction } from './payments'
 
 // Fetch the user's active cart and its items
@@ -179,6 +179,48 @@ export async function clearCartAction(cartId: string) {
   }
 }
 
+export async function clearActiveCartAfterPaymentAction() {
+  try {
+    const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return { success: false, error: 'User not authenticated' }
+    }
+
+    const { data: activeCart, error: cartError } = await supabase
+      .from('carts')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .single()
+
+    // No active cart means there is nothing to clear. Keep this idempotent.
+    if (cartError && cartError.code === 'PGRST116') {
+      return { success: true }
+    }
+
+    if (cartError || !activeCart) {
+      return { success: false, error: cartError?.message || 'Active cart not found' }
+    }
+
+    const { error: clearError } = await supabase
+      .from('cart_items')
+      .delete()
+      .eq('cart_id', activeCart.id)
+
+    if (clearError) {
+      return { success: false, error: clearError.message }
+    }
+
+    revalidatePath('/', 'layout')
+    return { success: true }
+  } catch (error) {
+    console.error('Error clearing active cart after payment:', error)
+    return { success: false, error: 'Failed to clear active cart after payment' }
+  }
+}
+
 export async function checkoutUnifiedCartAction(paymentMethod: 'gcash' | 'cash') {
   try {
     const supabase = await createClient()
@@ -197,7 +239,33 @@ export async function checkoutUnifiedCartAction(paymentMethod: 'gcash' | 'cash')
       return { success: false, error: 'Your cart is empty' }
     }
 
-    // 2. Map items to reservation action format
+    // 2. Final availability re-check (same safeguard pattern as /checkout flow)
+    const availabilityResult = await checkCartAvailabilityAction(
+      cart.items.map((item: any) => {
+        const start = new Date(item.start_time)
+        const end = new Date(item.end_time)
+        const startH = String(start.getHours()).padStart(2, '0')
+        const startM = String(start.getMinutes()).padStart(2, '0')
+        const endH = String(end.getHours()).padStart(2, '0')
+        const endM = String(end.getMinutes()).padStart(2, '0')
+
+        return {
+          courtId: item.court_id,
+          date: start,
+          startTime: `${startH}:${startM}`,
+          endTime: `${endH}:${endM}`,
+        }
+      })
+    )
+
+    if (!availabilityResult.available) {
+      return {
+        success: false,
+        error: 'Some selected slots are no longer available. Please review your cart and try again.'
+      }
+    }
+
+    // 3. Map items to reservation action format
     const multiItems = cart.items.map((item: any) => ({
       courtId: item.court_id,
       startTimeISO: item.start_time,
@@ -208,7 +276,7 @@ export async function checkoutUnifiedCartAction(paymentMethod: 'gcash' | 'cash')
       numPlayers: item.num_players,
     }))
 
-    // 3. Create global Multi-Court Reservation
+    // 4. Create global Multi-Court Reservation
     const multiResult = await createMultiCourtReservationsAction({
       userId: user.id,
       items: multiItems,
@@ -218,15 +286,12 @@ export async function checkoutUnifiedCartAction(paymentMethod: 'gcash' | 'cash')
       return { success: false, error: multiResult.error || 'Conflict: Failed to book courts. Please review your cart.' }
     }
 
-    // 4. Update cart status to checked_out
-    await supabase.from('carts').update({ status: 'checked_out' }).eq('id', cart.id)
-
-    // 5. Initiate Payment Mode
+     // 5. Initiate Payment Mode
     if (paymentMethod === 'cash') {
        return { success: true, bookingId: multiResult.bookingId || multiResult.reservationId }
     }
 
-    const paymentResult = await initiatePaymentAction(multiResult.bookingId || multiResult.reservationId!, 'gcash')
+    const paymentResult = await initiatePaymentAction(multiResult.reservationId, 'gcash')
     if (!paymentResult.success || !paymentResult.checkoutUrl) {
       return { success: false, error: paymentResult.error || 'Failed to initiate payment gateway' }
     }

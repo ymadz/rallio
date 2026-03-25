@@ -136,10 +136,12 @@ export async function initiatePaymentAction(
     let recurrenceGroupId = reservation.recurrence_group_id
     let bookingId = reservation.booking_id
     let isDownPayment = false
+    let isRemainingBalanceCharge = false
 
     // If reservation is already partially paid, we are charging the remaining balance
     if (reservation.status === 'partially_paid' && reservation.amount_paid > 0) {
       amountToCharge = reservation.total_amount - reservation.amount_paid
+      isRemainingBalanceCharge = true
       description += ' (Remaining Balance)'
     } else {
       // Check intent: is this meant to be a cash booking (with a down payment)?
@@ -175,7 +177,9 @@ export async function initiatePaymentAction(
       reservationPaymentMethod: reservation.payment_method,
     })
 
-    if (bookingId || recurrenceGroupId) {
+    // IMPORTANT: For "Continue Payment" on partially paid bookings,
+    // always charge only the selected reservation's remaining balance.
+    if (!isRemainingBalanceCharge && (bookingId || recurrenceGroupId)) {
       // Fetch all reservations in this group
       const query = supabase
         .from('reservations')
@@ -223,6 +227,7 @@ export async function initiatePaymentAction(
       singleAmount: reservation.total_amount,
       numPlayers: reservation.num_players,
       amountToCharge,
+      isRemainingBalanceCharge,
       isBulk: !!(bookingId || recurrenceGroupId)
     })
 

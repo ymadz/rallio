@@ -80,6 +80,7 @@ interface CheckoutState {
   promoCode?: string
   promoDiscountType?: string
   promoDiscountReason?: string
+  promoTargetVenueId?: string
 
   // Platform fee
   platformFeePercentage: number
@@ -107,7 +108,7 @@ interface CheckoutState {
   updatePlayerPayment: (playerNumber: number, updates: Partial<PlayerPaymentStatus>) => void
   setDiscount: (amount: number, code?: string) => void
   setDiscountDetails: (details: { amount: number; type?: string; reason?: string; discounts?: any[] }) => void
-  setPromoDiscount: (details: { amount: number; code?: string; type?: string; reason?: string }) => void
+  setPromoDiscount: (details: { amount: number; code?: string; type?: string; reason?: string; venueId?: string }) => void
   removePromoDiscount: () => void
   setPlatformFee: (percentage: number, enabled: boolean) => void
   setBookingReference: (reference: string, reservationId: string) => void
@@ -140,6 +141,7 @@ const initialState = {
   discountCode: undefined,
   promoDiscountAmount: 0,
   promoCode: undefined,
+  promoTargetVenueId: undefined,
   platformFeePercentage: 5, // Default 5%
   platformFeeEnabled: true,
   bookingReference: undefined,
@@ -211,6 +213,7 @@ export const useCheckoutStore = create<CheckoutState>()(
           discountAmount: 0,
           promoDiscountAmount: 0,
           promoCode: undefined,
+          promoTargetVenueId: undefined,
           applicableDiscounts: undefined,
           discountType: undefined,
           discountReason: undefined,
@@ -296,14 +299,16 @@ export const useCheckoutStore = create<CheckoutState>()(
         promoDiscountAmount: details.amount,
         promoCode: details.code,
         promoDiscountType: details.type,
-        promoDiscountReason: details.reason
+        promoDiscountReason: details.reason,
+        promoTargetVenueId: details.venueId,
       }),
 
       removePromoDiscount: () => set({
         promoDiscountAmount: 0,
         promoCode: undefined,
         promoDiscountType: undefined,
-        promoDiscountReason: undefined
+        promoDiscountReason: undefined,
+        promoTargetVenueId: undefined,
       }),
 
       setPlatformFee: (percentage, enabled) => set({
@@ -443,6 +448,7 @@ export const useCheckoutStore = create<CheckoutState>()(
         customDownPaymentAmount: state.customDownPaymentAmount,
         downPaymentPercentage: state.downPaymentPercentage,
         conflictingSlots: state.conflictingSlots,
+        promoTargetVenueId: state.promoTargetVenueId,
         // DO NOT persist paymentMethod - user must select it fresh each time
         // paymentMethod: state.paymentMethod,
       }),

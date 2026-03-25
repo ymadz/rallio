@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import { useCartStore } from '@/stores/cart-store'
-import { getUserCartAction, removeFromCartAction, clearCartAction } from '@/app/actions/cart-actions'
+import { getUserCartAction, removeFromCartAction } from '@/app/actions/cart-actions'
 import { checkCartAvailabilityAction } from '@/app/actions/reservations'
 import { useCheckoutStore } from '@/stores/checkout-store'
 import { X, Trash2, ShoppingCart, AlertCircle } from 'lucide-react'
@@ -126,15 +126,6 @@ export function CartDrawer() {
         })
         
         setBookingCart(mappedCart)
-        
-        if (cartId) {
-          try {
-            await clearCartAction(cartId)
-          } catch (e) {
-            console.error("Cart clear failed, ignoring", e)
-          }
-          setCartData(cartId, [])
-        }
         
         setLoading(false)
         setIsOpen(false)
