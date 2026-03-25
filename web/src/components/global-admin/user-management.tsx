@@ -73,6 +73,7 @@ const statusFilters = [
   { id: 'all', label: 'All Status' },
   { id: 'active', label: 'Active' },
   { id: 'banned', label: 'Banned' },
+  { id: 'no_show', label: 'No Show Flagged' },
 ]
 
 export default function UserManagement() {
@@ -81,7 +82,7 @@ export default function UserManagement() {
   const [searchQuery, setSearchQuery] = useState('')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [roleFilter, setRoleFilter] = useState('all')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'banned'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'banned' | 'no_show'>('all')
   const [skillLevelFilter, setSkillLevelFilter] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
@@ -374,7 +375,7 @@ export default function UserManagement() {
           <select
             value={statusFilter}
             onChange={(e) => {
-              setStatusFilter(e.target.value as 'all' | 'active' | 'banned')
+              setStatusFilter(e.target.value as 'all' | 'active' | 'banned' | 'no_show')
               setCurrentPage(1)
             }}
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"

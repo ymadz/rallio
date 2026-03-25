@@ -34,7 +34,7 @@ export async function getAllUsers(options: {
   pageSize?: number
   search?: string
   roleFilter?: string
-  statusFilter?: 'all' | 'active' | 'banned'
+  statusFilter?: 'all' | 'active' | 'banned' | 'no_show'
   skillLevelFilter?: string
 } = {}) {
   const auth = await verifyGlobalAdmin()
@@ -123,6 +123,8 @@ export async function getAllUsers(options: {
     query = query.eq('is_banned', true)
   } else if (options.statusFilter === 'active') {
     query = query.eq('is_banned', false)
+  } else if (options.statusFilter === 'no_show') {
+    query = query.contains('metadata', { no_show_user: true })
   }
 
   // Pagination
@@ -195,6 +197,7 @@ export async function getUserDetails(userId: string) {
       avatar_url,
       created_at,
       updated_at,
+      metadata,
       is_banned,
       banned_reason,
       banned_until,
@@ -240,6 +243,11 @@ export async function getUserDetails(userId: string) {
     user: {
       ...user,
       user_roles: userRoles || [],
+      no_show_user: Boolean(user?.metadata?.no_show_user),
+      no_show_count: Number(user?.metadata?.no_show_count || 0),
+      last_no_show_at: user?.metadata?.last_no_show_at || null,
+      last_no_show_reason: user?.metadata?.last_no_show_reason || null,
+      last_no_show_reservation_id: user?.metadata?.last_no_show_reservation_id || null,
       playerStats,
       recentActivity: recentActivity || []
     }
