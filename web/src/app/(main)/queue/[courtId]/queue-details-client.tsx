@@ -669,7 +669,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                   onClick={handleJoinQueue}
                   disabled={isJoining || queue.players.length >= queue.maxPlayers || isSkillMismatch}
                   title={isSkillMismatch ? 'Skill level mismatch' : queue.players.length >= queue.maxPlayers ? 'Queue is full' : undefined}
-                  className="w-full bg-primary text-white py-3.5 rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="hidden md:flex w-full bg-primary text-white py-3.5 rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed items-center justify-center gap-2"
                 >
                   {isJoining ? (
                     <>
@@ -736,7 +736,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                 onClick={handleLeaveQueue}
                 disabled={isLeaving || (participant && participant.amount_owed > 0 && participant.payment_status !== 'paid')}
                 title={participant && participant.amount_owed > 0 && participant.payment_status !== 'paid' ? "Settle your balance before leaving" : "Leave this queue and lose your position"}
-                className="w-full border-2 border-red-300 text-red-600 py-3.5 rounded-lg font-semibold hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="hidden md:flex w-full border-2 border-red-300 text-red-600 py-3.5 rounded-lg font-semibold hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed items-center justify-center gap-2"
               >
                 {isLeaving ? (
                   <>
