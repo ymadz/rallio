@@ -104,6 +104,7 @@ export async function getAllUsers(options: {
       created_at,
       is_banned,
       is_active,
+      metadata,
       banned_reason,
       banned_until
     `, { count: 'exact' })
@@ -163,7 +164,9 @@ export async function getAllUsers(options: {
   const usersWithRoles = (users || []).map((user: any) => ({
     ...user,
     user_roles: userRoles?.filter(ur => ur.user_id === user.id) || [],
-    player_profile: playerProfileByUserId.get(user.id) || null
+    player_profile: playerProfileByUserId.get(user.id) || null,
+    no_show_user: Boolean(user?.metadata?.no_show_user),
+    no_show_count: Number(user?.metadata?.no_show_count || 0)
   }))
 
   return {

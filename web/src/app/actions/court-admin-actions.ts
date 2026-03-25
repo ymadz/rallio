@@ -754,6 +754,151 @@ export async function markReservationAsPaid(reservationId: string) {
 }
 
 /**
+ * Mark a downpayment reservation as no-show.
+ * This cancels the booking and flags the user profile for global admin visibility.
+ */
+export async function markReservationAsNoShow(reservationId: string, reason?: string) {
+  const supabase = await createClient()
+  const serviceSupabase = createServiceClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { success: false, error: 'Not authenticated' }
+  }
+
+  try {
+    const { data: reservation } = await supabase
+      .from('reservations')
+      .select(`
+        id,
+        status,
+        user_id,
+        metadata,
+        start_time,
+        court:courts!inner(
+          id,
+          name,
+          venue:venues!inner(
+            id,
+            name,
+            owner_id
+          )
+        )
+      `)
+      .eq('id', reservationId)
+      .single()
+
+    if (!reservation || (reservation.court as any)?.venue?.owner_id !== user.id) {
+      return { success: false, error: 'Unauthorized' }
+    }
+
+    const hasDownPayment =
+      reservation.status === 'partially_paid' ||
+      Number(reservation.metadata?.down_payment_amount || 0) > 0
+
+    if (!hasDownPayment) {
+      return { success: false, error: 'No-show is only available for reservations with down payment' }
+    }
+
+    const noShowReason = reason?.trim() || 'No-show after down payment'
+    const nowIso = new Date().toISOString()
+    const isQueueSession = reservation.metadata?.is_queue_session_reservation === true
+
+    if (isQueueSession) {
+      const { data: queueSession } = await supabase
+        .from('queue_sessions')
+        .select('id, metadata')
+        .filter('metadata->>reservation_id', 'eq', reservationId)
+        .single()
+
+      if (queueSession) {
+        await supabase
+          .from('queue_sessions')
+          .update({
+            status: 'cancelled',
+            metadata: {
+              ...queueSession.metadata,
+              no_show: true,
+              no_show_marked_at: nowIso,
+              no_show_marked_by: user.id,
+              no_show_reason: noShowReason
+            }
+          })
+          .eq('id', queueSession.id)
+      }
+    }
+
+    const { error: reservationUpdateError } = await supabase
+      .from('reservations')
+      .update({
+        status: 'cancelled',
+        cancelled_at: nowIso,
+        cancellation_reason: noShowReason,
+        metadata: {
+          ...reservation.metadata,
+          no_show: true,
+          no_show_marked_at: nowIso,
+          no_show_marked_by: user.id,
+          no_show_reason: noShowReason
+        }
+      })
+      .eq('id', reservationId)
+
+    if (reservationUpdateError) throw reservationUpdateError
+
+    const { data: profile } = await serviceSupabase
+      .from('profiles')
+      .select('metadata')
+      .eq('id', reservation.user_id)
+      .single()
+
+    const profileMetadata = (profile?.metadata as any) || {}
+    const currentNoShowCount = Number(profileMetadata?.no_show_count || 0)
+
+    const { error: profileUpdateError } = await serviceSupabase
+      .from('profiles')
+      .update({
+        metadata: {
+          ...profileMetadata,
+          no_show_user: true,
+          no_show_count: currentNoShowCount + 1,
+          last_no_show_at: nowIso,
+          last_no_show_reservation_id: reservationId,
+          last_no_show_venue_id: (reservation.court as any)?.venue?.id,
+          last_no_show_marked_by: user.id,
+          last_no_show_reason: noShowReason
+        }
+      })
+      .eq('id', reservation.user_id)
+
+    if (profileUpdateError) throw profileUpdateError
+
+    await createNotification({
+      userId: reservation.user_id,
+      type: 'booking_cancelled',
+      title: 'No-show Recorded',
+      message: `Your booking at ${(reservation.court as any).venue.name} (${(reservation.court as any).name}) has been cancelled due to no-show.`,
+      actionUrl: `/bookings/${reservation.id}`,
+      metadata: {
+        booking_id: reservation.id,
+        reason: noShowReason,
+        is_no_show: true,
+        venue_name: (reservation.court as any).venue.name
+      }
+    })
+
+    revalidatePath('/court-admin/reservations')
+    revalidatePath('/court-admin')
+    revalidatePath('/admin/users')
+
+    return { success: true }
+  } catch (error: any) {
+    console.error('Error marking reservation as no-show:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
  * Reject a reservation
  */
 export async function rejectReservation(reservationId: string, reason: string) {

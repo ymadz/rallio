@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { approveReservation, rejectReservation, markReservationAsPaid, approveReschedule, rejectReschedule } from '@/app/actions/court-admin-actions'
+import { approveReservation, rejectReservation, markReservationAsPaid, approveReschedule, rejectReschedule, markReservationAsNoShow } from '@/app/actions/court-admin-actions'
 import {
   X,
   CheckCircle,
   XCircle,
+  UserMinus,
   Clock,
   User,
   MapPin,
@@ -69,6 +70,7 @@ export function ReservationDetailModal({
   const [rejectReason, setRejectReason] = useState('')
   const [isApprovingReschedule, setIsApprovingReschedule] = useState(false)
   const [isRejectingReschedule, setIsRejectingReschedule] = useState(false)
+  const [isMarkingNoShow, setIsMarkingNoShow] = useState(false)
   const [showRescheduleRejectForm, setShowRescheduleRejectForm] = useState(false)
   const [rescheduleRejectReason, setRescheduleRejectReason] = useState('')
   const [nowMs, setNowMs] = useState(Date.now())
@@ -86,6 +88,8 @@ export function ReservationDetailModal({
   const paymentMethod = reservation.metadata?.intended_payment_method || reservation.metadata?.payment_method
   const cashDeadline = reservation.cash_payment_deadline || reservation.metadata?.cash_payment_deadline || null
   const shouldShowCashTimer = reservation.status === 'pending_payment' && paymentMethod === 'cash' && !!cashDeadline
+  const canMarkNoShow = reservation.status === 'partially_paid' || Number(reservation.metadata?.down_payment_amount || 0) > 0
+  const pendingPaymentActionCols = canMarkNoShow ? 'sm:grid-cols-3' : 'sm:grid-cols-2'
 
   useEffect(() => {
     if (!shouldShowCashTimer) return
@@ -171,6 +175,25 @@ export function ReservationDetailModal({
       alert(error.message || 'Failed to mark as paid')
     } finally {
       setIsMarkingPaid(false)
+    }
+  }
+
+  const handleMarkAsNoShow = async () => {
+    const confirmed = confirm('Mark this user as NO SHOW? This will cancel the booking and flag the user in admin users list.')
+    if (!confirmed) return
+
+    setIsMarkingNoShow(true)
+    try {
+      const result = await markReservationAsNoShow(reservation.id)
+      if (result.success) {
+        onClose()
+      } else {
+        alert(result.error || 'Failed to mark no show')
+      }
+    } catch (error: any) {
+      alert(error.message || 'Failed to mark no show')
+    } finally {
+      setIsMarkingNoShow(false)
     }
   }
 
@@ -742,31 +765,52 @@ export function ReservationDetailModal({
 
         {/* Pending Payment Actions */}
         {isPendingPayment() && (
-          <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 flex items-center gap-3">
+          <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-3">
+            <div className={`grid grid-cols-1 ${pendingPaymentActionCols} gap-2.5`}>
             <button
               onClick={handleMarkAsPaid}
               disabled={isMarkingPaid}
-              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium whitespace-nowrap bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isMarkingPaid ? (
                 <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Processing...</span>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="whitespace-nowrap">Processing...</span>
                 </>
               ) : (
                 <>
-                  <Banknote className="w-5 h-5" />
-                  <span>{reservation.status === 'partially_paid' ? 'Collect Remaining Balance' : 'Mark as Paid (Cash Received)'}</span>
+                  <Banknote className="w-4 h-4" />
+                  <span className="whitespace-nowrap">{reservation.status === 'partially_paid' ? 'Collect Remaining Balance' : 'Mark as Paid (Cash Received)'}</span>
                 </>
               )}
             </button>
             <button
               onClick={() => setShowRejectForm(true)}
-              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 border-2 border-red-600 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium whitespace-nowrap border-2 border-red-600 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
             >
-              <XCircle className="w-5 h-5" />
-              <span>Reject</span>
+              <XCircle className="w-4 h-4" />
+              <span className="whitespace-nowrap">Reject</span>
             </button>
+            {canMarkNoShow && (
+              <button
+                onClick={handleMarkAsNoShow}
+                disabled={isMarkingNoShow}
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium whitespace-nowrap border-2 border-orange-600 text-orange-600 rounded-lg hover:bg-orange-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isMarkingNoShow ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="whitespace-nowrap">Marking...</span>
+                  </>
+                ) : (
+                  <>
+                    <UserMinus className="w-4 h-4" />
+                    <span className="whitespace-nowrap">No Show</span>
+                  </>
+                )}
+              </button>
+            )}
+            </div>
           </div>
         )}
       </div>

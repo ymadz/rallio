@@ -53,6 +53,8 @@ interface User {
   is_active: boolean
   banned_reason?: string
   banned_until?: string
+  no_show_user?: boolean
+  no_show_count?: number
   user_roles: Array<{ roles: { id: string; name: string } }>
   player_profile?: {
     skill_level: number | null
@@ -546,9 +548,16 @@ export default function UserManagement() {
                           </div>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2">
-                          <UserCheck className="w-4 h-4 text-green-600" />
-                          <span className="text-sm font-medium text-green-600">Active</span>
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <UserCheck className="w-4 h-4 text-green-600" />
+                            <span className="text-sm font-medium text-green-600">Active</span>
+                          </div>
+                          {user.no_show_user && (
+                            <div className="text-xs font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1 inline-block">
+                              No-show flagged ({user.no_show_count || 1})
+                            </div>
+                          )}
                         </div>
                       )}
                     </td>
