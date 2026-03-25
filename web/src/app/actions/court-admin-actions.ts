@@ -1,38 +1,42 @@
-'use server'
+'use server';
 
-import { createClient } from '@/lib/supabase/server'
-import { createServiceClient } from '@/lib/supabase/service'
-import { revalidatePath } from 'next/cache'
-import { createNotification, NotificationTemplates } from '@/lib/notifications'
-import { getServerNow } from '@/lib/time-server'
+import { createClient } from '@/lib/supabase/server';
+import { createServiceClient } from '@/lib/supabase/service';
+import { revalidatePath } from 'next/cache';
+import { createNotification, NotificationTemplates } from '@/lib/notifications';
+import { getServerNow } from '@/lib/time-server';
 
 /**
  * Get all venues owned by the current user (Court Admin)
  */
 export async function getMyVenues() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' }
+    return { success: false, error: 'Not authenticated' };
   }
 
   try {
     const { data: venues, error } = await supabase
       .from('venues')
-      .select(`
+      .select(
+        `
         *,
         courts:courts(count)
-      `)
+      `
+      )
       .eq('owner_id', user.id)
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: false });
 
-    if (error) throw error
+    if (error) throw error;
 
-    return { success: true, venues }
+    return { success: true, venues };
   } catch (error: any) {
-    console.error('Error fetching venues:', error)
-    return { success: false, error: error.message }
+    console.error('Error fetching venues:', error);
+    return { success: false, error: error.message };
   }
 }
 
@@ -40,21 +44,20 @@ export async function getMyVenues() {
  * Get dashboard statistics for Court Admin
  */
 export async function getDashboardStats() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' }
+    return { success: false, error: 'Not authenticated' };
   }
 
   try {
     // Get all venue IDs owned by user
-    const { data: venues } = await supabase
-      .from('venues')
-      .select('id')
-      .eq('owner_id', user.id)
+    const { data: venues } = await supabase.from('venues').select('id').eq('owner_id', user.id);
 
-    const venueIds = venues?.map(v => v.id) || []
+    const venueIds = venues?.map((v) => v.id) || [];
 
     if (venueIds.length === 0) {
       return {
@@ -66,24 +69,21 @@ export async function getDashboardStats() {
           upcomingReservations: 0,
           totalRevenue: 0,
           averageRating: 0,
-        }
-      }
+        },
+      };
     }
 
     // Get courts for these venues
-    const { data: courts } = await supabase
-      .from('courts')
-      .select('id')
-      .in('venue_id', venueIds)
+    const { data: courts } = await supabase.from('courts').select('id').in('venue_id', venueIds);
 
-    const courtIds = courts?.map(c => c.id) || []
+    const courtIds = courts?.map((c) => c.id) || [];
 
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const tomorrow = new Date(today)
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    const nextWeek = new Date(today)
-    nextWeek.setDate(nextWeek.getDate() + 7)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const nextWeek = new Date(today);
+    nextWeek.setDate(nextWeek.getDate() + 7);
 
     // Get today's reservations
     const { data: todayReservations } = await supabase
@@ -91,14 +91,14 @@ export async function getDashboardStats() {
       .select('id, total_amount')
       .in('court_id', courtIds)
       .gte('start_time', today.toISOString())
-      .lt('start_time', tomorrow.toISOString())
+      .lt('start_time', tomorrow.toISOString());
 
     // Get pending reservations
     const { data: pendingReservations } = await supabase
       .from('reservations')
       .select('id')
       .in('court_id', courtIds)
-      .eq('status', 'pending')
+      .eq('status', 'pending');
 
     // Get upcoming reservations (next 7 days)
     const { data: upcomingReservations } = await supabase
@@ -107,28 +107,31 @@ export async function getDashboardStats() {
       .in('court_id', courtIds)
       .gte('start_time', tomorrow.toISOString())
       .lt('start_time', nextWeek.toISOString())
-      .in('status', ['pending', 'confirmed'])
+      .in('status', ['pending', 'confirmed']);
 
     // Get this month's revenue
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
     const { data: monthRevenue } = await supabase
       .from('reservations')
       .select('amount_paid')
       .in('court_id', courtIds)
       .gte('created_at', monthStart.toISOString())
-      .in('status', ['confirmed', 'completed'])
+      .in('status', ['confirmed', 'completed']);
 
     // Get average rating
     const { data: ratings } = await supabase
       .from('court_ratings')
       .select('rating')
-      .in('court_id', courtIds)
+      .in('court_id', courtIds);
 
-    const todayRevenue = todayReservations?.reduce((sum, r) => sum + parseFloat(r.total_amount || '0'), 0) || 0
-    const totalRevenue = monthRevenue?.reduce((sum, r) => sum + parseFloat(r.amount_paid || '0'), 0) || 0
-    const averageRating = ratings && ratings.length > 0
-      ? ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length
-      : 0
+    const todayRevenue =
+      todayReservations?.reduce((sum, r) => sum + parseFloat(r.total_amount || '0'), 0) || 0;
+    const totalRevenue =
+      monthRevenue?.reduce((sum, r) => sum + parseFloat(r.amount_paid || '0'), 0) || 0;
+    const averageRating =
+      ratings && ratings.length > 0
+        ? ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length
+        : 0;
 
     return {
       success: true,
@@ -139,11 +142,11 @@ export async function getDashboardStats() {
         upcomingReservations: upcomingReservations?.length || 0,
         totalRevenue,
         averageRating: Math.round(averageRating * 10) / 10,
-      }
-    }
+      },
+    };
   } catch (error: any) {
-    console.error('Error fetching dashboard stats:', error)
-    return { success: false, error: error.message }
+    console.error('Error fetching dashboard stats:', error);
+    return { success: false, error: error.message };
   }
 }
 
@@ -151,30 +154,30 @@ export async function getDashboardStats() {
  * Get recent reservations for Court Admin
  */
 export async function getRecentReservations(limit = 10) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' }
+    return { success: false, error: 'Not authenticated' };
   }
 
   try {
     // Get all venue IDs owned by user
-    const { data: venues } = await supabase
-      .from('venues')
-      .select('id')
-      .eq('owner_id', user.id)
+    const { data: venues } = await supabase.from('venues').select('id').eq('owner_id', user.id);
 
-    const venueIds = venues?.map(v => v.id) || []
+    const venueIds = venues?.map((v) => v.id) || [];
 
     if (venueIds.length === 0) {
-      return { success: true, reservations: [] }
+      return { success: true, reservations: [] };
     }
 
     // Get reservations with court and user details
     const { data: reservations, error } = await supabase
       .from('reservations')
-      .select(`
+      .select(
+        `
         *,
         court:courts!inner(
           id,
@@ -192,18 +195,22 @@ export async function getRecentReservations(limit = 10) {
           last_name,
           avatar_url
         )
-      `)
+      `
+      )
       .in('court.venue_id', venueIds)
       .order('created_at', { ascending: false })
-      .limit(limit)
+      .limit(limit);
 
-    if (error) throw error
+    if (error) throw error;
 
-    const formattedReservations = reservations?.map(r => ({
+    const formattedReservations = reservations?.map((r) => ({
       id: r.id,
       courtName: r.court?.name || 'Unknown Court',
       venueName: r.court?.venue?.name || 'Unknown Venue',
-      customerName: r.user?.display_name || `${r.user?.first_name || ''} ${r.user?.last_name || ''}`.trim() || 'Unknown',
+      customerName:
+        r.user?.display_name ||
+        `${r.user?.first_name || ''} ${r.user?.last_name || ''}`.trim() ||
+        'Unknown',
       customerAvatar: r.user?.avatar_url,
       startTime: new Date(r.start_time),
       endTime: new Date(r.end_time),
@@ -211,12 +218,12 @@ export async function getRecentReservations(limit = 10) {
       totalAmount: parseFloat(r.total_amount || '0'),
       amountPaid: parseFloat(r.amount_paid || '0'),
       createdAt: new Date(r.created_at),
-    }))
+    }));
 
-    return { success: true, reservations: formattedReservations }
+    return { success: true, reservations: formattedReservations };
   } catch (error: any) {
-    console.error('Error fetching recent reservations:', error)
-    return { success: false, error: error.message }
+    console.error('Error fetching recent reservations:', error);
+    return { success: false, error: error.message };
   }
 }
 
@@ -224,34 +231,34 @@ export async function getRecentReservations(limit = 10) {
  * Get all reservations with filters
  */
 export async function getMyVenueReservations(filters?: {
-  startDate?: string
-  endDate?: string
-  status?: string
-  courtId?: string
+  startDate?: string;
+  endDate?: string;
+  status?: string;
+  courtId?: string;
 }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' }
+    return { success: false, error: 'Not authenticated' };
   }
 
   try {
     // Get all venue IDs owned by user
-    const { data: venues } = await supabase
-      .from('venues')
-      .select('id')
-      .eq('owner_id', user.id)
+    const { data: venues } = await supabase.from('venues').select('id').eq('owner_id', user.id);
 
-    const venueIds = venues?.map(v => v.id) || []
+    const venueIds = venues?.map((v) => v.id) || [];
 
     if (venueIds.length === 0) {
-      return { success: true, reservations: [] }
+      return { success: true, reservations: [] };
     }
 
     let query = supabase
       .from('reservations')
-      .select(`
+      .select(
+        `
         *,
         court:courts!inner(
           id,
@@ -270,32 +277,33 @@ export async function getMyVenueReservations(filters?: {
           avatar_url,
           phone
         )
-      `)
-      .in('court.venue_id', venueIds)
+      `
+      )
+      .in('court.venue_id', venueIds);
 
     // Apply filters
     if (filters?.startDate) {
-      query = query.gte('start_time', filters.startDate)
+      query = query.gte('start_time', filters.startDate);
     }
     if (filters?.endDate) {
-      query = query.lte('start_time', filters.endDate)
+      query = query.lte('start_time', filters.endDate);
     }
     if (filters?.status) {
-      query = query.eq('status', filters.status)
+      query = query.eq('status', filters.status);
     }
     if (filters?.courtId) {
-      query = query.eq('court_id', filters.courtId)
+      query = query.eq('court_id', filters.courtId);
     }
 
-    const { data: reservations, error } = await query.order('start_time', { ascending: true })
+    const { data: reservations, error } = await query.order('start_time', { ascending: true });
 
-    if (error) throw error
+    if (error) throw error;
 
     // Fetch queue sessions for queue session reservations
     if (reservations && reservations.length > 0) {
       const queueReservations = reservations.filter(
         (r: any) => r.metadata?.is_queue_session_reservation === true
-      )
+      );
 
       if (queueReservations.length > 0) {
         // Get queue sessions that match these reservations by court and time
@@ -305,7 +313,7 @@ export async function getMyVenueReservations(filters?: {
           .in(
             'court_id',
             queueReservations.map((r: any) => r.court_id)
-          )
+          );
 
         // Match queue sessions to reservations
         if (queueSessions) {
@@ -317,20 +325,20 @@ export async function getMyVenueReservations(filters?: {
                   qs.organizer_id === reservation.user_id &&
                   qs.start_time === reservation.start_time &&
                   qs.end_time === reservation.end_time
-              )
+              );
               if (matchingSession) {
-                reservation.queue_session = [matchingSession]
+                reservation.queue_session = [matchingSession];
               }
             }
-          })
+          });
         }
       }
     }
 
-    return { success: true, reservations }
+    return { success: true, reservations };
   } catch (error: any) {
-    console.error('Error fetching reservations:', error)
-    return { success: false, error: error.message }
+    console.error('Error fetching reservations:', error);
+    return { success: false, error: error.message };
   }
 }
 
@@ -338,18 +346,21 @@ export async function getMyVenueReservations(filters?: {
  * Approve a reservation
  */
 export async function approveReservation(reservationId: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' }
+    return { success: false, error: 'Not authenticated' };
   }
 
   try {
     // Verify the reservation belongs to user's venue and get details
     const { data: reservation } = await supabase
       .from('reservations')
-      .select(`
+      .select(
+        `
         id,
         status,
         start_time,
@@ -367,17 +378,18 @@ export async function approveReservation(reservationId: string) {
             owner_id
           )
         )
-      `)
+      `
+      )
       .eq('id', reservationId)
-      .single()
+      .single();
 
     if (!reservation || (reservation.court as any)?.venue?.owner_id !== user.id) {
-      return { success: false, error: 'Unauthorized' }
+      return { success: false, error: 'Unauthorized' };
     }
 
     // Check if it's a queue session reservation
-    const isQueueSession = reservation.metadata?.is_queue_session_reservation === true
-    let queueSessionId: string | null = null
+    const isQueueSession = reservation.metadata?.is_queue_session_reservation === true;
+    let queueSessionId: string | null = null;
 
     if (isQueueSession) {
       // Find the associated queue session
@@ -388,18 +400,19 @@ export async function approveReservation(reservationId: string) {
         .eq('organizer_id', reservation.user_id)
         .eq('start_time', reservation.start_time)
         .eq('end_time', reservation.end_time)
-        .single()
+        .single();
 
       if (queueSession) {
-        queueSessionId = queueSession.id
+        queueSessionId = queueSession.id;
 
         // Calculate payment amount for queue session
-        const durationMs = new Date(queueSession.end_time).getTime() - new Date(queueSession.start_time).getTime()
-        const durationHours = durationMs / (1000 * 60 * 60)
-        const hourlyRate = (reservation.court as any).hourly_rate || 0
-        const courtRental = hourlyRate * durationHours
-        const platformFee = courtRental * 0.05
-        const totalAmount = courtRental + platformFee
+        const durationMs =
+          new Date(queueSession.end_time).getTime() - new Date(queueSession.start_time).getTime();
+        const durationHours = durationMs / (1000 * 60 * 60);
+        const hourlyRate = (reservation.court as any).hourly_rate || 0;
+        const courtRental = hourlyRate * durationHours;
+        const platformFee = courtRental * 0.05;
+        const totalAmount = courtRental + platformFee;
 
         // Approve Queue Session -> Pending Payment
         const { error: qsError } = await supabase
@@ -411,12 +424,12 @@ export async function approveReservation(reservationId: string) {
               payment_required: totalAmount,
               court_rental: courtRental,
               platform_fee: platformFee,
-              payment_status: 'pending'
-            }
+              payment_status: 'pending',
+            },
           })
-          .eq('id', queueSession.id)
+          .eq('id', queueSession.id);
 
-        if (qsError) throw qsError
+        if (qsError) throw qsError;
 
         // Update reservation to pending_payment
         const { error: resError } = await supabase
@@ -429,12 +442,12 @@ export async function approveReservation(reservationId: string) {
               platform_fee: platformFee,
               hourly_rate: hourlyRate,
               duration_hours: durationHours,
-              total_with_fee: totalAmount
-            }
+              total_with_fee: totalAmount,
+            },
           })
-          .eq('id', reservationId)
+          .eq('id', reservationId);
 
-        if (resError) throw resError
+        if (resError) throw resError;
 
         // Notify Queue Master
         await createNotification({
@@ -448,18 +461,18 @@ export async function approveReservation(reservationId: string) {
             venue_name: (reservation.court as any).venue.name,
             queue_session_id: queueSession.id,
             total_amount: totalAmount,
-            payment_required: true
-          }
-        })
+            payment_required: true,
+          },
+        });
       }
     } else {
       // Normal Reservation -> Confirmed
       const { error } = await supabase
         .from('reservations')
         .update({ status: 'confirmed' })
-        .eq('id', reservationId)
+        .eq('id', reservationId);
 
-      if (error) throw error
+      if (error) throw error;
 
       // Notify User
       await createNotification({
@@ -469,16 +482,16 @@ export async function approveReservation(reservationId: string) {
           (reservation.court as any).name,
           new Date(reservation.start_time).toLocaleDateString(),
           reservation.id
-        )
-      })
+        ),
+      });
     }
 
-    revalidatePath('/court-admin/reservations')
-    revalidatePath('/court-admin')
-    return { success: true }
+    revalidatePath('/court-admin/reservations');
+    revalidatePath('/court-admin');
+    return { success: true };
   } catch (error: any) {
-    console.error('Error approving reservation:', error)
-    return { success: false, error: error.message }
+    console.error('Error approving reservation:', error);
+    return { success: false, error: error.message };
   }
 }
 
@@ -486,18 +499,21 @@ export async function approveReservation(reservationId: string) {
  * Mark a reservation as paid (Cash payment confirmation)
  */
 export async function markReservationAsPaid(reservationId: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' }
+    return { success: false, error: 'Not authenticated' };
   }
 
   try {
     // Verify ownership and get details
     const { data: reservation } = await supabase
       .from('reservations')
-      .select(`
+      .select(
+        `
         id,
         status,
         total_amount,
@@ -515,26 +531,27 @@ export async function markReservationAsPaid(reservationId: string) {
             owner_id
           )
         )
-      `)
+      `
+      )
       .eq('id', reservationId)
-      .single()
+      .single();
 
     if (!reservation || (reservation.court as any)?.venue?.owner_id !== user.id) {
-      return { success: false, error: 'Unauthorized' }
+      return { success: false, error: 'Unauthorized' };
     }
 
     // Accept both pending_payment (full cash) and partially_paid (down payment already received)
     if (reservation.status !== 'pending_payment' && reservation.status !== 'partially_paid') {
-      return { success: false, error: 'Reservation is not pending payment' }
+      return { success: false, error: 'Reservation is not pending payment' };
     }
 
     // Calculate the amount being paid now (remaining balance)
-    const alreadyPaid = parseFloat(reservation.amount_paid || '0')
-    const totalAmount = parseFloat(reservation.total_amount)
-    const remainingAmount = totalAmount - alreadyPaid
-    const isPartiallyPaid = reservation.status === 'partially_paid'
+    const alreadyPaid = parseFloat(reservation.amount_paid || '0');
+    const totalAmount = parseFloat(reservation.total_amount);
+    const remainingAmount = totalAmount - alreadyPaid;
+    const isPartiallyPaid = reservation.status === 'partially_paid';
 
-    const isQueueSession = reservation.metadata?.is_queue_session_reservation === true
+    const isQueueSession = reservation.metadata?.is_queue_session_reservation === true;
 
     if (isQueueSession) {
       // Find associated queue session via metadata link (reliable)
@@ -542,22 +559,22 @@ export async function markReservationAsPaid(reservationId: string) {
         .from('queue_sessions')
         .select('id, status, metadata')
         .filter('metadata->>reservation_id', 'eq', reservationId)
-        .single()
+        .single();
 
       if (queueSession) {
         // Calculate correct status based on time
         // After payment: open (players can join) or active (if already started)
-        const now = await getServerNow()
-        const sessionStart = new Date(reservation.start_time)
-        const sessionEnd = new Date(reservation.end_time)
+        const now = await getServerNow();
+        const sessionStart = new Date(reservation.start_time);
+        const sessionEnd = new Date(reservation.end_time);
 
-        let newQueueStatus: string
+        let newQueueStatus: string;
         if (now >= sessionEnd) {
-          newQueueStatus = 'completed'
+          newQueueStatus = 'completed';
         } else if (now >= sessionStart) {
-          newQueueStatus = 'active'
+          newQueueStatus = 'active';
         } else {
-          newQueueStatus = 'open'
+          newQueueStatus = 'open';
         }
 
         const { error: qsError } = await supabase
@@ -568,12 +585,12 @@ export async function markReservationAsPaid(reservationId: string) {
               ...queueSession.metadata,
               payment_status: 'paid',
               paid_at: now.toISOString(),
-              payment_method: 'cash_confirmed_by_admin'
-            }
+              payment_method: 'cash_confirmed_by_admin',
+            },
           })
-          .eq('id', queueSession.id)
+          .eq('id', queueSession.id);
 
-        if (qsError) throw qsError
+        if (qsError) throw qsError;
 
         // Create Payment Record for history (remaining balance for partially_paid, full amount otherwise)
         await supabase.from('payments').insert({
@@ -587,9 +604,12 @@ export async function markReservationAsPaid(reservationId: string) {
           metadata: {
             marked_by: user.id,
             queue_session_id: queueSession.id,
-            ...(isPartiallyPaid && { is_remaining_balance: true, down_payment_already_paid: alreadyPaid })
-          }
-        })
+            ...(isPartiallyPaid && {
+              is_remaining_balance: true,
+              down_payment_already_paid: alreadyPaid,
+            }),
+          },
+        });
       }
     } else {
       // Create Payment Record (remaining balance for partially_paid, full amount otherwise)
@@ -603,9 +623,12 @@ export async function markReservationAsPaid(reservationId: string) {
         provider: 'manual',
         metadata: {
           marked_by: user.id,
-          ...(isPartiallyPaid && { is_remaining_balance: true, down_payment_already_paid: alreadyPaid })
-        }
-      })
+          ...(isPartiallyPaid && {
+            is_remaining_balance: true,
+            down_payment_already_paid: alreadyPaid,
+          }),
+        },
+      });
     }
 
     // Update Reservation to Confirmed (full amount now paid)
@@ -618,12 +641,15 @@ export async function markReservationAsPaid(reservationId: string) {
           ...reservation.metadata,
           payment_status: 'paid',
           payment_method: isPartiallyPaid ? 'cash_with_down_payment' : 'cash',
-          ...(isPartiallyPaid && { cash_balance_paid_at: new Date().toISOString(), cash_balance_amount: remainingAmount })
-        }
+          ...(isPartiallyPaid && {
+            cash_balance_paid_at: new Date().toISOString(),
+            cash_balance_amount: remainingAmount,
+          }),
+        },
       })
-      .eq('id', reservationId)
+      .eq('id', reservationId);
 
-    if (error) throw error
+    if (error) throw error;
 
     // Notify User
     await createNotification({
@@ -631,24 +657,23 @@ export async function markReservationAsPaid(reservationId: string) {
       ...NotificationTemplates.paymentReceived(
         parseFloat(reservation.total_amount),
         isQueueSession ? reservation.metadata?.queue_session_id : reservation.id
-      )
-    })
+      ),
+    });
 
     // Consume promo code usage on successful payment completion.
     // Helper is idempotent per reservation_id, so calling this on both partial/full flows is safe.
-    const promoCodeStr = reservation.metadata?.promo_code
+    const promoCodeStr = reservation.metadata?.promo_code;
     if (promoCodeStr) {
-      const { consumeDeferredPromoCode } = await import('@/app/actions/promo-code-actions')
-      await consumeDeferredPromoCode(promoCodeStr, reservation.user_id, [reservationId])
+      const { consumeDeferredPromoCode } = await import('@/app/actions/promo-code-actions');
+      await consumeDeferredPromoCode(promoCodeStr, reservation.user_id, [reservationId]);
     }
 
-    revalidatePath('/court-admin/reservations')
-    revalidatePath('/court-admin')
-    return { success: true }
-
+    revalidatePath('/court-admin/reservations');
+    revalidatePath('/court-admin');
+    return { success: true };
   } catch (error: any) {
-    console.error('Error marking reservation as paid:', error)
-    return { success: false, error: error.message }
+    console.error('Error marking reservation as paid:', error);
+    return { success: false, error: error.message };
   }
 }
 
@@ -656,18 +681,21 @@ export async function markReservationAsPaid(reservationId: string) {
  * Reject a reservation
  */
 export async function rejectReservation(reservationId: string, reason: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' }
+    return { success: false, error: 'Not authenticated' };
   }
 
   try {
     // Verify the reservation belongs to user's venue
     const { data: reservation } = await supabase
       .from('reservations')
-      .select(`
+      .select(
+        `
         id,
         user_id,
         start_time,
@@ -682,16 +710,17 @@ export async function rejectReservation(reservationId: string, reason: string) {
             owner_id
           )
         )
-      `)
+      `
+      )
       .eq('id', reservationId)
-      .single()
+      .single();
 
     if (!reservation || (reservation.court as any)?.venue?.owner_id !== user.id) {
-      return { success: false, error: 'Unauthorized' }
+      return { success: false, error: 'Unauthorized' };
     }
 
     // Check if it's a queue session reservation
-    const isQueueSession = reservation.metadata?.is_queue_session_reservation === true
+    const isQueueSession = reservation.metadata?.is_queue_session_reservation === true;
 
     if (isQueueSession) {
       // Find and reject queue session via metadata link (reliable)
@@ -699,16 +728,16 @@ export async function rejectReservation(reservationId: string, reason: string) {
         .from('queue_sessions')
         .select('id')
         .filter('metadata->>reservation_id', 'eq', reservationId)
-        .single()
+        .single();
 
       if (queueSession) {
         await supabase
           .from('queue_sessions')
           .update({
             status: 'cancelled',
-            metadata: { rejection_reason: reason }
+            metadata: { rejection_reason: reason },
           })
-          .eq('id', queueSession.id)
+          .eq('id', queueSession.id);
 
         // Notify Queue Master
         await createNotification({
@@ -717,8 +746,8 @@ export async function rejectReservation(reservationId: string, reason: string) {
             (reservation.court as any).name,
             reason,
             queueSession.id
-          )
-        })
+          ),
+        });
       }
     } else {
       // Notify User about rejection
@@ -731,9 +760,9 @@ export async function rejectReservation(reservationId: string, reason: string) {
         metadata: {
           booking_id: reservation.id,
           reason,
-          venue_name: (reservation.court as any).venue.name
-        }
-      })
+          venue_name: (reservation.court as any).venue.name,
+        },
+      });
     }
 
     // Update reservation status to cancelled
@@ -744,41 +773,46 @@ export async function rejectReservation(reservationId: string, reason: string) {
         cancelled_at: new Date().toISOString(),
         cancellation_reason: reason,
       })
-      .eq('id', reservationId)
+      .eq('id', reservationId);
 
-    if (error) throw error
+    if (error) throw error;
 
-    revalidatePath('/court-admin/reservations')
-    revalidatePath('/court-admin')
-    return { success: true }
+    revalidatePath('/court-admin/reservations');
+    revalidatePath('/court-admin');
+    return { success: true };
   } catch (error: any) {
-    console.error('Error rejecting reservation:', error)
-    return { success: false, error: error.message }
+    console.error('Error rejecting reservation:', error);
+    return { success: false, error: error.message };
   }
 }
 
 /**
  * Update venue details
  */
-export async function updateVenue(venueId: string, updates: {
-  name?: string
-  description?: string
-  address?: string
-  city?: string
-  phone?: string
-  email?: string
-  website?: string
-  latitude?: number
-  longitude?: number
-  opening_hours?: any
-  image_url?: string
-  metadata?: any
-}) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+export async function updateVenue(
+  venueId: string,
+  updates: {
+    name?: string;
+    description?: string;
+    address?: string;
+    city?: string;
+    phone?: string;
+    email?: string;
+    website?: string;
+    latitude?: number;
+    longitude?: number;
+    opening_hours?: any;
+    image_url?: string;
+    metadata?: any;
+  }
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' }
+    return { success: false, error: 'Not authenticated' };
   }
 
   try {
@@ -787,26 +821,26 @@ export async function updateVenue(venueId: string, updates: {
       .from('venues')
       .select('owner_id')
       .eq('id', venueId)
-      .single()
+      .single();
 
     if (!venue || venue.owner_id !== user.id) {
-      return { success: false, error: 'Unauthorized' }
+      return { success: false, error: 'Unauthorized' };
     }
 
     // Update venue
     const { error } = await supabase
       .from('venues')
       .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', venueId)
+      .eq('id', venueId);
 
-    if (error) throw error
+    if (error) throw error;
 
-    revalidatePath('/court-admin/venues')
-    revalidatePath('/court-admin')
-    return { success: true }
+    revalidatePath('/court-admin/venues');
+    revalidatePath('/court-admin');
+    return { success: true };
   } catch (error: any) {
-    console.error('Error updating venue:', error)
-    return { success: false, error: error.message }
+    console.error('Error updating venue:', error);
+    return { success: false, error: error.message };
   }
 }
 
@@ -814,11 +848,13 @@ export async function updateVenue(venueId: string, updates: {
  * Get a single venue by ID (with full details)
  */
 export async function getVenueById(venueId: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' }
+    return { success: false, error: 'Not authenticated' };
   }
 
   try {
@@ -828,27 +864,27 @@ export async function getVenueById(venueId: string) {
       .select('*')
       .eq('id', venueId)
       .eq('owner_id', user.id)
-      .single()
+      .single();
 
-    if (error) throw error
+    if (error) throw error;
 
     if (!venue) {
-      return { success: false, error: 'Venue not found or access denied' }
+      return { success: false, error: 'Venue not found or access denied' };
     }
 
     // Get actual courts count separately
     const { count: courtsCount } = await supabase
       .from('courts')
       .select('*', { count: 'exact', head: true })
-      .eq('venue_id', venueId)
+      .eq('venue_id', venueId);
 
     // Add courts count to venue object
-    venue.courtsCount = courtsCount || 0
+    venue.courtsCount = courtsCount || 0;
 
-    return { success: true, venue }
+    return { success: true, venue };
   } catch (error: any) {
-    console.error('Error fetching venue:', error)
-    return { success: false, error: error.message }
+    console.error('Error fetching venue:', error);
+    return { success: false, error: error.message };
   }
 }
 
@@ -856,24 +892,26 @@ export async function getVenueById(venueId: string) {
  * Create a new venue
  */
 export async function createVenue(venueData: {
-  name: string
-  description?: string
-  address?: string
-  city?: string
-  latitude?: number
-  longitude?: number
-  phone?: string
-  email?: string
-  website?: string
-  opening_hours?: Record<string, { open: string; close: string }>
-  image_url?: string
-  metadata?: any
+  name: string;
+  description?: string;
+  address?: string;
+  city?: string;
+  latitude?: number;
+  longitude?: number;
+  phone?: string;
+  email?: string;
+  website?: string;
+  opening_hours?: Record<string, { open: string; close: string }>;
+  image_url?: string;
+  metadata?: any;
 }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' }
+    return { success: false, error: 'Not authenticated' };
   }
 
   try {
@@ -881,17 +919,17 @@ export async function createVenue(venueData: {
     const { data: roles } = await supabase
       .from('user_roles')
       .select('role:roles(name)')
-      .eq('user_id', user.id)
+      .eq('user_id', user.id);
 
     const hasCourtAdminRole = roles?.some(
       (r: any) => r.role?.name === 'court_admin' || r.role?.name === 'global_admin'
-    )
+    );
 
     if (!hasCourtAdminRole) {
       return {
         success: false,
-        error: 'You must have Court Admin role to create venues. Please contact support.'
-      }
+        error: 'You must have Court Admin role to create venues. Please contact support.',
+      };
     }
 
     // Create venue
@@ -918,23 +956,23 @@ export async function createVenue(venueData: {
           thursday: { open: '06:00', close: '22:00' },
           friday: { open: '06:00', close: '22:00' },
           saturday: { open: '06:00', close: '22:00' },
-          sunday: { open: '06:00', close: '22:00' }
+          sunday: { open: '06:00', close: '22:00' },
         },
         is_active: true,
         is_verified: false, // Requires admin verification
       })
       .select()
-      .single()
+      .single();
 
-    if (error) throw error
+    if (error) throw error;
 
-    revalidatePath('/court-admin/venues')
-    revalidatePath('/court-admin')
+    revalidatePath('/court-admin/venues');
+    revalidatePath('/court-admin');
 
-    return { success: true, venue }
+    return { success: true, venue };
   } catch (error: any) {
-    console.error('Error creating venue:', error)
-    return { success: false, error: error.message }
+    console.error('Error creating venue:', error);
+    return { success: false, error: error.message };
   }
 }
 
@@ -942,11 +980,13 @@ export async function createVenue(venueData: {
  * Toggle venue active/inactive (court admin)
  */
 export async function toggleVenueActiveStatus(venueId: string, isActive: boolean) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' }
+    return { success: false, error: 'Not authenticated' };
   }
 
   try {
@@ -955,26 +995,29 @@ export async function toggleVenueActiveStatus(venueId: string, isActive: boolean
       .from('venues')
       .select('owner_id')
       .eq('id', venueId)
-      .single()
+      .single();
 
     if (!venue || venue.owner_id !== user.id) {
-      return { success: false, error: 'Unauthorized - You do not own this venue' }
+      return { success: false, error: 'Unauthorized - You do not own this venue' };
     }
 
     const { error } = await supabase
       .from('venues')
       .update({ is_active: isActive, updated_at: new Date().toISOString() })
-      .eq('id', venueId)
+      .eq('id', venueId);
 
-    if (error) throw error
+    if (error) throw error;
 
-    revalidatePath('/court-admin/venues')
-    revalidatePath(`/court-admin/venues/${venueId}`)
+    revalidatePath('/court-admin/venues');
+    revalidatePath(`/court-admin/venues/${venueId}`);
 
-    return { success: true, message: `Venue ${isActive ? 'activated' : 'deactivated'} successfully` }
+    return {
+      success: true,
+      message: `Venue ${isActive ? 'activated' : 'deactivated'} successfully`,
+    };
   } catch (error: any) {
-    console.error('Error toggling venue status:', error)
-    return { success: false, error: error.message }
+    console.error('Error toggling venue status:', error);
+    return { success: false, error: error.message };
   }
 }
 
@@ -982,11 +1025,13 @@ export async function toggleVenueActiveStatus(venueId: string, isActive: boolean
  * Soft delete a venue (set is_active = false)
  */
 export async function deleteVenue(venueId: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' }
+    return { success: false, error: 'Not authenticated' };
   }
 
   try {
@@ -995,10 +1040,10 @@ export async function deleteVenue(venueId: string) {
       .from('venues')
       .select('owner_id')
       .eq('id', venueId)
-      .single()
+      .single();
 
     if (!venue || venue.owner_id !== user.id) {
-      return { success: false, error: 'Unauthorized - You do not own this venue' }
+      return { success: false, error: 'Unauthorized - You do not own this venue' };
     }
 
     // Check for active courts
@@ -1006,13 +1051,13 @@ export async function deleteVenue(venueId: string) {
       .from('courts')
       .select('id')
       .eq('venue_id', venueId)
-      .eq('is_active', true)
+      .eq('is_active', true);
 
     if (activeCourts && activeCourts.length > 0) {
       return {
         success: false,
-        error: `Cannot delete venue with ${activeCourts.length} active court(s). Please deactivate them first.`
-      }
+        error: `Cannot delete venue with ${activeCourts.length} active court(s). Please deactivate them first.`,
+      };
     }
 
     // Check for active reservations
@@ -1021,30 +1066,30 @@ export async function deleteVenue(venueId: string) {
       .select('id, court:courts!inner(venue_id)')
       .eq('court.venue_id', venueId)
       .in('status', ['pending', 'confirmed'])
-      .gte('start_time', new Date().toISOString())
+      .gte('start_time', new Date().toISOString());
 
     if (activeReservations && activeReservations.length > 0) {
       return {
         success: false,
-        error: `Cannot delete venue with ${activeReservations.length} active reservation(s). Please cancel them first.`
-      }
+        error: `Cannot delete venue with ${activeReservations.length} active reservation(s). Please cancel them first.`,
+      };
     }
 
     // Soft delete (set is_active = false)
     const { error } = await supabase
       .from('venues')
       .update({ is_active: false, updated_at: new Date().toISOString() })
-      .eq('id', venueId)
+      .eq('id', venueId);
 
-    if (error) throw error
+    if (error) throw error;
 
-    revalidatePath('/court-admin/venues')
-    revalidatePath('/court-admin')
+    revalidatePath('/court-admin/venues');
+    revalidatePath('/court-admin');
 
-    return { success: true }
+    return { success: true };
   } catch (error: any) {
-    console.error('Error deleting venue:', error)
-    return { success: false, error: error.message }
+    console.error('Error deleting venue:', error);
+    return { success: false, error: error.message };
   }
 }
 
@@ -1052,11 +1097,13 @@ export async function deleteVenue(venueId: string) {
  * Get courts for a venue
  */
 export async function getVenueCourts(venueId: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' }
+    return { success: false, error: 'Not authenticated' };
   }
 
   try {
@@ -1065,27 +1112,29 @@ export async function getVenueCourts(venueId: string) {
       .from('venues')
       .select('owner_id')
       .eq('id', venueId)
-      .single()
+      .single();
 
     if (!venue || venue.owner_id !== user.id) {
-      return { success: false, error: 'Unauthorized' }
+      return { success: false, error: 'Unauthorized' };
     }
 
     // Get courts
     const { data: courts, error } = await supabase
       .from('courts')
-      .select(`
+      .select(
+        `
         *
-      `)
+      `
+      )
       .eq('venue_id', venueId)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: true });
 
-    if (error) throw error
+    if (error) throw error;
 
-    return { success: true, courts }
+    return { success: true, courts };
   } catch (error: any) {
-    console.error('Error fetching courts:', error)
-    return { success: false, error: error.message }
+    console.error('Error fetching courts:', error);
+    return { success: false, error: error.message };
   }
 }
 
@@ -1093,30 +1142,30 @@ export async function getVenueCourts(venueId: string) {
  * Get pending (unverified) courts for the current court admin
  */
 export async function getPendingCourts() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' }
+    return { success: false, error: 'Not authenticated' };
   }
 
   try {
     // Get venue IDs owned by user
-    const { data: venues } = await supabase
-      .from('venues')
-      .select('id')
-      .eq('owner_id', user.id)
+    const { data: venues } = await supabase.from('venues').select('id').eq('owner_id', user.id);
 
-    const venueIds = venues?.map(v => v.id) || []
+    const venueIds = venues?.map((v) => v.id) || [];
 
     if (venueIds.length === 0) {
-      return { success: true, courts: [] }
+      return { success: true, courts: [] };
     }
 
     // Get unverified courts
     const { data: courts, error } = await supabase
       .from('courts')
-      .select(`
+      .select(
+        `
         *,
         venue:venue_id (
           id,
@@ -1124,17 +1173,18 @@ export async function getPendingCourts() {
           city,
           address
         )
-      `)
+      `
+      )
       .in('venue_id', venueIds)
       .eq('is_verified', false)
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: false });
 
-    if (error) throw error
+    if (error) throw error;
 
-    return { success: true, courts: courts || [] }
+    return { success: true, courts: courts || [] };
   } catch (error: any) {
-    console.error('Error fetching pending courts:', error)
-    return { success: false, error: error.message }
+    console.error('Error fetching pending courts:', error);
+    return { success: false, error: error.message };
   }
 }
 
@@ -1142,61 +1192,64 @@ export async function getPendingCourts() {
  * Get refunds for court admin's venues
  */
 export async function getMyVenueRefunds(options?: {
-  status?: string
-  limit?: number
-  offset?: number
+  status?: string;
+  limit?: number;
+  offset?: number;
 }): Promise<{ success: boolean; refunds?: any[]; total?: number; error?: string }> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' }
+    return { success: false, error: 'Not authenticated' };
   }
 
   try {
     // Use service client to bypass RLS — admin needs to see refunds created by other users
-    const serviceClient = createServiceClient()
+    const serviceClient = createServiceClient();
 
     // Get all venue IDs owned by user
     const { data: venues } = await serviceClient
       .from('venues')
       .select('id')
-      .eq('owner_id', user.id)
+      .eq('owner_id', user.id);
 
-    const venueIds = venues?.map(v => v.id) || []
+    const venueIds = venues?.map((v) => v.id) || [];
 
     if (venueIds.length === 0) {
-      return { success: true, refunds: [], total: 0 }
+      return { success: true, refunds: [], total: 0 };
     }
 
     // Get court IDs for these venues
     const { data: courts } = await serviceClient
       .from('courts')
       .select('id')
-      .in('venue_id', venueIds)
+      .in('venue_id', venueIds);
 
-    const courtIds = courts?.map(c => c.id) || []
+    const courtIds = courts?.map((c) => c.id) || [];
 
     if (courtIds.length === 0) {
-      return { success: true, refunds: [], total: 0 }
+      return { success: true, refunds: [], total: 0 };
     }
 
     // Get reservations for these courts
     const { data: reservations } = await serviceClient
       .from('reservations')
       .select('id')
-      .in('court_id', courtIds)
+      .in('court_id', courtIds);
 
-    const reservationIds = reservations?.map(r => r.id) || []
+    const reservationIds = reservations?.map((r) => r.id) || [];
 
     if (reservationIds.length === 0) {
-      return { success: true, refunds: [], total: 0 }
+      return { success: true, refunds: [], total: 0 };
     }
 
     // Now get refunds for these reservations
     let query = serviceClient
       .from('refunds')
-      .select(`
+      .select(
+        `
         *,
         reservations (
           id,
@@ -1209,57 +1262,63 @@ export async function getMyVenueRefunds(options?: {
             venues (name)
           )
         )
-      `, { count: 'exact' })
+      `,
+        { count: 'exact' }
+      )
       .in('reservation_id', reservationIds)
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: false });
 
     if (options?.status) {
-      query = query.eq('status', options.status)
+      query = query.eq('status', options.status);
     }
 
     if (options?.limit) {
-      query = query.limit(options.limit)
+      query = query.limit(options.limit);
     }
 
     if (options?.offset) {
-      query = query.range(options.offset, options.offset + (options.limit || 20) - 1)
+      query = query.range(options.offset, options.offset + (options.limit || 20) - 1);
     }
 
-    const { data: refunds, error, count } = await query
+    const { data: refunds, error, count } = await query;
 
     if (error) {
-      console.error('Error fetching refunds:', error)
-      return { success: false, error: error.message }
+      console.error('Error fetching refunds:', error);
+      return { success: false, error: error.message };
     }
 
     // Fetch profiles separately for the user_ids
-    const userIds = [...new Set(refunds?.map(r => r.user_id).filter(Boolean) || [])]
+    const userIds = [...new Set(refunds?.map((r) => r.user_id).filter(Boolean) || [])];
 
-    let profilesMap: Record<string, any> = {}
+    let profilesMap: Record<string, any> = {};
     if (userIds.length > 0) {
       const { data: profiles } = await serviceClient
         .from('profiles')
         .select('id, first_name, last_name, email, phone')
-        .in('id', userIds)
+        .in('id', userIds);
 
       if (profiles) {
-        profilesMap = profiles.reduce((acc, p) => {
-          acc[p.id] = p
-          return acc
-        }, {} as Record<string, any>)
+        profilesMap = profiles.reduce(
+          (acc, p) => {
+            acc[p.id] = p;
+            return acc;
+          },
+          {} as Record<string, any>
+        );
       }
     }
 
     // Attach profiles to refunds
-    const refundsWithProfiles = refunds?.map(refund => ({
-      ...refund,
-      profiles: profilesMap[refund.user_id] || null
-    })) || []
+    const refundsWithProfiles =
+      refunds?.map((refund) => ({
+        ...refund,
+        profiles: profilesMap[refund.user_id] || null,
+      })) || [];
 
-    return { success: true, refunds: refundsWithProfiles, total: count || 0 }
+    return { success: true, refunds: refundsWithProfiles, total: count || 0 };
   } catch (error: any) {
-    console.error('Error fetching venue refunds:', error)
-    return { success: false, error: error.message }
+    console.error('Error fetching venue refunds:', error);
+    return { success: false, error: error.message };
   }
 }
 
@@ -1267,15 +1326,17 @@ export async function getMyVenueRefunds(options?: {
  * Get queue session history for court admin's venues
  */
 export async function getVenueQueueHistory(filters?: {
-  venueId?: string
-  startDate?: string
-  endDate?: string
+  venueId?: string;
+  startDate?: string;
+  endDate?: string;
 }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' }
+    return { success: false, error: 'Not authenticated' };
   }
 
   try {
@@ -1283,59 +1344,62 @@ export async function getVenueQueueHistory(filters?: {
     const { data: venues } = await supabase
       .from('venues')
       .select('id, name')
-      .eq('owner_id', user.id)
+      .eq('owner_id', user.id);
 
-    const venueIds = venues?.map(v => v.id) || []
+    const venueIds = venues?.map((v) => v.id) || [];
 
     if (venueIds.length === 0) {
-      return { success: true, sessions: [] }
+      return { success: true, sessions: [] };
     }
 
     // If specific venue requested, verify ownership
     if (filters?.venueId && !venueIds.includes(filters.venueId)) {
-      return { success: false, error: 'Unauthorized for this venue' }
+      return { success: false, error: 'Unauthorized for this venue' };
     }
 
-    const targetVenueIds = filters?.venueId ? [filters.venueId] : venueIds
+    const targetVenueIds = filters?.venueId ? [filters.venueId] : venueIds;
 
     // Load courts for the target venues (used to filter sessions)
     const { data: courts } = await supabase
       .from('courts')
       .select('id')
-      .in('venue_id', targetVenueIds)
+      .in('venue_id', targetVenueIds);
 
-    const courtIds = courts?.map(c => c.id) || []
+    const courtIds = courts?.map((c) => c.id) || [];
 
     if (courtIds.length === 0) {
-      return { success: true, sessions: [] }
+      return { success: true, sessions: [] };
     }
 
-    const now = await getServerNow()
+    const now = await getServerNow();
 
     console.log('[getVenueQueueHistory] 🔍 Starting query with:', {
       targetVenueIds,
       courtIds,
       currentTime: now.toISOString(),
-    })
+    });
 
     // First, let's see ALL sessions for these courts (debug)
     const { data: allSessions } = await supabase
       .from('queue_sessions')
       .select('id, status, start_time, end_time, court_id')
       .in('court_id', courtIds)
-      .order('start_time', { ascending: false })
+      .order('start_time', { ascending: false });
 
-    console.log('[getVenueQueueHistory] 📊 ALL sessions in courts:',allSessions?.map(s => ({
+    console.log(
+      '[getVenueQueueHistory] 📊 ALL sessions in courts:',
+      allSessions?.map((s) => ({
         id: s.id,
         status: s.status,
         isPast: new Date(s.end_time) < now,
         endTime: s.end_time,
       })) || []
-    )
+    );
 
     let query = supabase
       .from('queue_sessions')
-      .select(`
+      .select(
+        `
         *,
         court:courts!inner(
           id,
@@ -1350,87 +1414,95 @@ export async function getVenueQueueHistory(filters?: {
           avatar_url,
           email
         )
-      `)
+      `
+      )
       .in('court_id', courtIds)
       // History includes sessions that have finished (completed/closed), were cancelled/rejected,
       // or are past their end time even if status hasn’t been auto-updated yet.
-      .or(
-        `status.in.(completed,closed,cancelled,rejected),end_time.lt.${now.toISOString()}`
-      )
-      .order('start_time', { ascending: false })
+      .or(`status.in.(completed,closed,cancelled,rejected),end_time.lt.${now.toISOString()}`)
+      .order('start_time', { ascending: false });
 
     // Apply date filters
     if (filters?.startDate) {
-      query = query.gte('start_time', filters.startDate)
+      query = query.gte('start_time', filters.startDate);
     }
     if (filters?.endDate) {
-      query = query.lte('start_time', filters.endDate)
+      query = query.lte('start_time', filters.endDate);
     }
 
-    const { data: sessions, error } = await query
+    const { data: sessions, error } = await query;
 
     if (error) {
-      console.error('[getVenueQueueHistory] ❌ Query error:', error)
-      throw error
+      console.error('[getVenueQueueHistory] ❌ Query error:', error);
+      throw error;
     }
 
-    console.log('[getVenueQueueHistory] ✅ Sessions found:', sessions?.length || 0)
+    console.log('[getVenueQueueHistory] ✅ Sessions found:', sessions?.length || 0);
 
     // Backfill summary data for sessions missing it
-    const formattedSessions = await Promise.all((sessions || []).map(async (s) => {
-      let summary = s.settings?.summary
-      
-      // If summary is missing, calculate it from participants
-      if (!summary) {
-        try {
-          const { data: participants } = await supabase
-            .from('queue_participants')
-            .select('games_played, amount_owed, payment_status')
-            .eq('queue_session_id', s.id)
+    const formattedSessions = await Promise.all(
+      (sessions || []).map(async (s) => {
+        let summary = s.settings?.summary;
 
-          if (participants) {
-            const totalGames = participants.reduce((sum, p) => sum + (p.games_played || 0), 0)
-            const totalRevenue = participants.reduce((sum, p) => sum + parseFloat(p.amount_owed || '0'), 0)
-            summary = {
-              totalGames,
-              totalRevenue,
-              totalParticipants: participants.length,
-              closedBy: s.organizer?.display_name || 'Unknown',
-              closedByAvatarUrl: s.organizer?.avatar_url || null,
+        // If summary is missing, calculate it from participants
+        if (!summary) {
+          try {
+            const { data: participants } = await supabase
+              .from('queue_participants')
+              .select('games_played, amount_owed, payment_status')
+              .eq('queue_session_id', s.id);
+
+            if (participants) {
+              const totalGames = participants.reduce((sum, p) => sum + (p.games_played || 0), 0);
+              const totalRevenue = participants.reduce(
+                (sum, p) => sum + parseFloat(p.amount_owed || '0'),
+                0
+              );
+              summary = {
+                totalGames,
+                totalRevenue,
+                totalParticipants: participants.length,
+                closedBy: s.organizer?.display_name || 'Unknown',
+                closedByAvatarUrl: s.organizer?.avatar_url || null,
+              };
             }
+          } catch (err) {
+            console.warn(
+              `[getVenueQueueHistory] Failed to backfill summary for session ${s.id}:`,
+              err
+            );
           }
-        } catch (err) {
-          console.warn(`[getVenueQueueHistory] Failed to backfill summary for session ${s.id}:`, err)
         }
-      }
 
-      return {
-        id: s.id,
-        venueName: s.court?.venue?.name,
-        courtName: s.court?.name,
-        organizerName: s.organizer?.display_name || 'Unknown',
-        organizerAvatarUrl: s.organizer?.avatar_url || null,
-        startTime: new Date(s.start_time),
-        endTime: new Date(s.end_time),
-        status: s.status,
-        maxPlayers: s.max_players,
-        costPerGame: s.cost_per_game,
-        totalRevenue: summary?.totalRevenue || 0,
-        totalGames: summary?.totalGames || 0,
-        closedBy: summary?.closedBy || s.organizer?.display_name || 'unknown',
-        closedByAvatarUrl: summary?.closedByAvatarUrl || s.organizer?.avatar_url || null,
-      }
-    }))
+        return {
+          id: s.id,
+          venueName: s.court?.venue?.name,
+          courtName: s.court?.name,
+          organizerName: s.organizer?.display_name || 'Unknown',
+          organizerAvatarUrl: s.organizer?.avatar_url || null,
+          startTime: new Date(s.start_time),
+          endTime: new Date(s.end_time),
+          status: s.status,
+          maxPlayers: s.max_players,
+          costPerGame: s.cost_per_game,
+          totalRevenue: summary?.totalRevenue || 0,
+          totalGames: summary?.totalGames || 0,
+          closedBy: summary?.closedBy || s.organizer?.display_name || 'unknown',
+          closedByAvatarUrl: summary?.closedByAvatarUrl || s.organizer?.avatar_url || null,
+        };
+      })
+    );
 
-    return { success: true, sessions: formattedSessions }
+    return { success: true, sessions: formattedSessions };
   } catch (error: any) {
     // Supabase errors can be plain objects without `message`, so stringify to capture full details
-    const formattedError = error && typeof error === 'object'
-      ? JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
-      : String(error)
+    const formattedError =
+      error && typeof error === 'object'
+        ? JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
+        : String(error);
 
-    console.error('Error fetching queue history:', formattedError)
-    return { success: false, error: (error?.message || formattedError || 'Unknown error') }
+    console.error('Error fetching queue history:', formattedError);
+    return { success: false, error: error?.message || formattedError || 'Unknown error' };
   }
 }
 
@@ -1440,18 +1512,21 @@ export async function getVenueQueueHistory(filters?: {
  * and notifies the user.
  */
 export async function approveReschedule(reservationId: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' }
+    return { success: false, error: 'Not authenticated' };
   }
 
   try {
     // Fetch reservation with court/venue info
     const { data: reservation } = await supabase
       .from('reservations')
-      .select(`
+      .select(
+        `
         id,
         user_id,
         court_id,
@@ -1467,24 +1542,33 @@ export async function approveReschedule(reservationId: string) {
             owner_id
           )
         )
-      `)
+      `
+      )
       .eq('id', reservationId)
-      .single()
+      .single();
 
     if (!reservation || (reservation.court as any)?.venue?.owner_id !== user.id) {
-      return { success: false, error: 'Unauthorized' }
+      return { success: false, error: 'Unauthorized' };
     }
 
-    const rescheduleRequest = reservation.metadata?.reschedule_request
+    const rescheduleRequest = reservation.metadata?.reschedule_request;
     if (!rescheduleRequest || rescheduleRequest.status !== 'pending') {
-      return { success: false, error: 'No pending reschedule request found' }
+      return { success: false, error: 'No pending reschedule request found' };
     }
 
-    const { proposed_start_time, proposed_end_time } = rescheduleRequest
+    const { proposed_start_time, proposed_end_time } = rescheduleRequest;
 
     // Re-validate availability at approval time
-    const adminDb = createServiceClient()
-    const conflictStatuses = ['pending_payment', 'partially_paid', 'confirmed', 'ongoing', 'pending_refund', 'completed', 'no_show']
+    const adminDb = createServiceClient();
+    const conflictStatuses = [
+      'pending_payment',
+      'partially_paid',
+      'confirmed',
+      'ongoing',
+      'pending_refund',
+      'completed',
+      'no_show',
+    ];
 
     const { data: conflicts } = await adminDb
       .from('reservations')
@@ -1493,10 +1577,14 @@ export async function approveReschedule(reservationId: string) {
       .neq('id', reservationId)
       .in('status', conflictStatuses)
       .lt('start_time', proposed_end_time)
-      .gt('end_time', proposed_start_time)
+      .gt('end_time', proposed_start_time);
 
     if (conflicts && conflicts.length > 0) {
-      return { success: false, error: 'The proposed time slot is no longer available. Please ask the user to reschedule again.' }
+      return {
+        success: false,
+        error:
+          'The proposed time slot is no longer available. Please ask the user to reschedule again.',
+      };
     }
 
     // Also check queue session conflicts
@@ -1506,27 +1594,27 @@ export async function approveReschedule(reservationId: string) {
       .eq('court_id', reservation.court_id)
       .in('status', ['pending_payment', 'open', 'active'])
       .lt('start_time', proposed_end_time)
-      .gt('end_time', proposed_start_time)
+      .gt('end_time', proposed_start_time);
 
     if (queueConflicts && queueConflicts.length > 0) {
-      return { success: false, error: 'The proposed time slot conflicts with a queue session.' }
+      return { success: false, error: 'The proposed time slot conflicts with a queue session.' };
     }
 
     // Apply the reschedule — update actual times
-    const updatedMetadata = { ...reservation.metadata }
-    delete updatedMetadata.reschedule_request
-    updatedMetadata.rescheduled = true
+    const updatedMetadata = { ...reservation.metadata };
+    delete updatedMetadata.reschedule_request;
+    updatedMetadata.rescheduled = true;
     updatedMetadata.rescheduled_from = {
       start_time: reservation.start_time,
       end_time: reservation.end_time,
       rescheduled_at: new Date().toISOString(),
       approved_by: user.id,
-    }
+    };
 
     // Determine siblings if this is a queue session
-    const queueSessionId = reservation.metadata?.queue_session_id
-    const siblingReservationIds = reservation.metadata?.reservation_ids || []
-    
+    const queueSessionId = reservation.metadata?.queue_session_id;
+    const siblingReservationIds = reservation.metadata?.reservation_ids || [];
+
     // 1. Update the primary reservation
     const { error: updateError } = await adminDb
       .from('reservations')
@@ -1536,11 +1624,11 @@ export async function approveReschedule(reservationId: string) {
         updated_at: new Date().toISOString(),
         metadata: updatedMetadata,
       })
-      .eq('id', reservationId)
+      .eq('id', reservationId);
 
     if (updateError) {
-      console.error('Error approving reschedule:', updateError)
-      return { success: false, error: 'Failed to apply reschedule' }
+      console.error('Error approving reschedule:', updateError);
+      return { success: false, error: 'Failed to apply reschedule' };
     }
 
     // 2. If it's a queue session, update siblings and the session itself
@@ -1550,49 +1638,55 @@ export async function approveReschedule(reservationId: string) {
         .from('queue_sessions')
         .select('*')
         .eq('id', queueSessionId)
-        .single()
+        .single();
 
       if (qs) {
         // Update queue session record
-        await adminDb.from('queue_sessions').update({
-          start_time: proposed_start_time,
-          end_time: proposed_end_time,
-          metadata: {
-            ...(qs.metadata || {}),
-            rescheduled: true,
-            rescheduled_at: new Date().toISOString(),
-            reschedule_request: null
-          }
-        }).eq('id', queueSessionId)
+        await adminDb
+          .from('queue_sessions')
+          .update({
+            start_time: proposed_start_time,
+            end_time: proposed_end_time,
+            metadata: {
+              ...(qs.metadata || {}),
+              rescheduled: true,
+              rescheduled_at: new Date().toISOString(),
+              reschedule_request: null,
+            },
+          })
+          .eq('id', queueSessionId);
 
         // Update all siblings
         const { data: siblings } = await adminDb
           .from('reservations')
           .select('id, metadata')
-          .filter('metadata->>queue_session_id', 'eq', queueSessionId)
-        
+          .filter('metadata->>queue_session_id', 'eq', queueSessionId);
+
         if (siblings) {
           for (const sib of siblings) {
             if (sib.id === reservationId) continue;
-            
-            const sibMetadata = { ...(sib.metadata as any || {}) }
-            delete sibMetadata.reschedule_request
-            sibMetadata.rescheduled = true
-            sibMetadata.rescheduled_from = updatedMetadata.rescheduled_from
 
-            await adminDb.from('reservations').update({
-              start_time: proposed_start_time,
-              end_time: proposed_end_time,
-              updated_at: new Date().toISOString(),
-              metadata: sibMetadata
-            }).eq('id', sib.id)
+            const sibMetadata = { ...((sib.metadata as any) || {}) };
+            delete sibMetadata.reschedule_request;
+            sibMetadata.rescheduled = true;
+            sibMetadata.rescheduled_from = updatedMetadata.rescheduled_from;
+
+            await adminDb
+              .from('reservations')
+              .update({
+                start_time: proposed_start_time,
+                end_time: proposed_end_time,
+                updated_at: new Date().toISOString(),
+                metadata: sibMetadata,
+              })
+              .eq('id', sib.id);
           }
         }
       }
     }
 
     // Notify the user
-    const courtName = (reservation.court as any)?.name || 'Court'
+    const courtName = (reservation.court as any)?.name || 'Court';
     const newDateStr = new Date(proposed_start_time).toLocaleDateString('en-US', {
       timeZone: 'Asia/Manila',
       weekday: 'short',
@@ -1600,22 +1694,22 @@ export async function approveReschedule(reservationId: string) {
       day: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
-    })
+    });
 
     await createNotification({
       userId: reservation.user_id,
-      ...NotificationTemplates.rescheduleApproved(courtName, newDateStr, reservationId)
-    })
+      ...NotificationTemplates.rescheduleApproved(courtName, newDateStr, reservationId),
+    });
 
-    revalidatePath('/court-admin/reservations')
-    revalidatePath('/court-admin')
-    revalidatePath('/bookings')
-    revalidatePath(`/bookings/${reservationId}`)
+    revalidatePath('/court-admin/reservations');
+    revalidatePath('/court-admin');
+    revalidatePath('/bookings');
+    revalidatePath(`/bookings/${reservationId}`);
 
-    return { success: true }
+    return { success: true };
   } catch (error: any) {
-    console.error('Error approving reschedule:', error)
-    return { success: false, error: error.message }
+    console.error('Error approving reschedule:', error);
+    return { success: false, error: error.message };
   }
 }
 
@@ -1625,22 +1719,25 @@ export async function approveReschedule(reservationId: string) {
  * The booking stays at its original time.
  */
 export async function rejectReschedule(reservationId: string, reason: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    return { success: false, error: 'Not authenticated' }
+    return { success: false, error: 'Not authenticated' };
   }
 
   if (!reason?.trim()) {
-    return { success: false, error: 'Please provide a reason for rejection' }
+    return { success: false, error: 'Please provide a reason for rejection' };
   }
 
   try {
     // Fetch reservation with court/venue info
     const { data: reservation } = await supabase
       .from('reservations')
-      .select(`
+      .select(
+        `
         id,
         user_id,
         metadata,
@@ -1653,58 +1750,59 @@ export async function rejectReschedule(reservationId: string, reason: string) {
             owner_id
           )
         )
-      `)
+      `
+      )
       .eq('id', reservationId)
-      .single()
+      .single();
 
     if (!reservation || (reservation.court as any)?.venue?.owner_id !== user.id) {
-      return { success: false, error: 'Unauthorized' }
+      return { success: false, error: 'Unauthorized' };
     }
 
-    const rescheduleRequest = reservation.metadata?.reschedule_request
+    const rescheduleRequest = reservation.metadata?.reschedule_request;
     if (!rescheduleRequest || rescheduleRequest.status !== 'pending') {
-      return { success: false, error: 'No pending reschedule request found' }
+      return { success: false, error: 'No pending reschedule request found' };
     }
 
     // Clear the reschedule request and store rejection info
-    const updatedMetadata = { ...reservation.metadata }
-    delete updatedMetadata.reschedule_request
+    const updatedMetadata = { ...reservation.metadata };
+    delete updatedMetadata.reschedule_request;
     updatedMetadata.last_reschedule_rejection = {
       reason,
       rejected_at: new Date().toISOString(),
       rejected_by: user.id,
-    }
+    };
 
-    const adminDb = createServiceClient()
+    const adminDb = createServiceClient();
     const { error: updateError } = await adminDb
       .from('reservations')
       .update({
         updated_at: new Date().toISOString(),
         metadata: updatedMetadata,
       })
-      .eq('id', reservationId)
+      .eq('id', reservationId);
 
     if (updateError) {
-      console.error('Error rejecting reschedule:', updateError)
-      return { success: false, error: 'Failed to reject reschedule' }
+      console.error('Error rejecting reschedule:', updateError);
+      return { success: false, error: 'Failed to reject reschedule' };
     }
 
     // Notify the user
-    const courtName = (reservation.court as any)?.name || 'Court'
+    const courtName = (reservation.court as any)?.name || 'Court';
 
     await createNotification({
       userId: reservation.user_id,
-      ...NotificationTemplates.rescheduleRejected(courtName, reason, reservationId)
-    })
+      ...NotificationTemplates.rescheduleRejected(courtName, reason, reservationId),
+    });
 
-    revalidatePath('/court-admin/reservations')
-    revalidatePath('/court-admin')
-    revalidatePath('/bookings')
-    revalidatePath(`/bookings/${reservationId}`)
+    revalidatePath('/court-admin/reservations');
+    revalidatePath('/court-admin');
+    revalidatePath('/bookings');
+    revalidatePath(`/bookings/${reservationId}`);
 
-    return { success: true }
+    return { success: true };
   } catch (error: any) {
-    console.error('Error rejecting reschedule:', error)
-    return { success: false, error: error.message }
+    console.error('Error rejecting reschedule:', error);
+    return { success: false, error: error.message };
   }
 }

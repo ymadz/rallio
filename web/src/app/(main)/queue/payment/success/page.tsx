@@ -1,98 +1,99 @@
-'use client'
+'use client';
 
-import { useEffect, useState, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
-import { CheckCircle, Loader2, ArrowRight, Receipt, AlertCircle } from 'lucide-react'
-import Link from 'next/link'
-import confetti from 'canvas-confetti'
-import { processChargeableSourceAction } from '@/app/actions/payments'
+import { useEffect, useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
+import { CheckCircle, Loader2, ArrowRight, Receipt, AlertCircle } from 'lucide-react';
+import Link from 'next/link';
+import confetti from 'canvas-confetti';
+import { processChargeableSourceAction } from '@/app/actions/payments';
 
 function PaymentSuccessContent() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const participantId = searchParams.get('participant')
-  const sessionId = searchParams.get('session')
-  const sourceId = searchParams.get('source_id')
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const participantId = searchParams.get('participant');
+  const sessionId = searchParams.get('session');
+  const sourceId = searchParams.get('source_id');
 
-  const [participant, setParticipant] = useState<any>(null)
-  const [session, setSession] = useState<any>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isProcessing, setIsProcessing] = useState(!!sourceId)
-  const [processingError, setProcessingError] = useState<string | null>(null)
+  const [participant, setParticipant] = useState<any>(null);
+  const [session, setSession] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(!!sourceId);
+  const [processingError, setProcessingError] = useState<string | null>(null);
 
   useEffect(() => {
     // Trigger confetti celebration
-    const duration = 3 * 1000
-    const animationEnd = Date.now() + duration
-    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 }
+    const duration = 3 * 1000;
+    const animationEnd = Date.now() + duration;
+    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
 
     function randomInRange(min: number, max: number) {
-      return Math.random() * (max - min) + min
+      return Math.random() * (max - min) + min;
     }
 
     const interval: any = setInterval(function () {
-      const timeLeft = animationEnd - Date.now()
+      const timeLeft = animationEnd - Date.now();
 
       if (timeLeft <= 0) {
-        return clearInterval(interval)
+        return clearInterval(interval);
       }
 
-      const particleCount = 50 * (timeLeft / duration)
+      const particleCount = 50 * (timeLeft / duration);
       confetti({
         ...defaults,
         particleCount,
         origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 },
-      })
+      });
       confetti({
         ...defaults,
         particleCount,
         origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 },
-      })
-    }, 250)
+      });
+    }, 250);
 
-    return () => clearInterval(interval)
-  }, [])
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     async function processPayment() {
-      if (!sourceId) return
+      if (!sourceId) return;
 
       try {
-        console.log('[QueuePaymentSuccessPage] 🔄 Processing source_id:', sourceId)
-        const result = await processChargeableSourceAction(sourceId)
-        
+        console.log('[QueuePaymentSuccessPage] 🔄 Processing source_id:', sourceId);
+        const result = await processChargeableSourceAction(sourceId);
+
         if (!result.success) {
-          console.error('[QueuePaymentSuccessPage] ❌ Processing failed:', result.error)
-          setProcessingError(result.error || 'Failed to process payment')
+          console.error('[QueuePaymentSuccessPage] ❌ Processing failed:', result.error);
+          setProcessingError(result.error || 'Failed to process payment');
         } else {
-          console.log('[QueuePaymentSuccessPage] ✅ Payment processed successfully')
+          console.log('[QueuePaymentSuccessPage] ✅ Payment processed successfully');
         }
       } catch (err) {
-        console.error('[QueuePaymentSuccessPage] 🧨 Unexpected error:', err)
-        setProcessingError(err instanceof Error ? err.message : 'An unexpected error occurred')
+        console.error('[QueuePaymentSuccessPage] 🧨 Unexpected error:', err);
+        setProcessingError(err instanceof Error ? err.message : 'An unexpected error occurred');
       } finally {
-        setIsProcessing(false)
+        setIsProcessing(false);
       }
     }
 
-    processPayment()
-  }, [sourceId])
+    processPayment();
+  }, [sourceId]);
 
   useEffect(() => {
     const loadPaymentDetails = async () => {
       if (!participantId) {
-        setIsLoading(false)
-        return
+        setIsLoading(false);
+        return;
       }
 
       try {
-        const supabase = createClient()
+        const supabase = createClient();
 
         // Fetch participant details with payment info
         const { data: participantData, error: participantError } = await supabase
           .from('queue_participants')
-          .select(`
+          .select(
+            `
             *,
             queue_sessions (
               *,
@@ -110,23 +111,24 @@ function PaymentSuccessContent() {
               paid_at,
               reference
             )
-          `)
+          `
+          )
           .eq('id', participantId)
-          .single()
+          .single();
 
-        if (participantError) throw participantError
+        if (participantError) throw participantError;
 
-        setParticipant(participantData)
-        setSession(participantData.queue_sessions)
+        setParticipant(participantData);
+        setSession(participantData.queue_sessions);
       } catch (error) {
-        console.error('Error loading payment details:', error)
+        console.error('Error loading payment details:', error);
       } finally {
-        setIsLoading(false)
+        setIsLoading(false);
       }
-    }
+    };
 
-    loadPaymentDetails()
-  }, [participantId])
+    loadPaymentDetails();
+  }, [participantId]);
 
   if (isProcessing) {
     return (
@@ -139,10 +141,12 @@ function PaymentSuccessContent() {
             </div>
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Finalizing Payment</h2>
-          <p className="text-gray-600">Please wait while we confirm your transaction and clear your balance...</p>
+          <p className="text-gray-600">
+            Please wait while we confirm your transaction and clear your balance...
+          </p>
         </div>
       </div>
-    )
+    );
   }
 
   if (processingError) {
@@ -170,7 +174,7 @@ function PaymentSuccessContent() {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   if (isLoading) {
@@ -181,10 +185,10 @@ function PaymentSuccessContent() {
           <p className="text-gray-600">Loading payment details...</p>
         </div>
       </div>
-    )
+    );
   }
 
-  const payment = participant?.payments?.[0]
+  const payment = participant?.payments?.[0];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 flex items-center justify-center p-4">
@@ -198,9 +202,7 @@ function PaymentSuccessContent() {
 
           {/* Title */}
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Payment Successful!</h1>
-          <p className="text-gray-600 mb-8">
-            Your queue payment has been processed successfully
-          </p>
+          <p className="text-gray-600 mb-8">Your queue payment has been processed successfully</p>
 
           {/* Payment Details */}
           {participant && session && (
@@ -224,7 +226,8 @@ function PaymentSuccessContent() {
                   <div>
                     <p className="text-sm text-gray-500">Amount Paid</p>
                     <p className="font-semibold text-gray-900">
-                      ₱{payment?.amount?.toFixed(2) || participant.amount_owed?.toFixed(2) || '0.00'}
+                      ₱
+                      {payment?.amount?.toFixed(2) || participant.amount_owed?.toFixed(2) || '0.00'}
                     </p>
                   </div>
                 </div>
@@ -247,9 +250,13 @@ function PaymentSuccessContent() {
                       <div>
                         <p className="text-sm text-gray-500">Promo / Discount</p>
                         <p className="font-semibold text-gray-900">
-                          {session.discount_amount && session.discount_amount > 0
-                            ? <span className="text-green-600">-₱{session.discount_amount.toFixed(2)}</span>
-                            : <span className="text-gray-400">None</span>}
+                          {session.discount_amount && session.discount_amount > 0 ? (
+                            <span className="text-green-600">
+                              -₱{session.discount_amount.toFixed(2)}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">None</span>
+                          )}
                         </p>
                       </div>
                       <div>
@@ -305,13 +312,11 @@ function PaymentSuccessContent() {
 
         {/* Receipt Note */}
         <div className="text-center mt-6">
-          <p className="text-sm text-gray-600">
-            A receipt has been saved to your account history
-          </p>
+          <p className="text-sm text-gray-600">A receipt has been saved to your account history</p>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 export default function QueuePaymentSuccessPage() {
@@ -325,5 +330,5 @@ export default function QueuePaymentSuccessPage() {
     >
       <PaymentSuccessContent />
     </Suspense>
-  )
+  );
 }

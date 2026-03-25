@@ -181,37 +181,39 @@ export function BookingCard({
   };
 
   const paymentStatus = getExtendedPaymentStatus(booking);
-  const cashDeadline = booking.cash_payment_deadline || booking.metadata?.cash_payment_deadline || null
-  const shouldShowCashTimer = isCashBooking(booking) && booking.status === 'pending_payment' && !!cashDeadline
-  const [nowMs, setNowMs] = useState(Date.now())
+  const cashDeadline =
+    booking.cash_payment_deadline || booking.metadata?.cash_payment_deadline || null;
+  const shouldShowCashTimer =
+    isCashBooking(booking) && booking.status === 'pending_payment' && !!cashDeadline;
+  const [nowMs, setNowMs] = useState(Date.now());
 
   useEffect(() => {
-    if (!shouldShowCashTimer) return
+    if (!shouldShowCashTimer) return;
 
-    const timerId = setInterval(() => setNowMs(Date.now()), 1000)
-    return () => clearInterval(timerId)
-  }, [shouldShowCashTimer])
+    const timerId = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timerId);
+  }, [shouldShowCashTimer]);
 
   const formatCountdown = (msRemaining: number) => {
-    if (msRemaining <= 0) return '00:00:00'
+    if (msRemaining <= 0) return '00:00:00';
 
-    const totalSeconds = Math.floor(msRemaining / 1000)
-    const days = Math.floor(totalSeconds / 86400)
-    const hours = Math.floor((totalSeconds % 86400) / 3600)
-    const minutes = Math.floor((totalSeconds % 3600) / 60)
-    const seconds = totalSeconds % 60
+    const totalSeconds = Math.floor(msRemaining / 1000);
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
 
-    const hh = String(hours).padStart(2, '0')
-    const mm = String(minutes).padStart(2, '0')
-    const ss = String(seconds).padStart(2, '0')
+    const hh = String(hours).padStart(2, '0');
+    const mm = String(minutes).padStart(2, '0');
+    const ss = String(seconds).padStart(2, '0');
 
-    if (days > 0) return `${days}d ${hh}:${mm}:${ss}`
-    return `${hh}:${mm}:${ss}`
-  }
+    if (days > 0) return `${days}d ${hh}:${mm}:${ss}`;
+    return `${hh}:${mm}:${ss}`;
+  };
 
-  const deadlineMs = cashDeadline ? new Date(cashDeadline).getTime() : 0
-  const remainingMs = deadlineMs - nowMs
-  const isCashDeadlineExpired = shouldShowCashTimer && remainingMs <= 0
+  const deadlineMs = cashDeadline ? new Date(cashDeadline).getTime() : 0;
+  const remainingMs = deadlineMs - nowMs;
+  const isCashDeadlineExpired = shouldShowCashTimer && remainingMs <= 0;
 
   return (
     <div className="overflow-hidden flex flex-col max-h-[90vh]">
@@ -364,8 +366,18 @@ export function BookingCard({
         {booking.metadata?.last_reschedule_rejection && (
           <div className="rounded-xl p-4 mb-4 border border-red-200 bg-gradient-to-br from-red-50 to-rose-50">
             <div className="flex items-center gap-2 mb-2">
-              <svg className="w-4 h-4 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              <svg
+                className="w-4 h-4 text-red-500 shrink-0"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
+                />
               </svg>
               <p className="text-red-800 font-semibold text-xs uppercase tracking-wider">
                 Reschedule Rejected
@@ -376,7 +388,10 @@ export function BookingCard({
             </p>
             {booking.metadata.last_reschedule_rejection.rejected_at && (
               <p className="text-xs text-red-400 mt-2">
-                {format(new Date(booking.metadata.last_reschedule_rejection.rejected_at), 'MMM d, yyyy · h:mm a')}
+                {format(
+                  new Date(booking.metadata.last_reschedule_rejection.rejected_at),
+                  'MMM d, yyyy · h:mm a'
+                )}
               </p>
             )}
           </div>
@@ -386,8 +401,18 @@ export function BookingCard({
         {booking.metadata?.reschedule_request?.status === 'pending' && (
           <div className="rounded-xl p-4 mb-4 border border-amber-200 bg-gradient-to-br from-amber-50 to-yellow-50">
             <div className="flex items-center gap-2 mb-2">
-              <svg className="w-4 h-4 text-amber-500 shrink-0 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg
+                className="w-4 h-4 text-amber-500 shrink-0 animate-pulse"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
               <p className="text-amber-800 font-semibold text-xs uppercase tracking-wider">
                 Reschedule Pending Approval
@@ -396,10 +421,17 @@ export function BookingCard({
             <div className="text-sm text-amber-700 space-y-1">
               <p>
                 <span className="font-medium">Proposed:</span>{' '}
-                {format(new Date(booking.metadata.reschedule_request.proposed_start_time), 'EEE, MMM d, yyyy')}
+                {format(
+                  new Date(booking.metadata.reschedule_request.proposed_start_time),
+                  'EEE, MMM d, yyyy'
+                )}
               </p>
               <p>
-                {format(new Date(booking.metadata.reschedule_request.proposed_start_time), 'h:mm a')} –{' '}
+                {format(
+                  new Date(booking.metadata.reschedule_request.proposed_start_time),
+                  'h:mm a'
+                )}{' '}
+                –{' '}
                 {format(new Date(booking.metadata.reschedule_request.proposed_end_time), 'h:mm a')}
               </p>
             </div>
@@ -572,16 +604,22 @@ export function BookingCard({
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className={`text-xs font-semibold uppercase tracking-wider ${isCashDeadlineExpired ? 'text-red-700' : 'text-amber-700'}`}>
+                      <p
+                        className={`text-xs font-semibold uppercase tracking-wider ${isCashDeadlineExpired ? 'text-red-700' : 'text-amber-700'}`}
+                      >
                         Cash Payment Deadline
                       </p>
-                      <p className={`text-xs mt-1 ${isCashDeadlineExpired ? 'text-red-600' : 'text-amber-700'}`}>
+                      <p
+                        className={`text-xs mt-1 ${isCashDeadlineExpired ? 'text-red-600' : 'text-amber-700'}`}
+                      >
                         {isCashDeadlineExpired
                           ? 'Deadline passed. This booking will be cancelled if still unpaid.'
                           : `Pay cash at venue before ${format(new Date(cashDeadline as string), 'MMM d, yyyy • h:mm a')}`}
                       </p>
                     </div>
-                    <div className={`rounded-lg px-3 py-2 text-sm font-bold tabular-nums ${isCashDeadlineExpired ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>
+                    <div
+                      className={`rounded-lg px-3 py-2 text-sm font-bold tabular-nums ${isCashDeadlineExpired ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}
+                    >
                       {formatCountdown(remainingMs)}
                     </div>
                   </div>
@@ -679,7 +717,10 @@ export function BookingCard({
             {booking.type === 'queue_session' && booking.queue_session_id ? (
               /* Queue Session Actions */
               <>
-                <Link href={`/queue/${booking.queue_session_id || booking.courts?.id}`} className="col-span-2">
+                <Link
+                  href={`/queue/${booking.queue_session_id || booking.courts?.id}`}
+                  className="col-span-2"
+                >
                   <Button
                     variant="outline"
                     className="w-full h-10 rounded-xl text-green-700 border-green-300 bg-white hover:bg-green-50 hover:text-green-800 hover:border-green-400 transition-colors"
@@ -704,15 +745,25 @@ export function BookingCard({
 
                 {/* Organizer Management Actions */}
                 {booking.metadata?.is_organizer && canCancelBooking(booking) && (
-                   <>
+                  <>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => onReschedule(booking)}
                       className="w-full h-10 rounded-xl border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 transition-colors"
                     >
-                      <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      <svg
+                        className="w-4 h-4 mr-1.5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                        />
                       </svg>
                       Reschedule
                     </Button>
@@ -724,8 +775,18 @@ export function BookingCard({
                         onClick={() => onRefundBooking(booking)}
                         className="w-full h-10 rounded-xl transition-colors text-primary border-primary/30 hover:bg-primary/5 hover:text-primary hover:border-primary/40"
                       >
-                        <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                        <svg
+                          className="w-4 h-4 mr-1.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
+                          />
                         </svg>
                         Request Refund
                       </Button>
@@ -737,11 +798,27 @@ export function BookingCard({
                         disabled={cancellingId === booking.id}
                         className="w-full h-10 rounded-xl text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors"
                       >
-                        {cancellingId === booking.id ? <Spinner className="w-4 h-4 mr-2" /> : <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>}
+                        {cancellingId === booking.id ? (
+                          <Spinner className="w-4 h-4 mr-2" />
+                        ) : (
+                          <svg
+                            className="w-4 h-4 mr-1.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        )}
                         Cancel Session
                       </Button>
                     )}
-                   </>
+                  </>
                 )}
 
                 <Link href={`/bookings/${booking.id}/receipt`} className="col-span-2">
@@ -876,7 +953,10 @@ export function BookingCard({
                     </Button>
 
                     {/* Show Cancel for unpaid, nothing extra for paid (refund button is above) */}
-                    {!((booking.status === 'confirmed' || booking.status === 'partially_paid') && booking.amount_paid > 0) && (
+                    {!(
+                      (booking.status === 'confirmed' || booking.status === 'partially_paid') &&
+                      booking.amount_paid > 0
+                    ) && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -909,7 +989,6 @@ export function BookingCard({
                         )}
                       </Button>
                     )}
-
                   </>
                 )}
               </>

@@ -15,8 +15,8 @@ import {
 } from '@/app/actions/match-actions';
 import { PayMongoError } from '@/lib/paymongo/client';
 import { initiatePaymentAction } from '@/app/actions/payments';
-import { Capacitor } from '@capacitor/core'
-import { Browser } from '@capacitor/browser'
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { QueueEventCard } from '@/components/queue/queue-event-card';
 import type { QueueSession as QueueSessionHook } from '@/hooks/use-queue';
@@ -96,11 +96,15 @@ interface QueueSession {
   }>;
 }
 
-const resolveSkillRange = (sessionRow: any): { minSkillLevel: number | null; maxSkillLevel: number | null } => {
+const resolveSkillRange = (
+  sessionRow: any
+): { minSkillLevel: number | null; maxSkillLevel: number | null } => {
   const meta = sessionRow?.metadata || {};
 
-  let minSkillLevel = sessionRow?.min_skill_level ?? meta.min_skill_level ?? meta.minSkillLevel ?? null;
-  let maxSkillLevel = sessionRow?.max_skill_level ?? meta.max_skill_level ?? meta.maxSkillLevel ?? null;
+  let minSkillLevel =
+    sessionRow?.min_skill_level ?? meta.min_skill_level ?? meta.minSkillLevel ?? null;
+  let maxSkillLevel =
+    sessionRow?.max_skill_level ?? meta.max_skill_level ?? meta.maxSkillLevel ?? null;
 
   // Fallback for older payload shapes that stored selected tiers in metadata.
   const tiers = Array.isArray(meta.allowed_skill_tiers) ? meta.allowed_skill_tiers : null;
@@ -112,9 +116,7 @@ const resolveSkillRange = (sessionRow: any): { minSkillLevel: number | null; max
       elite: { min: 9, max: 10 },
     };
 
-    const ranges = tiers
-      .map((tier: string) => tierMap[String(tier).toLowerCase()])
-      .filter(Boolean);
+    const ranges = tiers.map((tier: string) => tierMap[String(tier).toLowerCase()]).filter(Boolean);
 
     if (ranges.length > 0) {
       minSkillLevel = Math.min(...ranges.map((r: { min: number; max: number }) => r.min));
@@ -152,7 +154,10 @@ const getSkillRequirementLabel = (min?: number | null, max?: number | null) => {
   return `${minTier} - ${maxTier}`;
 };
 
-export function SessionManagementClient({ sessionId, onSwitchToPlayerView }: SessionManagementClientProps) {
+export function SessionManagementClient({
+  sessionId,
+  onSwitchToPlayerView,
+}: SessionManagementClientProps) {
   const router = useRouter();
   const { date: serverDate } = useServerTime();
   const supabase = createClient();
@@ -317,9 +322,15 @@ export function SessionManagementClient({ sessionId, onSwitchToPlayerView }: Ses
       const formattedSession: QueueSession = {
         id: sessionData.id,
         courtId: sessionData.court_id,
-        courtName: sessionData.queue_session_courts?.length > 0
-          ? sessionData.queue_session_courts.map((qsc: any) => qsc.courts?.name).filter(Boolean).join(', ')
-          : sessionData.metadata?.courts?.map((c: any) => c.name).join(', ') || sessionData.courts?.name || 'Unknown Court',
+        courtName:
+          sessionData.queue_session_courts?.length > 0
+            ? sessionData.queue_session_courts
+                .map((qsc: any) => qsc.courts?.name)
+                .filter(Boolean)
+                .join(', ')
+            : sessionData.metadata?.courts?.map((c: any) => c.name).join(', ') ||
+              sessionData.courts?.name ||
+              'Unknown Court',
         venueName: sessionData.courts?.venues?.name || 'Unknown Venue',
         status: sessionData.status,
         currentPlayers: sessionData.current_players || formattedParticipants.length,
@@ -545,15 +556,13 @@ export function SessionManagementClient({ sessionId, onSwitchToPlayerView }: Ses
     setActionLoading('pay');
     try {
       const paymentMethod = session.metadata?.payment_method === 'paymaya' ? 'paymaya' : 'gcash';
-      const result = await initiatePaymentAction(
-        session.metadata.reservation_id, 
-        paymentMethod,
-        { isMobile: Capacitor.isNativePlatform() }
-      );
+      const result = await initiatePaymentAction(session.metadata.reservation_id, paymentMethod, {
+        isMobile: Capacitor.isNativePlatform(),
+      });
       if (!result.success || !result.checkoutUrl) {
         throw new Error(result.error || 'Failed to initiate payment');
       }
-      
+
       if (Capacitor.isNativePlatform()) {
         await Browser.open({ url: result.checkoutUrl });
       } else {
@@ -892,10 +901,15 @@ export function SessionManagementClient({ sessionId, onSwitchToPlayerView }: Ses
                         </div>
                         <div className="grid grid-cols-2 gap-3 border-t border-gray-100 pt-3 mt-1">
                           <div>
-                            <div className="text-xs text-gray-500 font-medium mb-1.5 uppercase tracking-wider">Team A</div>
+                            <div className="text-xs text-gray-500 font-medium mb-1.5 uppercase tracking-wider">
+                              Team A
+                            </div>
                             <div className="space-y-1">
                               {match.teamAPlayers?.map((p: any) => (
-                                <div key={p.id} className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                                <div
+                                  key={p.id}
+                                  className="text-sm font-medium text-gray-900 flex items-center gap-2"
+                                >
                                   <div className="w-1.5 h-1.5 rounded-full bg-primary" />
                                   {p.name}
                                 </div>
@@ -903,10 +917,15 @@ export function SessionManagementClient({ sessionId, onSwitchToPlayerView }: Ses
                             </div>
                           </div>
                           <div>
-                            <div className="text-xs text-gray-500 font-medium mb-1.5 uppercase tracking-wider">Team B</div>
+                            <div className="text-xs text-gray-500 font-medium mb-1.5 uppercase tracking-wider">
+                              Team B
+                            </div>
                             <div className="space-y-1">
                               {match.teamBPlayers?.map((p: any) => (
-                                <div key={p.id} className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                                <div
+                                  key={p.id}
+                                  className="text-sm font-medium text-gray-900 flex items-center gap-2"
+                                >
                                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                                   {p.name}
                                 </div>
@@ -1003,8 +1022,8 @@ export function SessionManagementClient({ sessionId, onSwitchToPlayerView }: Ses
                 {waitingPlayers.length > 0 && (
                   <div className="mb-6">
                     <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wider flex items-center gap-2">
-                       <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                       Waiting ({waitingPlayers.length})
+                      <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                      Waiting ({waitingPlayers.length})
                     </h3>
                     <div className="space-y-2">
                       {waitingPlayers.map((player) => (
@@ -1031,7 +1050,9 @@ export function SessionManagementClient({ sessionId, onSwitchToPlayerView }: Ses
                             </div>
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
-                                <div className="font-semibold text-gray-900 group-hover:text-primary transition-colors">{player.playerName}</div>
+                                <div className="font-semibold text-gray-900 group-hover:text-primary transition-colors">
+                                  {player.playerName}
+                                </div>
                                 {player.rating && (
                                   <span className="px-2 py-0.5 bg-white text-gray-700 text-[10px] font-bold rounded-full border border-gray-200 shadow-sm">
                                     {player.rating} ELO
@@ -1039,9 +1060,13 @@ export function SessionManagementClient({ sessionId, onSwitchToPlayerView }: Ses
                                 )}
                               </div>
                               <div className="text-sm text-gray-600 flex items-center gap-1.5">
-                                <span className="font-medium text-primary/80">{player.gamesPlayed} played</span>
+                                <span className="font-medium text-primary/80">
+                                  {player.gamesPlayed} played
+                                </span>
                                 <span className="text-gray-300">•</span>
-                                <span className="font-semibold text-emerald-600">₱{player.amountOwed.toFixed(0)} owed</span>
+                                <span className="font-semibold text-emerald-600">
+                                  ₱{player.amountOwed.toFixed(0)} owed
+                                </span>
                               </div>
                             </div>
                             <button
@@ -1113,7 +1138,9 @@ export function SessionManagementClient({ sessionId, onSwitchToPlayerView }: Ses
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
-                                <div className="font-semibold text-gray-900 group-hover:text-green-700">{player.playerName}</div>
+                                <div className="font-semibold text-gray-900 group-hover:text-green-700">
+                                  {player.playerName}
+                                </div>
                                 {player.rating && (
                                   <span className="px-2 py-0.5 bg-white text-gray-700 text-[10px] font-bold rounded-full border border-gray-200 shadow-sm">
                                     {player.rating} ELO
@@ -1151,7 +1178,9 @@ export function SessionManagementClient({ sessionId, onSwitchToPlayerView }: Ses
                       <Users className="w-8 h-8 text-gray-400" />
                     </div>
                     <h3 className="font-bold text-gray-900 mb-2">No Participants Yet</h3>
-                    <p className="text-sm text-gray-500 max-w-[200px] mx-auto">Players will appear here as they join the queue.</p>
+                    <p className="text-sm text-gray-500 max-w-[200px] mx-auto">
+                      Players will appear here as they join the queue.
+                    </p>
                   </div>
                 )}
               </div>
@@ -1159,19 +1188,12 @@ export function SessionManagementClient({ sessionId, onSwitchToPlayerView }: Ses
           ) : (
             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-gray-900">
-                  Completed Matches
-                </h2>
+                <h2 className="text-xl font-bold text-gray-900">Completed Matches</h2>
                 <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                   <Trophy className="w-5 h-5 text-primary" />
+                  <Trophy className="w-5 h-5 text-primary" />
                 </div>
               </div>
-              <MatchHistoryViewer
-                sessionId={session.id}
-                userId=""
-                courtId=""
-                isManager={true}
-              />
+              <MatchHistoryViewer sessionId={session.id} userId="" courtId="" isManager={true} />
             </div>
           )}
         </div>

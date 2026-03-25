@@ -986,49 +986,54 @@ async function updateQueueSessionStatus(reservationId: string, supabaseParam: an
  * Helper to mark queue participant as paid and clear balance
  */
 async function markQueueParticipantPaidIfApplicable(supabase: any, payment: any) {
-  const paymentType = payment?.metadata?.payment_type
-  const participantId = payment?.metadata?.participant_id
-  const queueSessionId = payment?.metadata?.queue_session_id
+  const paymentType = payment?.metadata?.payment_type;
+  const participantId = payment?.metadata?.participant_id;
+  const queueSessionId = payment?.metadata?.queue_session_id;
 
   if (paymentType !== 'queue_session' && !participantId) {
-    return
+    return;
   }
 
   console.log('[markQueueParticipantPaidIfApplicable] 🔄 Processing queue participant payment:', {
     participantId,
     paymentId: payment.id,
-    paymentType
-  })
+    paymentType,
+  });
 
   if (!participantId) {
-    console.warn('[markQueueParticipantPaidIfApplicable] ⚠️ Missing participant_id for queue payment:', payment?.id)
-    return
+    console.warn(
+      '[markQueueParticipantPaidIfApplicable] ⚠️ Missing participant_id for queue payment:',
+      payment?.id
+    );
+    return;
   }
 
   // Use service client to ensure we can update even if RLS is strict
-  const serviceClient = createServiceClient()
+  const serviceClient = createServiceClient();
 
   const { data: participant, error: participantError } = await serviceClient
     .from('queue_participants')
     .select('*')
     .eq('id', participantId)
-    .single()
+    .single();
 
   if (participantError || !participant) {
     console.warn('[markQueueParticipantPaidIfApplicable] ❌ Participant not found:', {
       participantId,
       error: participantError,
-    })
-    return
+    });
+    return;
   }
 
   // If already paid and balance cleared, nothing to do
   if (participant.payment_status === 'paid' && Number(participant.amount_owed || 0) <= 0) {
-    console.log('[markQueueParticipantPaidIfApplicable] ℹ️ Participant already marked as paid')
-    return
+    console.log('[markQueueParticipantPaidIfApplicable] ℹ️ Participant already marked as paid');
+    return;
   }
 
-  console.log('[markQueueParticipantPaidIfApplicable] 📝 Marking participant as paid and clearing amount_owed')
+  console.log(
+    '[markQueueParticipantPaidIfApplicable] 📝 Marking participant as paid and clearing amount_owed'
+  );
   const { error: updateError } = await serviceClient
     .from('queue_participants')
     .update({
@@ -1038,32 +1043,37 @@ async function markQueueParticipantPaidIfApplicable(supabase: any, payment: any)
         ...(participant.metadata || {}),
         paid_at: new Date().toISOString(),
         payment_id: payment.id,
-        processed_by: 'server_action'
-      }
+        processed_by: 'server_action',
+      },
     })
-    .eq('id', participant.id)
+    .eq('id', participant.id);
 
   if (updateError) {
-    console.error('[markQueueParticipantPaidIfApplicable] ❌ Failed to mark participant paid:', updateError)
-    return
+    console.error(
+      '[markQueueParticipantPaidIfApplicable] ❌ Failed to mark participant paid:',
+      updateError
+    );
+    return;
   }
 
-  const effectiveSessionId = participant.queue_session_id || queueSessionId
+  const effectiveSessionId = participant.queue_session_id || queueSessionId;
   if (!effectiveSessionId) {
-    revalidatePath('/queue')
-    return
+    revalidatePath('/queue');
+    return;
   }
 
   const { data: queueSession } = await serviceClient
     .from('queue_sessions')
     .select('court_id')
     .eq('id', effectiveSessionId)
-    .single()
+    .single();
 
-  console.log('[markQueueParticipantPaidIfApplicable] ✅ Participant fulfillment complete. Revalidating paths.')
-  revalidatePath('/queue')
+  console.log(
+    '[markQueueParticipantPaidIfApplicable] ✅ Participant fulfillment complete. Revalidating paths.'
+  );
+  revalidatePath('/queue');
   if (queueSession?.court_id) {
-    revalidatePath(`/queue/${queueSession.court_id}`)
+    revalidatePath(`/queue/${queueSession.court_id}`);
   }
 }
 

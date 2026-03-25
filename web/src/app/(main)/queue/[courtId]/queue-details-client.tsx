@@ -1,87 +1,102 @@
-'use client'
+'use client';
 
-import { useQueue } from '@/hooks/use-queue'
-import { PlayerCard } from '@/components/queue/player-card'
-import { QueuePositionTracker } from '@/components/queue/queue-position-tracker'
-import { MatchHistoryViewer } from '@/components/queue/match-history-viewer'
-import { SessionManagementClient } from '@/components/queue-master/session-management-client'
-import { QueueEventCard } from '@/components/queue/queue-event-card'
+import { useQueue } from '@/hooks/use-queue';
+import { PlayerCard } from '@/components/queue/player-card';
+import { QueuePositionTracker } from '@/components/queue/queue-position-tracker';
+import { MatchHistoryViewer } from '@/components/queue/match-history-viewer';
+import { SessionManagementClient } from '@/components/queue-master/session-management-client';
+import { QueueEventCard } from '@/components/queue/queue-event-card';
 
-import { Users, Clock, Activity, Loader2, AlertCircle, Trophy, Calendar, X, CreditCard } from 'lucide-react'
-import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import { initiateQueuePaymentAction } from '@/app/actions/payments'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { differenceInSeconds, subHours, isBefore, format } from 'date-fns'
-import { useServerTime } from '@/hooks/use-server-time'
-import { formatCurrency } from '@rallio/shared/utils'
+import {
+  Users,
+  Clock,
+  Activity,
+  Loader2,
+  AlertCircle,
+  Trophy,
+  Calendar,
+  X,
+  CreditCard,
+} from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { initiateQueuePaymentAction } from '@/app/actions/payments';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { differenceInSeconds, subHours, isBefore, format } from 'date-fns';
+import { useServerTime } from '@/hooks/use-server-time';
+import { formatCurrency } from '@rallio/shared/utils';
 
 interface QueueDetailsClientProps {
-  courtId: string
+  courtId: string;
 }
 
 export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
-  const router = useRouter()
-  const { queue, isLoading, error, joinQueue, leaveQueue, refreshQueue } = useQueue(courtId)
-  const { date: serverDate } = useServerTime()
-  const [isJoining, setIsJoining] = useState(false)
-  const [isLeaving, setIsLeaving] = useState(false)
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [participant, setParticipant] = useState<any>(null)
-  const [userSkillLevel, setUserSkillLevel] = useState<number | null>(null)
-  const [isProfileCompleted, setIsProfileCompleted] = useState<boolean>(false)
+  const router = useRouter();
+  const { queue, isLoading, error, joinQueue, leaveQueue, refreshQueue } = useQueue(courtId);
+  const { date: serverDate } = useServerTime();
+  const [isJoining, setIsJoining] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [participant, setParticipant] = useState<any>(null);
+  const [userSkillLevel, setUserSkillLevel] = useState<number | null>(null);
+  const [isProfileCompleted, setIsProfileCompleted] = useState<boolean>(false);
 
-  const [timeUntilOpen, setTimeUntilOpen] = useState<number | null>(null)
+  const [timeUntilOpen, setTimeUntilOpen] = useState<number | null>(null);
 
   // Timer effect
   useEffect(() => {
-    if (!queue?.startTime) return
+    if (!queue?.startTime) return;
 
     const updateTimer = () => {
-      const startTime = new Date(queue.startTime)
-      const openTime = queue.joinWindowHours != null ? subHours(startTime, queue.joinWindowHours) : new Date(0)
-      const now = serverDate || new Date()
+      const startTime = new Date(queue.startTime);
+      const openTime =
+        queue.joinWindowHours != null ? subHours(startTime, queue.joinWindowHours) : new Date(0);
+      const now = serverDate || new Date();
 
       if (isBefore(now, openTime)) {
-        const diff = differenceInSeconds(openTime, now)
-        setTimeUntilOpen(diff)
+        const diff = differenceInSeconds(openTime, now);
+        setTimeUntilOpen(diff);
       } else {
-        setTimeUntilOpen(0)
+        setTimeUntilOpen(0);
       }
-    }
+    };
 
-    updateTimer()
-    const interval = setInterval(updateTimer, 1000)
-    return () => clearInterval(interval)
-  }, [queue?.startTime, serverDate])
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [queue?.startTime, serverDate]);
 
   const formatTime = (seconds: number) => {
-    const h = Math.floor(seconds / 3600)
-    const m = Math.floor((seconds % 3600) / 60)
-    const s = seconds % 60
-    return `${h}h ${m}m ${s}s`
-  }
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    return `${h}h ${m}m ${s}s`;
+  };
 
-  const [showMatchHistory, setShowMatchHistory] = useState(false)
-  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
+  const [showMatchHistory, setShowMatchHistory] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [paymentRequiredInfo, setPaymentRequiredInfo] = useState<{
-    show: boolean
-    amountOwed: number
-    gamesPlayed: number
-  } | null>(null)
-  const [isInitiatingPayment, setIsInitiatingPayment] = useState(false)
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'gcash' | 'paymaya' | null>(null)
-  const [paymentError, setPaymentError] = useState<string | null>(null)
-  const [isQueueMaster, setIsQueueMaster] = useState(false)
-  const [showPlayerView, setShowPlayerView] = useState(false)
-  const supabase = createClient()
+    show: boolean;
+    amountOwed: number;
+    gamesPlayed: number;
+  } | null>(null);
+  const [isInitiatingPayment, setIsInitiatingPayment] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'gcash' | 'paymaya' | null>(
+    null
+  );
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [isQueueMaster, setIsQueueMaster] = useState(false);
+  const [showPlayerView, setShowPlayerView] = useState(false);
+  const supabase = createClient();
 
   // Get current user ID and check if queue master
   useEffect(() => {
     async function getCurrentUser() {
-      const { data: { user } } = await supabase.auth.getUser()
-      setCurrentUserId(user?.id || null)
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setCurrentUserId(user?.id || null);
 
       if (user?.id) {
         try {
@@ -90,43 +105,44 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
             .from('profiles')
             .select('profile_completed')
             .eq('id', user.id)
-            .single()
+            .single();
 
-          setIsProfileCompleted(profile?.profile_completed ?? false)
+          setIsProfileCompleted(profile?.profile_completed ?? false);
 
           const { data: roles } = await supabase
             .from('user_roles')
             .select('roles(name)')
-            .eq('user_id', user.id)
+            .eq('user_id', user.id);
 
-          const hasQueueMasterRole = roles?.some((r: any) => r.roles?.name === 'queue_master') || false
-          setIsQueueMaster(hasQueueMasterRole)
+          const hasQueueMasterRole =
+            roles?.some((r: any) => r.roles?.name === 'queue_master') || false;
+          setIsQueueMaster(hasQueueMasterRole);
         } catch (err) {
-          console.error('Error fetching user roles/profile:', err)
-          setIsQueueMaster(false)
+          console.error('Error fetching user roles/profile:', err);
+          setIsQueueMaster(false);
         }
       }
     }
-    getCurrentUser()
-  }, [])
+    getCurrentUser();
+  }, []);
 
   // Fetch user skill level
   useEffect(() => {
-    if (!currentUserId) return
+    if (!currentUserId) return;
     async function fetchUserSkill() {
       const { data } = await supabase
         .from('players')
         .select('skill_level')
         .eq('user_id', currentUserId)
-        .single()
-      setUserSkillLevel(data?.skill_level || null)
+        .single();
+      setUserSkillLevel(data?.skill_level || null);
     }
-    fetchUserSkill()
-  }, [currentUserId])
+    fetchUserSkill();
+  }, [currentUserId]);
 
   // Fetch participant details and keep in sync with realtime updates
   useEffect(() => {
-    if (!queue?.id || !currentUserId) return
+    if (!queue?.id || !currentUserId) return;
 
     const fetchParticipant = async () => {
       try {
@@ -136,20 +152,20 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
           .eq('queue_session_id', queue.id)
           .eq('user_id', currentUserId)
           .is('left_at', null)
-          .maybeSingle()
+          .maybeSingle();
 
         if (error) {
-          console.error('Error fetching participant:', error)
-          return
+          console.error('Error fetching participant:', error);
+          return;
         }
 
-        setParticipant(data || null)
+        setParticipant(data || null);
       } catch (err) {
-        console.error('Error fetching participant:', err)
+        console.error('Error fetching participant:', err);
       }
-    }
+    };
 
-    fetchParticipant()
+    fetchParticipant();
 
     const participantChannel = supabase
       .channel(`queue-participant-${queue.id}-${currentUserId}`)
@@ -162,55 +178,53 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
           filter: `queue_session_id=eq.${queue.id}`,
         },
         () => {
-          fetchParticipant()
+          fetchParticipant();
         }
       )
-      .subscribe()
+      .subscribe();
 
     return () => {
-      supabase.removeChannel(participantChannel)
-    }
-  }, [queue?.id, currentUserId])
-
-
+      supabase.removeChannel(participantChannel);
+    };
+  }, [queue?.id, currentUserId]);
 
   const handleJoinQueue = async () => {
-    setIsJoining(true)
-    await joinQueue()
-    setIsJoining(false)
-  }
+    setIsJoining(true);
+    await joinQueue();
+    setIsJoining(false);
+  };
 
   const handleQueuePayment = async (method: 'gcash' | 'paymaya') => {
-    if (!participant || !queue) return
-    setIsInitiatingPayment(true)
-    setSelectedPaymentMethod(method)
-    setPaymentError(null)
+    if (!participant || !queue) return;
+    setIsInitiatingPayment(true);
+    setSelectedPaymentMethod(method);
+    setPaymentError(null);
 
     try {
-      const result = await initiateQueuePaymentAction(queue.id, method)
+      const result = await initiateQueuePaymentAction(queue.id, method);
       if (!result.success) {
-        setPaymentError(result.error || 'Failed to initiate payment')
-        return
+        setPaymentError(result.error || 'Failed to initiate payment');
+        return;
       }
       if (result.checkoutUrl) {
-        window.location.href = result.checkoutUrl
+        window.location.href = result.checkoutUrl;
       }
     } catch (err: any) {
-      setPaymentError(err.message || 'Payment failed')
+      setPaymentError(err.message || 'Payment failed');
     } finally {
-      setIsInitiatingPayment(false)
-      setSelectedPaymentMethod(null)
+      setIsInitiatingPayment(false);
+      setSelectedPaymentMethod(null);
     }
-  }
+  };
 
   const handleLeaveQueue = async () => {
     if (!showLeaveConfirm) {
-      setShowLeaveConfirm(true)
-      return
+      setShowLeaveConfirm(true);
+      return;
     }
-    setIsLeaving(true)
-    setShowLeaveConfirm(false)
-    const result = await leaveQueue()
+    setIsLeaving(true);
+    setShowLeaveConfirm(false);
+    const result = await leaveQueue();
 
     if (result?.requiresPayment) {
       // Show payment required modal
@@ -218,18 +232,18 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
         show: true,
         amountOwed: result.amountOwed || 0,
         gamesPlayed: result.gamesPlayed || 0,
-      })
+      });
     }
 
-    setIsLeaving(false)
-  }
+    setIsLeaving(false);
+  };
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
       </div>
-    )
+    );
   }
 
   if (error || !queue) {
@@ -245,7 +259,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
           Try Again
         </button>
       </div>
-    )
+    );
   }
 
   // Wait for both queue data AND user ID before deciding which view to show
@@ -254,7 +268,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
       <div className="flex items-center justify-center py-20">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
       </div>
-    )
+    );
   }
 
   // Closed/cancelled sessions should show summary view instead of join/leave UI.
@@ -264,8 +278,10 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
       totalRevenue: 0,
       totalParticipants: queue.currentPlayers || 0,
       unpaidBalances: 0,
-    }
-    const sortedOutcomes = [...(queue.matchOutcomes || [])].sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0))
+    };
+    const sortedOutcomes = [...(queue.matchOutcomes || [])].sort(
+      (a, b) => (a.matchNumber || 0) - (b.matchNumber || 0)
+    );
 
     return (
       <div className="space-y-6">
@@ -295,7 +311,9 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Total Games</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+                      Total Games
+                    </p>
                     <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
                       <Trophy className="w-4 h-4 text-teal-700" />
                     </div>
@@ -304,25 +322,35 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                 </div>
                 <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Total Revenue</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+                      Total Revenue
+                    </p>
                     <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
                       <CreditCard className="w-4 h-4 text-teal-700" />
                     </div>
                   </div>
-                  <p className="text-3xl font-bold text-teal-900 mt-1">{formatCurrency(summary.totalRevenue)}</p>
+                  <p className="text-3xl font-bold text-teal-900 mt-1">
+                    {formatCurrency(summary.totalRevenue)}
+                  </p>
                 </div>
                 <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Participants</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+                      Participants
+                    </p>
                     <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
                       <Users className="w-4 h-4 text-teal-700" />
                     </div>
                   </div>
-                  <p className="text-3xl font-bold text-teal-900 mt-1">{summary.totalParticipants}</p>
+                  <p className="text-3xl font-bold text-teal-900 mt-1">
+                    {summary.totalParticipants}
+                  </p>
                 </div>
                 <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Unpaid Balances</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+                      Unpaid Balances
+                    </p>
                     <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
                       <Clock className="w-4 h-4 text-teal-700" />
                     </div>
@@ -335,7 +363,9 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Total Games</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+                      Total Games
+                    </p>
                     <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
                       <Trophy className="w-4 h-4 text-teal-700" />
                     </div>
@@ -344,21 +374,31 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                 </div>
                 <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Avg Per Game</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+                      Avg Per Game
+                    </p>
                     <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
                       <CreditCard className="w-4 h-4 text-teal-700" />
                     </div>
                   </div>
-                  <p className="text-3xl font-bold text-teal-900 mt-1">{summary.totalGames > 0 ? formatCurrency(summary.totalRevenue / summary.totalGames) : '-'}</p>
+                  <p className="text-3xl font-bold text-teal-900 mt-1">
+                    {summary.totalGames > 0
+                      ? formatCurrency(summary.totalRevenue / summary.totalGames)
+                      : '-'}
+                  </p>
                 </div>
                 <div className="rounded-xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Participants</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+                      Participants
+                    </p>
                     <div className="w-7 h-7 rounded-lg bg-teal-100 border border-teal-200 flex items-center justify-center">
                       <Users className="w-4 h-4 text-teal-700" />
                     </div>
                   </div>
-                  <p className="text-3xl font-bold text-teal-900 mt-1">{summary.totalParticipants}</p>
+                  <p className="text-3xl font-bold text-teal-900 mt-1">
+                    {summary.totalParticipants}
+                  </p>
                 </div>
               </div>
             )}
@@ -374,9 +414,14 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
               {sortedOutcomes.length > 0 ? (
                 <div className="space-y-3">
                   {sortedOutcomes.map((match) => (
-                    <div key={`${match.matchNumber}-${match.completedAt || 'na'}`} className="rounded-xl border border-teal-100 p-4 bg-gradient-to-b from-white to-teal-50/40">
+                    <div
+                      key={`${match.matchNumber}-${match.completedAt || 'na'}`}
+                      className="rounded-xl border border-teal-100 p-4 bg-gradient-to-b from-white to-teal-50/40"
+                    >
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
-                        <p className="text-sm font-semibold text-gray-900">Game {match.matchNumber || '-'}</p>
+                        <p className="text-sm font-semibold text-gray-900">
+                          Game {match.matchNumber || '-'}
+                        </p>
                         <div className="flex items-center gap-2">
                           <span className="inline-flex items-center rounded-full bg-white border border-teal-200 text-xs font-semibold text-teal-700 px-2.5 py-1">
                             Score {match.score}
@@ -397,11 +442,15 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2">
                             <p className="text-xs font-semibold text-teal-700 mb-1">Winners</p>
-                            <p className="text-sm text-teal-900 font-medium">{match.winnerNames.join(', ') || 'Unknown'}</p>
+                            <p className="text-sm text-teal-900 font-medium">
+                              {match.winnerNames.join(', ') || 'Unknown'}
+                            </p>
                           </div>
                           <div className="rounded-lg border border-gray-200 bg-white px-3 py-2">
                             <p className="text-xs font-semibold text-gray-700 mb-1">Losers</p>
-                            <p className="text-sm text-gray-900 font-medium">{match.loserNames.join(', ') || 'Unknown'}</p>
+                            <p className="text-sm text-gray-900 font-medium">
+                              {match.loserNames.join(', ') || 'Unknown'}
+                            </p>
                           </div>
                         </div>
                       )}
@@ -423,7 +472,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   // If the current user is the organizer, show the full session management UI by default
@@ -437,7 +486,9 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
             </div>
             <div>
               <p className="font-semibold">Manager Mode</p>
-              <p className="text-xs text-teal-100">You are managing this session as an organizer.</p>
+              <p className="text-xs text-teal-100">
+                You are managing this session as an organizer.
+              </p>
             </div>
           </div>
           <button
@@ -452,17 +503,17 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
           onSwitchToPlayerView={() => setShowPlayerView(true)}
         />
       </div>
-    )
+    );
   }
 
-  const isUserInQueue = queue.userPosition !== null
-  const playersAhead = isUserInQueue ? queue.userPosition! - 1 : 0
+  const isUserInQueue = queue.userPosition !== null;
+  const playersAhead = isUserInQueue ? queue.userPosition! - 1 : 0;
 
-  const isSkillMismatch = queue && userSkillLevel !== null && (
-    (queue.minSkillLevel != null && userSkillLevel < queue.minSkillLevel) ||
-    (queue.maxSkillLevel != null && userSkillLevel > queue.maxSkillLevel)
-  )
-
+  const isSkillMismatch =
+    queue &&
+    userSkillLevel !== null &&
+    ((queue.minSkillLevel != null && userSkillLevel < queue.minSkillLevel) ||
+      (queue.maxSkillLevel != null && userSkillLevel > queue.maxSkillLevel));
 
   return (
     <>
@@ -512,12 +563,10 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                     Required Bracket: {queue.minSkillLevel || 1}-{queue.maxSkillLevel || 10}
                   </span>
                 </div>
-
               </div>
             </div>
           </div>
         )}
-
 
         {/* Queue Position Tracker (if in queue) */}
         {isUserInQueue && participant && (
@@ -553,8 +602,18 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               title="Refresh"
             >
-              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              <svg
+                className="w-5 h-5 text-gray-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
               </svg>
             </button>
           </div>
@@ -565,46 +624,48 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                 <Users className="w-8 h-8 text-gray-400" />
               </div>
               <h4 className="font-semibold text-gray-900 mb-2">No Players Yet</h4>
-              <p className="text-sm text-gray-500">
-                Be the first to join this queue!
-              </p>
+              <p className="text-sm text-gray-500">Be the first to join this queue!</p>
             </div>
           ) : (
             <div className="space-y-4">
               {/* Playing Section */}
-              {queue.players.filter(p => p.status === 'playing').length > 0 && (
+              {queue.players.filter((p) => p.status === 'playing').length > 0 && (
                 <div>
                   <h4 className="text-sm font-medium text-green-700 mb-2 flex items-center gap-2">
                     <Activity className="w-4 h-4" />
-                    Currently Playing ({queue.players.filter(p => p.status === 'playing').length})
+                    Currently Playing ({queue.players.filter((p) => p.status === 'playing').length})
                   </h4>
                   <div className="space-y-2">
-                    {queue.players.filter(p => p.status === 'playing').map((player) => (
-                      <PlayerCard
-                        key={player.id}
-                        player={player}
-                        isCurrentUser={player.userId === currentUserId}
-                      />
-                    ))}
+                    {queue.players
+                      .filter((p) => p.status === 'playing')
+                      .map((player) => (
+                        <PlayerCard
+                          key={player.id}
+                          player={player}
+                          isCurrentUser={player.userId === currentUserId}
+                        />
+                      ))}
                   </div>
                 </div>
               )}
 
               {/* Waiting Section */}
-              {queue.players.filter(p => p.status === 'waiting').length > 0 && (
+              {queue.players.filter((p) => p.status === 'waiting').length > 0 && (
                 <div>
                   <h4 className="text-sm font-medium text-gray-600 mb-2 flex items-center gap-2">
                     <Clock className="w-4 h-4" />
-                    Waiting ({queue.players.filter(p => p.status === 'waiting').length})
+                    Waiting ({queue.players.filter((p) => p.status === 'waiting').length})
                   </h4>
                   <div className="space-y-2">
-                    {queue.players.filter(p => p.status === 'waiting').map((player) => (
-                      <PlayerCard
-                        key={player.id}
-                        player={player}
-                        isCurrentUser={player.userId === currentUserId}
-                      />
-                    ))}
+                    {queue.players
+                      .filter((p) => p.status === 'waiting')
+                      .map((player) => (
+                        <PlayerCard
+                          key={player.id}
+                          player={player}
+                          isCurrentUser={player.userId === currentUserId}
+                        />
+                      ))}
                   </div>
                 </div>
               )}
@@ -638,7 +699,8 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                   <Clock className="w-8 h-8 text-blue-500 mx-auto mb-2" />
                   <h4 className="font-semibold text-blue-900 mb-1">Queue Opens Soon</h4>
                   <p className="text-sm text-blue-700 mb-3">
-                    Joining opens {queue.joinWindowHours ?? 2} hour{(queue.joinWindowHours ?? 2) === 1 ? '' : 's'} before the session starts.
+                    Joining opens {queue.joinWindowHours ?? 2} hour
+                    {(queue.joinWindowHours ?? 2) === 1 ? '' : 's'} before the session starts.
                   </p>
                   <div className="text-2xl font-bold text-blue-600 font-mono">
                     {formatTime(timeUntilOpen)}
@@ -646,29 +708,63 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                 </div>
                 <div className="flex items-start gap-2 text-sm text-gray-500">
                   <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                  <span>You can join this queue starting at {format(subHours(new Date(queue.startTime), queue.joinWindowHours ?? 2), 'h:mm a')}</span>
+                  <span>
+                    You can join this queue starting at{' '}
+                    {format(
+                      subHours(new Date(queue.startTime), queue.joinWindowHours ?? 2),
+                      'h:mm a'
+                    )}
+                  </span>
                 </div>
               </div>
             ) : (
               <>
                 <div className="space-y-3 mb-6">
                   <div className="flex items-start gap-2 text-sm text-gray-600">
-                    <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <svg
+                      className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
                     </svg>
                     <span>You will be notified when it&apos;s your turn</span>
                   </div>
                   <div className="flex items-start gap-2 text-sm text-gray-600">
-                    <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <svg
+                      className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
                     </svg>
                     <span>Cancel anytime without penalty</span>
                   </div>
                 </div>
                 <button
                   onClick={handleJoinQueue}
-                  disabled={isJoining || queue.players.length >= queue.maxPlayers || isSkillMismatch}
-                  title={isSkillMismatch ? 'Skill level mismatch' : queue.players.length >= queue.maxPlayers ? 'Queue is full' : undefined}
+                  disabled={
+                    isJoining || queue.players.length >= queue.maxPlayers || isSkillMismatch
+                  }
+                  title={
+                    isSkillMismatch
+                      ? 'Skill level mismatch'
+                      : queue.players.length >= queue.maxPlayers
+                        ? 'Queue is full'
+                        : undefined
+                  }
                   className="w-full bg-primary text-white py-3.5 rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {isJoining ? (
@@ -693,18 +789,27 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
             <h3 className="font-semibold text-gray-900 mb-3">Leave Queue</h3>
 
             {/* Outstanding balance warning */}
-            {participant && participant.amount_owed > 0 && participant.payment_status !== 'paid' && (
-              <div className="flex items-start gap-2 bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4">
-                <AlertCircle className="w-4 h-4 text-orange-600 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-orange-700">
-                  You have an outstanding balance of <span className="font-bold">₱{participant.amount_owed.toFixed(2)}</span>. You must pay before leaving.
-                </p>
-              </div>
-            )}
+            {participant &&
+              participant.amount_owed > 0 &&
+              participant.payment_status !== 'paid' && (
+                <div className="flex items-start gap-2 bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4">
+                  <AlertCircle className="w-4 h-4 text-orange-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-orange-700">
+                    You have an outstanding balance of{' '}
+                    <span className="font-bold">₱{participant.amount_owed.toFixed(2)}</span>. You
+                    must pay before leaving.
+                  </p>
+                </div>
+              )}
 
-            {!(participant && participant.amount_owed > 0 && participant.payment_status !== 'paid') && (
+            {!(
+              participant &&
+              participant.amount_owed > 0 &&
+              participant.payment_status !== 'paid'
+            ) && (
               <p className="text-sm text-gray-600 mb-4">
-                You&apos;re currently at position #{queue.userPosition}. You can leave anytime without penalty.
+                You&apos;re currently at position #{queue.userPosition}. You can leave anytime
+                without penalty.
               </p>
             )}
 
@@ -712,7 +817,9 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
               <div className="space-y-3">
                 <div className="flex items-start gap-2 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                   <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-yellow-800">You&apos;ll lose your position in the queue. Are you sure?</p>
+                  <p className="text-sm text-yellow-800">
+                    You&apos;ll lose your position in the queue. Are you sure?
+                  </p>
                 </div>
                 <div className="flex gap-3">
                   <button
@@ -734,8 +841,19 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
             ) : (
               <button
                 onClick={handleLeaveQueue}
-                disabled={isLeaving || (participant && participant.amount_owed > 0 && participant.payment_status !== 'paid')}
-                title={participant && participant.amount_owed > 0 && participant.payment_status !== 'paid' ? "Settle your balance before leaving" : "Leave this queue and lose your position"}
+                disabled={
+                  isLeaving ||
+                  (participant &&
+                    participant.amount_owed > 0 &&
+                    participant.payment_status !== 'paid')
+                }
+                title={
+                  participant &&
+                  participant.amount_owed > 0 &&
+                  participant.payment_status !== 'paid'
+                    ? 'Settle your balance before leaving'
+                    : 'Leave this queue and lose your position'
+                }
                 className="w-full border-2 border-red-300 text-red-600 py-3.5 rounded-lg font-semibold hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isLeaving ? (
@@ -746,7 +864,12 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                 ) : (
                   <>
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                      />
                     </svg>
                     <span>Leave Queue</span>
                   </>
@@ -776,11 +899,15 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600">Duration</span>
-                <span className="font-semibold text-gray-900">{queue.currentMatch.duration} minutes</span>
+                <span className="font-semibold text-gray-900">
+                  {queue.currentMatch.duration} minutes
+                </span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600">Players</span>
-                <span className="font-semibold text-gray-900">{queue.currentMatch.players.join(', ')}</span>
+                <span className="font-semibold text-gray-900">
+                  {queue.currentMatch.players.join(', ')}
+                </span>
               </div>
             </div>
 
@@ -814,16 +941,29 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
             </button>
           ) : (
             <div className="space-y-2">
-              {participant && participant.amount_owed > 0 && participant.payment_status !== 'paid' && (
-                <div className="flex items-center gap-2 text-orange-600 text-xs font-medium justify-center">
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  <span>Outstanding balance: ₱{participant.amount_owed.toFixed(2)}</span>
-                </div>
-              )}
+              {participant &&
+                participant.amount_owed > 0 &&
+                participant.payment_status !== 'paid' && (
+                  <div className="flex items-center gap-2 text-orange-600 text-xs font-medium justify-center">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    <span>Outstanding balance: ₱{participant.amount_owed.toFixed(2)}</span>
+                  </div>
+                )}
               <button
                 onClick={handleLeaveQueue}
-                disabled={isLeaving || (participant && participant.amount_owed > 0 && participant.payment_status !== 'paid')}
-                title={participant && participant.amount_owed > 0 && participant.payment_status !== 'paid' ? "Settle your balance before leaving" : "Leave this queue and lose your position"}
+                disabled={
+                  isLeaving ||
+                  (participant &&
+                    participant.amount_owed > 0 &&
+                    participant.payment_status !== 'paid')
+                }
+                title={
+                  participant &&
+                  participant.amount_owed > 0 &&
+                  participant.payment_status !== 'paid'
+                    ? 'Settle your balance before leaving'
+                    : 'Leave this queue and lose your position'
+                }
                 className="w-full border-2 border-red-300 text-red-600 py-4 rounded-xl font-semibold hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg"
               >
                 {isLeaving ? (
@@ -834,7 +974,12 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                 ) : (
                   <>
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                      />
                     </svg>
                     <span>Leave Queue</span>
                   </>
@@ -843,8 +988,6 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
             </div>
           )}
         </div>
-
-
 
         {/* Payment Required Modal */}
         {paymentRequiredInfo?.show && (
@@ -861,7 +1004,10 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                   </div>
                 </div>
                 <button
-                  onClick={() => { setPaymentRequiredInfo(null); setPaymentError(null) }}
+                  onClick={() => {
+                    setPaymentRequiredInfo(null);
+                    setPaymentError(null);
+                  }}
                   className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5 text-gray-500" />
@@ -871,7 +1017,9 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
               <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-5">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-orange-700">Amount Owed</span>
-                  <span className="text-2xl font-bold text-orange-900">₱{paymentRequiredInfo.amountOwed.toFixed(2)}</span>
+                  <span className="text-2xl font-bold text-orange-900">
+                    ₱{paymentRequiredInfo.amountOwed.toFixed(2)}
+                  </span>
                 </div>
               </div>
 
@@ -882,7 +1030,9 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                 </div>
               )}
 
-              <p className="text-sm text-gray-600 mb-4">Choose a payment method to settle your balance:</p>
+              <p className="text-sm text-gray-600 mb-4">
+                Choose a payment method to settle your balance:
+              </p>
 
               <div className="space-y-3">
                 <button
@@ -924,7 +1074,10 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                 </button>
 
                 <button
-                  onClick={() => { setPaymentRequiredInfo(null); setPaymentError(null) }}
+                  onClick={() => {
+                    setPaymentRequiredInfo(null);
+                    setPaymentError(null);
+                  }}
                   className="w-full px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium text-sm"
                 >
                   Pay Later
@@ -951,16 +1104,12 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                 </button>
               </div>
               <div className="overflow-y-auto flex-1 p-5">
-                <MatchHistoryViewer
-                  sessionId={queue.id}
-                  userId={currentUserId}
-                  courtId={courtId}
-                />
+                <MatchHistoryViewer sessionId={queue.id} userId={currentUserId} courtId={courtId} />
               </div>
             </div>
           </div>
         )}
       </div>
     </>
-  )
+  );
 }
