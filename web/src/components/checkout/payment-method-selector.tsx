@@ -56,7 +56,9 @@ export function PaymentMethodSelector() {
     }
   }
 
-  const effectiveAmount = Math.min(Math.max(customDownPaymentAmount || minimumDownPayment, 0), total)
+  const effectiveAmount = shouldUseDownPayment
+    ? Math.min(Math.max(customDownPaymentAmount || minimumDownPayment, minimumDownPayment), total)
+    : Math.min(Math.max(customDownPaymentAmount || minimumDownPayment, 0), total)
   const isBelowMinimum = customDownPaymentAmount !== undefined && customDownPaymentAmount > 0 && customDownPaymentAmount < minimumDownPayment
   const isAboveTotal = customDownPaymentAmount !== undefined && customDownPaymentAmount > total
   
@@ -304,7 +306,10 @@ export function PaymentMethodSelector() {
                 onBlur={() => {
                   const parsed = parseFloat(inputValue)
                   if (!isNaN(parsed) && parsed > 0) {
-                    setInputValue(parsed.toFixed(2))
+                    // Keep UI in sync with server-side clamping rules.
+                    const normalized = Math.min(Math.max(parsed, minimumDownPayment), total)
+                    setInputValue(normalized.toFixed(2))
+                    setCustomDownPaymentAmount(normalized)
                   } else {
                     setInputValue(minimumDownPayment.toFixed(2))
                     setCustomDownPaymentAmount(minimumDownPayment)

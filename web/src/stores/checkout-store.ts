@@ -481,11 +481,11 @@ export const useCheckoutStore = create<CheckoutState>()(
         if (rawLines.length === 0) return []
 
         const baseTotal = rawLines.reduce((sum, line) => sum + line.baseAmount, 0)
-        const finalTotal = state.getTotalAmount()
+        const downPaymentBaseTotal = state.getSubtotal()
 
-        // Scale per-court amounts so they reconcile to checkout total (after discounts/fees).
+        // Scale per-court amounts so they reconcile to subtotal (court amount only).
         const scaledLines = rawLines.map((line) => {
-          const totalAmount = baseTotal > 0 ? (line.baseAmount / baseTotal) * finalTotal : 0
+          const totalAmount = baseTotal > 0 ? (line.baseAmount / baseTotal) * downPaymentBaseTotal : 0
           const percentageRaw = state.courtDownPaymentPercentages[line.courtId]
           const percentage = Number.isFinite(percentageRaw)
             ? Math.min(Math.max(percentageRaw, 0), 100)
@@ -518,7 +518,7 @@ export const useCheckoutStore = create<CheckoutState>()(
             .slice(0, -1)
             .reduce((sum, item) => sum + (Math.round(item.amount * 100) / 100), 0)
 
-          const adjustedTotalAmount = Math.max(0, Math.round((Math.round(finalTotal * 100) / 100 - prevTotalAmount) * 100) / 100)
+          const adjustedTotalAmount = Math.max(0, Math.round((Math.round(downPaymentBaseTotal * 100) / 100 - prevTotalAmount) * 100) / 100)
           const minimumSum = scaledLines.reduce((sum, item) => sum + item.amount, 0)
           const adjustedAmount = Math.max(0, Math.round((Math.round(minimumSum * 100) / 100 - prevTotalDownPayment) * 100) / 100)
 
