@@ -61,6 +61,8 @@ interface ReservationDetailModalProps {
     num_players: number
     notes?: string
     created_at: string
+    cancelled_at?: string | null
+    cancellation_reason?: string | null
     cash_payment_deadline?: string | null
     metadata?: any
     queue_session?: Array<{
@@ -102,6 +104,13 @@ export function ReservationDetailModal({
   const paymentMethod = reservation.metadata?.intended_payment_method || reservation.metadata?.payment_method
   const cashDeadline = reservation.cash_payment_deadline || reservation.metadata?.cash_payment_deadline || null
   const shouldShowCashTimer = reservation.status === 'pending_payment' && paymentMethod === 'cash' && !!cashDeadline
+  const cancellationReason = reservation.cancellation_reason || reservation.metadata?.cancellation_reason || ''
+  const isNoShowReservation =
+    reservation.status === 'no_show' ||
+    reservation.metadata?.no_show === true ||
+    /no[\s-]?show/i.test(cancellationReason)
+  const noShowReason = reservation.metadata?.no_show_reason || cancellationReason || 'User did not arrive for the reservation.'
+  const noShowMarkedAt = reservation.metadata?.no_show_marked_at || reservation.cancelled_at || null
   const canMarkNoShow = reservation.status === 'partially_paid' || Number(reservation.metadata?.down_payment_amount || 0) > 0
   const pendingPaymentActionCols = canMarkNoShow ? 'sm:grid-cols-3' : 'sm:grid-cols-2'
 
@@ -217,8 +226,12 @@ export function ReservationDetailModal({
 
   // Helper to determine display status
   const getDisplayStatus = () => {
+    if (isNoShowReservation) {
+      return 'no_show'
+    }
+
     // Check for cancelled reservation with reason (implies rejection)
-    if (reservation.status === 'cancelled' && (reservation as any).cancellation_reason) {
+    if (reservation.status === 'cancelled' && cancellationReason) {
       return 'rejected'
     }
     return reservation.status
@@ -238,6 +251,7 @@ export function ReservationDetailModal({
       case 'pending': return 'bg-yellow-100 text-yellow-700 border-yellow-200'
       case 'pending_payment': return 'bg-orange-100 text-orange-700 border-orange-200'
       case 'partially_paid': return 'bg-amber-100 text-amber-700 border-amber-200'
+      case 'no_show': return 'bg-orange-100 text-orange-700 border-orange-200'
       case 'cancelled':
       case 'rejected': return 'bg-red-100 text-red-700 border-red-200'
       case 'completed': return 'bg-blue-100 text-blue-700 border-blue-200'
@@ -328,6 +342,7 @@ export function ReservationDetailModal({
               <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium ${getStatusColor(getDisplayStatus())}`}>
                 {getDisplayStatus() === 'confirmed' && <CheckCircle className="w-4 h-4" />}
                 {(getDisplayStatus() === 'pending' || getDisplayStatus() === 'pending_payment' || getDisplayStatus() === 'partially_paid') && <Clock className="w-4 h-4" />}
+                {getDisplayStatus() === 'no_show' && <UserMinus className="w-4 h-4" />}
                 {(getDisplayStatus() === 'cancelled' || getDisplayStatus() === 'rejected') && <XCircle className="w-4 h-4" />}
                 {getDisplayStatus() === 'pending_refund' && <Clock className="w-4 h-4" />}
                 {getDisplayStatus() === 'refunded' && <Banknote className="w-4 h-4" />}
@@ -347,6 +362,27 @@ export function ReservationDetailModal({
               })}
             </span>
           </div>
+
+          {isNoShowReservation && (
+            <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <UserMinus className="w-4 h-4 text-orange-600" />
+                <h3 className="text-sm font-semibold text-orange-900">No Show Details</h3>
+              </div>
+              <p className="text-sm text-orange-800">{noShowReason}</p>
+              {noShowMarkedAt && (
+                <p className="text-xs text-orange-700 mt-2">
+                  Marked at {new Date(noShowMarkedAt).toLocaleString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                  })}
+                </p>
+              )}
+            </div>
+          )}
 
           {shouldShowCashTimer && (
             <div
