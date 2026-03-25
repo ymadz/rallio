@@ -283,28 +283,29 @@ export function useQueue(courtId: string) {
   }, [queue?.id])
 
 
-  const joinQueue = async () => {
+  const joinQueue = async (): Promise<{ success: boolean; error?: string }> => {
     console.log('[useQueue] ➕ Joining queue')
 
     if (!queue) {
-      setError('No queue session found')
-      return
+      return { success: false, error: 'No queue session found' }
     }
 
     try {
       const result = await joinQueueAction(queue.id)
 
       if (!result.success) {
-        setError(result.error || 'Failed to join queue')
-        return
+        // Joining errors (e.g., cooldown/capacity) are action-level errors.
+        // Do not set global load error, or the whole queue page gets replaced.
+        return { success: false, error: result.error || 'Failed to join queue' }
       }
 
       // Refresh queue data
       await fetchQueue()
       console.log('[useQueue] ✅ Successfully joined queue')
+      return { success: true }
     } catch (err: any) {
       console.error('[useQueue] ❌ Error joining queue:', err)
-      setError(err.message || 'Failed to join queue')
+      return { success: false, error: err.message || 'Failed to join queue' }
     }
   }
 

@@ -415,6 +415,10 @@ export async function getQueueDetails(courtId: string) {
       matchOutcomes,
     }
 
+    // Keep denormalized queue_sessions.current_players in sync when DB triggers lag/misfire.
+    // The UI should always reflect active participants (left_at IS NULL) as the source of truth.
+    queueData.currentPlayers = formattedParticipants.length
+
     console.log('[getQueueDetails] ✅ Queue fetched successfully:', {
       sessionId: queueData.id,
       playerCount: queueData.players.length,
@@ -473,6 +477,121 @@ export async function joinQueue(sessionId: string) {
       return { success: false, error: 'Queue is not accepting new players' }
     }
 
+    const now = await getServerNow()
+
+    const runMissingUpdatedAtFallback = async () => {
+      console.warn('[joinQueue] ⚠️ Falling back to app-level join logic due to missing updated_at column')
+
+      // Re-check capacity using active participants.
+      const { count: activeCount, error: countError } = await supabase
+        .from('queue_participants')
+        .select('*', { count: 'exact', head: true })
+        .eq('queue_session_id', sessionId)
+        .is('left_at', null)
+        .neq('status', 'left')
+
+      if (countError) {
+        console.error('[joinQueue] ❌ Fallback count error:', countError)
+        return { success: false, error: 'Failed to join queue' }
+      }
+
+      if ((activeCount || 0) >= session.max_players) {
+        return { success: false, error: 'Queue is full' }
+      }
+
+      // Find latest participant row for this user in this session.
+      const { data: existingParticipant, error: existingError } = await supabase
+        .from('queue_participants')
+        .select('*')
+        .eq('queue_session_id', sessionId)
+        .eq('user_id', user.id)
+        .order('left_at', { ascending: false, nullsFirst: true })
+        .limit(1)
+        .maybeSingle()
+
+      if (existingError) {
+        console.error('[joinQueue] ❌ Fallback existing participant error:', existingError)
+        return { success: false, error: 'Failed to join queue' }
+      }
+
+      // Already active in queue.
+      if (existingParticipant && !existingParticipant.left_at && existingParticipant.status !== 'left') {
+        return { success: false, error: 'You are already in this queue' }
+      }
+
+      // Cooldown enforcement: 1 minute.
+      if (existingParticipant?.left_at) {
+        const leftAt = new Date(existingParticipant.left_at)
+        const elapsedMs = now.getTime() - leftAt.getTime()
+        const cooldownMs = 1 * 60 * 1000
+
+        if (elapsedMs < cooldownMs) {
+          const remainingMs = cooldownMs - elapsedMs
+          const totalSeconds = Math.ceil(remainingMs / 1000)
+          const hours = Math.floor(totalSeconds / 3600)
+          const minutes = Math.floor((totalSeconds % 3600) / 60)
+          const seconds = totalSeconds % 60
+          const formatted = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+
+          return { success: false, error: `Please wait ${formatted} before rejoining` }
+        }
+
+        const { data: reactivated, error: reactivateError } = await supabase
+          .from('queue_participants')
+          .update({
+            left_at: null,
+            status: 'waiting',
+            joined_at: now.toISOString(),
+          })
+          .eq('id', existingParticipant.id)
+          .select('id')
+          .single()
+
+        if (reactivateError || !reactivated) {
+          console.error('[joinQueue] ❌ Fallback reactivation error:', reactivateError)
+          return { success: false, error: 'Failed to join queue' }
+        }
+
+        console.log('[joinQueue] ✅ Fallback reactivated participant:', reactivated.id)
+        revalidatePath(`/queue/${session.courts.id}`)
+        revalidatePath('/queue')
+
+        return {
+          success: true,
+          participant: { id: reactivated.id },
+        }
+      }
+
+      // First-time join.
+      const { data: inserted, error: insertError } = await supabase
+        .from('queue_participants')
+        .insert({
+          queue_session_id: sessionId,
+          user_id: user.id,
+          status: 'waiting',
+          payment_status: 'unpaid',
+          amount_owed: 0,
+          games_played: 0,
+          games_won: 0,
+        })
+        .select('id')
+        .single()
+
+      if (insertError || !inserted) {
+        console.error('[joinQueue] ❌ Fallback insert error:', insertError)
+        return { success: false, error: 'Failed to join queue' }
+      }
+
+      console.log('[joinQueue] ✅ Fallback joined participant:', inserted.id)
+      revalidatePath(`/queue/${session.courts.id}`)
+      revalidatePath('/queue')
+
+      return {
+        success: true,
+        participant: { id: inserted.id },
+      }
+    }
+
     // Call the centralized RPC function
     const { data: rpcResult, error: rpcError } = await supabase.rpc('join_queue', {
       p_session_id: sessionId,
@@ -481,11 +600,28 @@ export async function joinQueue(sessionId: string) {
 
     if (rpcError) {
       console.error('[joinQueue] ❌ RPC Error:', rpcError)
+
+      if (rpcError.message?.includes('column "updated_at" of relation "queue_participants" does not exist')) {
+        return runMissingUpdatedAtFallback()
+      }
+
       return { success: false, error: 'Failed to join queue' }
     }
 
     if (!rpcResult.success) {
       console.warn('[joinQueue] ⚠️ Join rejected by RPC:', rpcResult.error)
+
+      // Some DB functions catch exceptions and return the SQL error string in rpcResult.error
+      // (with rpcError unset). Handle missing updated_at here as well.
+      if (typeof rpcResult.error === 'string' && rpcResult.error.includes('column "updated_at" of relation "queue_participants" does not exist')) {
+        return runMissingUpdatedAtFallback()
+      }
+
+      // Override legacy DB cooldown policy (e.g. 5 minutes) with app-level 1-minute cooldown.
+      if (typeof rpcResult.error === 'string' && /before rejoining/i.test(rpcResult.error)) {
+        return runMissingUpdatedAtFallback()
+      }
+
       return { success: false, error: rpcResult.error }
     }
 
@@ -922,8 +1058,11 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
         return isFullyPaid
       })
       .map((session: any) => {
-      // Use actual participant count, falling back to current_players column
-      const currentPlayers = participantCounts[session.id] || session.current_players || 0
+      // Use actual participant count (left_at IS NULL). Preserve 0 when everyone has left.
+      const hasActualCount = Object.prototype.hasOwnProperty.call(participantCounts, session.id)
+      const currentPlayers = hasActualCount
+        ? participantCounts[session.id]
+        : (session.current_players ?? 0)
 
       return {
         id: session.id,

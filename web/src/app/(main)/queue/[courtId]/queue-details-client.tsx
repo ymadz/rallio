@@ -31,6 +31,8 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
   const [participant, setParticipant] = useState<any>(null)
   const [userSkillLevel, setUserSkillLevel] = useState<number | null>(null)
   const [isProfileCompleted, setIsProfileCompleted] = useState<boolean>(false)
+  const [joinError, setJoinError] = useState<string | null>(null)
+  const [rejoinCooldownSeconds, setRejoinCooldownSeconds] = useState<number | null>(null)
 
   const [timeUntilOpen, setTimeUntilOpen] = useState<number | null>(null)
 
@@ -62,6 +64,55 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
     const s = seconds % 60
     return `${h}h ${m}m ${s}s`
   }
+
+  const formatCooldown = (seconds: number) => {
+    const s = Math.max(0, seconds)
+    const h = Math.floor(s / 3600)
+    const m = Math.floor((s % 3600) / 60)
+    const sec = s % 60
+
+    if (h > 0) {
+      return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+    }
+
+    return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+  }
+
+  const parseRejoinCooldownSeconds = (message: string): number | null => {
+    // Handles messages like "Please wait 00:02:29.187105 before rejoining".
+    const match = message.match(/Please wait\s+([0-9:.]+)\s+before rejoining/i)
+    if (!match) return null
+
+    const timePart = match[1].split('.')[0]
+    const parts = timePart.split(':').map((p) => Number(p))
+    if (parts.some((n) => Number.isNaN(n))) return null
+
+    if (parts.length === 3) {
+      const [h, m, s] = parts
+      return h * 3600 + m * 60 + s
+    }
+
+    if (parts.length === 2) {
+      const [m, s] = parts
+      return m * 60 + s
+    }
+
+    return null
+  }
+
+  useEffect(() => {
+    if (rejoinCooldownSeconds == null || rejoinCooldownSeconds <= 0) return
+
+    const timer = setInterval(() => {
+      setRejoinCooldownSeconds((prev) => {
+        if (prev == null) return null
+        if (prev <= 1) return null
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [rejoinCooldownSeconds])
 
   const [showMatchHistory, setShowMatchHistory] = useState(false)
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
@@ -175,8 +226,18 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
 
 
   const handleJoinQueue = async () => {
+    setJoinError(null)
     setIsJoining(true)
-    await joinQueue()
+    const result = await joinQueue()
+    if (!result.success) {
+      const message = result.error || 'Failed to join queue'
+      setJoinError(message)
+
+      const cooldown = parseRejoinCooldownSeconds(message)
+      setRejoinCooldownSeconds(cooldown)
+    } else {
+      setRejoinCooldownSeconds(null)
+    }
     setIsJoining(false)
   }
 
@@ -426,6 +487,8 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
     )
   }
 
+  const isRejoinCooldownActive = rejoinCooldownSeconds != null && rejoinCooldownSeconds > 0
+
   // If the current user is the organizer, show the full session management UI by default
   if (queue.organizerId === currentUserId && !showPlayerView) {
     return (
@@ -651,6 +714,17 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
               </div>
             ) : (
               <>
+                {joinError && (
+                  <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                    <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-amber-800">
+                      <p>{joinError}</p>
+                      {isRejoinCooldownActive && (
+                        <p className="mt-1 font-semibold">You can rejoin in {formatCooldown(rejoinCooldownSeconds!)}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-3 mb-6">
                   <div className="flex items-start gap-2 text-sm text-gray-600">
                     <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -667,9 +741,9 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                 </div>
                 <button
                   onClick={handleJoinQueue}
-                  disabled={isJoining || queue.players.length >= queue.maxPlayers || isSkillMismatch}
+                  disabled={isJoining || queue.players.length >= queue.maxPlayers || isSkillMismatch || isRejoinCooldownActive}
                   title={isSkillMismatch ? 'Skill level mismatch' : queue.players.length >= queue.maxPlayers ? 'Queue is full' : undefined}
-                  className="w-full bg-primary text-white py-3.5 rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="hidden md:flex w-full bg-primary text-white py-3.5 rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed items-center justify-center gap-2"
                 >
                   {isJoining ? (
                     <>
@@ -678,6 +752,8 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                     </>
                   ) : queue.players.length >= queue.maxPlayers ? (
                     <span>Queue Full</span>
+                  ) : isRejoinCooldownActive ? (
+                    <span>Rejoin in {formatCooldown(rejoinCooldownSeconds!)}</span>
                   ) : (
                     <>
                       <Users className="w-5 h-5" />
@@ -736,7 +812,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                 onClick={handleLeaveQueue}
                 disabled={isLeaving || (participant && participant.amount_owed > 0 && participant.payment_status !== 'paid')}
                 title={participant && participant.amount_owed > 0 && participant.payment_status !== 'paid' ? "Settle your balance before leaving" : "Leave this queue and lose your position"}
-                className="w-full border-2 border-red-300 text-red-600 py-3.5 rounded-lg font-semibold hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="hidden md:flex w-full border-2 border-red-300 text-red-600 py-3.5 rounded-lg font-semibold hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed items-center justify-center gap-2"
               >
                 {isLeaving ? (
                   <>
@@ -795,7 +871,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
           {!isUserInQueue ? (
             <button
               onClick={handleJoinQueue}
-              disabled={isJoining || queue.players.length >= queue.maxPlayers || isSkillMismatch}
+              disabled={isJoining || queue.players.length >= queue.maxPlayers || isSkillMismatch || isRejoinCooldownActive}
               className="w-full bg-primary text-white py-4 rounded-xl font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg"
             >
               {isJoining ? (
@@ -805,6 +881,8 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                 </>
               ) : queue.players.length >= queue.maxPlayers ? (
                 <span>Queue Full</span>
+              ) : isRejoinCooldownActive ? (
+                <span>Rejoin in {formatCooldown(rejoinCooldownSeconds!)}</span>
               ) : (
                 <>
                   <Users className="w-5 h-5" />
