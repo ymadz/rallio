@@ -217,6 +217,60 @@ body {
   scrollbar-width: none;  /* Firefox */
 }
 
+/* Booking summary: only reveal scrollbars while interacting with the card */
+.summary-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  -ms-overflow-style: auto;
+}
+
+.summary-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.summary-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.summary-scrollbar::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.summary-scroll-container:hover .summary-scrollbar,
+.summary-scroll-container:focus-within .summary-scrollbar,
+.summary-scroll-container:active .summary-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-gray-300) var(--color-gray-100);
+}
+
+.summary-scroll-container:hover .summary-scrollbar::-webkit-scrollbar,
+.summary-scroll-container:focus-within .summary-scrollbar::-webkit-scrollbar,
+.summary-scroll-container:active .summary-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.summary-scroll-container:hover .summary-scrollbar::-webkit-scrollbar-thumb,
+.summary-scroll-container:focus-within .summary-scrollbar::-webkit-scrollbar-thumb,
+.summary-scroll-container:active .summary-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-gray-300);
+  border-radius: 4px;
+}
+
+.summary-scroll-container:hover .summary-scrollbar::-webkit-scrollbar-track,
+.summary-scroll-container:focus-within .summary-scrollbar::-webkit-scrollbar-track,
+.summary-scroll-container:active .summary-scrollbar::-webkit-scrollbar-track {
+  background: var(--color-gray-100);
+}
+
+.summary-scroll-container:hover .summary-scrollbar::-webkit-scrollbar-thumb:hover,
+.summary-scroll-container:focus-within .summary-scrollbar::-webkit-scrollbar-thumb:hover,
+.summary-scroll-container:active .summary-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-gray-400);
+}
+
 /* Mobile auth layout: bottom sheet slide-up animation */
 @keyframes mobileSheetIn {
   from {

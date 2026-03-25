@@ -40,6 +40,7 @@ export default function CheckoutPage() {
         platformFeeEnabled,
         platformFeePercentage,
         setDownPaymentPercentage,
+        setCourtDownPaymentPercentages,
     } = useCheckoutStore()
 
     // Guard: detect stale checkout state (e.g. page revisited after completed booking)
@@ -95,8 +96,8 @@ export default function CheckoutPage() {
         fetchImage()
     }, [bookingData?.courtId, bookingData?.venueId])
 
-    // Resolve effective down payment percentage from court settings.
-    // For multi-court bookings, use max percentage so proportional split always satisfies each court minimum.
+    // Resolve effective down payment settings from court metadata.
+    // We keep per-court percentages in store for summed minimum-floor calculations.
     useEffect(() => {
         if (!bookingData) return
 
@@ -116,6 +117,10 @@ export default function CheckoutPage() {
                 const result = await getCourtDownPaymentPercentagesAction(uniqueCourtIds)
                 if (!result.success) return
 
+                if (result.percentages) {
+                    setCourtDownPaymentPercentages(result.percentages)
+                }
+
                 if (typeof result.maxPercentage === 'number') {
                     setDownPaymentPercentage(result.maxPercentage)
                 }
@@ -125,7 +130,7 @@ export default function CheckoutPage() {
         }
 
         resolveDownPaymentPercentage()
-    }, [bookingData, bookingCart, setDownPaymentPercentage])
+    }, [bookingData, bookingCart, setDownPaymentPercentage, setCourtDownPaymentPercentages])
 
     if (!bookingData) {
         return (
@@ -220,15 +225,18 @@ export default function CheckoutPage() {
         if (currentStep === 'payment') {
             if (!paymentMethod) return false
             if (paymentMethod === 'cash') {
-                const { getTotalAmount, downPaymentPercentage, customDownPaymentAmount, cashPaymentOption } = useCheckoutStore.getState()
+                const { getTotalAmount, getMinimumDownPaymentAmount, customDownPaymentAmount, cashPaymentOption } = useCheckoutStore.getState()
                 if (cashPaymentOption === 'full_cash') return true
 
                 const finalTotal = getTotalAmount()
-                const isDownPaymentRequired = downPaymentPercentage ? downPaymentPercentage > 0 : false
+                const minimumDownPayment = getMinimumDownPaymentAmount()
+                const isDownPaymentRequired = minimumDownPayment > 0
 
                 if (isDownPaymentRequired) {
-                    const minimumDownPayment = Math.round((finalTotal * ((downPaymentPercentage ?? 20) / 100)) * 100) / 100
                     if (customDownPaymentAmount !== undefined && customDownPaymentAmount > 0 && customDownPaymentAmount < minimumDownPayment) {
+                        return false
+                    }
+                    if (customDownPaymentAmount !== undefined && customDownPaymentAmount > finalTotal) {
                         return false
                     }
                 }

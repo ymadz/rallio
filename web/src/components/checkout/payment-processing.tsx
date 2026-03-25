@@ -26,6 +26,7 @@ export function PaymentProcessing() {
     getTotalAmount,
     getDownPaymentAmount,
     getRemainingBalance,
+    getDownPaymentBreakdown,
     downPaymentPercentage,
     setCurrentStep,
     setBookingReference,
@@ -386,6 +387,8 @@ export function PaymentProcessing() {
   }
 
   const downPaymentAmount = getDownPaymentAmount()
+  const downPaymentBreakdown = getDownPaymentBreakdown()
+  const hasMixedDownPaymentPercentages = new Set(downPaymentBreakdown.map((item) => item.percentage)).size > 1
   const remainingBalance = getRemainingBalance()
   const isCashWithDownPayment = paymentMethod === 'cash' && downPaymentAmount > 0
   const amountToPay = isCashWithDownPayment
@@ -617,7 +620,11 @@ export function PaymentProcessing() {
             <div className="space-y-4">
               <div className="bg-gradient-to-br from-primary to-primary/80 rounded-xl p-6 text-white text-center">
                 <p className="text-sm text-white/80 mb-2">
-                  {isCashWithDownPayment ? `Down Payment (${downPaymentPercentage}%)` : 'Amount to Pay'}
+                  {isCashWithDownPayment
+                    ? hasMixedDownPaymentPercentages
+                      ? 'Down Payment (Multi-Court Minimum)'
+                      : `Down Payment (${downPaymentPercentage}%)`
+                    : 'Amount to Pay'}
                 </p>
                 <p className="text-4xl font-bold">₱{amountToPay.toFixed(2)}</p>
                 {isCashWithDownPayment && (

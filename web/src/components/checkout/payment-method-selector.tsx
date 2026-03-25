@@ -11,15 +11,17 @@ export function PaymentMethodSelector() {
     setCashPaymentOption,
     downPaymentPercentage,
     getTotalAmount,
+    getMinimumDownPaymentAmount,
+    getDownPaymentBreakdown,
     setCustomDownPaymentAmount,
     customDownPaymentAmount,
   } = useCheckoutStore()
 
   const total = getTotalAmount()
-  const isDownPaymentRequired = downPaymentPercentage ? downPaymentPercentage > 0 : false
-  const minimumDownPayment = isDownPaymentRequired
-    ? Math.round((total * ((downPaymentPercentage ?? 20) / 100)) * 100) / 100
-    : 0
+  const downPaymentBreakdown = getDownPaymentBreakdown()
+  const hasMixedPercentages = new Set(downPaymentBreakdown.map((item) => item.percentage)).size > 1
+  const minimumDownPayment = getMinimumDownPaymentAmount()
+  const isDownPaymentRequired = minimumDownPayment > 0
 
   const [inputValue, setInputValue] = useState('')
 
@@ -205,7 +207,9 @@ export function PaymentMethodSelector() {
               <p className="text-sm font-semibold text-gray-900">Pay Down Payment Online</p>
               <p className="text-xs text-gray-600 mt-1">
                 {isDownPaymentRequired
-                  ? `Pay minimum ${downPaymentPercentage}% now via e-wallet, then settle remaining cash at venue.`
+                  ? hasMixedPercentages
+                    ? `Pay the minimum required amount for all selected courts, then settle the remaining balance in cash at the venue.`
+                    : `Pay minimum ${downPaymentPercentage}% now via e-wallet, then settle remaining cash at venue.`
                   : 'No venue down payment rule configured. Full amount will be paid at venue.'}
               </p>
             </button>
@@ -261,12 +265,29 @@ export function PaymentMethodSelector() {
           <div className="px-5 py-3 backdrop-blur-md bg-white/15 border-b border-white/20">
             <h4 className="text-sm font-semibold text-white">Down Payment</h4>
             <p className="text-xs text-white/70 mt-0.5">
-              Minimum {downPaymentPercentage}% required to secure your booking
+              {hasMixedPercentages
+                ? `Minimum required today: ₱${minimumDownPayment.toFixed(2)} (computed per court)`
+                : `Minimum ${downPaymentPercentage}% required to secure your booking`}
             </p>
           </div>
 
           {/* Input */}
-          <div className="px-5 py-4 backdrop-blur-sm bg-white/10">
+          <div className="px-5 py-4 backdrop-blur-sm bg-white/10 space-y-3">
+            {downPaymentBreakdown.length > 1 && (
+              <div className="rounded-lg border border-white/25 bg-white/10 px-3 py-2 space-y-1.5">
+                {downPaymentBreakdown.map((item, index) => (
+                  <div key={`dp-${item.courtId}-${index}`} className="flex items-center justify-between text-xs text-white/90">
+                    <span className="truncate pr-2">{item.courtName} Down Payment ({item.percentage}%)</span>
+                    <span className="font-semibold">₱{item.amount.toFixed(2)}</span>
+                  </div>
+                ))}
+                <div className="pt-1.5 mt-1.5 border-t border-white/20 flex items-center justify-between text-xs text-white">
+                  <span className="font-medium">Minimum Required</span>
+                  <span className="font-bold">₱{minimumDownPayment.toFixed(2)}</span>
+                </div>
+              </div>
+            )}
+
             <label className="block text-xs font-medium text-white/70 mb-1.5">Enter amount</label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50 text-sm font-medium">₱</span>
@@ -305,7 +326,7 @@ export function PaymentMethodSelector() {
                 <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
-                Minimum is ₱{minimumDownPayment.toFixed(2)}
+                The minimum down payment for these courts is ₱{minimumDownPayment.toFixed(2)}
               </p>
             )}
             {isAboveTotal && (
