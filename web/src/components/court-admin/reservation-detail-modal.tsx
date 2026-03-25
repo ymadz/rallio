@@ -23,6 +23,14 @@ import {
   AvatarFallback,
   AvatarImage,
 } from '@/components/ui/avatar'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 interface ReservationDetailModalProps {
   isOpen: boolean
@@ -76,6 +84,7 @@ export function ReservationDetailModal({
   const [isApprovingReschedule, setIsApprovingReschedule] = useState(false)
   const [isRejectingReschedule, setIsRejectingReschedule] = useState(false)
   const [isMarkingNoShow, setIsMarkingNoShow] = useState(false)
+  const [showNoShowModal, setShowNoShowModal] = useState(false)
   const [showRescheduleRejectForm, setShowRescheduleRejectForm] = useState(false)
   const [rescheduleRejectReason, setRescheduleRejectReason] = useState('')
   const [nowMs, setNowMs] = useState(Date.now())
@@ -102,6 +111,12 @@ export function ReservationDetailModal({
     const timerId = setInterval(() => setNowMs(Date.now()), 1000)
     return () => clearInterval(timerId)
   }, [shouldShowCashTimer])
+
+  useEffect(() => {
+    if (!isOpen) {
+      setShowNoShowModal(false)
+    }
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -184,13 +199,11 @@ export function ReservationDetailModal({
   }
 
   const handleMarkAsNoShow = async () => {
-    const confirmed = confirm('Mark this user as NO SHOW? This will cancel the booking and flag the user in admin users list.')
-    if (!confirmed) return
-
     setIsMarkingNoShow(true)
     try {
       const result = await markReservationAsNoShow(reservation.id)
       if (result.success) {
+        setShowNoShowModal(false)
         onClose()
       } else {
         alert(result.error || 'Failed to mark no show')
@@ -801,7 +814,7 @@ export function ReservationDetailModal({
             </button>
             {canMarkNoShow && (
               <button
-                onClick={handleMarkAsNoShow}
+                onClick={() => setShowNoShowModal(true)}
                 disabled={isMarkingNoShow}
                 className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium whitespace-nowrap border-2 border-orange-600 text-orange-600 rounded-lg hover:bg-orange-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -822,6 +835,46 @@ export function ReservationDetailModal({
           </div>
         )}
       </div>
+
+      <Dialog open={showNoShowModal} onOpenChange={setShowNoShowModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mark user as No Show?</DialogTitle>
+            <DialogDescription>
+              This will cancel the booking and flag the user in admin users list.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="sm:justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowNoShowModal(false)}
+              disabled={isMarkingNoShow}
+              className="inline-flex items-center justify-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleMarkAsNoShow}
+              disabled={isMarkingNoShow}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50"
+            >
+              {isMarkingNoShow ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Marking...</span>
+                </>
+              ) : (
+                <>
+                  <UserMinus className="w-4 h-4" />
+                  <span>Confirm No Show</span>
+                </>
+              )}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
