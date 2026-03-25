@@ -36,6 +36,7 @@ import {
   Trophy,
   Play,
   X,
+  Zap,
 } from 'lucide-react';
 import Link from 'next/link';
 import { ScoreRecordingModal } from './score-recording-modal';
@@ -44,6 +45,7 @@ import { MatchAssignmentModal } from './match-assignment-modal';
 import { MatchTimer } from './match-timer';
 import { MatchHistoryViewer } from '@/components/queue/match-history-viewer';
 import { MatchStatusBadge } from './match-status-badge';
+import { AutoAssignModal } from './auto-assign-modal';
 import { useServerTime } from '@/hooks/use-server-time';
 
 interface SessionManagementClientProps {
@@ -162,6 +164,7 @@ export function SessionManagementClient({ sessionId, onSwitchToPlayerView }: Ses
 
   // Modal states
   const [showMatchAssignModal, setShowMatchAssignModal] = useState(false);
+  const [showAutoAssignModal, setShowAutoAssignModal] = useState(false);
   const [showScoreModal, setShowScoreModal] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'participants' | 'matches'>('participants');
@@ -880,7 +883,7 @@ export function SessionManagementClient({ sessionId, onSwitchToPlayerView }: Ses
                             {match.status === 'in_progress' && (
                               <button
                                 onClick={() => handleOpenScoreModal(match)}
-                                className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors shadow-sm"
+                                className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors shadow-sm font-medium"
                               >
                                 Record Winner
                               </button>
@@ -926,18 +929,32 @@ export function SessionManagementClient({ sessionId, onSwitchToPlayerView }: Ses
                     const now = serverDate || new Date();
                     const isStarted = new Date(session.startTime) <= now;
                     return (
-                      <button
-                        onClick={handleAssignMatch}
-                        disabled={
-                          !isStarted ||
-                          waitingPlayers.length < (session.gameFormat === 'doubles' ? 4 : 2)
-                        }
-                        title={!isStarted ? 'Session has not started yet' : undefined}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm font-medium"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>Assign Match</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setShowAutoAssignModal(true)}
+                          disabled={
+                            !isStarted ||
+                            waitingPlayers.length < (session.gameFormat === 'doubles' ? 4 : 2)
+                          }
+                          title={!isStarted ? 'Session has not started yet' : undefined}
+                          className="inline-flex items-center gap-2 px-3 py-2 bg-teal-50 text-teal-700 border border-teal-200 rounded-lg hover:bg-teal-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm font-bold text-sm"
+                        >
+                          <Zap className="w-4 h-4 fill-current" />
+                          <span>Auto-Assign</span>
+                        </button>
+                        <button
+                          onClick={handleAssignMatch}
+                          disabled={
+                            !isStarted ||
+                            waitingPlayers.length < (session.gameFormat === 'doubles' ? 4 : 2)
+                          }
+                          title={!isStarted ? 'Session has not started yet' : undefined}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm font-medium text-sm"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Assign Match</span>
+                        </button>
+                      </div>
                     );
                   })()}
                 </div>
@@ -1355,6 +1372,15 @@ export function SessionManagementClient({ sessionId, onSwitchToPlayerView }: Ses
               gamesPlayed: p.gamesPlayed,
               position: p.position,
             }))}
+            gameFormat={session.gameFormat as 'singles' | 'doubles' | 'any'}
+            onSuccess={handleModalSuccess}
+          />
+
+          <AutoAssignModal
+            isOpen={showAutoAssignModal}
+            onClose={() => setShowAutoAssignModal(false)}
+            sessionId={sessionId}
+            waitingPlayersCount={waitingPlayers.length}
             gameFormat={session.gameFormat as 'singles' | 'doubles' | 'any'}
             onSuccess={handleModalSuccess}
           />
