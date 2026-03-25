@@ -16,6 +16,11 @@ import {
   Plus
 } from 'lucide-react'
 import Link from 'next/link'
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from '@/components/ui/avatar'
 
 interface Stats {
   todayReservations: number
@@ -279,9 +284,12 @@ export function CourtAdminDashboard() {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 flex-1">
-                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold">
-                      {reservation.customerName.charAt(0).toUpperCase()}
-                    </div>
+                    <Avatar className="w-10 h-10 border border-gray-200">
+                      <AvatarImage src={reservation.customerAvatar || ''} alt={reservation.customerName} />
+                      <AvatarFallback className="bg-blue-100 text-blue-600 font-bold">
+                        {reservation.customerName.charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-semibold text-gray-900">{reservation.customerName}</span>
