@@ -415,6 +415,10 @@ export async function getQueueDetails(courtId: string) {
       matchOutcomes,
     }
 
+    // Keep denormalized queue_sessions.current_players in sync when DB triggers lag/misfire.
+    // The UI should always reflect active participants (left_at IS NULL) as the source of truth.
+    queueData.currentPlayers = formattedParticipants.length
+
     console.log('[getQueueDetails] ✅ Queue fetched successfully:', {
       sessionId: queueData.id,
       playerCount: queueData.players.length,
@@ -922,8 +926,11 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
         return isFullyPaid
       })
       .map((session: any) => {
-      // Use actual participant count, falling back to current_players column
-      const currentPlayers = participantCounts[session.id] || session.current_players || 0
+      // Use actual participant count (left_at IS NULL). Preserve 0 when everyone has left.
+      const hasActualCount = Object.prototype.hasOwnProperty.call(participantCounts, session.id)
+      const currentPlayers = hasActualCount
+        ? participantCounts[session.id]
+        : (session.current_players ?? 0)
 
       return {
         id: session.id,
