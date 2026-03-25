@@ -17,6 +17,81 @@ export async function getVenueAnalytics(
   }
 
   try {
+    const getDownPaymentRevenueFromPayments = async (
+      reservations: Array<{ id: string; booking_id?: string | null; recurrence_group_id?: string | null }>,
+      fromISO: string,
+      toISO: string
+    ) => {
+      if (!reservations.length) return 0
+
+      const reservationIds = reservations.map(r => r.id).filter(Boolean)
+      const bookingIds = Array.from(new Set(reservations.map(r => r.booking_id).filter(Boolean))) as string[]
+      const recurrenceGroupIds = Array.from(new Set(reservations.map(r => r.recurrence_group_id).filter(Boolean))) as string[]
+
+      const mergedPayments = new Map<string, any>()
+
+      if (reservationIds.length > 0) {
+        const { data } = await supabase
+          .from('payments')
+          .select('id, amount, metadata')
+          .in('reservation_id', reservationIds)
+          .in('status', ['paid', 'completed'])
+          .gte('created_at', fromISO)
+          .lte('created_at', toISO)
+
+        data?.forEach((payment: any) => mergedPayments.set(payment.id, payment))
+      }
+
+      if (bookingIds.length > 0) {
+        const { data } = await supabase
+          .from('payments')
+          .select('id, amount, metadata')
+          .in('booking_id', bookingIds)
+          .in('status', ['paid', 'completed'])
+          .gte('created_at', fromISO)
+          .lte('created_at', toISO)
+
+        data?.forEach((payment: any) => mergedPayments.set(payment.id, payment))
+
+        const metadataResults = await Promise.all(
+          bookingIds.map(async (bookingId) => {
+            const { data: metadataData } = await supabase
+              .from('payments')
+              .select('id, amount, metadata')
+              .contains('metadata', { booking_id: bookingId })
+              .in('status', ['paid', 'completed'])
+              .gte('created_at', fromISO)
+              .lte('created_at', toISO)
+            return metadataData || []
+          })
+        )
+
+        metadataResults.flat().forEach((payment: any) => mergedPayments.set(payment.id, payment))
+      }
+
+      if (recurrenceGroupIds.length > 0) {
+        const metadataResults = await Promise.all(
+          recurrenceGroupIds.map(async (recurrenceGroupId) => {
+            const { data: metadataData } = await supabase
+              .from('payments')
+              .select('id, amount, metadata')
+              .contains('metadata', { recurrence_group_id: recurrenceGroupId })
+              .in('status', ['paid', 'completed'])
+              .gte('created_at', fromISO)
+              .lte('created_at', toISO)
+            return metadataData || []
+          })
+        )
+
+        metadataResults.flat().forEach((payment: any) => mergedPayments.set(payment.id, payment))
+      }
+
+      return Array.from(mergedPayments.values()).reduce((sum, payment: any) => {
+        const isDownPayment = payment?.metadata?.is_down_payment === true || payment?.metadata?.is_down_payment === 'true'
+        return isDownPayment ? sum + Number(payment?.amount || 0) : sum
+      }, 0)
+    }
+
     // Verify ownership
     const { data: venue } = await supabase
       .from('venues')
@@ -70,6 +145,9 @@ export async function getVenueAnalytics(
         success: true,
         analytics: {
           totalRevenue: 0,
+          down_payment_revenue: 0,
+          previous_down_payment_revenue: 0,
+          down_payment_change: 0,
           totalBookings: 0,
           confirmedBookings: 0,
           cancelledBookings: 0,
@@ -97,7 +175,7 @@ export async function getVenueAnalytics(
     // Get reservations for the current period
     const { data: currentReservations } = await supabase
       .from('reservations')
-      .select('id, user_id, status, total_amount, amount_paid, start_time, end_time, created_at')
+      .select('id, user_id, status, total_amount, amount_paid, booking_id, recurrence_group_id, metadata, start_time, end_time, created_at')
       .in('court_id', courtIds)
       .gte('created_at', startDate.toISOString())
       .lte('created_at', endDate.toISOString())
@@ -105,7 +183,7 @@ export async function getVenueAnalytics(
     // Get reservations for the previous period
     const { data: previousReservations } = await supabase
       .from('reservations')
-      .select('id, user_id, status, total_amount, amount_paid')
+      .select('id, user_id, status, total_amount, amount_paid, booking_id, recurrence_group_id, metadata')
       .in('court_id', courtIds)
       .gte('created_at', previousStartDate.toISOString())
       .lte('created_at', previousEndDate.toISOString())
@@ -114,15 +192,44 @@ export async function getVenueAnalytics(
     const calculateMetrics = (reservations: any[]) => {
       const allBookings = reservations.length
       const confirmed = reservations.filter(r => r.status === 'confirmed' || r.status === 'completed')
-      const revenue = confirmed.reduce((sum, r) => sum + parseFloat(r.amount_paid || '0'), 0)
+      const paidReservations = reservations.filter(
+        r => r.status === 'partially_paid' || r.status === 'confirmed' || r.status === 'completed'
+      )
+      const revenue = paidReservations.reduce((sum, r) => sum + parseFloat(r.amount_paid || '0'), 0)
+      const fallbackDownPaymentRevenue = reservations
+        .filter(r => ['partially_paid', 'confirmed', 'completed'].includes(r.status))
+        .reduce((sum, r) => {
+          const metaDownPayment = Number(r?.metadata?.down_payment_amount || 0)
+          if (r.status === 'partially_paid') {
+            const fallbackPaidAmount = Number(r.amount_paid || 0)
+            return sum + (metaDownPayment > 0 ? metaDownPayment : fallbackPaidAmount)
+          }
+          return sum + (metaDownPayment > 0 ? metaDownPayment : 0)
+        }, 0)
       const uniqueCustomers = new Set(confirmed.map(r => r.user_id)).size
       const avgValue = confirmed.length > 0 ? revenue / confirmed.length : 0
 
-      return { allBookings, confirmed, revenue, uniqueCustomers, avgValue }
+      return { allBookings, confirmed, paidReservations, revenue, fallbackDownPaymentRevenue, uniqueCustomers, avgValue }
     }
 
     const current = calculateMetrics(currentReservations || [])
     const previous = calculateMetrics(previousReservations || [])
+    const currentPaymentsDownPaymentRevenue = await getDownPaymentRevenueFromPayments(
+      (currentReservations as any[]) || [],
+      startDate.toISOString(),
+      endDate.toISOString()
+    )
+    const previousPaymentsDownPaymentRevenue = await getDownPaymentRevenueFromPayments(
+      (previousReservations as any[]) || [],
+      previousStartDate.toISOString(),
+      previousEndDate.toISOString()
+    )
+    const currentDownPaymentRevenue = currentPaymentsDownPaymentRevenue > 0
+      ? currentPaymentsDownPaymentRevenue
+      : current.fallbackDownPaymentRevenue
+    const previousDownPaymentRevenue = previousPaymentsDownPaymentRevenue > 0
+      ? previousPaymentsDownPaymentRevenue
+      : previous.fallbackDownPaymentRevenue
 
     // Calculate changes
     const calculateChange = (curr: number, prev: number) => {
@@ -131,6 +238,7 @@ export async function getVenueAnalytics(
     }
 
     const revenue_change = calculateChange(current.revenue, previous.revenue)
+    const down_payment_change = calculateChange(currentDownPaymentRevenue, previousDownPaymentRevenue)
     const bookings_change = calculateChange(current.allBookings, previous.allBookings)
     const customers_change = calculateChange(current.uniqueCustomers, previous.uniqueCustomers)
     const avg_value_change = calculateChange(current.avgValue, previous.avgValue)
@@ -148,7 +256,7 @@ export async function getVenueAnalytics(
 
     // Revenue by day (for charts)
     const revenueByDay: Record<string, number> = {}
-    current.confirmed.forEach((r: any) => {
+    current.paidReservations.forEach((r: any) => {
       const day = new Date(r.created_at).toISOString().split('T')[0]
       revenueByDay[day] = (revenueByDay[day] || 0) + parseFloat(r.amount_paid || '0')
     })
@@ -175,7 +283,7 @@ export async function getVenueAnalytics(
         monthData[key] = { revenue: 0, bookings: 0, label }
       }
 
-      current.confirmed.forEach((r: any) => {
+      current.paidReservations.forEach((r: any) => {
         const date = new Date(r.created_at)
         const key = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`
         if (monthData[key]) {
@@ -209,7 +317,7 @@ export async function getVenueAnalytics(
         const label = `${segStart.toLocaleString('default', { month: 'short', day: 'numeric' })} - ${segEnd.toLocaleString('default', { month: 'short', day: 'numeric' })}`
         weekData[key] = { revenue: 0, bookings: 0, label }
 
-        current.confirmed.forEach((r: any) => {
+        current.paidReservations.forEach((r: any) => {
           const rDate = new Date(r.created_at)
           if (rDate >= segStart && rDate <= segEnd) {
             weekData[key].revenue += parseFloat(r.amount_paid || '0')
@@ -231,7 +339,7 @@ export async function getVenueAnalytics(
       while (dayIterator <= endDate) {
         const dayStr = dayIterator.toISOString().split('T')[0]
         const revenue = revenueByDay[dayStr] || 0
-        const dailyBookings = current.confirmed.filter((r: any) =>
+        const dailyBookings = current.paidReservations.filter((r: any) =>
           new Date(r.created_at).toISOString().split('T')[0] === dayStr
         ).length
 
@@ -249,6 +357,7 @@ export async function getVenueAnalytics(
       analytics: {
         totalRevenue: Math.round(current.revenue * 100) / 100,
         total_revenue: Math.round(current.revenue * 100) / 100, // Frontend alias
+        down_payment_revenue: Math.round(currentDownPaymentRevenue * 100) / 100,
         totalBookings: current.allBookings,
         total_bookings: current.allBookings, // Frontend alias
         confirmedBookings: current.confirmed.length,
@@ -266,6 +375,9 @@ export async function getVenueAnalytics(
         // Historical / Comparisons
         previous_revenue: Math.round(previous.revenue * 100) / 100,
         revenue_change,
+
+        previous_down_payment_revenue: Math.round(previousDownPaymentRevenue * 100) / 100,
+        down_payment_change,
 
         previous_bookings: previous.allBookings,
         bookings_change,

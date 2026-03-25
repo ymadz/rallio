@@ -288,6 +288,7 @@ export function AnalyticsDashboard({ venueId }: AnalyticsDashboardProps) {
             </div>
             <p className="text-sm text-gray-600 mb-1">Total Revenue</p>
             <p className="text-3xl font-bold text-gray-900">₱{analytics.total_revenue?.toLocaleString() || 0}</p>
+            <p className="text-xs text-gray-500 mt-1">Downpayment: ₱{(analytics.down_payment_revenue || 0).toLocaleString()}</p>
             <p className="text-xs text-gray-500 mt-1">vs last period: ₱{analytics.previous_revenue?.toLocaleString() || 0}</p>
           </div>
 

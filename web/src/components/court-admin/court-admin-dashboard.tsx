@@ -23,6 +23,7 @@ interface Stats {
   pendingReservations: number
   upcomingReservations: number
   totalRevenue: number
+  downPaymentRevenue: number
   averageRating: number
 }
 
@@ -188,7 +189,7 @@ export function CourtAdminDashboard() {
             <span className="text-3xl font-bold text-gray-900">₱{stats.totalRevenue.toFixed(0)}</span>
           </div>
           <p className="text-gray-700 text-sm font-medium">This Month's Revenue</p>
-          <p className="text-gray-500 text-xs mt-1">Confirmed & completed</p>
+          <p className="text-gray-500 text-xs mt-1">Downpayment: ₱{stats.downPaymentRevenue.toFixed(2)}</p>
         </div>
 
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">

@@ -48,6 +48,81 @@ export async function getDashboardStats() {
   }
 
   try {
+    const getDownPaymentRevenueFromPayments = async (
+      reservations: Array<{ id: string; booking_id?: string | null; recurrence_group_id?: string | null }>,
+      fromISO: string,
+      toISO: string
+    ) => {
+      if (!reservations.length) return 0
+
+      const reservationIds = reservations.map(r => r.id).filter(Boolean)
+      const bookingIds = Array.from(new Set(reservations.map(r => r.booking_id).filter(Boolean))) as string[]
+      const recurrenceGroupIds = Array.from(new Set(reservations.map(r => r.recurrence_group_id).filter(Boolean))) as string[]
+
+      const mergedPayments = new Map<string, any>()
+
+      if (reservationIds.length > 0) {
+        const { data } = await supabase
+          .from('payments')
+          .select('id, amount, metadata')
+          .in('reservation_id', reservationIds)
+          .in('status', ['paid', 'completed'])
+          .gte('created_at', fromISO)
+          .lte('created_at', toISO)
+
+        data?.forEach((payment: any) => mergedPayments.set(payment.id, payment))
+      }
+
+      if (bookingIds.length > 0) {
+        const { data } = await supabase
+          .from('payments')
+          .select('id, amount, metadata')
+          .in('booking_id', bookingIds)
+          .in('status', ['paid', 'completed'])
+          .gte('created_at', fromISO)
+          .lte('created_at', toISO)
+
+        data?.forEach((payment: any) => mergedPayments.set(payment.id, payment))
+
+        const metadataResults = await Promise.all(
+          bookingIds.map(async (bookingId) => {
+            const { data: metadataData } = await supabase
+              .from('payments')
+              .select('id, amount, metadata')
+              .contains('metadata', { booking_id: bookingId })
+              .in('status', ['paid', 'completed'])
+              .gte('created_at', fromISO)
+              .lte('created_at', toISO)
+            return metadataData || []
+          })
+        )
+
+        metadataResults.flat().forEach((payment: any) => mergedPayments.set(payment.id, payment))
+      }
+
+      if (recurrenceGroupIds.length > 0) {
+        const metadataResults = await Promise.all(
+          recurrenceGroupIds.map(async (recurrenceGroupId) => {
+            const { data: metadataData } = await supabase
+              .from('payments')
+              .select('id, amount, metadata')
+              .contains('metadata', { recurrence_group_id: recurrenceGroupId })
+              .in('status', ['paid', 'completed'])
+              .gte('created_at', fromISO)
+              .lte('created_at', toISO)
+            return metadataData || []
+          })
+        )
+
+        metadataResults.flat().forEach((payment: any) => mergedPayments.set(payment.id, payment))
+      }
+
+      return Array.from(mergedPayments.values()).reduce((sum, payment: any) => {
+        const isDownPayment = payment?.metadata?.is_down_payment === true || payment?.metadata?.is_down_payment === 'true'
+        return isDownPayment ? sum + Number(payment?.amount || 0) : sum
+      }, 0)
+    }
+
     // Get all venue IDs owned by user
     const { data: venues } = await supabase
       .from('venues')
@@ -65,6 +140,7 @@ export async function getDashboardStats() {
           pendingReservations: 0,
           upcomingReservations: 0,
           totalRevenue: 0,
+          downPaymentRevenue: 0,
           averageRating: 0,
         }
       }
@@ -116,7 +192,15 @@ export async function getDashboardStats() {
       .select('amount_paid')
       .in('court_id', courtIds)
       .gte('created_at', monthStart.toISOString())
-      .in('status', ['confirmed', 'completed'])
+      .in('status', ['partially_paid', 'confirmed', 'completed'])
+
+    // Fallback down payment totals from reservation metadata.
+    const { data: monthDownPayments } = await supabase
+      .from('reservations')
+      .select('id, booking_id, recurrence_group_id, status, amount_paid, metadata')
+      .in('court_id', courtIds)
+      .gte('created_at', monthStart.toISOString())
+      .in('status', ['partially_paid', 'confirmed', 'completed'])
 
     // Get average rating
     const { data: ratings } = await supabase
@@ -126,6 +210,22 @@ export async function getDashboardStats() {
 
     const todayRevenue = todayReservations?.reduce((sum, r) => sum + parseFloat(r.total_amount || '0'), 0) || 0
     const totalRevenue = monthRevenue?.reduce((sum, r) => sum + parseFloat(r.amount_paid || '0'), 0) || 0
+    const fallbackDownPaymentRevenue = monthDownPayments?.reduce((sum, reservation: any) => {
+      const metaDownPayment = Number(reservation?.metadata?.down_payment_amount || 0)
+
+      if (reservation.status === 'partially_paid') {
+        const fallbackPaidAmount = Number(reservation?.amount_paid || 0)
+        return sum + (metaDownPayment > 0 ? metaDownPayment : fallbackPaidAmount)
+      }
+
+      return sum + (metaDownPayment > 0 ? metaDownPayment : 0)
+    }, 0) || 0
+    const paymentsDownPaymentRevenue = await getDownPaymentRevenueFromPayments(
+      (monthDownPayments as any[]) || [],
+      monthStart.toISOString(),
+      new Date().toISOString()
+    )
+    const downPaymentRevenue = paymentsDownPaymentRevenue > 0 ? paymentsDownPaymentRevenue : fallbackDownPaymentRevenue
     const averageRating = ratings && ratings.length > 0
       ? ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length
       : 0
@@ -138,6 +238,7 @@ export async function getDashboardStats() {
         pendingReservations: pendingReservations?.length || 0,
         upcomingReservations: upcomingReservations?.length || 0,
         totalRevenue,
+        downPaymentRevenue,
         averageRating: Math.round(averageRating * 10) / 10,
       }
     }
