@@ -1,41 +1,41 @@
-'use server'
+'use server';
 
-import { createClient } from '@/lib/supabase/server'
-import { createServiceClient } from '@/lib/supabase/service'
-import { createGCashCheckout, createMayaCheckout, getSource, createPayment } from '@/lib/paymongo'
-import { revalidatePath } from 'next/cache'
-import { headers } from 'next/headers'
-import { getServerNow } from '@/lib/time-server'
+import { createClient } from '@/lib/supabase/server';
+import { createServiceClient } from '@/lib/supabase/service';
+import { createGCashCheckout, createMayaCheckout, getSource, createPayment } from '@/lib/paymongo';
+import { revalidatePath } from 'next/cache';
+import { headers } from 'next/headers';
+import { getServerNow } from '@/lib/time-server';
 
-export type PaymentMethod = 'gcash' | 'paymaya' | 'cash'
+export type PaymentMethod = 'gcash' | 'paymaya' | 'cash';
 
 // Type for reservation with nested relations from Supabase query
 type ReservationWithRelations = {
-  id: string
-  user_id: string
-  total_amount: number
-  amount_paid: number
-  status: string
-  payment_type?: string
-  num_players?: number
-  recurrence_group_id?: string | null
-  booking_id?: string | null
-  metadata?: Record<string, any> | null
-  payment_method?: string
+  id: string;
+  user_id: string;
+  total_amount: number;
+  amount_paid: number;
+  status: string;
+  payment_type?: string;
+  num_players?: number;
+  recurrence_group_id?: string | null;
+  booking_id?: string | null;
+  metadata?: Record<string, any> | null;
+  payment_method?: string;
   courts: {
-    name: string
+    name: string;
     venues: {
-      name: string
-    }
-  } | null
-}
+      name: string;
+    };
+  } | null;
+};
 
 export interface InitiatePaymentResult {
-  success: boolean
-  checkoutUrl?: string
-  paymentId?: string
-  sourceId?: string
-  error?: string
+  success: boolean;
+  checkoutUrl?: string;
+  paymentId?: string;
+  sourceId?: string;
+  error?: string;
 }
 
 /**
@@ -47,34 +47,34 @@ export async function initiatePaymentAction(
   paymentMethod: PaymentMethod,
   options: { isMobile?: boolean } = {}
 ): Promise<InitiatePaymentResult> {
-  const headersList = await headers()
-  const userAgent = headersList.get('user-agent') || ''
-  const isCapacitorUserAgent = userAgent.includes('Capacitor')
-  
-  const { isMobile = isCapacitorUserAgent } = options
-  console.log('[initiatePaymentAction] 🚀 Starting payment initiation', { isMobile, userAgent })
+  const headersList = await headers();
+  const userAgent = headersList.get('user-agent') || '';
+  const isCapacitorUserAgent = userAgent.includes('Capacitor');
+
+  const { isMobile = isCapacitorUserAgent } = options;
+  console.log('[initiatePaymentAction] 🚀 Starting payment initiation', { isMobile, userAgent });
   console.log('[initiatePaymentAction] Input:', {
     reservationId,
     paymentMethod,
-    isMobile
-  })
+    isMobile,
+  });
 
   try {
-    const supabase = await createClient()
+    const supabase = await createClient();
 
     // Get the authenticated user
     const {
       data: { user },
-    } = await supabase.auth.getUser()
+    } = await supabase.auth.getUser();
 
     console.log('[initiatePaymentAction] User auth:', {
       authenticated: !!user,
-      userId: user?.id
-    })
+      userId: user?.id,
+    });
 
     if (!user) {
-      console.error('[initiatePaymentAction] ❌ User not authenticated')
-      return { success: false, error: 'User not authenticated' }
+      console.error('[initiatePaymentAction] ❌ User not authenticated');
+      return { success: false, error: 'User not authenticated' };
     }
 
     // Get reservation details with court and venue information
@@ -92,75 +92,80 @@ export async function initiatePaymentAction(
       `
       )
       .eq('id', reservationId)
-      .single<ReservationWithRelations>()
+      .single<ReservationWithRelations>();
 
     if (reservationError || !reservation) {
-      return { success: false, error: 'Reservation not found' }
+      return { success: false, error: 'Reservation not found' };
     }
 
     // Verify user owns this reservation
     if (reservation.user_id !== user.id) {
-      return { success: false, error: 'Unauthorized' }
+      return { success: false, error: 'Unauthorized' };
     }
 
     // Check if fully paid
-    if (reservation.status === 'completed' || reservation.status === 'confirmed' || reservation.amount_paid >= reservation.total_amount) {
+    if (
+      reservation.status === 'completed' ||
+      reservation.status === 'confirmed' ||
+      reservation.amount_paid >= reservation.total_amount
+    ) {
       // Allow partially_paid to be processed for the remaining balance
       if (reservation.status !== 'partially_paid') {
-        return { success: false, error: 'Reservation already fully paid' }
+        return { success: false, error: 'Reservation already fully paid' };
       }
     }
 
     // Generate unique payment reference
-    const paymentReference = `RES-${reservationId.slice(0, 8)}-${Date.now()}`
+    const paymentReference = `RES-${reservationId.slice(0, 8)}-${Date.now()}`;
 
     // Get user profile for billing info
     const { data: profile } = await supabase
       .from('profiles')
       .select('first_name, last_name, phone')
       .eq('id', user.id)
-      .single()
+      .single();
 
     // Build billing name with fallback to email
     const billingName = profile
       ? `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim() || user.email || 'Customer'
-      : user.email || 'Customer'
+      : user.email || 'Customer';
 
     // Build description with optional chaining for safety
-    const venueName = reservation.courts?.venues?.name ?? 'Court Reservation'
-    const courtName = reservation.courts?.name ?? 'Court'
-    let description = `${venueName} - ${courtName}`
+    const venueName = reservation.courts?.venues?.name ?? 'Court Reservation';
+    const courtName = reservation.courts?.name ?? 'Court';
+    let description = `${venueName} - ${courtName}`;
 
     // Check for bulk payment group
-    let amountToCharge = reservation.total_amount
-    let recurrenceGroupId = reservation.recurrence_group_id
-    let bookingId = reservation.booking_id
-    let isDownPayment = false
-    let isRemainingBalanceCharge = false
+    let amountToCharge = reservation.total_amount;
+    let recurrenceGroupId = reservation.recurrence_group_id;
+    let bookingId = reservation.booking_id;
+    let isDownPayment = false;
+    let isRemainingBalanceCharge = false;
 
     // If reservation is already partially paid, we are charging the remaining balance
     if (reservation.status === 'partially_paid' && reservation.amount_paid > 0) {
-      amountToCharge = reservation.total_amount - reservation.amount_paid
-      isRemainingBalanceCharge = true
-      description += ' (Remaining Balance)'
+      amountToCharge = reservation.total_amount - reservation.amount_paid;
+      isRemainingBalanceCharge = true;
+      description += ' (Remaining Balance)';
     } else {
       // Check intent: is this meant to be a cash booking (with a down payment)?
-      const isIntendedCash = reservation.metadata?.intended_payment_method === 'cash' ||
+      const isIntendedCash =
+        reservation.metadata?.intended_payment_method === 'cash' ||
         reservation.payment_type === 'cash' ||
         reservation.payment_method === 'cash' ||
-        paymentMethod === 'cash'
+        paymentMethod === 'cash';
 
       // If it's a cash booking but requires a down payment, charge the down payment amount online.
       if (isIntendedCash && reservation.status === 'pending_payment') {
-        const metadataDownPayment = reservation.metadata?.down_payment_amount
+        const metadataDownPayment = reservation.metadata?.down_payment_amount;
         if (metadataDownPayment) {
-          amountToCharge = Number(metadataDownPayment)
-          isDownPayment = true
-          description += ' (Down Payment)'
+          amountToCharge = Number(metadataDownPayment);
+          isDownPayment = true;
+          description += ' (Down Payment)';
         } else if (reservation.payment_type === 'cash' || reservation.payment_method === 'cash') {
           // Fallback: If it's explicitly marked as cash but metadata is missing the amount for some reason,
           // still treat it as a down payment situation to avoid the "not supported" error
-          isDownPayment = true
+          isDownPayment = true;
         }
       }
     }
@@ -175,7 +180,7 @@ export async function initiatePaymentAction(
       paymentMethod,
       metadata: reservation.metadata,
       reservationPaymentMethod: reservation.payment_method,
-    })
+    });
 
     // IMPORTANT: For "Continue Payment" on partially paid bookings,
     // always charge only the selected reservation's remaining balance.
@@ -184,41 +189,41 @@ export async function initiatePaymentAction(
       const query = supabase
         .from('reservations')
         .select('total_amount, status, metadata')
-        .in('status', ['pending_payment'])
+        .in('status', ['pending_payment']);
 
       if (bookingId) {
-        query.eq('booking_id', bookingId)
+        query.eq('booking_id', bookingId);
       } else {
-        query.eq('recurrence_group_id', recurrenceGroupId!)
+        query.eq('recurrence_group_id', recurrenceGroupId!);
       }
 
-      const { data: groupReservations } = await query
+      const { data: groupReservations } = await query;
 
       if (groupReservations && groupReservations.length > 0) {
         if (isDownPayment) {
           // For down payments, sum the down_payment_amount from each reservation's metadata.
           // Fallback to 20% of total_amount if metadata is missing.
           amountToCharge = groupReservations.reduce((sum, res) => {
-            const meta = res.metadata as any
-            const downPayment = Number(meta?.down_payment_amount || 0)
-            if (downPayment > 0) return sum + downPayment
-            
+            const meta = res.metadata as any;
+            const downPayment = Number(meta?.down_payment_amount || 0);
+            if (downPayment > 0) return sum + downPayment;
+
             // Fallback: use 20% of total_amount as a safe default for down payment
-            return sum + ((res.total_amount || 0) * 0.2)
-          }, 0)
-          description += ` (Down Payment - ${groupReservations.length} sessions)`
+            return sum + (res.total_amount || 0) * 0.2;
+          }, 0);
+          description += ` (Down Payment - ${groupReservations.length} sessions)`;
         } else {
           // For full payments, sum up the total amount
-          amountToCharge = groupReservations.reduce((sum, res) => sum + (res.total_amount || 0), 0)
-          description += ` (Bulk: ${groupReservations.length} sessions)`
+          amountToCharge = groupReservations.reduce((sum, res) => sum + (res.total_amount || 0), 0);
+          description += ` (Bulk: ${groupReservations.length} sessions)`;
         }
         console.log('[initiatePaymentAction] 🔄 Detected bulk group:', {
           bookingId,
           recurrenceGroupId,
           count: groupReservations.length,
           totalBulkAmount: amountToCharge,
-          isDownPayment
-        })
+          isDownPayment,
+        });
       }
     }
 
@@ -228,32 +233,34 @@ export async function initiatePaymentAction(
       numPlayers: reservation.num_players,
       amountToCharge,
       isRemainingBalanceCharge,
-      isBulk: !!(bookingId || recurrenceGroupId)
-    })
+      isBulk: !!(bookingId || recurrenceGroupId),
+    });
 
     // Generate success/failed URLs
-    const headersList = await headers()
-    const host = headersList.get('host')
-    const proto = headersList.get('x-forwarded-proto') || 'http'
-    const baseUrl = host ? `${proto}://${host}` : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000')
-    
-    let successUrl = `${baseUrl}/checkout/success?reservation=${reservationId}${bookingId ? `&booking=${bookingId}` : ''}`
-    let failedUrl = `${baseUrl}/checkout/failed?reservation=${reservationId}`
+    const headersList = await headers();
+    const host = headersList.get('host');
+    const proto = headersList.get('x-forwarded-proto') || 'http';
+    const baseUrl = host
+      ? `${proto}://${host}`
+      : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
+    let successUrl = `${baseUrl}/checkout/success?reservation=${reservationId}${bookingId ? `&booking=${bookingId}` : ''}`;
+    let failedUrl = `${baseUrl}/checkout/failed?reservation=${reservationId}`;
 
     if (isMobile) {
       // Use the bridge callback URL to trigger deep link back to app
-      successUrl = `${baseUrl}/mobile-payment/callback?status=success&reservation=${reservationId}${bookingId ? `&booking=${bookingId}` : ''}`
-      failedUrl = `${baseUrl}/mobile-payment/callback?status=failed&reservation=${reservationId}`
+      successUrl = `${baseUrl}/mobile-payment/callback?status=success&reservation=${reservationId}${bookingId ? `&booking=${bookingId}` : ''}`;
+      failedUrl = `${baseUrl}/mobile-payment/callback?status=failed&reservation=${reservationId}`;
     }
 
-    let checkoutUrl: string
-    let sourceId: string
+    let checkoutUrl: string;
+    let sourceId: string;
 
     // Create payment source based on method
     try {
       // Determine the actual method to use for PayMongo
       // If it's a cash booking requiring down payment, default to GCash for the online portion.
-      const paymongoMethod = (paymentMethod === 'cash' && isDownPayment) ? 'gcash' : paymentMethod
+      const paymongoMethod = paymentMethod === 'cash' && isDownPayment ? 'gcash' : paymentMethod;
 
       if (paymongoMethod === 'gcash') {
         const result = await createGCashCheckout({
@@ -274,11 +281,11 @@ export async function initiatePaymentAction(
             payment_type: reservation.payment_type || 'full',
             player_count: reservation.num_players?.toString() || '1',
             is_down_payment: isDownPayment ? 'true' : 'false',
-            recurrence_group_id: recurrenceGroupId || undefined
+            recurrence_group_id: recurrenceGroupId || undefined,
           },
-        })
-        checkoutUrl = result.checkoutUrl
-        sourceId = result.sourceId
+        });
+        checkoutUrl = result.checkoutUrl;
+        sourceId = result.sourceId;
       } else if (paymongoMethod === 'paymaya') {
         const result = await createMayaCheckout({
           amount: amountToCharge,
@@ -298,45 +305,52 @@ export async function initiatePaymentAction(
             payment_type: reservation.payment_type || 'full',
             player_count: reservation.num_players?.toString() || '1',
             is_down_payment: isDownPayment ? 'true' : 'false',
-            recurrence_group_id: recurrenceGroupId || undefined
+            recurrence_group_id: recurrenceGroupId || undefined,
           },
-        })
-        checkoutUrl = result.checkoutUrl
-        sourceId = result.sourceId
+        });
+        checkoutUrl = result.checkoutUrl;
+        sourceId = result.sourceId;
       } else {
-        return { success: false, error: 'Cash payment without down payment not supported here' }
+        return { success: false, error: 'Cash payment without down payment not supported here' };
       }
     } catch (paymentError) {
-      console.error('PayMongo API error:', paymentError)
+      console.error('PayMongo API error:', paymentError);
 
       // Check if it's a PayMongo configuration error
-      const errorMessage = paymentError instanceof Error ? paymentError.message : String(paymentError)
+      const errorMessage =
+        paymentError instanceof Error ? paymentError.message : String(paymentError);
 
-      if (errorMessage.includes('not allowed to process') || errorMessage.includes('gcash payments')) {
+      if (
+        errorMessage.includes('not allowed to process') ||
+        errorMessage.includes('gcash payments')
+      ) {
         return {
           success: false,
-          error: 'GCash payments are currently unavailable. Please use the "Pay with Cash" option at the venue instead.',
-        }
+          error:
+            'GCash payments are currently unavailable. Please use the "Pay with Cash" option at the venue instead.',
+        };
       }
 
       if (errorMessage.includes('paymaya') || errorMessage.includes('maya')) {
         return {
           success: false,
-          error: 'Maya payments are currently unavailable. Please use the "Pay with Cash" option at the venue instead.',
-        }
+          error:
+            'Maya payments are currently unavailable. Please use the "Pay with Cash" option at the venue instead.',
+        };
       }
 
       // Generic PayMongo error
       return {
         success: false,
-        error: 'Payment provider is temporarily unavailable. Please try paying with cash at the venue.',
-      }
+        error:
+          'Payment provider is temporarily unavailable. Please try paying with cash at the venue.',
+      };
     }
 
     // Create payment record in database with 15-minute expiration
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000) // 15 minutes
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
-    console.log('[initiatePaymentAction] 💾 Creating payment record in database')
+    console.log('[initiatePaymentAction] 💾 Creating payment record in database');
     const paymentData = {
       reference: paymentReference,
       user_id: user.id,
@@ -362,36 +376,41 @@ export async function initiatePaymentAction(
         recurrence_group_id: recurrenceGroupId,
         is_down_payment: isDownPayment,
       },
-    }
-    console.log('[initiatePaymentAction] Payment data:', paymentData)
+    };
+    console.log('[initiatePaymentAction] Payment data:', paymentData);
 
     const { data: payment, error: paymentError } = await supabase
       .from('payments')
       .insert(paymentData)
       .select('id')
-      .single()
+      .single();
 
     console.log('[initiatePaymentAction] Payment insert result:', {
       success: !!payment,
       paymentId: payment?.id,
-      error: paymentError ? {
-        message: paymentError.message,
-        code: paymentError.code,
-        details: paymentError.details
-      } : null
-    })
+      error: paymentError
+        ? {
+            message: paymentError.message,
+            code: paymentError.code,
+            details: paymentError.details,
+          }
+        : null,
+    });
 
     if (paymentError) {
-      console.error('[initiatePaymentAction] ❌ Error creating payment record:', paymentError)
-      console.error('[initiatePaymentAction] Payment error details:', JSON.stringify(paymentError, null, 2))
+      console.error('[initiatePaymentAction] ❌ Error creating payment record:', paymentError);
+      console.error(
+        '[initiatePaymentAction] Payment error details:',
+        JSON.stringify(paymentError, null, 2)
+      );
       return {
         success: false,
-        error: paymentError.message || paymentError.details || 'Failed to create payment record'
-      }
+        error: paymentError.message || paymentError.details || 'Failed to create payment record',
+      };
     }
 
     // Update reservation to indicate payment initiated
-    console.log('[initiatePaymentAction] 📝 Updating reservation status to pending_payment')
+    console.log('[initiatePaymentAction] 📝 Updating reservation status to pending_payment');
     const { error: reservationUpdateError } = await supabase
       .from('reservations')
       .update({
@@ -404,38 +423,38 @@ export async function initiatePaymentAction(
           payment_reference: paymentReference,
         },
       })
-      .eq('id', reservationId)
+      .eq('id', reservationId);
 
     if (reservationUpdateError) {
       console.error('[initiatePaymentAction] ⚠️ Failed to update reservation status:', {
         error: reservationUpdateError,
-        code: reservationUpdateError.code
-      })
+        code: reservationUpdateError.code,
+      });
       // Don't fail the payment creation if this fails
     } else {
-      console.log('[initiatePaymentAction] ✅ Reservation status updated')
+      console.log('[initiatePaymentAction] ✅ Reservation status updated');
     }
 
-    revalidatePath('/reservations')
+    revalidatePath('/reservations');
 
     console.log('[initiatePaymentAction] ✅ Payment initiation complete:', {
       paymentId: payment.id,
       sourceId,
-      checkoutUrl
-    })
+      checkoutUrl,
+    });
 
     return {
       success: true,
       checkoutUrl,
       paymentId: payment.id,
       sourceId,
-    }
+    };
   } catch (error) {
-    console.error('Payment initiation error:', error)
+    console.error('Payment initiation error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Payment initiation failed',
-    }
+    };
   }
 }
 
@@ -444,23 +463,23 @@ export async function initiatePaymentAction(
  * Polls PayMongo to check if payment has been completed
  */
 export async function checkPaymentStatusAction(sourceId: string): Promise<{
-  success: boolean
-  status?: 'pending' | 'chargeable' | 'cancelled' | 'expired' | 'paid'
-  error?: string
+  success: boolean;
+  status?: 'pending' | 'chargeable' | 'cancelled' | 'expired' | 'paid';
+  error?: string;
 }> {
   try {
-    const source = await getSource(sourceId)
+    const source = await getSource(sourceId);
 
     return {
       success: true,
       status: source.attributes.status,
-    }
+    };
   } catch (error) {
-    console.error('Payment status check error:', error)
+    console.error('Payment status check error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Status check failed',
-    }
+    };
   }
 }
 
@@ -469,31 +488,32 @@ export async function checkPaymentStatusAction(sourceId: string): Promise<{
  * Called when source becomes chargeable (webhook or polling detected it)
  */
 export async function processChargeableSourceAction(sourceId: string): Promise<{
-  success: boolean
-  error?: string
+  success: boolean;
+  error?: string;
 }> {
   try {
     // Use service client to bypass RLS for payment fulfillment
     // This ensures status updates always succeed regardless of policies
-    const supabase = createServiceClient()
+    const supabase = createServiceClient();
 
     // Get the payment record
     const { data: payment, error: paymentError } = await supabase
       .from('payments')
       .select('*')
       .eq('external_id', sourceId)
-      .single()
+      .single();
 
     if (paymentError || !payment) {
-      return { success: false, error: 'Payment record not found' }
+      return { success: false, error: 'Payment record not found' };
     }
 
-    const isDownPayment = payment.metadata?.is_down_payment === true || payment.metadata?.is_down_payment === 'true'
-    const newReservationStatus = isDownPayment ? 'partially_paid' : 'confirmed'
+    const isDownPayment =
+      payment.metadata?.is_down_payment === true || payment.metadata?.is_down_payment === 'true';
+    const newReservationStatus = isDownPayment ? 'partially_paid' : 'confirmed';
 
     // Idempotency check: If payment is already completed
     if (payment.status === 'completed') {
-      console.log('Payment already completed, verifying reservation status:', sourceId)
+      console.log('Payment already completed, verifying reservation status:', sourceId);
 
       // CRITICAL FIX: Ensure reservation is confirmed even if payment was already processed
       // This handles race conditions where payment completes but reservation update fails
@@ -501,23 +521,26 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
         .from('reservations')
         .select('status, id, amount_paid')
         .eq('id', payment.reservation_id)
-        .single()
+        .single();
 
       if (reservation?.status !== newReservationStatus && reservation?.status !== 'confirmed') {
-        console.warn(`⚠️ Payment completed but reservation not ${newReservationStatus} - fixing now`)
-        console.log('Reservation ID:', payment.reservation_id)
-        console.log('Current status:', reservation?.status)
+        console.warn(
+          `⚠️ Payment completed but reservation not ${newReservationStatus} - fixing now`
+        );
+        console.log('Reservation ID:', payment.reservation_id);
+        console.log('Current status:', reservation?.status);
 
         // For recurring down payments, use per-reservation share, not total payment
         const { data: firstResMeta } = await supabase
           .from('reservations')
           .select('metadata')
           .eq('id', payment.reservation_id)
-          .single()
+          .single();
 
-        const perResDownPayment = isDownPayment && firstResMeta?.metadata?.down_payment_amount
-          ? Number(firstResMeta.metadata.down_payment_amount)
-          : payment.amount
+        const perResDownPayment =
+          isDownPayment && firstResMeta?.metadata?.down_payment_amount
+            ? Number(firstResMeta.metadata.down_payment_amount)
+            : payment.amount;
 
         const { error: updateError } = await supabase
           .from('reservations')
@@ -527,54 +550,56 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
               ? perResDownPayment
               : (reservation?.amount_paid || 0) + payment.amount,
           })
-          .eq('id', payment.reservation_id)
+          .eq('id', payment.reservation_id);
 
         if (updateError) {
-          console.error('CRITICAL: Failed to confirm reservation:', updateError)
-          console.error('Payment ID:', payment.id)
-          console.error('Reservation ID:', payment.reservation_id)
+          console.error('CRITICAL: Failed to confirm reservation:', updateError);
+          console.error('Payment ID:', payment.id);
+          console.error('Reservation ID:', payment.reservation_id);
           return {
             success: false,
-            error: 'Payment completed but reservation confirmation failed. Please contact support with reference: ' + payment.reference
-          }
+            error:
+              'Payment completed but reservation confirmation failed. Please contact support with reference: ' +
+              payment.reference,
+          };
         }
 
-        console.log('✅ Reservation confirmed successfully:', payment.reservation_id)
-        revalidatePath('/reservations')
-        revalidatePath('/bookings')
+        console.log('✅ Reservation confirmed successfully:', payment.reservation_id);
+        revalidatePath('/reservations');
+        revalidatePath('/bookings');
       } else {
-        console.log('✅ Reservation already confirmed, no action needed')
+        console.log('✅ Reservation already confirmed, no action needed');
       }
 
       // Check if linked to Queue Session and update
-      await updateQueueSessionStatus(payment.reservation_id, supabase)
+      await updateQueueSessionStatus(payment.reservation_id, supabase);
 
-      return { success: true }
+      return { success: true };
     }
 
     // Check if currently being processed by webhook
     if (payment.metadata?.processing) {
-      const processingStartedAt = payment.metadata?.processing_started_at
+      const processingStartedAt = payment.metadata?.processing_started_at;
       const processingDuration = processingStartedAt
         ? Date.now() - new Date(processingStartedAt).getTime()
-        : 0
+        : 0;
 
       // If processing for less than 2 minutes, wait for it to complete
       if (processingDuration < 2 * 60 * 1000) {
-        console.log('Payment is being processed by webhook, waiting...', sourceId)
+        console.log('Payment is being processed by webhook, waiting...', sourceId);
         // Wait 3 seconds and check again
-        await new Promise(resolve => setTimeout(resolve, 3000))
+        await new Promise((resolve) => setTimeout(resolve, 3000));
 
         // Re-fetch payment status
         const { data: updatedPayment } = await supabase
           .from('payments')
           .select('status')
           .eq('external_id', sourceId)
-          .single()
+          .single();
 
         if (updatedPayment?.status === 'completed') {
-          console.log('Payment completed by webhook during wait')
-          return { success: true }
+          console.log('Payment completed by webhook during wait');
+          return { success: true };
         }
       }
     }
@@ -587,10 +612,10 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
           ...payment.metadata,
           processing: true,
           processing_started_at: new Date().toISOString(),
-          processed_by: 'success_page'
-        }
+          processed_by: 'success_page',
+        },
       })
-      .eq('id', payment.id)
+      .eq('id', payment.id);
 
     // Create charge in PayMongo
     // IMPORTANT: source.type must always be 'source' (not payment method type)
@@ -605,7 +630,7 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
         payment_id: payment.id,
         reservation_id: payment.reservation_id,
       },
-    })
+    });
 
     // Update payment record
     const { error: paymentUpdateError } = await supabase
@@ -619,46 +644,46 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
           paymongo_payment: paymentResult,
         },
       })
-      .eq('id', payment.id)
+      .eq('id', payment.id);
 
     if (paymentUpdateError) {
-      console.error('Error updating payment record:', paymentUpdateError)
+      console.error('Error updating payment record:', paymentUpdateError);
       // Continue anyway - payment was created in PayMongo
     }
 
     // Update reservation with comprehensive error handling
-    console.log(`Updating reservation to ${newReservationStatus}:`, payment.reservation_id)
+    console.log(`Updating reservation to ${newReservationStatus}:`, payment.reservation_id);
     // Fetch latest reservation first to get current amount_paid and total_amount
     const { data: currentRes } = await supabase
       .from('reservations')
       .select('amount_paid, total_amount')
       .eq('id', payment.reservation_id)
-      .single()
+      .single();
 
     // BULK/RECURRING PAYMENT HANDLING
     // Check if this is part of a booking or recurrence group
-    const recurrenceGroupId = payment.metadata?.recurrence_group_id
-    const bookingId = payment.metadata?.booking_id || payment.booking_id
-    const isBulkPayment = !!(bookingId || recurrenceGroupId)
+    const recurrenceGroupId = payment.metadata?.recurrence_group_id;
+    const bookingId = payment.metadata?.booking_id || payment.booking_id;
+    const isBulkPayment = !!(bookingId || recurrenceGroupId);
 
     // For recurring down payments, use per-reservation share, not total payment
-    let newAmountPaid: number
+    let newAmountPaid: number;
     if (isDownPayment) {
       // Get the reservation metadata for this specific reservation's down payment share
       const { data: firstResForMeta } = await supabase
         .from('reservations')
         .select('metadata')
         .eq('id', payment.reservation_id)
-        .single()
+        .single();
       newAmountPaid = firstResForMeta?.metadata?.down_payment_amount
         ? Number(firstResForMeta.metadata.down_payment_amount)
-        : payment.amount
+        : payment.amount;
     } else if (isBulkPayment) {
       // If it's a bulk full payment, this specific reservation only gets its own total_amount
       // The other reservations in the group are handled in the bulk loop below.
-      newAmountPaid = currentRes?.total_amount || 0
+      newAmountPaid = currentRes?.total_amount || 0;
     } else {
-      newAmountPaid = (currentRes?.amount_paid || 0) + payment.amount
+      newAmountPaid = (currentRes?.amount_paid || 0) + payment.amount;
     }
 
     const { data: updatedReservation, error: reservationError } = await supabase
@@ -668,13 +693,13 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
         amount_paid: newAmountPaid,
       })
       .eq('id', payment.reservation_id)
-      .select('id, status')
+      .select('id, status');
 
     if (reservationError) {
-      console.error('CRITICAL: Failed to confirm reservation:', reservationError)
-      console.error('Payment ID:', payment.id)
-      console.error('Reservation ID:', payment.reservation_id)
-      console.error('Error details:', JSON.stringify(reservationError, null, 2))
+      console.error('CRITICAL: Failed to confirm reservation:', reservationError);
+      console.error('Payment ID:', payment.id);
+      console.error('Reservation ID:', payment.reservation_id);
+      console.error('Error details:', JSON.stringify(reservationError, null, 2));
 
       // Mark payment with error flag for manual review
       await supabase
@@ -685,38 +710,40 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
             paymongo_payment: paymentResult,
             reservation_update_failed: true,
             reservation_error: reservationError.message,
-            error_timestamp: new Date().toISOString()
-          }
+            error_timestamp: new Date().toISOString(),
+          },
         })
-        .eq('id', payment.id)
+        .eq('id', payment.id);
 
       return {
         success: false,
-        error: 'Payment completed but reservation confirmation failed. Please contact support with reference: ' + payment.reference
-      }
+        error:
+          'Payment completed but reservation confirmation failed. Please contact support with reference: ' +
+          payment.reference,
+      };
     }
 
     // Verify update actually happened
     if (!updatedReservation || updatedReservation.length === 0) {
-      console.error('WARNING: Reservation update returned no data - verifying...')
+      console.error('WARNING: Reservation update returned no data - verifying...');
 
       // Double-check the reservation status
       const { data: verification } = await supabase
         .from('reservations')
         .select('status')
         .eq('id', payment.reservation_id)
-        .single()
+        .single();
 
       if (verification?.status !== newReservationStatus && verification?.status !== 'confirmed') {
-        console.error(`CRITICAL: Reservation not ${newReservationStatus} after update!`)
-        console.error(`Expected: ${newReservationStatus}, Got:`, verification?.status)
+        console.error(`CRITICAL: Reservation not ${newReservationStatus} after update!`);
+        console.error(`Expected: ${newReservationStatus}, Got:`, verification?.status);
 
         // Retry once
-        console.log('Retrying reservation update...')
+        console.log('Retrying reservation update...');
         await supabase
           .from('reservations')
           .update({ status: newReservationStatus, amount_paid: payment.amount })
-          .eq('id', payment.reservation_id)
+          .eq('id', payment.reservation_id);
       }
     }
 
@@ -724,41 +751,46 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
     // Check if this is part of a booking or recurrence group and confirm the rest
 
     if (bookingId || recurrenceGroupId) {
-      console.log('🔄 Bulk Payment detected in processChargeableSourceAction:', { bookingId, recurrenceGroupId })
+      console.log('🔄 Bulk Payment detected in processChargeableSourceAction:', {
+        bookingId,
+        recurrenceGroupId,
+      });
 
       // Fetch all other pending reservations in this group/booking
       const query = supabase
         .from('reservations')
         .select('id, total_amount, metadata')
         .neq('id', payment.reservation_id) // Exclude the one we just updated
-        .in('status', ['pending_payment'])
+        .in('status', ['pending_payment']);
 
       if (bookingId) {
-        query.eq('booking_id', bookingId)
+        query.eq('booking_id', bookingId);
       } else {
-        query.eq('recurrence_group_id', recurrenceGroupId!)
+        query.eq('recurrence_group_id', recurrenceGroupId!);
       }
 
-      const { data: groupReservations, error: groupFetchError } = await query
+      const { data: groupReservations, error: groupFetchError } = await query;
 
       if (groupFetchError) {
-        console.error('❌ Failed to fetch bulk group for update:', groupFetchError)
+        console.error('❌ Failed to fetch bulk group for update:', groupFetchError);
       } else if (groupReservations && groupReservations.length > 0) {
-        console.log(`🔄 Confirming ${groupReservations.length} additional reservations...`)
+        console.log(`🔄 Confirming ${groupReservations.length} additional reservations...`);
 
         for (const res of groupReservations) {
           // If original payment was a down payment, set each reservation to partially_paid
-          // with amount_paid = each reservation's down_payment_amount if available, 
+          // with amount_paid = each reservation's down_payment_amount if available,
           // or a proportional share of the total payment.
-          let resStatus = 'confirmed'
-          let resAmountPaid = res.total_amount
+          let resStatus = 'confirmed';
+          let resAmountPaid = res.total_amount;
 
           if (isDownPayment) {
-            const resMeta = (res as any).metadata as any
-            resStatus = 'partially_paid'
-            // Total payment amount should be distributed. 
+            const resMeta = (res as any).metadata as any;
+            resStatus = 'partially_paid';
+            // Total payment amount should be distributed.
             // Preferably we use the pre-calculated item split in metadata.
-            resAmountPaid = Number(resMeta?.down_payment_amount || (payment.amount / (groupReservations.length + 1)))
+            resAmountPaid = Number(
+              resMeta?.down_payment_amount || payment.amount / (groupReservations.length + 1)
+            );
           }
 
           const { error: bulkUpdateError } = await supabase
@@ -767,38 +799,41 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
               status: resStatus,
               amount_paid: resAmountPaid,
             })
-            .eq('id', res.id)
+            .eq('id', res.id);
 
           if (bulkUpdateError) {
-            console.error(`❌ Failed to confirm reservation ${res.id} in bulk update:`, bulkUpdateError)
+            console.error(
+              `❌ Failed to confirm reservation ${res.id} in bulk update:`,
+              bulkUpdateError
+            );
           }
         }
-        console.log('✅ Bulk confirmation complete')
+        console.log('✅ Bulk confirmation complete');
       }
     }
 
-    console.log('✅ Payment and reservation updated successfully')
-    console.log('Payment ID:', payment.id)
-    console.log('Reservation ID:', payment.reservation_id)
-    console.log('Reservation status:', updatedReservation?.[0]?.status || 'unknown')
+    console.log('✅ Payment and reservation updated successfully');
+    console.log('Payment ID:', payment.id);
+    console.log('Reservation ID:', payment.reservation_id);
+    console.log('Reservation status:', updatedReservation?.[0]?.status || 'unknown');
 
-    revalidatePath('/reservations')
-    revalidatePath('/bookings')
+    revalidatePath('/reservations');
+    revalidatePath('/bookings');
 
     // Check if linked to Queue Session and update
-    await updateQueueSessionStatus(payment.reservation_id, supabase)
+    await updateQueueSessionStatus(payment.reservation_id, supabase);
 
-    return { success: true }
+    return { success: true };
   } catch (error) {
-    console.error('Charge processing error:', error)
+    console.error('Charge processing error:', error);
 
     // Clear processing flag on error
-    const supabase = createServiceClient()
+    const supabase = createServiceClient();
     const { data: payment } = await supabase
       .from('payments')
       .select('metadata')
       .eq('external_id', sourceId)
-      .single()
+      .single();
 
     if (payment) {
       await supabase
@@ -809,16 +844,16 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
             ...payment.metadata,
             processing: false,
             error: error instanceof Error ? error.message : 'Charge failed',
-            failed_at: new Date().toISOString()
-          }
+            failed_at: new Date().toISOString(),
+          },
         })
-        .eq('external_id', sourceId)
+        .eq('external_id', sourceId);
     }
 
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Charge processing failed',
-    }
+    };
   }
 }
 
@@ -827,19 +862,22 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
  */
 async function updateQueueSessionStatus(reservationId: string, supabaseParam: any) {
   try {
-    console.log('[updateQueueSessionStatus] 🔄 Checking for Queue Session linked to reservation:', reservationId)
+    console.log(
+      '[updateQueueSessionStatus] 🔄 Checking for Queue Session linked to reservation:',
+      reservationId
+    );
 
     // Use service client for fulfillment to bypass RLS and ensure success
-    const supabase = createServiceClient()
+    const supabase = createServiceClient();
 
     // Check linked reservation payment status
     const { data: reservationRecord } = await supabase
       .from('reservations')
       .select('status')
       .eq('id', reservationId)
-      .single()
+      .single();
 
-    const reservationFullyPaid = reservationRecord?.status === 'confirmed'
+    const reservationFullyPaid = reservationRecord?.status === 'confirmed';
 
     // Check if this reservation is for a queue session
     // Using a more robust JSON search
@@ -847,25 +885,35 @@ async function updateQueueSessionStatus(reservationId: string, supabaseParam: an
       .from('queue_sessions')
       .select('id, status, metadata, start_time, court_id')
       .filter('metadata->>reservation_id', 'eq', reservationId)
-      .maybeSingle()
+      .maybeSingle();
 
     if (fetchError) {
-      console.error('[updateQueueSessionStatus] ❌ Error fetching queue session:', fetchError)
-      return
+      console.error('[updateQueueSessionStatus] ❌ Error fetching queue session:', fetchError);
+      return;
     }
 
     if (queueSession) {
-      console.log('[updateQueueSessionStatus] 🔄 Found linked Queue Session:', queueSession.id, 'Current status:', queueSession.status)
+      console.log(
+        '[updateQueueSessionStatus] 🔄 Found linked Queue Session:',
+        queueSession.id,
+        'Current status:',
+        queueSession.status
+      );
 
       // Activate and approve when payment is confirmed
-      if (reservationFullyPaid && ['pending_payment', 'pending_approval'].includes(queueSession.status)) {
+      if (
+        reservationFullyPaid &&
+        ['pending_payment', 'pending_approval'].includes(queueSession.status)
+      ) {
         // Only set 'active' if the session has already started;
         // otherwise set 'open' (paid & ready, but scheduled for later)
-        const now = await getServerNow()
-        const startTime = new Date(queueSession.start_time)
-        const newStatus = startTime <= now ? 'active' : 'open'
+        const now = await getServerNow();
+        const startTime = new Date(queueSession.start_time);
+        const newStatus = startTime <= now ? 'active' : 'open';
 
-        console.log(`[updateQueueSessionStatus] 🕒 start_time=${startTime.toISOString()}, now=${now.toISOString()} → status='${newStatus}'`)
+        console.log(
+          `[updateQueueSessionStatus] 🕒 start_time=${startTime.toISOString()}, now=${now.toISOString()} → status='${newStatus}'`
+        );
 
         const { error: updateError } = await supabase
           .from('queue_sessions')
@@ -874,23 +922,30 @@ async function updateQueueSessionStatus(reservationId: string, supabaseParam: an
             metadata: {
               ...queueSession.metadata,
               payment_status: 'paid',
-              payment_confirmed_at: now.toISOString()
-            }
+              payment_confirmed_at: now.toISOString(),
+            },
           })
-          .eq('id', queueSession.id)
+          .eq('id', queueSession.id);
 
         if (updateError) {
-          console.error('[updateQueueSessionStatus] ❌ Failed to activate Queue Session:', updateError)
+          console.error(
+            '[updateQueueSessionStatus] ❌ Failed to activate Queue Session:',
+            updateError
+          );
         } else {
-          console.log(`[updateQueueSessionStatus] ✅ Queue Session set to '${newStatus}' successfully`)
-          revalidatePath('/queue')
-          revalidatePath('/bookings')
-          revalidatePath(`/queue/${queueSession.court_id}`)
+          console.log(
+            `[updateQueueSessionStatus] ✅ Queue Session set to '${newStatus}' successfully`
+          );
+          revalidatePath('/queue');
+          revalidatePath('/bookings');
+          revalidatePath(`/queue/${queueSession.court_id}`);
         }
       } else {
-        console.log('[updateQueueSessionStatus] ℹ️ Queue Session status is not pending_payment, just updating payment flags')
+        console.log(
+          '[updateQueueSessionStatus] ℹ️ Queue Session status is not pending_payment, just updating payment flags'
+        );
         // Keep unpaid/partially-paid sessions hidden from player join flow
-        const metadataPaymentStatus = reservationFullyPaid ? 'paid' : 'partial'
+        const metadataPaymentStatus = reservationFullyPaid ? 'paid' : 'partial';
         const { error: updateError } = await supabase
           .from('queue_sessions')
           .update({
@@ -898,23 +953,29 @@ async function updateQueueSessionStatus(reservationId: string, supabaseParam: an
             metadata: {
               ...queueSession.metadata,
               payment_status: metadataPaymentStatus,
-              payment_confirmed_at: new Date().toISOString()
-            }
+              payment_confirmed_at: new Date().toISOString(),
+            },
           })
-          .eq('id', queueSession.id)
+          .eq('id', queueSession.id);
 
         if (!updateError) {
-          console.log('[updateQueueSessionStatus] ✅ Queue Session payment status updated')
-          revalidatePath('/bookings')
+          console.log('[updateQueueSessionStatus] ✅ Queue Session payment status updated');
+          revalidatePath('/bookings');
         } else {
-          console.error('[updateQueueSessionStatus] ❌ Failed to update payment status:', updateError)
+          console.error(
+            '[updateQueueSessionStatus] ❌ Failed to update payment status:',
+            updateError
+          );
         }
       }
     } else {
-      console.log('[updateQueueSessionStatus] ℹ️ No linked Queue Session found for reservation:', reservationId)
+      console.log(
+        '[updateQueueSessionStatus] ℹ️ No linked Queue Session found for reservation:',
+        reservationId
+      );
     }
   } catch (err) {
-    console.error('[updateQueueSessionStatus] 🧨 Exception checking queue session:', err)
+    console.error('[updateQueueSessionStatus] 🧨 Exception checking queue session:', err);
   }
 }
 
@@ -924,57 +985,72 @@ async function updateQueueSessionStatus(reservationId: string, supabaseParam: an
  * Looks up the payment record by reservation ID and processes it
  */
 export async function processPaymentByReservationAction(reservationId: string): Promise<{
-  success: boolean
-  error?: string
-  status?: string
+  success: boolean;
+  error?: string;
+  status?: string;
 }> {
-  console.log('[processPaymentByReservationAction] Starting for reservation:', reservationId)
+  console.log('[processPaymentByReservationAction] Starting for reservation:', reservationId);
 
   try {
     // Use service client to bypass RLS for payment fulfillment
-    const supabase = createServiceClient()
+    const supabase = createServiceClient();
 
     const consumePromoForReservations = async (reservationIds: string[]) => {
-      if (!reservationIds.length) return
+      if (!reservationIds.length) return;
 
       try {
         const { data: reservations, error: reservationsError } = await supabase
           .from('reservations')
           .select('id, user_id, metadata, court_id')
-          .in('id', reservationIds)
+          .in('id', reservationIds);
 
         if (reservationsError || !reservations) {
-          console.warn('[processPaymentByReservationAction] Failed to fetch reservations for promo consumption:', reservationsError)
-          return
+          console.warn(
+            '[processPaymentByReservationAction] Failed to fetch reservations for promo consumption:',
+            reservationsError
+          );
+          return;
         }
 
-        const courtIds = Array.from(new Set(reservations.map((r: any) => r.court_id).filter(Boolean)))
-        const courtVenueMap = new Map<string, string>()
+        const courtIds = Array.from(
+          new Set(reservations.map((r: any) => r.court_id).filter(Boolean))
+        );
+        const courtVenueMap = new Map<string, string>();
 
         if (courtIds.length > 0) {
           const { data: courts } = await supabase
             .from('courts')
             .select('id, venue_id')
-            .in('id', courtIds)
+            .in('id', courtIds);
 
           courts?.forEach((court: any) => {
-            if (court.id && court.venue_id) courtVenueMap.set(court.id, court.venue_id)
-          })
+            if (court.id && court.venue_id) courtVenueMap.set(court.id, court.venue_id);
+          });
         }
 
-        const { consumeDeferredPromoCode } = await import('@/app/actions/promo-code-actions')
+        const { consumeDeferredPromoCode } = await import('@/app/actions/promo-code-actions');
 
         for (const reservation of reservations) {
-          const promoCodeStr = reservation.metadata?.promo_code
-          if (!promoCodeStr || !reservation.user_id) continue
+          const promoCodeStr = reservation.metadata?.promo_code;
+          if (!promoCodeStr || !reservation.user_id) continue;
 
-          const venueId = reservation.court_id ? courtVenueMap.get(reservation.court_id) : undefined
-          await consumeDeferredPromoCode(promoCodeStr, reservation.user_id, [reservation.id], venueId)
+          const venueId = reservation.court_id
+            ? courtVenueMap.get(reservation.court_id)
+            : undefined;
+          await consumeDeferredPromoCode(
+            promoCodeStr,
+            reservation.user_id,
+            [reservation.id],
+            venueId
+          );
         }
       } catch (promoError) {
-        console.warn('[processPaymentByReservationAction] Promo consumption failed (non-critical):', promoError)
+        console.warn(
+          '[processPaymentByReservationAction] Promo consumption failed (non-critical):',
+          promoError
+        );
       }
-    }
+    };
 
     // Get the most recent payment record for this reservation
     const { data: payment, error: paymentError } = await supabase
@@ -983,68 +1059,82 @@ export async function processPaymentByReservationAction(reservationId: string): 
       .eq('reservation_id', reservationId)
       .order('created_at', { ascending: false })
       .limit(1)
-      .single()
+      .single();
 
     if (paymentError || !payment) {
-      console.log('[processPaymentByReservationAction] No payment found:', paymentError)
-      return { success: false, error: 'No payment record found for this reservation' }
+      console.log('[processPaymentByReservationAction] No payment found:', paymentError);
+      return { success: false, error: 'No payment record found for this reservation' };
     }
 
     console.log('[processPaymentByReservationAction] Found payment:', {
       id: payment.id,
       status: payment.status,
       external_id: payment.external_id,
-      payment_method: payment.payment_method
-    })
+      payment_method: payment.payment_method,
+    });
 
     // If payment is already completed, check reservation status
     if (payment.status === 'completed') {
-      console.log('[processPaymentByReservationAction] Payment already completed, checking reservation...')
+      console.log(
+        '[processPaymentByReservationAction] Payment already completed, checking reservation...'
+      );
 
       const { data: reservation } = await supabase
         .from('reservations')
         .select('status, id, amount_paid, recurrence_group_id, metadata')
         .eq('id', reservationId)
-        .single()
+        .single();
 
-      const isDownPaymentAction = payment.metadata?.is_down_payment === true || payment.metadata?.is_down_payment === 'true'
-      const targetStatus = isDownPaymentAction ? 'partially_paid' : 'confirmed'
+      const isDownPaymentAction =
+        payment.metadata?.is_down_payment === true || payment.metadata?.is_down_payment === 'true';
+      const targetStatus = isDownPaymentAction ? 'partially_paid' : 'confirmed';
 
-      if (reservation?.status === 'confirmed' || (reservation?.status === 'partially_paid' && targetStatus === 'partially_paid')) {
-        console.log(`[processPaymentByReservationAction] Reservation already ${reservation.status}`)
-        return { success: true, status: reservation.status }
+      if (
+        reservation?.status === 'confirmed' ||
+        (reservation?.status === 'partially_paid' && targetStatus === 'partially_paid')
+      ) {
+        console.log(
+          `[processPaymentByReservationAction] Reservation already ${reservation.status}`
+        );
+        return { success: true, status: reservation.status };
       }
 
       // Payment completed but reservation not in target state - fix it
-      console.warn(`[processPaymentByReservationAction] Payment completed but reservation not ${targetStatus} - fixing`)
+      console.warn(
+        `[processPaymentByReservationAction] Payment completed but reservation not ${targetStatus} - fixing`
+      );
 
       if (reservation?.recurrence_group_id) {
-        console.log(`[processPaymentByReservationAction] Bulk Confirmation: Found recurrence group ${reservation.recurrence_group_id}`)
+        console.log(
+          `[processPaymentByReservationAction] Bulk Confirmation: Found recurrence group ${reservation.recurrence_group_id}`
+        );
 
         const { data: groupReservations, error: groupFetchError } = await supabase
           .from('reservations')
           .select('id, status, metadata, amount_paid')
           .eq('recurrence_group_id', reservation.recurrence_group_id)
-          .in('status', ['pending_payment', 'paid', 'partially_paid'])
+          .in('status', ['pending_payment', 'paid', 'partially_paid']);
 
         if (!groupFetchError && groupReservations && groupReservations.length > 0) {
-          const updates = groupReservations.map(res => {
-            const resMeta = (res.metadata || {}) as any
+          const updates = groupReservations.map((res) => {
+            const resMeta = (res.metadata || {}) as any;
             let resAmountPaid: number;
 
             if (isDownPaymentAction) {
-              resAmountPaid = resMeta?.down_payment_amount ? parseFloat(resMeta.down_payment_amount) : payment.amount / groupReservations.length
+              resAmountPaid = resMeta?.down_payment_amount
+                ? parseFloat(resMeta.down_payment_amount)
+                : payment.amount / groupReservations.length;
             } else {
-              const newPaymentShare = payment.amount / groupReservations.length
-              resAmountPaid = (res.amount_paid || 0) + newPaymentShare
+              const newPaymentShare = payment.amount / groupReservations.length;
+              resAmountPaid = (res.amount_paid || 0) + newPaymentShare;
             }
 
             return {
               id: res.id,
               status: targetStatus,
               amount_paid: resAmountPaid,
-            }
-          })
+            };
+          });
 
           for (const update of updates) {
             const { error: updateError } = await supabase
@@ -1053,73 +1143,78 @@ export async function processPaymentByReservationAction(reservationId: string): 
                 status: update.status,
                 amount_paid: update.amount_paid,
               })
-              .eq('id', update.id)
+              .eq('id', update.id);
 
-            if (updateError) console.error(`Failed to update bulk instance ${update.id}:`, updateError)
+            if (updateError)
+              console.error(`Failed to update bulk instance ${update.id}:`, updateError);
           }
 
-          await consumePromoForReservations(updates.map(update => update.id))
+          await consumePromoForReservations(updates.map((update) => update.id));
         }
       } else {
         const { error: updateError } = await supabase
           .from('reservations')
           .update({
             status: targetStatus,
-            amount_paid: targetStatus === 'confirmed' && !isDownPaymentAction
-              ? (reservation?.amount_paid || 0) + payment.amount
-              : payment.amount,
+            amount_paid:
+              targetStatus === 'confirmed' && !isDownPaymentAction
+                ? (reservation?.amount_paid || 0) + payment.amount
+                : payment.amount,
           })
-          .eq('id', reservationId)
+          .eq('id', reservationId);
 
         if (updateError) {
-          console.error('[processPaymentByReservationAction] Failed to confirm reservation:', updateError)
-          return { success: false, error: 'Failed to confirm reservation' }
+          console.error(
+            '[processPaymentByReservationAction] Failed to confirm reservation:',
+            updateError
+          );
+          return { success: false, error: 'Failed to confirm reservation' };
         }
 
-        await consumePromoForReservations([reservationId])
+        await consumePromoForReservations([reservationId]);
       }
 
-      revalidatePath('/reservations')
-      revalidatePath('/bookings')
+      revalidatePath('/reservations');
+      revalidatePath('/bookings');
 
       // Check if linked to Queue Session and update
-      await updateQueueSessionStatus(reservationId, supabase)
+      await updateQueueSessionStatus(reservationId, supabase);
 
-      return { success: true, status: targetStatus }
+      return { success: true, status: targetStatus };
     }
 
     // For pure cash payments (no down payment), no processing needed
-    const isDownPaymentAction = payment.metadata?.is_down_payment === true || payment.metadata?.is_down_payment === 'true'
+    const isDownPaymentAction =
+      payment.metadata?.is_down_payment === true || payment.metadata?.is_down_payment === 'true';
     if (payment.payment_method === 'cash' && !isDownPaymentAction) {
-      console.log('[processPaymentByReservationAction] Pure cash payment - no processing needed')
-      return { success: true, status: 'pending' }
+      console.log('[processPaymentByReservationAction] Pure cash payment - no processing needed');
+      return { success: true, status: 'pending' };
     }
 
     // For e-wallet payments, process the source
-    const sourceId = payment.external_id
+    const sourceId = payment.external_id;
     if (!sourceId) {
-      console.error('[processPaymentByReservationAction] No source ID found in payment record')
-      return { success: false, error: 'Payment source not found' }
+      console.error('[processPaymentByReservationAction] No source ID found in payment record');
+      return { success: false, error: 'Payment source not found' };
     }
 
-    console.log('[processPaymentByReservationAction] Processing source:', sourceId)
+    console.log('[processPaymentByReservationAction] Processing source:', sourceId);
 
     // Use the existing function to process the chargeable source
-    const result = await processChargeableSourceAction(sourceId)
+    const result = await processChargeableSourceAction(sourceId);
 
     if (result.success) {
       // Logic handled inside processChargeableSourceAction now
-      return { success: true, status: 'confirmed' }
+      return { success: true, status: 'confirmed' };
     } else {
-      return { success: false, error: result.error, status: 'pending_payment' }
+      return { success: false, error: result.error, status: 'pending_payment' };
     }
-
   } catch (error) {
-    console.error('[processPaymentByReservationAction] Error:', error)
+    console.error('[processPaymentByReservationAction] Error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Payment processing failed',
-    }
+    };
   }
 }
 
@@ -1132,72 +1227,76 @@ export async function initiateQueuePaymentAction(
   paymentMethod: PaymentMethod,
   userId?: string // Optional: for Queue Masters generating payment for others
 ): Promise<InitiatePaymentResult> {
-  console.log('[initiateQueuePaymentAction] 🚀 Starting queue payment initiation')
+  console.log('[initiateQueuePaymentAction] 🚀 Starting queue payment initiation');
   console.log('[initiateQueuePaymentAction] Input:', {
     sessionIdOrParticipantId,
     paymentMethod,
     userId,
-  })
+  });
 
   try {
-    const supabase = await createClient()
+    const supabase = await createClient();
 
     // Get the authenticated user
     const {
       data: { user },
-    } = await supabase.auth.getUser()
+    } = await supabase.auth.getUser();
 
     if (!user) {
-      console.error('[initiateQueuePaymentAction] ❌ User not authenticated')
-      return { success: false, error: 'User not authenticated' }
+      console.error('[initiateQueuePaymentAction] ❌ User not authenticated');
+      return { success: false, error: 'User not authenticated' };
     }
 
     // Use provided userId if given (for Queue Masters), otherwise use authenticated user
-    const targetUserId = userId || user.id
+    const targetUserId = userId || user.id;
 
     console.log('[initiateQueuePaymentAction] 🔍 Looking for participant:', {
       sessionIdOrParticipantId,
       targetUserId,
       isQueueMaster: userId !== undefined,
-    })
+    });
 
     // Get participant details (use service client to bypass RLS - Queue Master is not the participant)
-    const serviceClient = createServiceClient()
-    let participant: any = null
+    const serviceClient = createServiceClient();
+    let participant: any = null;
 
     const { data: participantBySession } = await serviceClient
       .from('queue_participants')
       .select('*')
       .eq('queue_session_id', sessionIdOrParticipantId)
       .eq('user_id', targetUserId)
-      .single()
+      .single();
 
     if (participantBySession) {
-      participant = participantBySession
+      participant = participantBySession;
     } else {
       const { data: participantById } = await serviceClient
         .from('queue_participants')
         .select('*')
         .eq('id', sessionIdOrParticipantId)
         .eq('user_id', targetUserId)
-        .single()
+        .single();
 
       if (participantById) {
-        participant = participantById
+        participant = participantById;
       }
     }
 
     if (!participant) {
-      console.error('[initiateQueuePaymentAction] ❌ Participant not found for identifier:', sessionIdOrParticipantId)
-      return { success: false, error: 'Participant not found in this session' }
+      console.error(
+        '[initiateQueuePaymentAction] ❌ Participant not found for identifier:',
+        sessionIdOrParticipantId
+      );
+      return { success: false, error: 'Participant not found in this session' };
     }
 
-    const sessionId = participant.queue_session_id
+    const sessionId = participant.queue_session_id;
 
     // Get queue session details with court and venue info (use service client to bypass RLS)
     const { data: queueSession, error: sessionError } = await serviceClient
       .from('queue_sessions')
-      .select(`
+      .select(
+        `
         cost_per_game,
         organizer_id,
         court_id,
@@ -1207,58 +1306,63 @@ export async function initiateQueuePaymentAction(
             name
           )
         )
-      `)
+      `
+      )
       .eq('id', sessionId)
-      .single()
+      .single();
 
     if (sessionError || !queueSession) {
-      console.error('[initiateQueuePaymentAction] ❌ Queue session not found:', sessionError)
-      return { success: false, error: 'Queue session not found' }
+      console.error('[initiateQueuePaymentAction] ❌ Queue session not found:', sessionError);
+      return { success: false, error: 'Queue session not found' };
     }
 
     // If userId was provided, verify the requester is the queue organizer
     if (userId && queueSession.organizer_id !== user.id) {
-      console.error('[initiateQueuePaymentAction] ❌ Unauthorized: Not the queue organizer')
-      return { success: false, error: 'Only the queue organizer can generate payments for others' }
+      console.error('[initiateQueuePaymentAction] ❌ Unauthorized: Not the queue organizer');
+      return { success: false, error: 'Only the queue organizer can generate payments for others' };
     }
 
-    const costPerGame = parseFloat(queueSession.cost_per_game || '0')
-    const gamesPlayed = participant.games_played || 0
-    const totalAmount = costPerGame * gamesPlayed
+    const costPerGame = parseFloat(queueSession.cost_per_game || '0');
+    const gamesPlayed = participant.games_played || 0;
+    const totalAmount = costPerGame * gamesPlayed;
 
     if (totalAmount <= 0) {
-      return { success: false, error: 'No payment required' }
+      return { success: false, error: 'No payment required' };
     }
 
     // Generate unique payment reference
-    const paymentReference = `QUEUE-${sessionId.slice(0, 8)}-${Date.now()}`
+    const paymentReference = `QUEUE-${sessionId.slice(0, 8)}-${Date.now()}`;
 
     // Get user profile for billing info (for the participant, not the requester)
     const { data: profile } = await supabase
       .from('profiles')
       .select('first_name, last_name, phone, email')
       .eq('id', targetUserId)
-      .single()
+      .single();
 
     const billingName = profile
-      ? `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim() || profile.email || 'Customer'
-      : 'Customer'
+      ? `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim() ||
+        profile.email ||
+        'Customer'
+      : 'Customer';
 
-    const venueName = (queueSession.courts as any)?.venues?.name ?? 'Queue Session'
-    const courtName = (queueSession.courts as any)?.name ?? 'Court'
-    const description = `${venueName} - ${courtName} (${gamesPlayed} games)`
+    const venueName = (queueSession.courts as any)?.venues?.name ?? 'Queue Session';
+    const courtName = (queueSession.courts as any)?.name ?? 'Court';
+    const description = `${venueName} - ${courtName} (${gamesPlayed} games)`;
 
     // Generate success/failed URLs
-    const headersList = await headers()
-    const host = headersList.get('host')
-    const proto = headersList.get('x-forwarded-proto') || 'http'
-    const baseUrl = host ? `${proto}://${host}` : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000')
+    const headersList = await headers();
+    const host = headersList.get('host');
+    const proto = headersList.get('x-forwarded-proto') || 'http';
+    const baseUrl = host
+      ? `${proto}://${host}`
+      : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
-    const successUrl = `${baseUrl}/queue/payment/success?session=${sessionId}&participant=${participant.id}`
-    const failedUrl = `${baseUrl}/queue/payment/failed?session=${sessionId}`
+    const successUrl = `${baseUrl}/queue/payment/success?session=${sessionId}&participant=${participant.id}`;
+    const failedUrl = `${baseUrl}/queue/payment/failed?session=${sessionId}`;
 
-    let checkoutUrl: string
-    let sourceId: string
+    let checkoutUrl: string;
+    let sourceId: string;
 
     // Create payment source based on method
     try {
@@ -1280,9 +1384,9 @@ export async function initiateQueuePaymentAction(
             games_played: gamesPlayed.toString(),
             payment_reference: paymentReference,
           },
-        })
-        checkoutUrl = result.checkoutUrl
-        sourceId = result.sourceId
+        });
+        checkoutUrl = result.checkoutUrl;
+        sourceId = result.sourceId;
       } else if (paymentMethod === 'paymaya') {
         const result = await createMayaCheckout({
           amount: totalAmount,
@@ -1301,31 +1405,35 @@ export async function initiateQueuePaymentAction(
             games_played: gamesPlayed.toString(),
             payment_reference: paymentReference,
           },
-        })
-        checkoutUrl = result.checkoutUrl
-        sourceId = result.sourceId
+        });
+        checkoutUrl = result.checkoutUrl;
+        sourceId = result.sourceId;
       } else {
-        return { success: false, error: 'Cash payment not yet supported for queues' }
+        return { success: false, error: 'Cash payment not yet supported for queues' };
       }
     } catch (paymentError) {
-      console.error('[initiateQueuePaymentAction] PayMongo API error:', paymentError)
-      const errorMessage = paymentError instanceof Error ? paymentError.message : String(paymentError)
+      console.error('[initiateQueuePaymentAction] PayMongo API error:', paymentError);
+      const errorMessage =
+        paymentError instanceof Error ? paymentError.message : String(paymentError);
 
-      if (errorMessage.includes('not allowed to process') || errorMessage.includes('gcash payments')) {
+      if (
+        errorMessage.includes('not allowed to process') ||
+        errorMessage.includes('gcash payments')
+      ) {
         return {
           success: false,
           error: 'GCash payments are currently unavailable. Please pay with cash.',
-        }
+        };
       }
 
       return {
         success: false,
         error: 'Payment provider is temporarily unavailable. Please try again later.',
-      }
+      };
     }
 
     // Create payment record in database
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000) // 15 minutes
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
     const paymentData = {
       reference: paymentReference,
@@ -1347,39 +1455,39 @@ export async function initiateQueuePaymentAction(
         payment_reference: paymentReference,
         payment_type: 'queue_session',
       },
-    }
+    };
 
     const { data: payment, error: paymentError } = await supabase
       .from('payments')
       .insert(paymentData)
       .select('id')
-      .single()
+      .single();
 
     if (paymentError) {
-      console.error('[initiateQueuePaymentAction] ❌ Error creating payment record:', paymentError)
+      console.error('[initiateQueuePaymentAction] ❌ Error creating payment record:', paymentError);
       return {
         success: false,
         error: 'Failed to create payment record',
-      }
+      };
     }
 
     console.log('[initiateQueuePaymentAction] ✅ Payment initiated successfully:', {
       paymentId: payment.id,
       sourceId,
       amount: totalAmount,
-    })
+    });
 
-    revalidatePath(`/queue/${queueSession.court_id}`)
-    revalidatePath('/queue')
+    revalidatePath(`/queue/${queueSession.court_id}`);
+    revalidatePath('/queue');
 
     return {
       success: true,
       checkoutUrl,
       paymentId: payment.id,
       sourceId,
-    }
+    };
   } catch (error: any) {
-    console.error('[initiateQueuePaymentAction] ❌ Error:', error)
-    return { success: false, error: error.message || 'Failed to initiate payment' }
+    console.error('[initiateQueuePaymentAction] ❌ Error:', error);
+    return { success: false, error: error.message || 'Failed to initiate payment' };
   }
 }

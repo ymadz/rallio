@@ -1,130 +1,143 @@
-import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-import { mergeCartItems } from '@/lib/utils/booking-cart'
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import { mergeCartItems } from '@/lib/utils/booking-cart';
 
-export type CheckoutStep = 'details' | 'payment' | 'policy' | 'processing'
-export type PaymentMethod = 'e-wallet' | 'cash' | null
-export type CashPaymentOption = 'downpayment' | 'full_cash'
+export type CheckoutStep = 'details' | 'payment' | 'policy' | 'processing';
+export type PaymentMethod = 'e-wallet' | 'cash' | null;
+export type CashPaymentOption = 'downpayment' | 'full_cash';
 
 export interface BookingData {
-  courtId: string
-  courtName: string
-  courts?: { id: string; name: string; hourly_rate?: number }[] // For multi-court bookings (e.g., Queue Sessions)
-  venueId: string
-  venueName: string
-  date: Date
-  startTime: string
-  endTime: string
-  hourlyRate: number
-  capacity: number
-  recurrenceWeeks?: number // 1 = single booking, 4 = 4 weeks, etc.
-  selectedDays?: number[] // Array of day indices (0-6) for multi-day booking
-  isQueueSession?: boolean
+  courtId: string;
+  courtName: string;
+  courts?: { id: string; name: string; hourly_rate?: number }[]; // For multi-court bookings (e.g., Queue Sessions)
+  venueId: string;
+  venueName: string;
+  date: Date;
+  startTime: string;
+  endTime: string;
+  hourlyRate: number;
+  capacity: number;
+  recurrenceWeeks?: number; // 1 = single booking, 4 = 4 weeks, etc.
+  selectedDays?: number[]; // Array of day indices (0-6) for multi-day booking
+  isQueueSession?: boolean;
   queueSessionData?: {
-    mode: 'casual' | 'competitive'
-    gameFormat: 'singles' | 'doubles' | 'any'
-    maxPlayers: number
-    costPerGame: number
-    isPublic: boolean
-    joinWindowHours: number | null
-    minSkillLevel?: number | null
-    maxSkillLevel?: number | null
-  }
+    mode: 'casual' | 'competitive';
+    gameFormat: 'singles' | 'doubles' | 'any';
+    maxPlayers: number;
+    costPerGame: number;
+    isPublic: boolean;
+    joinWindowHours: number | null;
+    minSkillLevel?: number | null;
+    maxSkillLevel?: number | null;
+  };
 }
 
 export interface BookingCartItem extends BookingData {}
 
 export interface PlayerPaymentStatus {
-  playerNumber: number
-  email?: string
-  amountDue: number
-  status: 'pending' | 'paid' | 'failed'
-  paymentReference?: string
-  qrCodeUrl?: string
-  paidAt?: Date
+  playerNumber: number;
+  email?: string;
+  amountDue: number;
+  status: 'pending' | 'paid' | 'failed';
+  paymentReference?: string;
+  qrCodeUrl?: string;
+  paidAt?: Date;
 }
 
 interface CheckoutState {
   // Booking details
-  bookingData: BookingData | null
-  bookingCart: BookingCartItem[]
+  bookingData: BookingData | null;
+  bookingCart: BookingCartItem[];
 
   // Current step
-  currentStep: CheckoutStep
+  currentStep: CheckoutStep;
 
   // Split payment
-  isSplitPayment: boolean
-  playerCount: number
-  playerPayments: PlayerPaymentStatus[]
+  isSplitPayment: boolean;
+  playerCount: number;
+  playerPayments: PlayerPaymentStatus[];
 
   // Payment
-  paymentMethod: PaymentMethod
-  cashPaymentOption: CashPaymentOption
-  policyAccepted: boolean
+  paymentMethod: PaymentMethod;
+  cashPaymentOption: CashPaymentOption;
+  policyAccepted: boolean;
 
   // Discount (if applicable)
-  discountAmount: number
-  discountCode?: string
-  discountType?: string
-  discountReason?: string
+  discountAmount: number;
+  discountCode?: string;
+  discountType?: string;
+  discountReason?: string;
   applicableDiscounts?: Array<{
-    type: string
-    name: string
-    description: string
-    amount: number
-    isIncrease: boolean
-  }>
+    type: string;
+    name: string;
+    description: string;
+    amount: number;
+    isIncrease: boolean;
+  }>;
 
   // Promo Code Discount
-  promoDiscountAmount: number
-  promoCode?: string
-  promoDiscountType?: string
-  promoDiscountReason?: string
-  promoTargetVenueId?: string
+  promoDiscountAmount: number;
+  promoCode?: string;
+  promoDiscountType?: string;
+  promoDiscountReason?: string;
+  promoTargetVenueId?: string;
 
   // Platform fee
-  platformFeePercentage: number
-  platformFeeEnabled: boolean
+  platformFeePercentage: number;
+  platformFeeEnabled: boolean;
 
   // Confirmation
-  bookingReference?: string
-  reservationId?: string
-  downPaymentPercentage?: number
-  customDownPaymentAmount?: number
-  conflictingSlots: Array<{ courtId: string; date: string; startTime: string; endTime: string }>
+  bookingReference?: string;
+  reservationId?: string;
+  downPaymentPercentage?: number;
+  customDownPaymentAmount?: number;
+  conflictingSlots: Array<{ courtId: string; date: string; startTime: string; endTime: string }>;
 
   // Actions
-  setBookingData: (data: BookingData) => void
-  setBookingCart: (items: BookingCartItem[]) => void
-  addBookingCartItem: (item: BookingCartItem) => void
-  removeBookingCartItem: (index: number) => void
-  clearBookingCart: () => void
-  setCurrentStep: (step: CheckoutStep) => void
-  setSplitPayment: (enabled: boolean) => void
-  setPlayerCount: (count: number) => void
-  setPaymentMethod: (method: PaymentMethod) => void
-  setCashPaymentOption: (option: CashPaymentOption) => void
-  setPolicyAccepted: (accepted: boolean) => void
-  updatePlayerPayment: (playerNumber: number, updates: Partial<PlayerPaymentStatus>) => void
-  setDiscount: (amount: number, code?: string) => void
-  setDiscountDetails: (details: { amount: number; type?: string; reason?: string; discounts?: any[] }) => void
-  setPromoDiscount: (details: { amount: number; code?: string; type?: string; reason?: string; venueId?: string }) => void
-  removePromoDiscount: () => void
-  setPlatformFee: (percentage: number, enabled: boolean) => void
-  setBookingReference: (reference: string, reservationId: string) => void
-  setDownPaymentPercentage: (percentage: number) => void
-  setCustomDownPaymentAmount: (amount: number | undefined) => void
-  setConflictingSlots: (slots: Array<{ courtId: string; date: string; startTime: string; endTime: string }>) => void
-  resetCheckout: () => void
+  setBookingData: (data: BookingData) => void;
+  setBookingCart: (items: BookingCartItem[]) => void;
+  addBookingCartItem: (item: BookingCartItem) => void;
+  removeBookingCartItem: (index: number) => void;
+  clearBookingCart: () => void;
+  setCurrentStep: (step: CheckoutStep) => void;
+  setSplitPayment: (enabled: boolean) => void;
+  setPlayerCount: (count: number) => void;
+  setPaymentMethod: (method: PaymentMethod) => void;
+  setCashPaymentOption: (option: CashPaymentOption) => void;
+  setPolicyAccepted: (accepted: boolean) => void;
+  updatePlayerPayment: (playerNumber: number, updates: Partial<PlayerPaymentStatus>) => void;
+  setDiscount: (amount: number, code?: string) => void;
+  setDiscountDetails: (details: {
+    amount: number;
+    type?: string;
+    reason?: string;
+    discounts?: any[];
+  }) => void;
+  setPromoDiscount: (details: {
+    amount: number;
+    code?: string;
+    type?: string;
+    reason?: string;
+    venueId?: string;
+  }) => void;
+  removePromoDiscount: () => void;
+  setPlatformFee: (percentage: number, enabled: boolean) => void;
+  setBookingReference: (reference: string, reservationId: string) => void;
+  setDownPaymentPercentage: (percentage: number) => void;
+  setCustomDownPaymentAmount: (amount: number | undefined) => void;
+  setConflictingSlots: (
+    slots: Array<{ courtId: string; date: string; startTime: string; endTime: string }>
+  ) => void;
+  resetCheckout: () => void;
 
   // Computed values
-  getSubtotal: () => number
-  getPlatformFeeAmount: () => number
-  getTotalAmount: () => number
-  getDownPaymentAmount: () => number
-  getRemainingBalance: () => number
-  getPerPlayerAmount: () => number
-  getAllPlayersPaid: () => boolean
+  getSubtotal: () => number;
+  getPlatformFeeAmount: () => number;
+  getTotalAmount: () => number;
+  getDownPaymentAmount: () => number;
+  getRemainingBalance: () => number;
+  getPerPlayerAmount: () => number;
+  getAllPlayersPaid: () => boolean;
 }
 
 const initialState = {
@@ -148,8 +161,7 @@ const initialState = {
   reservationId: undefined,
   downPaymentPercentage: 20, // Default 20%
   conflictingSlots: [],
-}
-
+};
 
 export const useCheckoutStore = create<CheckoutState>()(
   persist(
@@ -157,7 +169,7 @@ export const useCheckoutStore = create<CheckoutState>()(
       ...initialState,
 
       setBookingData: (data) => {
-        const state = get()
+        const state = get();
         set({
           ...initialState,
           bookingData: data,
@@ -165,13 +177,13 @@ export const useCheckoutStore = create<CheckoutState>()(
           currentStep: 'details',
           playerCount: Math.min(2, data.capacity), // Default to 2 players or capacity
           downPaymentPercentage: state.downPaymentPercentage, // Preserve existing percentage (e.g. from venue metadata)
-        })
+        });
       },
 
       setBookingCart: (items) => {
-        const state = get()
-        const mergedItems = mergeCartItems(items)
-        const firstItem = mergedItems[0] ?? null
+        const state = get();
+        const mergedItems = mergeCartItems(items);
+        const firstItem = mergedItems[0] ?? null;
         set({
           ...initialState,
           bookingData: firstItem,
@@ -179,31 +191,31 @@ export const useCheckoutStore = create<CheckoutState>()(
           currentStep: 'details',
           playerCount: firstItem ? Math.min(2, firstItem.capacity) : 2,
           downPaymentPercentage: state.downPaymentPercentage, // Preserve existing percentage
-        })
+        });
       },
 
       addBookingCartItem: (item) => {
         set((state) => {
-          const newCart = [...state.bookingCart, item]
-          const mergedCart = mergeCartItems(newCart)
-          const firstItem = mergedCart[0] ?? null
+          const newCart = [...state.bookingCart, item];
+          const mergedCart = mergeCartItems(newCart);
+          const firstItem = mergedCart[0] ?? null;
           return {
             bookingCart: mergedCart,
             bookingData: firstItem,
-          }
-        })
+          };
+        });
       },
 
       removeBookingCartItem: (index) => {
         set((state) => {
-          const newCart = state.bookingCart.filter((_, currentIndex) => currentIndex !== index)
-          const mergedCart = mergeCartItems(newCart)
-          const firstItem = mergedCart[0] ?? null
+          const newCart = state.bookingCart.filter((_, currentIndex) => currentIndex !== index);
+          const mergedCart = mergeCartItems(newCart);
+          const firstItem = mergedCart[0] ?? null;
           return {
             bookingCart: mergedCart,
             bookingData: firstItem,
-          }
-        })
+          };
+        });
       },
 
       clearBookingCart: () => {
@@ -217,16 +229,16 @@ export const useCheckoutStore = create<CheckoutState>()(
           applicableDiscounts: undefined,
           discountType: undefined,
           discountReason: undefined,
-        }))
+        }));
       },
 
       setCurrentStep: (step) => set({ currentStep: step }),
 
       setSplitPayment: (enabled) => {
-        const state = get()
+        const state = get();
         if (enabled) {
           // Initialize player payments when split payment is enabled
-          const perPlayerAmount = state.getPerPlayerAmount()
+          const perPlayerAmount = state.getPerPlayerAmount();
           const players: PlayerPaymentStatus[] = Array.from(
             { length: state.playerCount },
             (_, i) => ({
@@ -234,39 +246,36 @@ export const useCheckoutStore = create<CheckoutState>()(
               amountDue: perPlayerAmount,
               status: 'pending' as const,
             })
-          )
+          );
           set({
             isSplitPayment: true,
-            playerPayments: players
-          })
+            playerPayments: players,
+          });
         } else {
           set({
             isSplitPayment: false,
-            playerPayments: []
-          })
+            playerPayments: [],
+          });
         }
       },
 
       setPlayerCount: (count) => {
-        const state = get()
-        const capacity = state.bookingData?.capacity || 4
-        const validCount = Math.max(2, Math.min(count, capacity))
+        const state = get();
+        const capacity = state.bookingData?.capacity || 4;
+        const validCount = Math.max(2, Math.min(count, capacity));
 
         if (state.isSplitPayment) {
           // Update player payments array
-          const perPlayerAmount = state.getTotalAmount() / validCount
-          const players: PlayerPaymentStatus[] = Array.from(
-            { length: validCount },
-            (_, i) => ({
-              ...(state.playerPayments[i] || {}), // Preserve existing data if available
-              playerNumber: i + 1,
-              amountDue: perPlayerAmount,
-              status: state.playerPayments[i]?.status || ('pending' as const),
-            })
-          )
-          set({ playerCount: validCount, playerPayments: players })
+          const perPlayerAmount = state.getTotalAmount() / validCount;
+          const players: PlayerPaymentStatus[] = Array.from({ length: validCount }, (_, i) => ({
+            ...(state.playerPayments[i] || {}), // Preserve existing data if available
+            playerNumber: i + 1,
+            amountDue: perPlayerAmount,
+            status: state.playerPayments[i]?.status || ('pending' as const),
+          }));
+          set({ playerCount: validCount, playerPayments: players });
         } else {
-          set({ playerCount: validCount })
+          set({ playerCount: validCount });
         }
       },
 
@@ -279,42 +288,44 @@ export const useCheckoutStore = create<CheckoutState>()(
       updatePlayerPayment: (playerNumber, updates) => {
         set((state) => ({
           playerPayments: state.playerPayments.map((payment) =>
-            payment.playerNumber === playerNumber
-              ? { ...payment, ...updates }
-              : payment
+            payment.playerNumber === playerNumber ? { ...payment, ...updates } : payment
           ),
-        }))
+        }));
       },
 
       setDiscount: (amount, code) => set({ discountAmount: amount, discountCode: code }),
 
-      setDiscountDetails: (details) => set({
-        discountAmount: details.amount,
-        discountType: details.type,
-        discountReason: details.reason,
-        applicableDiscounts: details.discounts
-      }),
+      setDiscountDetails: (details) =>
+        set({
+          discountAmount: details.amount,
+          discountType: details.type,
+          discountReason: details.reason,
+          applicableDiscounts: details.discounts,
+        }),
 
-      setPromoDiscount: (details) => set({
-        promoDiscountAmount: details.amount,
-        promoCode: details.code,
-        promoDiscountType: details.type,
-        promoDiscountReason: details.reason,
-        promoTargetVenueId: details.venueId,
-      }),
+      setPromoDiscount: (details) =>
+        set({
+          promoDiscountAmount: details.amount,
+          promoCode: details.code,
+          promoDiscountType: details.type,
+          promoDiscountReason: details.reason,
+          promoTargetVenueId: details.venueId,
+        }),
 
-      removePromoDiscount: () => set({
-        promoDiscountAmount: 0,
-        promoCode: undefined,
-        promoDiscountType: undefined,
-        promoDiscountReason: undefined,
-        promoTargetVenueId: undefined,
-      }),
+      removePromoDiscount: () =>
+        set({
+          promoDiscountAmount: 0,
+          promoCode: undefined,
+          promoDiscountType: undefined,
+          promoDiscountReason: undefined,
+          promoTargetVenueId: undefined,
+        }),
 
-      setPlatformFee: (percentage, enabled) => set({
-        platformFeePercentage: percentage,
-        platformFeeEnabled: enabled
-      }),
+      setPlatformFee: (percentage, enabled) =>
+        set({
+          platformFeePercentage: percentage,
+          platformFeeEnabled: enabled,
+        }),
 
       setBookingReference: (reference, reservationId) =>
         set({ bookingReference: reference, reservationId }),
@@ -329,113 +340,130 @@ export const useCheckoutStore = create<CheckoutState>()(
 
       // Computed values
       getSubtotal: () => {
-        const state = get()
-        const effectiveCart = state.bookingCart.length > 0
-          ? state.bookingCart
-          : (state.bookingData ? [state.bookingData] : [])
+        const state = get();
+        const effectiveCart =
+          state.bookingCart.length > 0
+            ? state.bookingCart
+            : state.bookingData
+              ? [state.bookingData]
+              : [];
 
-        if (effectiveCart.length === 0) return 0
+        if (effectiveCart.length === 0) return 0;
 
         const totalBase = effectiveCart.reduce((cartTotal, bookingData) => {
-          const [startH, startM] = bookingData.startTime.split(':').map(Number)
-          const [endH, endM] = bookingData.endTime.split(':').map(Number)
-          
-          let duration = (endH + (endM || 0) / 60) - (startH + (startM || 0) / 60)
-          if (duration <= 0) duration += 24 // Handle overnight bookings
+          const [startH, startM] = bookingData.startTime.split(':').map(Number);
+          const [endH, endM] = bookingData.endTime.split(':').map(Number);
 
-          const recurrenceWeeks = bookingData.recurrenceWeeks || 1
-          const selectedDays = bookingData.selectedDays || []
+          let duration = endH + (endM || 0) / 60 - (startH + (startM || 0) / 60);
+          if (duration <= 0) duration += 24; // Handle overnight bookings
 
-          const totalHourlyRate = (bookingData.courts && bookingData.courts.length > 0)
-            ? bookingData.courts.reduce((sum, c) => sum + (Number(c.hourly_rate) || bookingData.hourlyRate), 0)
-            : bookingData.hourlyRate;
+          const recurrenceWeeks = bookingData.recurrenceWeeks || 1;
+          const selectedDays = bookingData.selectedDays || [];
+
+          const totalHourlyRate =
+            bookingData.courts && bookingData.courts.length > 0
+              ? bookingData.courts.reduce(
+                  (sum, c) => sum + (Number(c.hourly_rate) || bookingData.hourlyRate),
+                  0
+                )
+              : bookingData.hourlyRate;
           const baseRate = totalHourlyRate * duration;
 
-          const initialStartTime = new Date(bookingData.date)
-          initialStartTime.setHours(startH, startM || 0, 0, 0)
-          const startDayIndex = initialStartTime.getDay()
+          const initialStartTime = new Date(bookingData.date);
+          initialStartTime.setHours(startH, startM || 0, 0, 0);
+          const startDayIndex = initialStartTime.getDay();
 
-          const uniqueSelectedDays = selectedDays.length > 0
-            ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
-            : [startDayIndex]
+          const uniqueSelectedDays =
+            selectedDays.length > 0
+              ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
+              : [startDayIndex];
 
-          let actualSlotCount = 0
+          let actualSlotCount = 0;
           for (let i = 0; i < recurrenceWeeks; i++) {
             for (const dayIndex of uniqueSelectedDays) {
-              const dayOffset = (dayIndex - startDayIndex + 7) % 7
+              const dayOffset = (dayIndex - startDayIndex + 7) % 7;
 
-              const slotStartTime = new Date(initialStartTime.getTime())
-              slotStartTime.setDate(slotStartTime.getDate() + (i * 7) + dayOffset)
+              const slotStartTime = new Date(initialStartTime.getTime());
+              slotStartTime.setDate(slotStartTime.getDate() + i * 7 + dayOffset);
 
               // Check if this specific slot is in the conflict list
-              const dateStr = slotStartTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-              const isConflicted = state.conflictingSlots.some(c => 
-                c.courtId === bookingData.courtId && 
-                c.date === dateStr && 
-                c.startTime === bookingData.startTime
-              )
+              const dateStr = slotStartTime.toLocaleDateString('en-US', {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+              });
+              const isConflicted = state.conflictingSlots.some(
+                (c) =>
+                  c.courtId === bookingData.courtId &&
+                  c.date === dateStr &&
+                  c.startTime === bookingData.startTime
+              );
 
               if (!isConflicted) {
-                actualSlotCount++
+                actualSlotCount++;
               }
             }
           }
 
-          return cartTotal + (baseRate * actualSlotCount)
-        }, 0)
+          return cartTotal + baseRate * actualSlotCount;
+        }, 0);
 
-        return Math.max(0, totalBase - state.discountAmount - state.promoDiscountAmount)
+        return Math.max(0, totalBase - state.discountAmount - state.promoDiscountAmount);
       },
 
       getPlatformFeeAmount: () => {
-        const state = get()
-        if (!state.platformFeeEnabled) return 0
-        const subtotal = state.getSubtotal()
-        return Math.round((subtotal * (state.platformFeePercentage / 100)) * 100) / 100
+        const state = get();
+        if (!state.platformFeeEnabled) return 0;
+        const subtotal = state.getSubtotal();
+        return Math.round(subtotal * (state.platformFeePercentage / 100) * 100) / 100;
       },
 
       getTotalAmount: () => {
-        const state = get()
-        const subtotal = state.getSubtotal()
-        const platformFee = state.getPlatformFeeAmount()
-        return Math.round((subtotal + platformFee) * 100) / 100
+        const state = get();
+        const subtotal = state.getSubtotal();
+        const platformFee = state.getPlatformFeeAmount();
+        return Math.round((subtotal + platformFee) * 100) / 100;
       },
 
       getDownPaymentAmount: () => {
-        const state = get()
-        if (state.paymentMethod !== 'cash') return 0
-        if (state.cashPaymentOption === 'full_cash') return 0
-        
-        const total = state.getTotalAmount()
-        const dpPercent = (state.downPaymentPercentage && state.downPaymentPercentage > 0)
-          ? state.downPaymentPercentage
-          : 20
-        const minimumDownPayment = Math.round((total * (dpPercent / 100)) * 100) / 100
+        const state = get();
+        if (state.paymentMethod !== 'cash') return 0;
+        if (state.cashPaymentOption === 'full_cash') return 0;
+
+        const total = state.getTotalAmount();
+        const dpPercent =
+          state.downPaymentPercentage && state.downPaymentPercentage > 0
+            ? state.downPaymentPercentage
+            : 20;
+        const minimumDownPayment = Math.round(total * (dpPercent / 100) * 100) / 100;
         // If user set a custom amount, use it (clamped between minimum and total)
         if (state.customDownPaymentAmount !== undefined && state.customDownPaymentAmount > 0) {
-          const clamped = Math.min(Math.max(state.customDownPaymentAmount, minimumDownPayment), total)
-          return Math.round(clamped * 100) / 100
+          const clamped = Math.min(
+            Math.max(state.customDownPaymentAmount, minimumDownPayment),
+            total
+          );
+          return Math.round(clamped * 100) / 100;
         }
-        return minimumDownPayment
+        return minimumDownPayment;
       },
 
       getRemainingBalance: () => {
-        const state = get()
-        const total = state.getTotalAmount()
-        const downPayment = state.getDownPaymentAmount()
-        return Math.round((total - downPayment) * 100) / 100
+        const state = get();
+        const total = state.getTotalAmount();
+        const downPayment = state.getDownPaymentAmount();
+        return Math.round((total - downPayment) * 100) / 100;
       },
 
       getPerPlayerAmount: () => {
-        const state = get()
-        if (!state.isSplitPayment) return state.getTotalAmount()
-        return Math.round((state.getTotalAmount() / state.playerCount) * 100) / 100
+        const state = get();
+        if (!state.isSplitPayment) return state.getTotalAmount();
+        return Math.round((state.getTotalAmount() / state.playerCount) * 100) / 100;
       },
 
       getAllPlayersPaid: () => {
-        const state = get()
-        if (!state.isSplitPayment) return true
-        return state.playerPayments.every((p) => p.status === 'paid')
+        const state = get();
+        if (!state.isSplitPayment) return true;
+        return state.playerPayments.every((p) => p.status === 'paid');
       },
     }),
     {
@@ -454,4 +482,4 @@ export const useCheckoutStore = create<CheckoutState>()(
       }),
     }
   )
-)
+);
