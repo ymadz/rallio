@@ -172,6 +172,7 @@ export async function createReservation(
         .from('courts')
         .select(`
             hourly_rate, 
+            metadata,
             venue_id,
             venues (metadata)
         `)
@@ -305,9 +306,14 @@ export async function createReservation(
     }
 
     // Calculate down payment if applicable (based on total including platform fee)
-    const venueData = court.venues as any;
-    const venueMetadata = venueData ? (Array.isArray(venueData) ? venueData[0]?.metadata : venueData.metadata) : null;
-    const downPaymentPercentage = parseFloat(venueMetadata?.down_payment_percentage || '20')
+    const venueData = court.venues as any
+    const venueMetadata = venueData ? (Array.isArray(venueData) ? venueData[0]?.metadata : venueData.metadata) : null
+    const courtMetadata = (court as any).metadata
+    const rawDownPaymentPercentage = courtMetadata?.down_payment_percentage ?? venueMetadata?.down_payment_percentage ?? 20
+    const parsedDownPaymentPercentage = Number(rawDownPaymentPercentage)
+    const downPaymentPercentage = Number.isFinite(parsedDownPaymentPercentage)
+        ? Math.min(Math.max(parsedDownPaymentPercentage, 0), 100)
+        : 20
     const minimumDownPaymentPerSlot = Math.round((perInstanceAmount * downPaymentPercentage / 100) * 100) / 100
     const hasCustomDownPayment = data.customDownPaymentAmount !== undefined && data.customDownPaymentAmount > 0
     const customDownPaymentPerSlot = hasCustomDownPayment

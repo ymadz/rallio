@@ -6,7 +6,12 @@ import { DayPicker } from 'react-day-picker'
 import { format } from 'date-fns'
 import 'react-day-picker/dist/style.css'
 import { useCheckoutStore } from '@/stores/checkout-store'
-import { getAvailableTimeSlotsAction, validateBookingAvailabilityAction, getVenueMetadataAction } from '@/app/actions/reservations'
+import {
+    getAvailableTimeSlotsAction,
+    validateBookingAvailabilityAction,
+    getCourtDownPaymentPercentageAction,
+    getCourtDownPaymentPercentagesAction
+} from '@/app/actions/reservations'
 import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
 import { cn } from '@/lib/utils'
 import { QueueTutorial } from './queue-tutorial'
@@ -139,24 +144,33 @@ export function QueueSessionModal({
         fetchTimeSlots()
     }, [selectedDate, primaryCourtId, isOpen])
 
-    // Fetch venue metadata (down payment percentage)
+    // Fetch effective court down payment percentage
     useEffect(() => {
-        async function fetchVenueMetadata() {
-            if (!venueId || !isOpen) return
+        async function fetchCourtDownPayment() {
+            if (!isOpen) return
 
             try {
-                const result = await getVenueMetadataAction(venueId)
-                if (result.success && result.metadata) {
-                    const percentage = parseFloat((result.metadata as any).down_payment_percentage || '20')
-                    setDownPaymentPercentage(percentage)
+                if (courts && courts.length > 1) {
+                    const result = await getCourtDownPaymentPercentagesAction(courts.map((court) => court.id))
+                    if (result.success && typeof result.maxPercentage === 'number') {
+                        setDownPaymentPercentage(result.maxPercentage)
+                    }
+                    return
+                }
+
+                if (!primaryCourtId) return
+
+                const result = await getCourtDownPaymentPercentageAction(primaryCourtId)
+                if (result.success && typeof result.percentage === 'number') {
+                    setDownPaymentPercentage(result.percentage)
                 }
             } catch (error) {
-                console.error('Error fetching venue metadata:', error)
+                console.error('Error fetching court down payment percentage:', error)
             }
         }
 
-        fetchVenueMetadata()
-    }, [venueId, isOpen, setDownPaymentPercentage])
+        fetchCourtDownPayment()
+    }, [courts, primaryCourtId, isOpen, setDownPaymentPercentage])
 
     // Helpers
     const getDuration = (): number => {

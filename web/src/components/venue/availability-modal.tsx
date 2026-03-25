@@ -11,7 +11,7 @@ import {
   getAvailableTimeSlotsAction,
   getMonthlySlotAvailabilityAction,
   validateBookingAvailabilityAction,
-  getVenueMetadataAction
+  getCourtDownPaymentPercentageAction
 } from '@/app/actions/reservations'
 import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
 import { cn } from '@/lib/utils'
@@ -171,24 +171,23 @@ export function AvailabilityModal({
     fetchFullyBookedDates()
   }, [isOpen, courtId, displayedMonth])
 
-  // Fetch venue metadata (down payment percentage)
+  // Fetch effective court down payment percentage
   useEffect(() => {
-    async function fetchVenueMetadata() {
-      if (!venueId || !isOpen) return
+    async function fetchCourtDownPayment() {
+      if (!courtId || !isOpen) return
 
       try {
-        const result = await getVenueMetadataAction(venueId)
-        if (result.success && result.metadata) {
-          const percentage = parseFloat((result.metadata as any).down_payment_percentage || '20')
-          setDownPaymentPercentage(percentage)
+        const result = await getCourtDownPaymentPercentageAction(courtId)
+        if (result.success && typeof result.percentage === 'number') {
+          setDownPaymentPercentage(result.percentage)
         }
       } catch (error) {
-        console.error('Error fetching venue metadata:', error)
+        console.error('Error fetching court down payment percentage:', error)
       }
     }
 
-    fetchVenueMetadata()
-  }, [venueId, isOpen, setDownPaymentPercentage])
+    fetchCourtDownPayment()
+  }, [courtId, isOpen, setDownPaymentPercentage])
 
   // Helpers needed for effects
   const getDuration = (): number => {

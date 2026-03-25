@@ -14,6 +14,7 @@ import { CancellationPolicy } from '@/components/checkout/cancellation-policy'
 import { PaymentProcessing } from '@/components/checkout/payment-processing'
 import { CancelBookingModal } from '@/components/checkout/cancel-booking-modal'
 import { createClient } from '@/lib/supabase/client'
+import { getCourtDownPaymentPercentagesAction } from '@/app/actions/reservations'
 
 export default function CheckoutPage() {
     const router = useRouter()
@@ -38,6 +39,7 @@ export default function CheckoutPage() {
         downPaymentPercentage,
         platformFeeEnabled,
         platformFeePercentage,
+        setDownPaymentPercentage,
     } = useCheckoutStore()
 
     // Guard: detect stale checkout state (e.g. page revisited after completed booking)
@@ -92,6 +94,38 @@ export default function CheckoutPage() {
         }
         fetchImage()
     }, [bookingData?.courtId, bookingData?.venueId])
+
+    // Resolve effective down payment percentage from court settings.
+    // For multi-court bookings, use max percentage so proportional split always satisfies each court minimum.
+    useEffect(() => {
+        if (!bookingData) return
+
+        const effectiveCart = bookingCart.length > 0 ? bookingCart : [bookingData]
+        const courtIds = effectiveCart.flatMap((item) => {
+            if (item.courts && item.courts.length > 0) {
+                return item.courts.map((court) => court.id)
+            }
+            return [item.courtId]
+        })
+
+        const uniqueCourtIds = Array.from(new Set(courtIds.filter(Boolean)))
+        if (uniqueCourtIds.length === 0) return
+
+        async function resolveDownPaymentPercentage() {
+            try {
+                const result = await getCourtDownPaymentPercentagesAction(uniqueCourtIds)
+                if (!result.success) return
+
+                if (typeof result.maxPercentage === 'number') {
+                    setDownPaymentPercentage(result.maxPercentage)
+                }
+            } catch (error) {
+                console.error('Error resolving checkout down payment percentage:', error)
+            }
+        }
+
+        resolveDownPaymentPercentage()
+    }, [bookingData, bookingCart, setDownPaymentPercentage])
 
     if (!bookingData) {
         return (

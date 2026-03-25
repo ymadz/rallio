@@ -49,6 +49,88 @@ export async function getVenueMetadataAction(venueId: string) {
 }
 
 /**
+ * Server Action: Resolve effective down payment percentage for a court.
+ * Priority: court metadata -> venue metadata -> 20 (default)
+ */
+export async function getCourtDownPaymentPercentageAction(courtId: string) {
+  const supabase = createServiceClient()
+
+  const { data, error } = await supabase
+    .from('courts')
+    .select(`
+      metadata,
+      venue:venues(metadata)
+    `)
+    .eq('id', courtId)
+    .single()
+
+  if (error || !data) {
+    console.error('Error fetching court down payment percentage:', error)
+    return { success: false, error: error?.message || 'Court not found' }
+  }
+
+  const venueData = data.venue as any
+  const venueMetadata = Array.isArray(venueData) ? venueData[0]?.metadata : venueData?.metadata
+  const courtMetadata = (data as any).metadata
+
+  const rawPercentage = courtMetadata?.down_payment_percentage ?? venueMetadata?.down_payment_percentage ?? 20
+  const parsedPercentage = Number(rawPercentage)
+  const percentage = Number.isFinite(parsedPercentage)
+    ? Math.min(Math.max(parsedPercentage, 0), 100)
+    : 20
+
+  return {
+    success: true,
+    percentage,
+    source: courtMetadata?.down_payment_percentage !== undefined ? 'court' : (venueMetadata?.down_payment_percentage !== undefined ? 'venue' : 'default')
+  }
+}
+
+/**
+ * Server Action: Resolve effective down payment percentages for multiple courts.
+ */
+export async function getCourtDownPaymentPercentagesAction(courtIds: string[]) {
+  const uniqueCourtIds = Array.from(new Set(courtIds.filter(Boolean)))
+  if (uniqueCourtIds.length === 0) {
+    return { success: true, percentages: {} as Record<string, number>, maxPercentage: 20 }
+  }
+
+  const supabase = createServiceClient()
+  const { data, error } = await supabase
+    .from('courts')
+    .select(`
+      id,
+      metadata,
+      venue:venues(metadata)
+    `)
+    .in('id', uniqueCourtIds)
+
+  if (error) {
+    console.error('Error fetching court down payment percentages:', error)
+    return { success: false, error: error.message }
+  }
+
+  const percentages: Record<string, number> = {}
+  for (const row of data || []) {
+    const venueData = (row as any).venue
+    const venueMetadata = Array.isArray(venueData) ? venueData[0]?.metadata : venueData?.metadata
+    const courtMetadata = (row as any).metadata
+
+    const rawPercentage = courtMetadata?.down_payment_percentage ?? venueMetadata?.down_payment_percentage ?? 20
+    const parsedPercentage = Number(rawPercentage)
+    percentages[row.id] = Number.isFinite(parsedPercentage)
+      ? Math.min(Math.max(parsedPercentage, 0), 100)
+      : 20
+  }
+
+  const maxPercentage = Object.values(percentages).length > 0
+    ? Math.max(...Object.values(percentages))
+    : 20
+
+  return { success: true, percentages, maxPercentage }
+}
+
+/**
  * Server Action: Get available time slots for a specific court on a given date
  */
 export async function getAvailableTimeSlotsAction(
