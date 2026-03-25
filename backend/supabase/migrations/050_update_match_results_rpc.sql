@@ -136,13 +136,15 @@ BEGIN
         
         IF v_is_draw THEN
           v_actual_score := 0.5;
+          -- QM requested draws not to affect ELO
+          v_new_rating := v_current_rating;
         ELSIF v_won THEN
           v_actual_score := 1.0;
+          v_new_rating := round(v_current_rating + v_k_factor * (v_actual_score - v_expected_score));
         ELSE
           v_actual_score := 0.0;
+          v_new_rating := round(v_current_rating + v_k_factor * (v_actual_score - v_expected_score));
         END IF;
-
-        v_new_rating := round(v_current_rating + v_k_factor * (v_actual_score - v_expected_score));
         
           -- Accumulate rating changes
           v_rating_changes := jsonb_set(

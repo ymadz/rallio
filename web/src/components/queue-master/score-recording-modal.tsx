@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { recordMatchScore } from '@/app/actions/match-actions'
-import { X, Trophy, Users, Loader2, CheckCircle } from 'lucide-react'
+import { X, Trophy, Users, Loader2, CheckCircle, AlertTriangle } from 'lucide-react'
 import { MatchTimer } from './match-timer'
 
 interface ScoreRecordingModalProps {
@@ -30,6 +30,7 @@ export function ScoreRecordingModal({
   onSuccess,
 }: ScoreRecordingModalProps) {
   const [selectedWinner, setSelectedWinner] = useState<'team_a' | 'team_b' | 'draw' | null>(null)
+  const [isForfeit, setIsForfeit] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -37,6 +38,7 @@ export function ScoreRecordingModal({
   useEffect(() => {
     if (isOpen) {
       setSelectedWinner(null)
+      setIsForfeit(false)
       setError(null)
     }
   }, [isOpen])
@@ -55,6 +57,10 @@ export function ScoreRecordingModal({
     try {
       const result = await recordMatchScore(match.id, {
         winner: selectedWinner,
+        metadata: {
+          isForfeit,
+          recordedAt: new Date().toISOString()
+        }
       })
 
       if (!result.success) {
@@ -224,6 +230,35 @@ export function ScoreRecordingModal({
               </button>
             </div>
           </div>
+
+          {/* Default/Forfeit Toggle */}
+          {selectedWinner && selectedWinner !== 'draw' && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 animate-in slide-in-from-top-2 duration-200">
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <div className="relative inline-flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={isForfeit}
+                    onChange={(e) => setIsForfeit(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className={`w-4 h-4 ${isForfeit ? 'text-amber-600' : 'text-gray-400'}`} />
+                  <span className={`text-sm font-bold ${isForfeit ? 'text-amber-900' : 'text-gray-600'}`}>
+                    Record as Default / Forfeit
+                  </span>
+                </div>
+              </label>
+              {isForfeit && (
+                <p className="mt-2 text-[11px] text-amber-700 font-medium leading-relaxed">
+                  The {selectedWinner === 'team_a' ? 'Team B' : 'Team A'} players left or defaulted. 
+                  Win is awarded to {selectedWinner === 'team_a' ? 'Team A' : 'Team B'}.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex gap-3 pt-4 border-t border-gray-200">

@@ -96,7 +96,13 @@ export function RescheduleModal({ booking, isOpen, onClose, onSuccess }: Resched
         setError(null)
 
         try {
-            const result = await rescheduleReservationAction(booking.id, selectedDate, selectedTime)
+            let result;
+            if ((booking as any).type === 'queue_session' && (booking as any).queue_session_id) {
+                const { rescheduleQueueSessionAction } = await import('@/app/actions/queue-actions')
+                result = await rescheduleQueueSessionAction((booking as any).queue_session_id, selectedDate, selectedTime)
+            } else {
+                result = await rescheduleReservationAction(booking.id, selectedDate, selectedTime)
+            }
 
             if (result.success) {
                 toast({

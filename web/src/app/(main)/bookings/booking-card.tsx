@@ -679,7 +679,7 @@ export function BookingCard({
             {booking.type === 'queue_session' && booking.queue_session_id ? (
               /* Queue Session Actions */
               <>
-                <Link href={`/queue/${booking.queue_session_id || booking.courts?.id}`}>
+                <Link href={`/queue/${booking.queue_session_id || booking.courts?.id}`} className="col-span-2">
                   <Button
                     variant="outline"
                     className="w-full h-10 rounded-xl text-green-700 border-green-300 bg-white hover:bg-green-50 hover:text-green-800 hover:border-green-400 transition-colors"
@@ -698,10 +698,53 @@ export function BookingCard({
                         d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
                       />
                     </svg>
-                    Manage Queue
+                    Manage Queue Slots
                   </Button>
                 </Link>
-                <Link href={`/bookings/${booking.id}/receipt`}>
+
+                {/* Organizer Management Actions */}
+                {booking.metadata?.is_organizer && canCancelBooking(booking) && (
+                   <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onReschedule(booking)}
+                      className="w-full h-10 rounded-xl border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 transition-colors"
+                    >
+                      <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      Reschedule
+                    </Button>
+
+                    {booking.amount_paid > 0 ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onRefundBooking(booking)}
+                        className="w-full h-10 rounded-xl transition-colors text-primary border-primary/30 hover:bg-primary/5 hover:text-primary hover:border-primary/40"
+                      >
+                        <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                        </svg>
+                        Request Refund
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onCancelBooking(booking, 'reservation')}
+                        disabled={cancellingId === booking.id}
+                        className="w-full h-10 rounded-xl text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors"
+                      >
+                        {cancellingId === booking.id ? <Spinner className="w-4 h-4 mr-2" /> : <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>}
+                        Cancel Session
+                      </Button>
+                    )}
+                   </>
+                )}
+
+                <Link href={`/bookings/${booking.id}/receipt`} className="col-span-2">
                   <Button
                     variant="outline"
                     className="w-full h-10 rounded-xl border-primary/20 hover:bg-primary/5 hover:text-primary hover:border-primary/40 transition-colors"

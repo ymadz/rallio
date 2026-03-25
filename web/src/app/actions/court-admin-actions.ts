@@ -1523,6 +1523,11 @@ export async function approveReschedule(reservationId: string) {
       approved_by: user.id,
     }
 
+    // Determine siblings if this is a queue session
+    const queueSessionId = reservation.metadata?.queue_session_id
+    const siblingReservationIds = reservation.metadata?.reservation_ids || []
+    
+    // 1. Update the primary reservation
     const { error: updateError } = await adminDb
       .from('reservations')
       .update({
@@ -1536,6 +1541,54 @@ export async function approveReschedule(reservationId: string) {
     if (updateError) {
       console.error('Error approving reschedule:', updateError)
       return { success: false, error: 'Failed to apply reschedule' }
+    }
+
+    // 2. If it's a queue session, update siblings and the session itself
+    if (queueSessionId) {
+      // Fetch the actual queue session to get latest metadata
+      const { data: qs } = await adminDb
+        .from('queue_sessions')
+        .select('*')
+        .eq('id', queueSessionId)
+        .single()
+
+      if (qs) {
+        // Update queue session record
+        await adminDb.from('queue_sessions').update({
+          start_time: proposed_start_time,
+          end_time: proposed_end_time,
+          metadata: {
+            ...(qs.metadata || {}),
+            rescheduled: true,
+            rescheduled_at: new Date().toISOString(),
+            reschedule_request: null
+          }
+        }).eq('id', queueSessionId)
+
+        // Update all siblings
+        const { data: siblings } = await adminDb
+          .from('reservations')
+          .select('id, metadata')
+          .filter('metadata->>queue_session_id', 'eq', queueSessionId)
+        
+        if (siblings) {
+          for (const sib of siblings) {
+            if (sib.id === reservationId) continue;
+            
+            const sibMetadata = { ...(sib.metadata as any || {}) }
+            delete sibMetadata.reschedule_request
+            sibMetadata.rescheduled = true
+            sibMetadata.rescheduled_from = updatedMetadata.rescheduled_from
+
+            await adminDb.from('reservations').update({
+              start_time: proposed_start_time,
+              end_time: proposed_end_time,
+              updated_at: new Date().toISOString(),
+              metadata: sibMetadata
+            }).eq('id', sib.id)
+          }
+        }
+      }
     }
 
     // Notify the user

@@ -83,14 +83,27 @@ export function CancelBookingModal({
                     setError(result.error || 'Failed to submit refund request')
                 }
             } else {
-                const { cancelReservationAction } = await import('@/app/actions/reservations')
-                const result = await cancelReservationAction(booking.id)
-
-                if (result.success) {
-                    onCancelSuccess()
-                    onClose()
+                // If this is a queue session, use the specialized action
+                if ((booking as any).type === 'queue_session' && (booking as any).queue_session_id) {
+                    const { cancelQueueSession } = await import('@/app/actions/queue-actions')
+                    const result = await cancelQueueSession((booking as any).queue_session_id, reason.trim())
+                    
+                    if (result.success) {
+                        onCancelSuccess()
+                        onClose()
+                    } else {
+                        setError(result.error || 'Failed to cancel queue session')
+                    }
                 } else {
-                    setError(result.error || 'Failed to cancel booking')
+                    const { cancelReservationAction } = await import('@/app/actions/reservations')
+                    const result = await cancelReservationAction(booking.id)
+
+                    if (result.success) {
+                        onCancelSuccess()
+                        onClose()
+                    } else {
+                        setError(result.error || 'Failed to cancel booking')
+                    }
                 }
             }
         } catch (err) {

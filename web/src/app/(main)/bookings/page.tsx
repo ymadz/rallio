@@ -168,6 +168,7 @@ async function getUserQueueSessions(userId: string) {
         intended_payment_method: linkedReservation?.payment_method || qs.metadata?.payment_method || 'cash',
         cash_payment_deadline: linkedReservation?.cash_payment_deadline || null,
         is_queue_session_reservation: true,
+        is_organizer: true, // They organized this session
       },
       // Queue session specific fields
       type: 'queue_session' as const,

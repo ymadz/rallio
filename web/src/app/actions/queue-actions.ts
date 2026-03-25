@@ -7,6 +7,8 @@ import { checkRateLimit, createRateLimitConfig } from '@/lib/rate-limiter'
 import { createBulkNotifications, createNotification, NotificationTemplates } from '@/lib/notifications'
 import { getServerNow } from '@/lib/time-server'
 import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
+import { requestRefundAction } from './refund-actions'
+import { differenceInMinutes, addMinutes } from 'date-fns'
 
 /**
  * Queue Management Server Actions
@@ -2201,7 +2203,7 @@ export async function closeQueueSession(sessionId: string): Promise<{
 
 /**
  * Cancel a queue session
- * Queue Master action
+ * Queue Master action - mirrors the normal reservation flow with refund integration.
  */
 export async function cancelQueueSession(
   sessionId: string,
@@ -2227,7 +2229,7 @@ export async function cancelQueueSession(
     // 2. Get session and verify user is organizer
     const { data: session, error: sessionError } = await supabase
       .from('queue_sessions')
-      .select('organizer_id, status, court_id, current_players, metadata')
+      .select('organizer_id, status, start_time, end_time, metadata')
       .eq('id', sessionId)
       .single()
 
@@ -2239,26 +2241,19 @@ export async function cancelQueueSession(
       return { success: false, error: 'Unauthorized: Not session organizer' }
     }
 
-    // 3. Only allow cancellation if status is pending_payment or open with no players
-    if (!['pending_payment', 'open'].includes(session.status)) {
-      return { success: false, error: 'Can only cancel pending or open sessions' }
+    // 3. Status check — only active/pending sessions can be cancelled
+    const cancellableStatuses = ['pending_payment', 'open', 'active']
+    if (!cancellableStatuses.includes(session.status)) {
+      return { success: false, error: `Cannot cancel a session with status: ${session.status}` }
     }
 
-    // Check actual active participants (current_players column can get out of sync)
-    const { count: activeParticipantCount } = await supabase
-      .from('queue_participants')
-      .select('id', { count: 'exact', head: true })
-      .eq('queue_session_id', sessionId)
-      .is('left_at', null)
-
-    if ((activeParticipantCount ?? 0) > 0) {
-      return {
-        success: false,
-        error: 'Cannot cancel session with active participants. Close the session instead.',
-      }
+    // 4. 24-hour policy — cannot cancel within 24 hours of start time
+    const hoursUntilStart = (new Date(session.start_time).getTime() - Date.now()) / (1000 * 60 * 60)
+    if (hoursUntilStart < 24) {
+      return { success: false, error: 'Cannot cancel within 24 hours of session start time' }
     }
 
-    // 4. Update session status to cancelled
+    // 5. Update session status to cancelled
     const { error: updateError } = await supabase
       .from('queue_sessions')
       .update({
@@ -2276,52 +2271,272 @@ export async function cancelQueueSession(
       return { success: false, error: 'Failed to cancel queue session' }
     }
 
-    // 4b. Sync with linked reservation
-    const reservationId = session.metadata?.reservation_id
-    if (reservationId) {
-      console.log('[cancelQueueSession] 🔄 Syncing cancellation with reservation:', reservationId)
+    // 6. Sync with linked reservations and handle refunds
+    const reservationIds = session.metadata?.reservation_ids || (session.metadata?.reservation_id ? [session.metadata.reservation_id] : [])
+    
+    if (reservationIds.length > 0) {
+      console.log('[cancelQueueSession] 🔄 Syncing cancellation with reservations:', reservationIds)
       const adminDb = createServiceClient()
 
-      // Fetch existing reservation metadata so we can merge, not overwrite
-      const { data: existingRes } = await adminDb
-        .from('reservations')
-        .select('metadata')
-        .eq('id', reservationId)
-        .single()
+      for (const resId of reservationIds) {
+        // Fetch reservation to check payment status
+        const { data: booking } = await adminDb
+          .from('reservations')
+          .select('id, status, amount_paid, metadata')
+          .eq('id', resId)
+          .single()
 
-      const { error: resError } = await adminDb
-        .from('reservations')
-        .update({
-          status: 'cancelled',
-          cancelled_at: new Date().toISOString(),
-          cancellation_reason: reason,
-          metadata: {
-            ...(existingRes?.metadata || {}),
-            cancelled_at: new Date().toISOString(),
-            cancellation_reason: reason,
-            cancelled_by: user.id
-          }
-        })
-        .eq('id', reservationId)
+        if (!booking) continue;
 
-      if (resError) {
-        console.error('[cancelQueueSession] ⚠️ Failed to sync reservation cancellation:', resError)
+        // If paid, trigger refund request
+        if (booking.amount_paid > 0) {
+          await requestRefundAction({
+            reservationId: resId,
+            reason: `Queue session cancelled: ${reason}`,
+            reasonCode: 'requested_by_customer'
+          })
+        }
+
+        // Update reservation status to cancelled
+        await adminDb
+          .from('reservations')
+          .update({
+            status: 'cancelled',
+            metadata: {
+              ...(booking.metadata || {}),
+              cancelled_at: new Date().toISOString(),
+              cancellation_reason: reason,
+              queue_session_cancelled: true
+            }
+          })
+          .eq('id', resId)
       }
     }
 
-    console.log('[cancelQueueSession] ✅ Queue session cancelled successfully')
+    revalidatePath('/bookings')
+    revalidatePath('/reservations')
+    revalidatePath(`/queue/${sessionId}`)
 
-    // 5. Revalidate paths
-    revalidatePath('/queue')
-    revalidatePath('/queue-master')
-    revalidatePath(`/queue/${session.court_id}`)
-    revalidatePath(`/queue-master/sessions/${sessionId}`)
-
+    console.log('[cancelQueueSession] ✅ Queue session and reservations cancelled successfully')
     return { success: true }
-  } catch (error: any) {
-    console.error('[cancelQueueSession] ❌ Error:', error)
-    return { success: false, error: error.message || 'Failed to cancel queue session' }
+  } catch (error) {
+    console.error('[cancelQueueSession] ❌ Unexpected Error:', error)
+    return { success: false, error: 'An unexpected error occurred' }
   }
+}
+
+/**
+ * Request a reschedule for a queue session.
+ * Stores the proposed new times in metadata for admin approval.
+ */
+export async function rescheduleQueueSessionAction(
+  sessionId: string,
+  newDate: Date,
+  newStartTime: string // HH:MM
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient()
+
+  // 1. Get current user
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return { success: false, error: 'Unauthorized' }
+  }
+
+  // 2. Fetch the existing queue session
+  const adminDb = createServiceClient()
+  const { data: session, error: fetchError } = await adminDb
+    .from('queue_sessions')
+    .select(`
+      *,
+      courts(
+        id,
+        name,
+        venue:venues(
+          id,
+          name,
+          owner_id
+        )
+      ),
+      queue_session_courts(
+        courts(
+          id,
+          name,
+          venue:venues(
+            id,
+            name,
+            owner_id
+          )
+        )
+      )
+    `)
+    .eq('id', sessionId)
+    .single()
+
+  if (fetchError || !session) {
+    return { success: false, error: 'Queue session not found' }
+  }
+
+  // Verify ownership
+  if (session.organizer_id !== user.id) {
+    return { success: false, error: 'You do not have permission to reschedule this session' }
+  }
+
+  // 3. Verify status
+  const allowedStatuses = ['pending_payment', 'open', 'active']
+  if (!allowedStatuses.includes(session.status)) {
+    return { success: false, error: `Cannot reschedule a session with status: ${session.status}` }
+  }
+
+  // 3b. 24-hour policy
+  const hoursUntilStart = (new Date(session.start_time).getTime() - Date.now()) / (1000 * 60 * 60)
+  if (hoursUntilStart < 24) {
+    return { success: false, error: 'Cannot reschedule within 24 hours of session start time' }
+  }
+
+  // 3c. Check if already rescheduled or has pending request
+  if (session.metadata?.rescheduled === true) {
+    return { success: false, error: 'This session has already been rescheduled once.' }
+  }
+  if (session.metadata?.reschedule_request?.status === 'pending') {
+    return { success: false, error: 'There is already a pending reschedule request.' }
+  }
+
+  // 4. Calculate new time range
+  const oldStart = new Date(session.start_time)
+  const oldEnd = new Date(session.end_time)
+  const durationInMinutes = differenceInMinutes(oldEnd, oldStart)
+
+  // Use Asia/Manila for time conversions
+  const [hours, minutes] = newStartTime.split(':').map(Number)
+  const dateStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(newDate))
+
+  const hoursStr = hours.toString().padStart(2, '0')
+  const minutesStr = minutes.toString().padStart(2, '0')
+  const newStartISO = `${dateStr}T${hoursStr}:${minutesStr}:00+08:00`
+  const newStartDateTime = new Date(newStartISO)
+  const newEndDateTime = addMinutes(newStartDateTime, durationInMinutes)
+  const newEndISO = newEndDateTime.toISOString()
+
+  // 5. Determine all court IDs in this session
+  const courtIds: string[] = []
+  if (session.queue_session_courts && Array.isArray(session.queue_session_courts)) {
+    session.queue_session_courts.forEach((qsc: any) => {
+      if (qsc.courts?.id) courtIds.push(qsc.courts.id)
+    })
+  }
+  
+  // Fallback to primary court_id if junction table is empty
+  if (courtIds.length === 0 && session.court_id) {
+    courtIds.push(session.court_id)
+  }
+
+  const venue = session.queue_session_courts?.[0]?.courts?.venue || session.courts?.venue
+  if (!venue) {
+    return { success: false, error: 'Venue information not found' }
+  }
+
+  // 6. Check Availability for ALL courts in the session
+  
+  for (const courtId of courtIds) {
+    // Check reservations
+    const { data: conflicts } = await adminDb
+      .from('reservations')
+      .select('id')
+      .eq('court_id', courtId)
+      // Ignore reservations that are part of THIS session
+      .filter('metadata->>queue_session_id', 'neq', sessionId)
+      .in('status', ['pending_payment', 'confirmed', 'ongoing', 'partially_paid'])
+      .lt('start_time', newEndISO)
+      .gt('end_time', newStartISO)
+      .limit(1)
+
+    if (conflicts && conflicts.length > 0) {
+      return { success: false, error: `One of the courts is no longer available at the selected time.` }
+    }
+
+    // Check other queue sessions
+    const { data: queueConflicts } = await adminDb
+      .from('queue_sessions')
+      .select('id')
+      .eq('court_id', courtId)
+      .neq('id', sessionId)
+      .in('status', ['pending_payment', 'open', 'active'])
+      .lt('start_time', newEndISO)
+      .gt('end_time', newStartISO)
+      .limit(1)
+
+    if (queueConflicts && queueConflicts.length > 0) {
+      return { success: false, error: `The selected time slot conflicts with another queue session.` }
+    }
+  }
+
+  // 6. Store request in metadata
+  const rescheduleRequest = {
+    status: 'pending',
+    proposed_start_time: newStartISO,
+    proposed_end_time: newEndISO,
+    original_start_time: session.start_time,
+    original_end_time: session.end_time,
+    requested_at: new Date().toISOString(),
+    requested_by: user.id,
+  }
+
+  const { error: updateError } = await adminDb
+    .from('queue_sessions')
+    .update({
+      metadata: {
+        ...(session.metadata || {}),
+        reschedule_request: rescheduleRequest
+      }
+    })
+    .eq('id', sessionId)
+
+  if (updateError) {
+    return { success: false, error: 'Failed to submit reschedule request' }
+  }
+
+  // 7. Sync request to linked reservations (for UI visibility)
+  const reservationIds = session.metadata?.reservation_ids || (session.metadata?.reservation_id ? [session.metadata.reservation_id] : [])
+  if (reservationIds.length > 0) {
+    for (const resId of reservationIds) {
+      const { data: res } = await adminDb.from('reservations').select('metadata').eq('id', resId).single()
+      await adminDb.from('reservations').update({
+        metadata: {
+          ...(res?.metadata || {}),
+          reschedule_request: rescheduleRequest
+        }
+      }).eq('id', resId)
+    }
+  }
+
+  // 8. Notify Admin
+  const venueOwnerId = venue?.owner_id
+  
+  if (venueOwnerId) {
+    // Get user name for notification
+    const { data: profile } = await adminDb.from('profiles').select('display_name, first_name, last_name').eq('id', user.id).single()
+    const customerName = profile?.display_name || `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || 'A customer'
+    
+    await createNotification({
+      userId: venueOwnerId,
+      ...NotificationTemplates.reschedulePending(
+        customerName,
+        'Multi-court Queue Slot',
+        new Date(newStartISO).toLocaleDateString('en-US', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }),
+        sessionId
+      )
+    })
+  }
+
+  revalidatePath('/bookings')
+  revalidatePath(`/queue/${sessionId}`)
+
+  return { success: true }
 }
 
 /**

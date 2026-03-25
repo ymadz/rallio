@@ -757,6 +757,47 @@ export async function resetPlayerToWaiting(
       return { success: false, error: 'Not authorized' }
     }
 
+    // 1. Get the participant's user_id
+    const { data: participant } = await supabase
+      .from('queue_participants')
+      .select('user_id')
+      .eq('id', participantId)
+      .single()
+
+    if (participant) {
+      // 2. Find any active or scheduled matches for this player in this session
+      const { data: matches } = await supabase
+        .from('matches')
+        .select('id, team_a_players, team_b_players')
+        .eq('queue_session_id', sessionId)
+        .in('status', ['scheduled', 'in_progress'])
+
+      const playerMatches = matches?.filter(m => 
+        m.team_a_players.includes(participant.user_id) || 
+        m.team_b_players.includes(participant.user_id)
+      ) || []
+
+      if (playerMatches.length > 0) {
+        const matchIds = playerMatches.map(m => m.id)
+        const allPlayerIds = [...new Set(playerMatches.flatMap(m => [...m.team_a_players, ...m.team_b_players]))]
+
+        // 3. Cancel the matches
+        await supabase
+          .from('matches')
+          .update({ status: 'cancelled' })
+          .in('id', matchIds)
+
+        // 4. Reset ALL players in those matches to 'waiting'
+        const serviceDb = createServiceClient()
+        await serviceDb
+          .from('queue_participants')
+          .update({ status: 'waiting' })
+          .eq('queue_session_id', sessionId)
+          .in('user_id', allPlayerIds)
+      }
+    }
+
+    // 5. Finally, ensure the specific participant is reset and given a new joined_at for back-of-queue
     const { error } = await supabase
       .from('queue_participants')
       .update({
@@ -801,6 +842,14 @@ export async function resetAllPlayersToWaiting(
       return { success: false, error: 'Not authorized' }
     }
 
+    // 1. Cancel all active matches for the session
+    await supabase
+      .from('matches')
+      .update({ status: 'cancelled' })
+      .eq('queue_session_id', sessionId)
+      .in('status', ['scheduled', 'in_progress'])
+
+    // 2. Reset all participants who are currently marked as 'playing'
     const { data, error } = await supabase
       .from('queue_participants')
       .update({
@@ -822,5 +871,191 @@ export async function resetAllPlayersToWaiting(
     return { success: true, count: data?.length || 0 }
   } catch (error: any) {
     return { success: false, error: error.message }
+  }
+}
+
+/**
+ * Auto-assign all waiting players to matches based on skill level.
+ * @param sessionId - The queue session ID
+ * @param format - 'singles' or 'doubles'
+ */
+export async function autoAssignMatches(
+  sessionId: string,
+  format: 'singles' | 'doubles'
+) {
+  console.log('[autoAssignMatches] 🤖 Starting auto-assignment:', { sessionId, format })
+
+  try {
+    const supabase = await createClient()
+    const serviceDb = createServiceClient()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'User not authenticated' }
+    }
+
+    // Rate limiting
+    const rateLimitResult = await checkRateLimit(createRateLimitConfig('ASSIGN_MATCH', user.id))
+    if (!rateLimitResult.allowed) {
+      return {
+        success: false,
+        error: `Too many assignment attempts. Please wait ${rateLimitResult.retryAfter} seconds.`,
+      }
+    }
+
+    // Get session and verify user is organizer
+    const { data: session, error: sessionError } = await supabase
+      .from('queue_sessions')
+      .select('*, courts(id, name)')
+      .eq('id', sessionId)
+      .single()
+
+    if (sessionError || !session) {
+      return { success: false, error: 'Queue session not found' }
+    }
+
+    if (session.organizer_id !== user.id) {
+      return { success: false, error: 'Unauthorized' }
+    }
+
+    // Get all waiting participants
+    const { data: participants, error: participantsError } = await supabase
+      .from('queue_participants')
+      .select('*')
+      .eq('queue_session_id', sessionId)
+      .eq('status', 'waiting')
+      .is('left_at', null)
+      .order('joined_at', { ascending: true })
+
+    if (participantsError || !participants || participants.length === 0) {
+      return { success: false, error: 'No players in the waiting queue' }
+    }
+
+    const playersNeeded = format === 'singles' ? 2 : 4
+    if (participants.length < playersNeeded) {
+      return {
+        success: false,
+        error: `Not enough players. Need ${playersNeeded}, found ${participants.length}`,
+      }
+    }
+
+    // Get player skill levels
+    const { data: players } = await supabase
+      .from('players')
+      .select('user_id, skill_level')
+      .in(
+        'user_id',
+        participants.map(p => p.user_id)
+      )
+
+    const skillMap = new Map(players?.map(p => [p.user_id, p.skill_level || 5]) || [])
+
+    // Sort participants by skill level (descending) for "Fair Matching"
+    // This ensures players of similar skill are grouped into the same matches.
+    const sortedParticipants = [...participants].sort((a, b) => {
+      const skillA = skillMap.get(a.user_id) || 5
+      const skillB = skillMap.get(b.user_id) || 5
+      return skillB - skillA
+    })
+
+    const numMatches = Math.floor(sortedParticipants.length / playersNeeded)
+    const matchesToCreate = []
+    const participantsToUpdate: string[] = []
+
+    // Get current match count for numbering
+    const { count: matchCount } = await supabase
+      .from('matches')
+      .select('*', { count: 'exact', head: true })
+      .eq('queue_session_id', sessionId)
+
+    let currentMatchNumber = (matchCount || 0) + 1
+
+    for (let i = 0; i < numMatches; i++) {
+        const batch = sortedParticipants.slice(i * playersNeeded, (i + 1) * playersNeeded)
+        
+        // Inner team balancing (snake draft)
+        const sortedBatch = [...batch].sort((a, b) => (skillMap.get(b.user_id) || 5) - (skillMap.get(a.user_id) || 5))
+        
+        let teamA: string[] = []
+        let teamB: string[] = []
+        const teamSize = playersNeeded / 2
+
+        for (let j = 0; j < sortedBatch.length; j++) {
+            const player = sortedBatch[j]
+            // Snake draft pattern: 1, 4 to Team A; 2, 3 to Team B
+            if (j % 4 === 0 || j % 4 === 3) {
+                if (teamA.length < teamSize) teamA.push(player.user_id)
+                else teamB.push(player.user_id)
+            } else {
+                if (teamB.length < teamSize) teamB.push(player.user_id)
+                else teamA.push(player.user_id)
+            }
+        }
+
+        matchesToCreate.push({
+            queue_session_id: sessionId,
+            court_id: session.court_id,
+            match_number: currentMatchNumber++,
+            game_format: format,
+            team_a_players: teamA,
+            team_b_players: teamB,
+            status: 'scheduled',
+        })
+
+        batch.forEach(p => participantsToUpdate.push(p.id))
+    }
+
+    // Bulk insert matches
+    const { data: createdMatches, error: insertError } = await serviceDb
+      .from('matches')
+      .insert(matchesToCreate)
+      .select()
+
+    if (insertError) {
+      console.error('[autoAssignMatches] ❌ Failed to create matches:', insertError)
+      return { success: false, error: 'Failed to create matches' }
+    }
+
+    // Bulk update participants
+    const { error: updateError } = await serviceDb
+      .from('queue_participants')
+      .update({ status: 'playing' })
+      .in('id', participantsToUpdate)
+
+    if (updateError) {
+      console.error('[autoAssignMatches] ⚠️ Failed to update participant statuses:', updateError)
+    }
+
+    // 🔔 Notifications
+    const courtName = session.courts?.name || 'Court'
+    const notificationData: any[] = []
+    for (const match of createdMatches || []) {
+        const matchPlayers = [...(match.team_a_players || []), ...(match.team_b_players || [])]
+        matchPlayers.forEach(userId => {
+            notificationData.push({
+                userId,
+                ...NotificationTemplates.queueMatchAssigned(match.match_number, courtName, sessionId, match.id),
+            })
+        })
+    }
+    
+    if (notificationData.length > 0) {
+        await createBulkNotifications(notificationData)
+    }
+
+    revalidatePath(`/queue/${session.court_id}`)
+    revalidatePath(`/queue-master/sessions/${sessionId}`)
+
+    return { 
+        success: true, 
+        count: matchesToCreate.length,
+        playersAssigned: participantsToUpdate.length 
+    }
+  } catch (error: any) {
+    console.error('[autoAssignMatches] ❌ Error:', error)
+    return { success: false, error: error.message || 'Failed to auto-assign matches' }
   }
 }

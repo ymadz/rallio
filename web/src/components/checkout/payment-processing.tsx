@@ -138,16 +138,27 @@ export function PaymentProcessing() {
 
 
         if (bookingData.isQueueSession && bookingData.queueSessionData) {
-          if (effectiveCart.length > 1) {
-            throw new Error('Multi-court queue sessions are not supported yet. Please book one queue session at a time.')
-          }
-
           console.log('Creating queue session(s)...')
 
+          // Group all items that match the venue, date, and time of the primary selection
+          // This automatically makes it a multi-court session if multiple courts are selected for the same slot.
+          const matchingItems = effectiveCart.filter((item: any) => {
+            const itemDateStr = typeof item.date === 'string' ? item.date : new Date(item.date).toISOString().split('T')[0]
+            const primaryDateStr = typeof bookingData.date === 'string' ? bookingData.date : new Date(bookingData.date).toISOString().split('T')[0]
+            
+            return item.venueId === bookingData.venueId &&
+                   itemDateStr === primaryDateStr &&
+                   item.startTime === bookingData.startTime &&
+                   item.endTime === bookingData.endTime
+          })
+
+          const courts = matchingItems.map((item: any) => ({
+            id: item.courtId,
+            name: item.courtName || 'Court'
+          }))
+
           const sessionResult = await createQueueSession({
-            courts: (bookingData.courts && bookingData.courts.length > 0)
-              ? bookingData.courts.map((c: any) => ({ id: c.id, name: c.name }))
-              : [{ id: bookingData.courtId, name: bookingData.courtName || 'Court' }],
+            courts,
             startTime: startDateTime,
             endTime: endDateTime,
             mode: bookingData.queueSessionData.mode,
