@@ -23,11 +23,13 @@ export function BookingReviewButton({
 }: BookingReviewButtonProps) {
   const [showReviewModal, setShowReviewModal] = useState(false)
 
-  // Only show review button for confirmed bookings in the past
-  const isPastBooking = new Date(bookingDate) < new Date()
-  const isConfirmed = bookingStatus === 'confirmed'
+  // Always allow completed bookings. For confirmed, require booking date to be in the past.
+  const normalizedStatus = (bookingStatus || '').trim().toLowerCase()
+  const bookingTime = new Date(bookingDate).getTime()
+  const isPastBooking = Number.isFinite(bookingTime) ? bookingTime < Date.now() : false
+  const canReviewStatus = normalizedStatus === 'completed' || (normalizedStatus === 'confirmed' && isPastBooking)
 
-  if (!isPastBooking || !isConfirmed) {
+  if (!canReviewStatus) {
     return null
   }
 

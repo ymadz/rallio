@@ -18,7 +18,7 @@ interface SubmitCourtReviewInput {
 
 /**
  * Submit a court/venue review
- * Users can only review venues where they've had confirmed bookings
+ * Users can only review venues where they've had confirmed/completed bookings
  */
 export async function submitCourtReview(input: SubmitCourtReviewInput) {
   const supabase = await createClient()
@@ -100,13 +100,13 @@ export async function submitCourtReview(input: SubmitCourtReviewInput) {
       }
     }
 
-    // Check if user has a confirmed booking at this court
+    // Check if user has a confirmed or completed booking at this court
     const { data: bookings, error: bookingError } = await supabase
       .from('reservations')
       .select('id, status')
       .eq('user_id', user.id)
       .eq('court_id', input.courtId)
-      .eq('status', 'confirmed')
+      .in('status', ['confirmed', 'completed'])
       .limit(1)
 
     if (bookingError) {
@@ -121,7 +121,7 @@ export async function submitCourtReview(input: SubmitCourtReviewInput) {
     if (!bookings || bookings.length === 0) {
       return {
         success: false,
-        error: 'You can only review venues where you have confirmed bookings',
+        error: 'You can only review venues where you have confirmed or completed bookings',
       }
     }
 
@@ -254,7 +254,7 @@ export async function getUserCourtReview(courtId: string, reservationId?: string
 }
 
 /**
- * Check if user can review a court (has confirmed booking)
+ * Check if user can review a court (has confirmed/completed booking)
  */
 export async function canUserReviewCourt(courtId: string) {
   const supabase = await createClient()
@@ -269,13 +269,13 @@ export async function canUserReviewCourt(courtId: string) {
   }
 
   try {
-    // Check for confirmed bookings
+    // Check for confirmed/completed bookings
     const { data: bookings, error: bookingError } = await supabase
       .from('reservations')
       .select('id, status, start_time')
       .eq('user_id', user.id)
       .eq('court_id', courtId)
-      .eq('status', 'confirmed')
+      .in('status', ['confirmed', 'completed'])
       .order('start_time', { ascending: false })
       .limit(1)
 
