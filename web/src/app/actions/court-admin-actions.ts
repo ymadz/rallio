@@ -185,14 +185,15 @@ export async function getDashboardStats() {
       .lt('start_time', nextWeek.toISOString())
       .in('status', ['pending', 'confirmed'])
 
-    // Get this month's revenue
+    // Get this month's revenue.
+    // No-show reservations keep their paid down payment as realized revenue.
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
     const { data: monthRevenue } = await supabase
       .from('reservations')
-      .select('amount_paid')
+      .select('status, amount_paid, metadata')
       .in('court_id', courtIds)
       .gte('created_at', monthStart.toISOString())
-      .in('status', ['partially_paid', 'confirmed', 'completed'])
+      .in('status', ['partially_paid', 'confirmed', 'completed', 'cancelled', 'no_show'])
 
     // Fallback down payment totals from reservation metadata.
     const { data: monthDownPayments } = await supabase
@@ -200,7 +201,7 @@ export async function getDashboardStats() {
       .select('id, booking_id, recurrence_group_id, status, amount_paid, metadata')
       .in('court_id', courtIds)
       .gte('created_at', monthStart.toISOString())
-      .in('status', ['partially_paid', 'confirmed', 'completed'])
+      .in('status', ['partially_paid', 'confirmed', 'completed', 'cancelled', 'no_show'])
 
     // Get average rating
     const { data: ratings } = await supabase
@@ -209,7 +210,15 @@ export async function getDashboardStats() {
       .in('court_id', courtIds)
 
     const todayRevenue = todayReservations?.reduce((sum, r) => sum + parseFloat(r.total_amount || '0'), 0) || 0
-    const totalRevenue = monthRevenue?.reduce((sum, r) => sum + parseFloat(r.amount_paid || '0'), 0) || 0
+    const totalRevenue = monthRevenue?.reduce((sum, reservation: any) => {
+      const paidAmount = Number(reservation?.amount_paid || 0)
+      if (paidAmount <= 0) return sum
+
+      const isPaidStatus = ['partially_paid', 'confirmed', 'completed'].includes(reservation.status)
+      const isNoShowCancelled = (reservation.status === 'cancelled' || reservation.status === 'no_show') && reservation?.metadata?.no_show === true
+
+      return (isPaidStatus || isNoShowCancelled) ? sum + paidAmount : sum
+    }, 0) || 0
     const fallbackDownPaymentRevenue = monthDownPayments?.reduce((sum, reservation: any) => {
       const metaDownPayment = Number(reservation?.metadata?.down_payment_amount || 0)
 

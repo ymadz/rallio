@@ -192,9 +192,17 @@ export async function getVenueAnalytics(
     const calculateMetrics = (reservations: any[]) => {
       const allBookings = reservations.length
       const confirmed = reservations.filter(r => r.status === 'confirmed' || r.status === 'completed')
-      const paidReservations = reservations.filter(
-        r => r.status === 'partially_paid' || r.status === 'confirmed' || r.status === 'completed'
-      )
+      const paidReservations = reservations.filter((r: any) => {
+        const paidAmount = Number(r?.amount_paid || 0)
+        if (paidAmount <= 0) return false
+
+        const isPaidStatus = ['partially_paid', 'confirmed', 'completed'].includes(r.status)
+        const isNoShowCancelled = (r.status === 'cancelled' || r.status === 'no_show') && r?.metadata?.no_show === true
+
+        return isPaidStatus || isNoShowCancelled
+      })
+      // Revenue reflects actual paid money: includes downpayments now,
+      // and remaining balance later once the reservation is fully paid.
       const revenue = paidReservations.reduce((sum, r) => sum + parseFloat(r.amount_paid || '0'), 0)
       const fallbackDownPaymentRevenue = reservations
         .filter(r => ['partially_paid', 'confirmed', 'completed'].includes(r.status))
@@ -206,30 +214,66 @@ export async function getVenueAnalytics(
           }
           return sum + (metaDownPayment > 0 ? metaDownPayment : 0)
         }, 0)
-      const uniqueCustomers = new Set(confirmed.map(r => r.user_id)).size
-      const avgValue = confirmed.length > 0 ? revenue / confirmed.length : 0
+      const uniqueCustomers = new Set(paidReservations.map(r => r.user_id)).size
+      const avgValue = paidReservations.length > 0 ? revenue / paidReservations.length : 0
 
       return { allBookings, confirmed, paidReservations, revenue, fallbackDownPaymentRevenue, uniqueCustomers, avgValue }
     }
 
     const current = calculateMetrics(currentReservations || [])
     const previous = calculateMetrics(previousReservations || [])
+
+    // Keep down payment totals aligned with the dashboard card semantics:
+    // month-to-date (current month) and previous month, independent of chart range.
+    const monthStart = new Date(endDate.getFullYear(), endDate.getMonth(), 1)
+    const monthEnd = new Date(endDate)
+    const previousMonthStart = new Date(endDate.getFullYear(), endDate.getMonth() - 1, 1)
+    const previousMonthEnd = new Date(endDate.getFullYear(), endDate.getMonth(), 0, 23, 59, 59, 999)
+
+    const { data: monthReservations } = await supabase
+      .from('reservations')
+      .select('id, status, amount_paid, booking_id, recurrence_group_id, metadata')
+      .in('court_id', courtIds)
+      .gte('created_at', monthStart.toISOString())
+      .lte('created_at', monthEnd.toISOString())
+      .in('status', ['partially_paid', 'confirmed', 'completed', 'cancelled', 'no_show'])
+
+    const { data: previousMonthReservations } = await supabase
+      .from('reservations')
+      .select('id, status, amount_paid, booking_id, recurrence_group_id, metadata')
+      .in('court_id', courtIds)
+      .gte('created_at', previousMonthStart.toISOString())
+      .lte('created_at', previousMonthEnd.toISOString())
+      .in('status', ['partially_paid', 'confirmed', 'completed', 'cancelled', 'no_show'])
+
+    const calculateFallbackDownPayment = (reservations: any[]) => {
+      return reservations.reduce((sum, r) => {
+        const metaDownPayment = Number(r?.metadata?.down_payment_amount || 0)
+        if (r.status === 'partially_paid') {
+          const fallbackPaidAmount = Number(r.amount_paid || 0)
+          return sum + (metaDownPayment > 0 ? metaDownPayment : fallbackPaidAmount)
+        }
+        return sum + (metaDownPayment > 0 ? metaDownPayment : 0)
+      }, 0)
+    }
+
     const currentPaymentsDownPaymentRevenue = await getDownPaymentRevenueFromPayments(
-      (currentReservations as any[]) || [],
-      startDate.toISOString(),
-      endDate.toISOString()
+      (monthReservations as any[]) || [],
+      monthStart.toISOString(),
+      monthEnd.toISOString()
     )
     const previousPaymentsDownPaymentRevenue = await getDownPaymentRevenueFromPayments(
-      (previousReservations as any[]) || [],
-      previousStartDate.toISOString(),
-      previousEndDate.toISOString()
+      (previousMonthReservations as any[]) || [],
+      previousMonthStart.toISOString(),
+      previousMonthEnd.toISOString()
     )
-    const currentDownPaymentRevenue = currentPaymentsDownPaymentRevenue > 0
-      ? currentPaymentsDownPaymentRevenue
-      : current.fallbackDownPaymentRevenue
-    const previousDownPaymentRevenue = previousPaymentsDownPaymentRevenue > 0
-      ? previousPaymentsDownPaymentRevenue
-      : previous.fallbackDownPaymentRevenue
+
+    const currentFallbackDownPaymentRevenue = calculateFallbackDownPayment((monthReservations as any[]) || [])
+    const previousFallbackDownPaymentRevenue = calculateFallbackDownPayment((previousMonthReservations as any[]) || [])
+
+    // Prefer the larger trusted source to avoid undercount when one source is incomplete.
+    const currentDownPaymentRevenue = Math.max(currentPaymentsDownPaymentRevenue, currentFallbackDownPaymentRevenue)
+    const previousDownPaymentRevenue = Math.max(previousPaymentsDownPaymentRevenue, previousFallbackDownPaymentRevenue)
 
     // Calculate changes
     const calculateChange = (curr: number, prev: number) => {
