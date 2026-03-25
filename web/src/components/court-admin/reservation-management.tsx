@@ -23,6 +23,11 @@ import { ReservationDetailModal } from './reservation-detail-modal'
 import { CourtAdminCalendar } from './court-admin-calendar'
 import { RefundManagement } from './refund-management'
 import { StatusBadge } from '@/components/shared/status-badge'
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from '@/components/ui/avatar'
 
 interface Reservation {
   id: string
@@ -554,9 +559,12 @@ export function ReservationManagement() {
                       <tr key={reservation.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
-                            <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold">
-                              {customerName.charAt(0).toUpperCase()}
-                            </div>
+                            <Avatar className="w-10 h-10 border border-gray-200">
+                              <AvatarImage src={reservation.user?.avatar_url || ''} alt={customerName} />
+                              <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                                {customerName.charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
                             <div className="ml-3">
                               <div className="font-medium text-gray-900">{customerName}</div>
                               {reservation.user?.phone && (

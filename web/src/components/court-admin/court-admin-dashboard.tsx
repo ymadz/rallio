@@ -16,6 +16,11 @@ import {
   Plus
 } from 'lucide-react'
 import Link from 'next/link'
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from '@/components/ui/avatar'
 
 interface Stats {
   todayReservations: number
@@ -23,6 +28,7 @@ interface Stats {
   pendingReservations: number
   upcomingReservations: number
   totalRevenue: number
+  downPaymentRevenue: number
   averageRating: number
 }
 
@@ -188,7 +194,7 @@ export function CourtAdminDashboard() {
             <span className="text-3xl font-bold text-gray-900">₱{stats.totalRevenue.toFixed(0)}</span>
           </div>
           <p className="text-gray-700 text-sm font-medium">This Month's Revenue</p>
-          <p className="text-gray-500 text-xs mt-1">Confirmed & completed</p>
+          <p className="text-gray-500 text-xs mt-1">Downpayment: ₱{stats.downPaymentRevenue.toFixed(2)}</p>
         </div>
 
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
@@ -278,9 +284,12 @@ export function CourtAdminDashboard() {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 flex-1">
-                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold">
-                      {reservation.customerName.charAt(0).toUpperCase()}
-                    </div>
+                    <Avatar className="w-10 h-10 border border-gray-200">
+                      <AvatarImage src={reservation.customerAvatar || ''} alt={reservation.customerName} />
+                      <AvatarFallback className="bg-blue-100 text-blue-600 font-bold">
+                        {reservation.customerName.charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-semibold text-gray-900">{reservation.customerName}</span>

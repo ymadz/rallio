@@ -48,6 +48,81 @@ export async function getDashboardStats() {
   }
 
   try {
+    const getDownPaymentRevenueFromPayments = async (
+      reservations: Array<{ id: string; booking_id?: string | null; recurrence_group_id?: string | null }>,
+      fromISO: string,
+      toISO: string
+    ) => {
+      if (!reservations.length) return 0
+
+      const reservationIds = reservations.map(r => r.id).filter(Boolean)
+      const bookingIds = Array.from(new Set(reservations.map(r => r.booking_id).filter(Boolean))) as string[]
+      const recurrenceGroupIds = Array.from(new Set(reservations.map(r => r.recurrence_group_id).filter(Boolean))) as string[]
+
+      const mergedPayments = new Map<string, any>()
+
+      if (reservationIds.length > 0) {
+        const { data } = await supabase
+          .from('payments')
+          .select('id, amount, metadata')
+          .in('reservation_id', reservationIds)
+          .in('status', ['paid', 'completed'])
+          .gte('created_at', fromISO)
+          .lte('created_at', toISO)
+
+        data?.forEach((payment: any) => mergedPayments.set(payment.id, payment))
+      }
+
+      if (bookingIds.length > 0) {
+        const { data } = await supabase
+          .from('payments')
+          .select('id, amount, metadata')
+          .in('booking_id', bookingIds)
+          .in('status', ['paid', 'completed'])
+          .gte('created_at', fromISO)
+          .lte('created_at', toISO)
+
+        data?.forEach((payment: any) => mergedPayments.set(payment.id, payment))
+
+        const metadataResults = await Promise.all(
+          bookingIds.map(async (bookingId) => {
+            const { data: metadataData } = await supabase
+              .from('payments')
+              .select('id, amount, metadata')
+              .contains('metadata', { booking_id: bookingId })
+              .in('status', ['paid', 'completed'])
+              .gte('created_at', fromISO)
+              .lte('created_at', toISO)
+            return metadataData || []
+          })
+        )
+
+        metadataResults.flat().forEach((payment: any) => mergedPayments.set(payment.id, payment))
+      }
+
+      if (recurrenceGroupIds.length > 0) {
+        const metadataResults = await Promise.all(
+          recurrenceGroupIds.map(async (recurrenceGroupId) => {
+            const { data: metadataData } = await supabase
+              .from('payments')
+              .select('id, amount, metadata')
+              .contains('metadata', { recurrence_group_id: recurrenceGroupId })
+              .in('status', ['paid', 'completed'])
+              .gte('created_at', fromISO)
+              .lte('created_at', toISO)
+            return metadataData || []
+          })
+        )
+
+        metadataResults.flat().forEach((payment: any) => mergedPayments.set(payment.id, payment))
+      }
+
+      return Array.from(mergedPayments.values()).reduce((sum, payment: any) => {
+        const isDownPayment = payment?.metadata?.is_down_payment === true || payment?.metadata?.is_down_payment === 'true'
+        return isDownPayment ? sum + Number(payment?.amount || 0) : sum
+      }, 0)
+    }
+
     // Get all venue IDs owned by user
     const { data: venues } = await supabase
       .from('venues')
@@ -65,6 +140,7 @@ export async function getDashboardStats() {
           pendingReservations: 0,
           upcomingReservations: 0,
           totalRevenue: 0,
+          downPaymentRevenue: 0,
           averageRating: 0,
         }
       }
@@ -109,14 +185,23 @@ export async function getDashboardStats() {
       .lt('start_time', nextWeek.toISOString())
       .in('status', ['pending', 'confirmed'])
 
-    // Get this month's revenue
+    // Get this month's revenue.
+    // No-show reservations keep their paid down payment as realized revenue.
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
     const { data: monthRevenue } = await supabase
       .from('reservations')
-      .select('amount_paid')
+      .select('status, amount_paid, metadata')
       .in('court_id', courtIds)
       .gte('created_at', monthStart.toISOString())
-      .in('status', ['confirmed', 'completed'])
+      .in('status', ['partially_paid', 'confirmed', 'completed', 'cancelled', 'no_show'])
+
+    // Fallback down payment totals from reservation metadata.
+    const { data: monthDownPayments } = await supabase
+      .from('reservations')
+      .select('id, booking_id, recurrence_group_id, status, amount_paid, metadata')
+      .in('court_id', courtIds)
+      .gte('created_at', monthStart.toISOString())
+      .in('status', ['partially_paid', 'confirmed', 'completed', 'cancelled', 'no_show'])
 
     // Get average rating
     const { data: ratings } = await supabase
@@ -125,7 +210,31 @@ export async function getDashboardStats() {
       .in('court_id', courtIds)
 
     const todayRevenue = todayReservations?.reduce((sum, r) => sum + parseFloat(r.total_amount || '0'), 0) || 0
-    const totalRevenue = monthRevenue?.reduce((sum, r) => sum + parseFloat(r.amount_paid || '0'), 0) || 0
+    const totalRevenue = monthRevenue?.reduce((sum, reservation: any) => {
+      const paidAmount = Number(reservation?.amount_paid || 0)
+      if (paidAmount <= 0) return sum
+
+      const isPaidStatus = ['partially_paid', 'confirmed', 'completed'].includes(reservation.status)
+      const isNoShowCancelled = (reservation.status === 'cancelled' || reservation.status === 'no_show') && reservation?.metadata?.no_show === true
+
+      return (isPaidStatus || isNoShowCancelled) ? sum + paidAmount : sum
+    }, 0) || 0
+    const fallbackDownPaymentRevenue = monthDownPayments?.reduce((sum, reservation: any) => {
+      const metaDownPayment = Number(reservation?.metadata?.down_payment_amount || 0)
+
+      if (reservation.status === 'partially_paid') {
+        const fallbackPaidAmount = Number(reservation?.amount_paid || 0)
+        return sum + (metaDownPayment > 0 ? metaDownPayment : fallbackPaidAmount)
+      }
+
+      return sum + (metaDownPayment > 0 ? metaDownPayment : 0)
+    }, 0) || 0
+    const paymentsDownPaymentRevenue = await getDownPaymentRevenueFromPayments(
+      (monthDownPayments as any[]) || [],
+      monthStart.toISOString(),
+      new Date().toISOString()
+    )
+    const downPaymentRevenue = paymentsDownPaymentRevenue > 0 ? paymentsDownPaymentRevenue : fallbackDownPaymentRevenue
     const averageRating = ratings && ratings.length > 0
       ? ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length
       : 0
@@ -138,6 +247,7 @@ export async function getDashboardStats() {
         pendingReservations: pendingReservations?.length || 0,
         upcomingReservations: upcomingReservations?.length || 0,
         totalRevenue,
+        downPaymentRevenue,
         averageRating: Math.round(averageRating * 10) / 10,
       }
     }
@@ -648,6 +758,151 @@ export async function markReservationAsPaid(reservationId: string) {
 
   } catch (error: any) {
     console.error('Error marking reservation as paid:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
+ * Mark a downpayment reservation as no-show.
+ * This cancels the booking and flags the user profile for global admin visibility.
+ */
+export async function markReservationAsNoShow(reservationId: string, reason?: string) {
+  const supabase = await createClient()
+  const serviceSupabase = createServiceClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { success: false, error: 'Not authenticated' }
+  }
+
+  try {
+    const { data: reservation } = await supabase
+      .from('reservations')
+      .select(`
+        id,
+        status,
+        user_id,
+        metadata,
+        start_time,
+        court:courts!inner(
+          id,
+          name,
+          venue:venues!inner(
+            id,
+            name,
+            owner_id
+          )
+        )
+      `)
+      .eq('id', reservationId)
+      .single()
+
+    if (!reservation || (reservation.court as any)?.venue?.owner_id !== user.id) {
+      return { success: false, error: 'Unauthorized' }
+    }
+
+    const hasDownPayment =
+      reservation.status === 'partially_paid' ||
+      Number(reservation.metadata?.down_payment_amount || 0) > 0
+
+    if (!hasDownPayment) {
+      return { success: false, error: 'No-show is only available for reservations with down payment' }
+    }
+
+    const noShowReason = reason?.trim() || 'No-show after down payment'
+    const nowIso = new Date().toISOString()
+    const isQueueSession = reservation.metadata?.is_queue_session_reservation === true
+
+    if (isQueueSession) {
+      const { data: queueSession } = await supabase
+        .from('queue_sessions')
+        .select('id, metadata')
+        .filter('metadata->>reservation_id', 'eq', reservationId)
+        .single()
+
+      if (queueSession) {
+        await supabase
+          .from('queue_sessions')
+          .update({
+            status: 'cancelled',
+            metadata: {
+              ...queueSession.metadata,
+              no_show: true,
+              no_show_marked_at: nowIso,
+              no_show_marked_by: user.id,
+              no_show_reason: noShowReason
+            }
+          })
+          .eq('id', queueSession.id)
+      }
+    }
+
+    const { error: reservationUpdateError } = await supabase
+      .from('reservations')
+      .update({
+        status: 'cancelled',
+        cancelled_at: nowIso,
+        cancellation_reason: noShowReason,
+        metadata: {
+          ...reservation.metadata,
+          no_show: true,
+          no_show_marked_at: nowIso,
+          no_show_marked_by: user.id,
+          no_show_reason: noShowReason
+        }
+      })
+      .eq('id', reservationId)
+
+    if (reservationUpdateError) throw reservationUpdateError
+
+    const { data: profile } = await serviceSupabase
+      .from('profiles')
+      .select('metadata')
+      .eq('id', reservation.user_id)
+      .single()
+
+    const profileMetadata = (profile?.metadata as any) || {}
+    const currentNoShowCount = Number(profileMetadata?.no_show_count || 0)
+
+    const { error: profileUpdateError } = await serviceSupabase
+      .from('profiles')
+      .update({
+        metadata: {
+          ...profileMetadata,
+          no_show_user: true,
+          no_show_count: currentNoShowCount + 1,
+          last_no_show_at: nowIso,
+          last_no_show_reservation_id: reservationId,
+          last_no_show_venue_id: (reservation.court as any)?.venue?.id,
+          last_no_show_marked_by: user.id,
+          last_no_show_reason: noShowReason
+        }
+      })
+      .eq('id', reservation.user_id)
+
+    if (profileUpdateError) throw profileUpdateError
+
+    await createNotification({
+      userId: reservation.user_id,
+      type: 'booking_cancelled',
+      title: 'No-show Recorded',
+      message: `Your booking at ${(reservation.court as any).venue.name} (${(reservation.court as any).name}) has been cancelled due to no-show.`,
+      actionUrl: `/bookings/${reservation.id}`,
+      metadata: {
+        booking_id: reservation.id,
+        reason: noShowReason,
+        is_no_show: true,
+        venue_name: (reservation.court as any).venue.name
+      }
+    })
+
+    revalidatePath('/court-admin/reservations')
+    revalidatePath('/court-admin')
+    revalidatePath('/admin/users')
+
+    return { success: true }
+  } catch (error: any) {
+    console.error('Error marking reservation as no-show:', error)
     return { success: false, error: error.message }
   }
 }

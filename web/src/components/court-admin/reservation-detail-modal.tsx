@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { approveReservation, rejectReservation, markReservationAsPaid, approveReschedule, rejectReschedule } from '@/app/actions/court-admin-actions'
+import { approveReservation, rejectReservation, markReservationAsPaid, approveReschedule, rejectReschedule, markReservationAsNoShow } from '@/app/actions/court-admin-actions'
 import {
   X,
   CheckCircle,
   XCircle,
+  UserMinus,
   Clock,
   User,
   MapPin,
@@ -17,6 +18,19 @@ import {
   CalendarCheck,
   History
 } from 'lucide-react'
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from '@/components/ui/avatar'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 interface ReservationDetailModalProps {
   isOpen: boolean
@@ -47,6 +61,8 @@ interface ReservationDetailModalProps {
     num_players: number
     notes?: string
     created_at: string
+    cancelled_at?: string | null
+    cancellation_reason?: string | null
     cash_payment_deadline?: string | null
     metadata?: any
     queue_session?: Array<{
@@ -69,6 +85,8 @@ export function ReservationDetailModal({
   const [rejectReason, setRejectReason] = useState('')
   const [isApprovingReschedule, setIsApprovingReschedule] = useState(false)
   const [isRejectingReschedule, setIsRejectingReschedule] = useState(false)
+  const [isMarkingNoShow, setIsMarkingNoShow] = useState(false)
+  const [showNoShowModal, setShowNoShowModal] = useState(false)
   const [showRescheduleRejectForm, setShowRescheduleRejectForm] = useState(false)
   const [rescheduleRejectReason, setRescheduleRejectReason] = useState('')
   const [nowMs, setNowMs] = useState(Date.now())
@@ -86,6 +104,15 @@ export function ReservationDetailModal({
   const paymentMethod = reservation.metadata?.intended_payment_method || reservation.metadata?.payment_method
   const cashDeadline = reservation.cash_payment_deadline || reservation.metadata?.cash_payment_deadline || null
   const shouldShowCashTimer = reservation.status === 'pending_payment' && paymentMethod === 'cash' && !!cashDeadline
+  const cancellationReason = reservation.cancellation_reason || reservation.metadata?.cancellation_reason || ''
+  const isNoShowReservation =
+    reservation.status === 'no_show' ||
+    reservation.metadata?.no_show === true ||
+    /no[\s-]?show/i.test(cancellationReason)
+  const noShowReason = reservation.metadata?.no_show_reason || cancellationReason || 'User did not arrive for the reservation.'
+  const noShowMarkedAt = reservation.metadata?.no_show_marked_at || reservation.cancelled_at || null
+  const canMarkNoShow = reservation.status === 'partially_paid' || Number(reservation.metadata?.down_payment_amount || 0) > 0
+  const pendingPaymentActionCols = canMarkNoShow ? 'sm:grid-cols-3' : 'sm:grid-cols-2'
 
   useEffect(() => {
     if (!shouldShowCashTimer) return
@@ -93,6 +120,12 @@ export function ReservationDetailModal({
     const timerId = setInterval(() => setNowMs(Date.now()), 1000)
     return () => clearInterval(timerId)
   }, [shouldShowCashTimer])
+
+  useEffect(() => {
+    if (!isOpen) {
+      setShowNoShowModal(false)
+    }
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -174,10 +207,31 @@ export function ReservationDetailModal({
     }
   }
 
+  const handleMarkAsNoShow = async () => {
+    setIsMarkingNoShow(true)
+    try {
+      const result = await markReservationAsNoShow(reservation.id)
+      if (result.success) {
+        setShowNoShowModal(false)
+        onClose()
+      } else {
+        alert(result.error || 'Failed to mark no show')
+      }
+    } catch (error: any) {
+      alert(error.message || 'Failed to mark no show')
+    } finally {
+      setIsMarkingNoShow(false)
+    }
+  }
+
   // Helper to determine display status
   const getDisplayStatus = () => {
+    if (isNoShowReservation) {
+      return 'no_show'
+    }
+
     // Check for cancelled reservation with reason (implies rejection)
-    if (reservation.status === 'cancelled' && (reservation as any).cancellation_reason) {
+    if (reservation.status === 'cancelled' && cancellationReason) {
       return 'rejected'
     }
     return reservation.status
@@ -197,6 +251,7 @@ export function ReservationDetailModal({
       case 'pending': return 'bg-yellow-100 text-yellow-700 border-yellow-200'
       case 'pending_payment': return 'bg-orange-100 text-orange-700 border-orange-200'
       case 'partially_paid': return 'bg-amber-100 text-amber-700 border-amber-200'
+      case 'no_show': return 'bg-orange-100 text-orange-700 border-orange-200'
       case 'cancelled':
       case 'rejected': return 'bg-red-100 text-red-700 border-red-200'
       case 'completed': return 'bg-blue-100 text-blue-700 border-blue-200'
@@ -287,6 +342,7 @@ export function ReservationDetailModal({
               <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium ${getStatusColor(getDisplayStatus())}`}>
                 {getDisplayStatus() === 'confirmed' && <CheckCircle className="w-4 h-4" />}
                 {(getDisplayStatus() === 'pending' || getDisplayStatus() === 'pending_payment' || getDisplayStatus() === 'partially_paid') && <Clock className="w-4 h-4" />}
+                {getDisplayStatus() === 'no_show' && <UserMinus className="w-4 h-4" />}
                 {(getDisplayStatus() === 'cancelled' || getDisplayStatus() === 'rejected') && <XCircle className="w-4 h-4" />}
                 {getDisplayStatus() === 'pending_refund' && <Clock className="w-4 h-4" />}
                 {getDisplayStatus() === 'refunded' && <Banknote className="w-4 h-4" />}
@@ -306,6 +362,27 @@ export function ReservationDetailModal({
               })}
             </span>
           </div>
+
+          {isNoShowReservation && (
+            <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <UserMinus className="w-4 h-4 text-orange-600" />
+                <h3 className="text-sm font-semibold text-orange-900">No Show Details</h3>
+              </div>
+              <p className="text-sm text-orange-800">{noShowReason}</p>
+              {noShowMarkedAt && (
+                <p className="text-xs text-orange-700 mt-2">
+                  Marked at {new Date(noShowMarkedAt).toLocaleString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                  })}
+                </p>
+              )}
+            </div>
+          )}
 
           {shouldShowCashTimer && (
             <div
@@ -439,9 +516,12 @@ export function ReservationDetailModal({
             </div>
             <div className="space-y-2">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-lg">
-                  {customerName.charAt(0).toUpperCase()}
-                </div>
+                <Avatar className="w-12 h-12 border border-gray-200">
+                  <AvatarImage src={reservation.user?.avatar_url || ''} alt={customerName} />
+                  <AvatarFallback className="bg-blue-100 text-blue-600 font-bold text-lg">
+                    {customerName.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
                 <div>
                   <div className="font-medium text-gray-900">{customerName}</div>
                   {reservation.user?.phone && (
@@ -742,34 +822,95 @@ export function ReservationDetailModal({
 
         {/* Pending Payment Actions */}
         {isPendingPayment() && (
-          <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 flex items-center gap-3">
+          <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-3">
+            <div className={`grid grid-cols-1 ${pendingPaymentActionCols} gap-2.5`}>
             <button
               onClick={handleMarkAsPaid}
               disabled={isMarkingPaid}
-              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium whitespace-nowrap bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isMarkingPaid ? (
                 <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Processing...</span>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="whitespace-nowrap">Processing...</span>
                 </>
               ) : (
                 <>
-                  <Banknote className="w-5 h-5" />
-                  <span>{reservation.status === 'partially_paid' ? 'Collect Remaining Balance' : 'Mark as Paid (Cash Received)'}</span>
+                  <Banknote className="w-4 h-4" />
+                  <span className="whitespace-nowrap">{reservation.status === 'partially_paid' ? 'Collect Remaining Balance' : 'Mark as Paid (Cash Received)'}</span>
                 </>
               )}
             </button>
             <button
               onClick={() => setShowRejectForm(true)}
-              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 border-2 border-red-600 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium whitespace-nowrap border-2 border-red-600 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
             >
-              <XCircle className="w-5 h-5" />
-              <span>Reject</span>
+              <XCircle className="w-4 h-4" />
+              <span className="whitespace-nowrap">Reject</span>
             </button>
+            {canMarkNoShow && (
+              <button
+                onClick={() => setShowNoShowModal(true)}
+                disabled={isMarkingNoShow}
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium whitespace-nowrap border-2 border-orange-600 text-orange-600 rounded-lg hover:bg-orange-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isMarkingNoShow ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="whitespace-nowrap">Marking...</span>
+                  </>
+                ) : (
+                  <>
+                    <UserMinus className="w-4 h-4" />
+                    <span className="whitespace-nowrap">No Show</span>
+                  </>
+                )}
+              </button>
+            )}
+            </div>
           </div>
         )}
       </div>
+
+      <Dialog open={showNoShowModal} onOpenChange={setShowNoShowModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mark user as No Show?</DialogTitle>
+            <DialogDescription>
+              This will cancel the booking and flag the user in admin users list.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="sm:justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowNoShowModal(false)}
+              disabled={isMarkingNoShow}
+              className="inline-flex items-center justify-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleMarkAsNoShow}
+              disabled={isMarkingNoShow}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50"
+            >
+              {isMarkingNoShow ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Marking...</span>
+                </>
+              ) : (
+                <>
+                  <UserMinus className="w-4 h-4" />
+                  <span>Confirm No Show</span>
+                </>
+              )}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

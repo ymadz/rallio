@@ -89,6 +89,7 @@ interface CheckoutState {
   bookingReference?: string
   reservationId?: string
   downPaymentPercentage?: number
+  courtDownPaymentPercentages: Record<string, number>
   customDownPaymentAmount?: number
   conflictingSlots: Array<{ courtId: string; date: string; startTime: string; endTime: string }>
 
@@ -112,6 +113,7 @@ interface CheckoutState {
   setPlatformFee: (percentage: number, enabled: boolean) => void
   setBookingReference: (reference: string, reservationId: string) => void
   setDownPaymentPercentage: (percentage: number) => void
+  setCourtDownPaymentPercentages: (percentages: Record<string, number>) => void
   setCustomDownPaymentAmount: (amount: number | undefined) => void
   setConflictingSlots: (slots: Array<{ courtId: string; date: string; startTime: string; endTime: string }>) => void
   resetCheckout: () => void
@@ -120,6 +122,14 @@ interface CheckoutState {
   getSubtotal: () => number
   getPlatformFeeAmount: () => number
   getTotalAmount: () => number
+  getMinimumDownPaymentAmount: () => number
+  getDownPaymentBreakdown: () => Array<{
+    courtId: string
+    courtName: string
+    percentage: number
+    amount: number
+    totalAmount: number
+  }>
   getDownPaymentAmount: () => number
   getRemainingBalance: () => number
   getPerPlayerAmount: () => number
@@ -145,6 +155,7 @@ const initialState = {
   bookingReference: undefined,
   reservationId: undefined,
   downPaymentPercentage: 20, // Default 20%
+  courtDownPaymentPercentages: {},
   conflictingSlots: [],
 }
 
@@ -316,6 +327,8 @@ export const useCheckoutStore = create<CheckoutState>()(
 
       setDownPaymentPercentage: (percentage) => set({ downPaymentPercentage: percentage }),
 
+      setCourtDownPaymentPercentages: (percentages) => set({ courtDownPaymentPercentages: percentages }),
+
       setCustomDownPaymentAmount: (amount) => set({ customDownPaymentAmount: amount }),
 
       setConflictingSlots: (slots) => set({ conflictingSlots: slots }),
@@ -396,16 +409,142 @@ export const useCheckoutStore = create<CheckoutState>()(
         return Math.round((subtotal + platformFee) * 100) / 100
       },
 
+      getDownPaymentBreakdown: () => {
+        const state = get()
+        if (state.paymentMethod !== 'cash' || state.cashPaymentOption === 'full_cash') return []
+
+        const effectiveCart = state.bookingCart.length > 0
+          ? state.bookingCart
+          : (state.bookingData ? [state.bookingData] : [])
+
+        if (effectiveCart.length === 0) return []
+
+        const rawLines: Array<{ courtId: string; courtName: string; baseAmount: number }> = []
+
+        for (const bookingData of effectiveCart) {
+          const [startH, startM] = bookingData.startTime.split(':').map(Number)
+          const [endH, endM] = bookingData.endTime.split(':').map(Number)
+
+          let duration = (endH + (endM || 0) / 60) - (startH + (startM || 0) / 60)
+          if (duration <= 0) duration += 24
+
+          const recurrenceWeeks = bookingData.recurrenceWeeks || 1
+          const selectedDays = bookingData.selectedDays || []
+
+          const initialStartTime = new Date(bookingData.date)
+          initialStartTime.setHours(startH, startM || 0, 0, 0)
+          const startDayIndex = initialStartTime.getDay()
+
+          const uniqueSelectedDays = selectedDays.length > 0
+            ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
+            : [startDayIndex]
+
+          let actualSlotCount = 0
+          for (let i = 0; i < recurrenceWeeks; i++) {
+            for (const dayIndex of uniqueSelectedDays) {
+              const dayOffset = (dayIndex - startDayIndex + 7) % 7
+              const slotStartTime = new Date(initialStartTime.getTime())
+              slotStartTime.setDate(slotStartTime.getDate() + (i * 7) + dayOffset)
+
+              const dateStr = slotStartTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+              const isConflicted = state.conflictingSlots.some(c =>
+                c.courtId === bookingData.courtId &&
+                c.date === dateStr &&
+                c.startTime === bookingData.startTime
+              )
+
+              if (!isConflicted) actualSlotCount++
+            }
+          }
+
+          const slotMultiplier = duration * actualSlotCount
+          if (slotMultiplier <= 0) continue
+
+          if (bookingData.courts && bookingData.courts.length > 0) {
+            for (const court of bookingData.courts) {
+              const rate = Number(court.hourly_rate) || bookingData.hourlyRate
+              rawLines.push({
+                courtId: court.id,
+                courtName: court.name,
+                baseAmount: rate * slotMultiplier,
+              })
+            }
+          } else {
+            rawLines.push({
+              courtId: bookingData.courtId,
+              courtName: bookingData.courtName,
+              baseAmount: bookingData.hourlyRate * slotMultiplier,
+            })
+          }
+        }
+
+        if (rawLines.length === 0) return []
+
+        const baseTotal = rawLines.reduce((sum, line) => sum + line.baseAmount, 0)
+        const finalTotal = state.getTotalAmount()
+
+        // Scale per-court amounts so they reconcile to checkout total (after discounts/fees).
+        const scaledLines = rawLines.map((line) => {
+          const totalAmount = baseTotal > 0 ? (line.baseAmount / baseTotal) * finalTotal : 0
+          const percentageRaw = state.courtDownPaymentPercentages[line.courtId]
+          const percentage = Number.isFinite(percentageRaw)
+            ? Math.min(Math.max(percentageRaw, 0), 100)
+            : (state.downPaymentPercentage ?? 20)
+          const amount = totalAmount * (percentage / 100)
+
+          return {
+            courtId: line.courtId,
+            courtName: line.courtName,
+            percentage,
+            amount,
+            totalAmount,
+          }
+        })
+
+        return scaledLines.map((line, index) => {
+          const isLast = index === scaledLines.length - 1
+          if (!isLast) {
+            return {
+              ...line,
+              amount: Math.round(line.amount * 100) / 100,
+              totalAmount: Math.round(line.totalAmount * 100) / 100,
+            }
+          }
+
+          const prevTotalAmount = scaledLines
+            .slice(0, -1)
+            .reduce((sum, item) => sum + (Math.round(item.totalAmount * 100) / 100), 0)
+          const prevTotalDownPayment = scaledLines
+            .slice(0, -1)
+            .reduce((sum, item) => sum + (Math.round(item.amount * 100) / 100), 0)
+
+          const adjustedTotalAmount = Math.max(0, Math.round((Math.round(finalTotal * 100) / 100 - prevTotalAmount) * 100) / 100)
+          const minimumSum = scaledLines.reduce((sum, item) => sum + item.amount, 0)
+          const adjustedAmount = Math.max(0, Math.round((Math.round(minimumSum * 100) / 100 - prevTotalDownPayment) * 100) / 100)
+
+          return {
+            ...line,
+            totalAmount: adjustedTotalAmount,
+            amount: adjustedAmount,
+          }
+        })
+      },
+
+      getMinimumDownPaymentAmount: () => {
+        const state = get()
+        if (state.paymentMethod !== 'cash' || state.cashPaymentOption === 'full_cash') return 0
+        const breakdown = state.getDownPaymentBreakdown()
+        if (breakdown.length === 0) return 0
+        return Math.round(breakdown.reduce((sum, item) => sum + item.amount, 0) * 100) / 100
+      },
+
       getDownPaymentAmount: () => {
         const state = get()
         if (state.paymentMethod !== 'cash') return 0
         if (state.cashPaymentOption === 'full_cash') return 0
         
         const total = state.getTotalAmount()
-        const dpPercent = (state.downPaymentPercentage && state.downPaymentPercentage > 0)
-          ? state.downPaymentPercentage
-          : 20
-        const minimumDownPayment = Math.round((total * (dpPercent / 100)) * 100) / 100
+        const minimumDownPayment = state.getMinimumDownPaymentAmount()
         // If user set a custom amount, use it (clamped between minimum and total)
         if (state.customDownPaymentAmount !== undefined && state.customDownPaymentAmount > 0) {
           const clamped = Math.min(Math.max(state.customDownPaymentAmount, minimumDownPayment), total)
@@ -442,6 +581,7 @@ export const useCheckoutStore = create<CheckoutState>()(
         playerCount: state.playerCount,
         customDownPaymentAmount: state.customDownPaymentAmount,
         downPaymentPercentage: state.downPaymentPercentage,
+        courtDownPaymentPercentages: state.courtDownPaymentPercentages,
         conflictingSlots: state.conflictingSlots,
         // DO NOT persist paymentMethod - user must select it fresh each time
         // paymentMethod: state.paymentMethod,

@@ -41,6 +41,8 @@ export function BookingSummaryCard({
     paymentMethod,
     customDownPaymentAmount,
     getDownPaymentAmount,
+    getMinimumDownPaymentAmount,
+    getDownPaymentBreakdown,
     getRemainingBalance,
     setConflictingSlots,
   } = useCheckoutStore();
@@ -58,6 +60,8 @@ export function BookingSummaryCard({
     totalSlots: 0,
     availableSlots: 0,
   });
+  const [showAllCartItems, setShowAllCartItems] = useState(false);
+  const [showAllDownPaymentItems, setShowAllDownPaymentItems] = useState(false);
 
   useEffect(() => {
     if (!bookingData) return;
@@ -122,6 +126,8 @@ export function BookingSummaryCard({
   const total = getTotalAmount();
   const perPlayer = getPerPlayerAmount();
   const downPaymentAmount = getDownPaymentAmount();
+  const downPaymentBreakdown = getDownPaymentBreakdown();
+  const minimumDownPayment = getMinimumDownPaymentAmount();
   const remainingBalance = getRemainingBalance();
   const isCashWithDownpayment =
     paymentMethod === 'cash' &&
@@ -175,22 +181,30 @@ export function BookingSummaryCard({
   };
 
   const bookedDates = getActualBookedDates();
+  const MAX_VISIBLE_CART_ITEMS = 5;
+  const MAX_VISIBLE_DP_ITEMS = 4;
+  const visibleDisplayCart = showAllCartItems ? displayCart : displayCart.slice(0, MAX_VISIBLE_CART_ITEMS);
+  const visibleDownPaymentBreakdown = showAllDownPaymentItems
+    ? downPaymentBreakdown
+    : downPaymentBreakdown.slice(0, MAX_VISIBLE_DP_ITEMS);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-6 sticky top-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Booking Summary</h3>
+    <div className="summary-scroll-container bg-white border border-gray-200 rounded-xl p-4 md:p-5 sticky top-6 max-h-[calc(100vh-3rem)] flex flex-col overflow-x-hidden">
+      <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-3">Booking Summary</h3>
+
+      <div className="summary-scrollbar flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-1 space-y-4">
 
       {/* Court Details */}
-      <div className="space-y-3 pb-4 border-b border-gray-200">
+      <div className="space-y-3 pb-3 border-b border-gray-200">
         {isMultiCourt ? (
           <div>
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm text-gray-500">Cart Items</p>
               <p className="text-sm font-medium text-gray-900">{displayCart.length} slots</p>
             </div>
-            <div className="max-h-[220px] overflow-y-auto rounded-md border border-gray-100 divide-y divide-gray-100">
-              {displayCart.map((item, index) => (
-                <div key={item.displayKey} className="px-2.5 py-2">
+            <div className="summary-scrollbar max-h-[180px] overflow-y-auto overflow-x-hidden rounded-md border border-gray-100 divide-y divide-gray-100">
+              {visibleDisplayCart.map((item, index) => (
+                <div key={item.displayKey} className="px-2.5 py-2 min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate">{item.courtName}</p>
                   <p className="text-xs text-gray-600 truncate">
                     {format(new Date(item.date), 'EEE, MMM d')} • {formatTime(item.startTime)} - {formatTime(item.endTime)}
@@ -198,6 +212,17 @@ export function BookingSummaryCard({
                 </div>
               ))}
             </div>
+            {displayCart.length > MAX_VISIBLE_CART_ITEMS && (
+              <button
+                type="button"
+                onClick={() => setShowAllCartItems(!showAllCartItems)}
+                className="mt-2 text-xs font-medium text-primary hover:text-primary/80"
+              >
+                {showAllCartItems
+                  ? 'Show fewer cart items'
+                  : `Show ${displayCart.length - MAX_VISIBLE_CART_ITEMS} more item(s)`}
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -219,7 +244,7 @@ export function BookingSummaryCard({
               {bookedDates.length > 0 && (
                 <div className="mt-2 text-xs">
                   <p className="font-medium text-gray-700 mb-1">Booked Dates ({bookedDates.length}):</p>
-                  <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto p-1.5 bg-gray-50 rounded-md border border-gray-100">
+                  <div className="summary-scrollbar flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto p-1.5 bg-gray-50 rounded-md border border-gray-100">
                     {bookedDates.map((date, idx) => (
                       <span
                         key={idx}
@@ -257,7 +282,7 @@ export function BookingSummaryCard({
       </div>
 
       {/* Price Breakdown */}
-      <div className="space-y-2 py-4">
+      <div className="space-y-2 py-3">
         <div className="flex justify-between text-sm">
           <span className="text-gray-600">
             {isMultiCourt
@@ -370,8 +395,43 @@ export function BookingSummaryCard({
         )}
       </div>
 
+      {isCashWithDownpayment && downPaymentBreakdown.length > 0 && (
+        <div className="pt-3 border-t border-gray-100 space-y-1.5">
+          <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Down Payment Breakdown</p>
+          {visibleDownPaymentBreakdown.map((item, index) => (
+            <div key={`summary-dp-${item.courtId}-${index}`} className="flex justify-between text-xs gap-2 min-w-0">
+              <span className="text-gray-600 truncate pr-2 min-w-0">{item.courtName} ({item.percentage}%)</span>
+              <span className="font-medium text-gray-900 shrink-0">₱{item.amount.toFixed(2)}</span>
+            </div>
+          ))}
+          {downPaymentBreakdown.length > MAX_VISIBLE_DP_ITEMS && (
+            <button
+              type="button"
+              onClick={() => setShowAllDownPaymentItems(!showAllDownPaymentItems)}
+              className="text-xs font-medium text-primary hover:text-primary/80"
+            >
+              {showAllDownPaymentItems
+                ? 'Show fewer down payment lines'
+                : `Show ${downPaymentBreakdown.length - MAX_VISIBLE_DP_ITEMS} more line(s)`}
+            </button>
+          )}
+          <div className="flex justify-between text-sm pt-2 border-t border-gray-100">
+            <span className="text-gray-700 font-medium">Minimum Required</span>
+            <span className="font-semibold text-gray-900">₱{minimumDownPayment.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-primary font-semibold">Total Due Today</span>
+            <span className="font-bold text-primary">₱{downPaymentAmount.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-600">Remaining at Venue</span>
+            <span className="font-semibold text-gray-900">₱{remainingBalance.toFixed(2)}</span>
+          </div>
+        </div>
+      )}
+
       {/* Total */}
-      <div className="pt-4 border-t border-gray-200">
+      <div className="pt-3 border-t border-gray-200">
         {!availability.loading && !availability.available && (
           <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
             <div className="flex items-start gap-2">
@@ -408,7 +468,7 @@ export function BookingSummaryCard({
           <span className="text-base font-semibold text-gray-900">
             {isSplitPayment ? 'Your Share' : 'Total Amount'}
           </span>
-          <span className="text-2xl font-bold text-primary">
+          <span className="text-xl md:text-2xl font-bold text-primary">
             ₱
             {(isSplitPayment
               ? perPlayer
@@ -420,14 +480,14 @@ export function BookingSummaryCard({
         </div>
 
         {isCashWithDownpayment && (
-          <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center bg-primary/5 -mx-6 px-6 py-3">
+          <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between items-center bg-primary/5 px-3 py-3 rounded-lg gap-2 min-w-0">
             <div>
               <p className="text-xs font-semibold text-primary uppercase tracking-wider">
                 Remaining Balance
               </p>
               <p className="text-xs text-gray-500">To be paid at the venue</p>
             </div>
-            <p className="text-xl font-bold text-gray-900">₱{remainingBalance.toFixed(2)}</p>
+            <p className="text-xl font-bold text-gray-900 shrink-0">₱{remainingBalance.toFixed(2)}</p>
           </div>
         )}
 
@@ -437,28 +497,29 @@ export function BookingSummaryCard({
           </p>
         )}
       </div>
+      </div>
 
       {/* Navigation Buttons */}
       {showButtons && currentStep !== 'processing' && (
-        <div className="pt-4 mt-4 border-t border-gray-200 flex flex-col gap-3">
+        <div className="pt-3 mt-3 border-t border-gray-200 flex flex-col gap-2">
           <button
             onClick={onContinue}
             disabled={!canContinue}
-            className="w-full px-6 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-5 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Continue
           </button>
           {currentStep === 'details' ? (
             <button
               onClick={onCancel}
-              className="w-full px-6 py-3 border border-red-300 text-red-600 rounded-lg font-medium hover:bg-red-50 transition-colors"
+              className="w-full px-5 py-2.5 border border-red-300 text-red-600 rounded-lg font-medium hover:bg-red-50 transition-colors"
             >
               Cancel Booking
             </button>
           ) : (
             <button
               onClick={onBack}
-              className="w-full px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+              className="w-full px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
             >
               Back
             </button>

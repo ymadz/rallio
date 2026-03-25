@@ -49,6 +49,88 @@ export async function getVenueMetadataAction(venueId: string) {
 }
 
 /**
+ * Server Action: Resolve effective down payment percentage for a court.
+ * Priority: court metadata -> venue metadata -> 20 (default)
+ */
+export async function getCourtDownPaymentPercentageAction(courtId: string) {
+  const supabase = createServiceClient()
+
+  const { data, error } = await supabase
+    .from('courts')
+    .select(`
+      metadata,
+      venue:venues(metadata)
+    `)
+    .eq('id', courtId)
+    .single()
+
+  if (error || !data) {
+    console.error('Error fetching court down payment percentage:', error)
+    return { success: false, error: error?.message || 'Court not found' }
+  }
+
+  const venueData = data.venue as any
+  const venueMetadata = Array.isArray(venueData) ? venueData[0]?.metadata : venueData?.metadata
+  const courtMetadata = (data as any).metadata
+
+  const rawPercentage = courtMetadata?.down_payment_percentage ?? venueMetadata?.down_payment_percentage ?? 20
+  const parsedPercentage = Number(rawPercentage)
+  const percentage = Number.isFinite(parsedPercentage)
+    ? Math.min(Math.max(parsedPercentage, 0), 100)
+    : 20
+
+  return {
+    success: true,
+    percentage,
+    source: courtMetadata?.down_payment_percentage !== undefined ? 'court' : (venueMetadata?.down_payment_percentage !== undefined ? 'venue' : 'default')
+  }
+}
+
+/**
+ * Server Action: Resolve effective down payment percentages for multiple courts.
+ */
+export async function getCourtDownPaymentPercentagesAction(courtIds: string[]) {
+  const uniqueCourtIds = Array.from(new Set(courtIds.filter(Boolean)))
+  if (uniqueCourtIds.length === 0) {
+    return { success: true, percentages: {} as Record<string, number>, maxPercentage: 20 }
+  }
+
+  const supabase = createServiceClient()
+  const { data, error } = await supabase
+    .from('courts')
+    .select(`
+      id,
+      metadata,
+      venue:venues(metadata)
+    `)
+    .in('id', uniqueCourtIds)
+
+  if (error) {
+    console.error('Error fetching court down payment percentages:', error)
+    return { success: false, error: error.message }
+  }
+
+  const percentages: Record<string, number> = {}
+  for (const row of data || []) {
+    const venueData = (row as any).venue
+    const venueMetadata = Array.isArray(venueData) ? venueData[0]?.metadata : venueData?.metadata
+    const courtMetadata = (row as any).metadata
+
+    const rawPercentage = courtMetadata?.down_payment_percentage ?? venueMetadata?.down_payment_percentage ?? 20
+    const parsedPercentage = Number(rawPercentage)
+    percentages[row.id] = Number.isFinite(parsedPercentage)
+      ? Math.min(Math.max(parsedPercentage, 0), 100)
+      : 20
+  }
+
+  const maxPercentage = Object.values(percentages).length > 0
+    ? Math.max(...Object.values(percentages))
+    : 20
+
+  return { success: true, percentages, maxPercentage }
+}
+
+/**
  * Server Action: Get available time slots for a specific court on a given date
  */
 export async function getAvailableTimeSlotsAction(
@@ -1003,13 +1085,92 @@ export async function createMultiCourtReservationsAction(data: {
   const uniqueDates = new Set(itemsToProcess.map(item => new Date(item.startTimeISO).toDateString()))
   const totalBookingDateCount = uniqueDates.size
 
-  // Phase 4B: Proportional downpayment split instead of an even split
-  const grandTotal = itemsToProcess.reduce((s, i) => s + i.totalAmount, 0)
+  // Resolve per-court down payment percentages for minimum floor validation.
+  const uniqueCourtIds = Array.from(new Set(itemsToProcess.map((item) => item.courtId).filter(Boolean)))
+  const percentagesResult = await getCourtDownPaymentPercentagesAction(uniqueCourtIds)
+  const courtPercentages = percentagesResult.success ? percentagesResult.percentages : {}
 
-  for (const item of itemsToProcess) {
-    const itemDownPayment = data.customDownPaymentAmount && grandTotal > 0
-      ? data.customDownPaymentAmount * (item.totalAmount / grandTotal)
-      : undefined
+  const itemMinimums = itemsToProcess.map((item) => {
+    const rawPercentage = courtPercentages[item.courtId] ?? 20
+    const percentage = Number.isFinite(rawPercentage)
+      ? Math.min(Math.max(rawPercentage, 0), 100)
+      : 20
+    const minAmount = Math.round((item.totalAmount * (percentage / 100)) * 100) / 100
+    return {
+      ...item,
+      minimumDownPayment: minAmount,
+    }
+  })
+
+  // Phase 4B: Down payment amount validation and distribution.
+  const grandTotal = itemsToProcess.reduce((s, i) => s + i.totalAmount, 0)
+  const minimumRequiredDownPayment = Math.round(itemMinimums.reduce((sum, item) => sum + item.minimumDownPayment, 0) * 100) / 100
+
+  if (data.customDownPaymentAmount !== undefined && data.customDownPaymentAmount > 0) {
+    if (data.customDownPaymentAmount < minimumRequiredDownPayment) {
+      return {
+        success: false,
+        error: `The minimum down payment for these courts is ₱${minimumRequiredDownPayment.toFixed(2)}.`,
+      }
+    }
+
+    if (data.customDownPaymentAmount > grandTotal) {
+      return {
+        success: false,
+        error: `Down payment cannot exceed total booking amount of ₱${grandTotal.toFixed(2)}.`,
+      }
+    }
+  }
+
+  const hasCustomDownPayment = data.customDownPaymentAmount !== undefined && data.customDownPaymentAmount > 0
+  const targetDownPaymentTotal = hasCustomDownPayment
+    ? data.customDownPaymentAmount!
+    : minimumRequiredDownPayment
+
+  const extraDownPayment = Math.max(0, targetDownPaymentTotal - minimumRequiredDownPayment)
+  const totalHeadroom = itemMinimums.reduce((sum, item) => sum + Math.max(0, item.totalAmount - item.minimumDownPayment), 0)
+
+  const allocatedDownPayments = itemMinimums.map((item) => {
+    if (extraDownPayment <= 0 || totalHeadroom <= 0) {
+      return {
+        courtId: item.courtId,
+        amount: item.minimumDownPayment,
+      }
+    }
+
+    const headroom = Math.max(0, item.totalAmount - item.minimumDownPayment)
+    const extraShare = (headroom / totalHeadroom) * extraDownPayment
+    const amount = Math.min(item.totalAmount, item.minimumDownPayment + extraShare)
+    return {
+      courtId: item.courtId,
+      amount: Math.round(amount * 100) / 100,
+    }
+  })
+
+  // Keep cent-level totals exact by adjusting the last item.
+  if (allocatedDownPayments.length > 0) {
+    const lastIndex = allocatedDownPayments.length - 1
+    const currentSum = allocatedDownPayments.reduce((sum, item) => sum + item.amount, 0)
+    const delta = Math.round((targetDownPaymentTotal - currentSum) * 100) / 100
+    if (Math.abs(delta) > 0) {
+      const lastItem = allocatedDownPayments[lastIndex]
+      const itemTotal = itemMinimums[lastIndex].totalAmount
+      const adjusted = Math.min(itemTotal, Math.max(0, lastItem.amount + delta))
+      allocatedDownPayments[lastIndex] = {
+        ...lastItem,
+        amount: Math.round(adjusted * 100) / 100,
+      }
+    }
+  }
+
+  const perItemDownPayment = allocatedDownPayments.map((item, index) => ({
+    index,
+    amount: item.amount,
+  }))
+
+  for (let index = 0; index < itemsToProcess.length; index++) {
+    const item = itemsToProcess[index]
+    const itemDownPayment = perItemDownPayment[index]?.amount
 
     const result = await createReservation(supabase, {
       courtId: item.courtId,
