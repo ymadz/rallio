@@ -305,7 +305,9 @@ export async function createReservation(
         }
     }
 
-    // Calculate down payment if applicable (based on total including platform fee)
+    // Calculate down payment if applicable.
+    // Minimum down payment is based on court rental only (excluding platform fee)
+    // so the venue-configured percentage maps cleanly to expected values.
     const venueData = court.venues as any
     const venueMetadata = venueData ? (Array.isArray(venueData) ? venueData[0]?.metadata : venueData.metadata) : null
     const courtMetadata = (court as any).metadata
@@ -314,7 +316,7 @@ export async function createReservation(
     const downPaymentPercentage = Number.isFinite(parsedDownPaymentPercentage)
         ? Math.min(Math.max(parsedDownPaymentPercentage, 0), 100)
         : 20
-    const minimumDownPaymentPerSlot = Math.round((perInstanceAmount * downPaymentPercentage / 100) * 100) / 100
+    const minimumDownPaymentPerSlot = Math.round((courtAmountPerSlot * downPaymentPercentage / 100) * 100) / 100
     const hasCustomDownPayment = data.customDownPaymentAmount !== undefined && data.customDownPaymentAmount > 0
     const customDownPaymentPerSlot = hasCustomDownPayment
         ? data.customDownPaymentAmount! / finalSlots.length

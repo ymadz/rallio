@@ -131,6 +131,26 @@ export async function initiatePaymentAction(
     const courtName = reservation.courts?.name ?? 'Court'
     let description = `${venueName} - ${courtName}`
 
+    const resolveDownPaymentAmount = (meta: Record<string, any> | null | undefined, reservationTotal: number): number | null => {
+      if (!meta) return null
+
+      const rawStored = Number(meta.down_payment_amount)
+      if (!Number.isFinite(rawStored) || rawStored <= 0) return null
+
+      const isCustom = Boolean(meta.is_custom_down_payment)
+      if (isCustom) return Math.round(rawStored * 100) / 100
+
+      const courtAmount = Number(meta.court_amount)
+      const percentage = Number(meta.down_payment_percentage)
+
+      if (Number.isFinite(courtAmount) && courtAmount > 0 && Number.isFinite(percentage) && percentage > 0) {
+        const computedMinimum = Math.round((courtAmount * (percentage / 100)) * 100) / 100
+        return Math.min(Math.max(computedMinimum, 0), Math.round(reservationTotal * 100) / 100)
+      }
+
+      return Math.round(rawStored * 100) / 100
+    }
+
     // Check for bulk payment group
     let amountToCharge = reservation.total_amount
     let recurrenceGroupId = reservation.recurrence_group_id
@@ -150,9 +170,9 @@ export async function initiatePaymentAction(
 
       // If it's a cash booking but requires a down payment, charge the down payment amount online.
       if (isIntendedCash && reservation.status === 'pending_payment') {
-        const metadataDownPayment = reservation.metadata?.down_payment_amount
-        if (metadataDownPayment) {
-          amountToCharge = Number(metadataDownPayment)
+        const normalizedDownPayment = resolveDownPaymentAmount(reservation.metadata, reservation.total_amount)
+        if (normalizedDownPayment && normalizedDownPayment > 0) {
+          amountToCharge = normalizedDownPayment
           isDownPayment = true
           description += ' (Down Payment)'
         } else if (reservation.payment_type === 'cash' || reservation.payment_method === 'cash') {
@@ -196,7 +216,7 @@ export async function initiatePaymentAction(
           // Fallback to 20% of total_amount if metadata is missing.
           amountToCharge = groupReservations.reduce((sum, res) => {
             const meta = res.metadata as any
-            const downPayment = Number(meta?.down_payment_amount || 0)
+            const downPayment = resolveDownPaymentAmount(meta, Number(res.total_amount || 0)) || 0
             if (downPayment > 0) return sum + downPayment
             
             // Fallback: use 20% of total_amount as a safe default for down payment
