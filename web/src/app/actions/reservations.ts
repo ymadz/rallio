@@ -1088,8 +1088,8 @@ export async function createMultiCourtReservationsAction(data: {
   // Resolve per-court down payment percentages for minimum floor validation.
   const uniqueCourtIds = Array.from(new Set(itemsToProcess.map((item) => item.courtId).filter(Boolean)))
   const percentagesResult = await getCourtDownPaymentPercentagesAction(uniqueCourtIds)
-  const courtPercentages: Record<string, number> = percentagesResult.success
-    ? (percentagesResult.percentages as Record<string, number>)
+  const courtPercentages: Record<string, number> = percentagesResult.success 
+    ? (percentagesResult.percentages as Record<string, number>) 
     : {}
 
   const itemMinimums = itemsToProcess.map((item) => {
