@@ -33,6 +33,10 @@ interface Court {
   court_type?: string
   capacity?: number
   hourly_rate: number
+  metadata?: {
+    down_payment_percentage?: number
+    [key: string]: any
+  }
   is_active: boolean
   is_verified: boolean
   court_images?: CourtImage[]
@@ -57,7 +61,8 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
     court_type: 'indoor' as 'indoor' | 'outdoor',
     surface_type: 'hardcourt',
     capacity: 4,
-    hourly_rate: 500
+    hourly_rate: 500,
+    down_payment_percentage: 20
   })
   const [editImages, setEditImages] = useState<CourtImage[]>([])
   const [pendingImageFiles, setPendingImageFiles] = useState<File[]>([])
@@ -191,7 +196,8 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
         court_type: 'indoor',
         surface_type: 'hardcourt',
         capacity: 4,
-        hourly_rate: 500
+        hourly_rate: 500,
+        down_payment_percentage: 20
       })
     } catch (err: any) {
       alert('Error: ' + err.message)
@@ -209,7 +215,8 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
       court_type: (court.court_type as 'indoor' | 'outdoor') || 'indoor',
       surface_type: court.surface_type || 'hardcourt',
       capacity: court.capacity || 4,
-      hourly_rate: court.hourly_rate
+      hourly_rate: court.hourly_rate,
+      down_payment_percentage: Number(court.metadata?.down_payment_percentage ?? 20)
     })
     setShowEditModal(true)
   }
@@ -234,7 +241,8 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
         court_type: 'indoor',
         surface_type: 'hardcourt',
         capacity: 4,
-        hourly_rate: 500
+        hourly_rate: 500,
+        down_payment_percentage: 20
       })
     } catch (err: any) {
       alert('Error: ' + err.message)
@@ -504,6 +512,20 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                 </div>
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Minimum Down Payment (%)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={formData.down_payment_percentage}
+                  onChange={(e) => setFormData({ ...formData, down_payment_percentage: Math.min(Math.max(parseFloat(e.target.value) || 0, 0), 100) })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500 mt-1">Applied per court. This is the minimum percentage users must pay upfront for cash down payment bookings.</p>
+              </div>
+
               {/* Court Photos */}
               
 
@@ -636,6 +658,20 @@ export function VenueCourts({ venueId, onCourtChange }: VenueCourtsProps) {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Minimum Down Payment (%)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={formData.down_payment_percentage}
+                  onChange={(e) => setFormData({ ...formData, down_payment_percentage: Math.min(Math.max(parseFloat(e.target.value) || 0, 0), 100) })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500 mt-1">This court-specific percentage overrides venue-level down payment for bookings on this court.</p>
               </div>
 
               {/* Court Photos */}

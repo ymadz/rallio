@@ -77,34 +77,80 @@ export default async function AuthLayout({
 
       {/* Right side - Form */}
       <div className="flex-1 flex flex-col">
-        {/* Mobile logo */}
-        <div className="lg:hidden bg-rallio-gradient p-6 flex items-center justify-center">
-          <Link href="/" className="flex items-center gap-3">
-            <Image
-              src={logo}
-              alt="Rallio"
-              className="w-10 h-10 brightness-0 invert"
-              width={40}
-              height={40}
-            />
-            <span className="text-xl font-bold text-white">Rallio</span>
-          </Link>
-        </div>
 
-        {/* Form content */}
-        <div className="flex-1 flex items-center justify-center p-6 sm:p-12">
-          <div className="w-full max-w-md">
-            {children}
+        {/* ── MOBILE layout (hidden on lg+) ── */}
+        <div className="lg:hidden relative flex flex-col min-h-screen overflow-hidden">
+
+          {/* Hero: full-width teal gradient background */}
+          <div
+            className="bg-rallio-gradient flex-shrink-0 relative overflow-hidden"
+            style={{ height: '42%', minHeight: '220px' }}
+          >
+            {/* decorative badminton shuttlecock net lines */}
+            <div className="absolute inset-0 opacity-[0.07]"
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Ccircle cx='20' cy='20' r='1.5'/%3E%3C/g%3E%3C/svg%3E")`,
+                backgroundSize: '40px 40px'
+              }}
+            />
+            {/* subtle diagonal stripe */}
+            <div className="absolute -bottom-8 -right-8 w-40 h-40 rounded-full bg-white/5" />
+            <div className="absolute -top-6 -left-6 w-28 h-28 rounded-full bg-white/5" />
+
+            {/* centered brand */}
+            <div className="relative z-10 flex flex-col items-center justify-center h-full px-6 pb-8">
+              <Link href="/" className="flex flex-col items-center gap-3">
+                <div className="w-16 h-16 rounded-2xl bg-white/15 flex items-center justify-center shadow-lg">
+                  <Image
+                    src={logo}
+                    alt="Rallio"
+                    className="w-10 h-10 brightness-0 invert"
+                    width={40}
+                    height={40}
+                  />
+                </div>
+                <span className="text-3xl font-bold text-white tracking-tight">Rallio</span>
+              </Link>
+              <p className="text-white/70 text-sm mt-2 tracking-wide">Your game starts here.</p>
+            </div>
+          </div>
+
+          {/* Form sheet — slides up over hero with rounded top corners */}
+          <div
+            className="relative z-10 flex flex-col flex-1 bg-white rounded-t-[2rem] -mt-16 shadow-[0_-8px_32px_rgba(0,0,0,0.10)] overflow-auto scrollbar-hide"
+            style={{ animation: 'mobileSheetIn 0.45s cubic-bezier(0.34,1.56,0.64,1) both' }}
+          >
+            <div className="flex-1 flex items-start justify-center px-6 pt-8 pb-4">
+              <div className="w-full max-w-md">
+                {children}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="pb-6 px-6 text-center text-sm text-muted-foreground">
+              <TermsPrivacyModal
+                termsContent={termsContent}
+                privacyContent={privacyContent}
+              />
+            </div>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="p-6 text-center text-sm text-muted-foreground">
-          <TermsPrivacyModal 
-            termsContent={termsContent} 
-            privacyContent={privacyContent} 
-          />
+        {/* ── DESKTOP layout (lg+) — unchanged ── */}
+        <div className="hidden lg:flex lg:flex-col lg:flex-1">
+          <div className="flex-1 flex items-center justify-center p-6 sm:p-12">
+            <div className="w-full max-w-md">
+              {children}
+            </div>
+          </div>
+          <div className="p-6 text-center text-sm text-muted-foreground">
+            <TermsPrivacyModal
+              termsContent={termsContent}
+              privacyContent={privacyContent}
+            />
+          </div>
         </div>
+
       </div>
     </div>
   )

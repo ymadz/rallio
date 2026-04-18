@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
@@ -9,8 +9,11 @@ import { markRescheduleResultSeenAction } from '@/app/actions/reschedule-actions
 
 import { RescheduleModal } from '@/components/booking/reschedule-modal'
 import { CancelBookingModal } from '@/components/booking/cancel-booking-modal'
+import { BookingGroupModal } from '@/components/booking/booking-group-modal'
 import { useServerTime } from '@/hooks/use-server-time'
 import Link from 'next/link'
+import { Capacitor } from '@capacitor/core'
+import { Browser } from '@capacitor/browser'
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
@@ -19,6 +22,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { BookingCard, Booking } from './booking-card'
 import { BookingPreviewCard } from './booking-preview-card'
+import { GroupedBookingPreviewCard } from './grouped-booking-preview-card'
+
+interface BookingGroup {
+  id: string
+  type: 'single' | 'grouped_multi_court' | 'grouped_recurring'
+  reservations: Booking[]
+  totalAmount: number
+  amountPaid: number
+}
 
 // Booking interface moved to booking-card.tsx
 
@@ -32,7 +44,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
   const [bookings, setBookings] = useState(initialBookings)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [reschedulingBooking, setReschedulingBooking] = useState<Booking | null>(null)
-  const [cancelModalBooking, setCancelModalBooking] = useState<Booking | null>(null)
+  const [cancelModalState, setCancelModalState] = useState<{booking: Booking, target: 'reservation' | 'refund_reservation'} | null>(null)
   const [resumingPaymentId, setResumingPaymentId] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'today' | 'week'>('all')
   // activeTab state is now managed by the Tabs component, but we can track it if needed for filtering logic separate from rendering
@@ -41,6 +53,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
   // We will keep `activeTab` and sync it with Tabs onValueChange to keep logic simple without rewriting everything right away.
   const [activeTab, setActiveTab] = useState('upcoming')
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
+  const [selectedGroup, setSelectedGroup] = useState<BookingGroup | null>(null)
   const [outOfOrderWarning, setOutOfOrderWarning] = useState<{
     booking: Booking
     paymentMethod: 'gcash' | 'paymaya'
@@ -111,12 +124,53 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     }
   })
 
-  // Sort Bookings
-  filteredBookings.sort((a, b) => {
-    const timeA = new Date(a.start_time).getTime()
-    const timeB = new Date(b.start_time).getTime()
-    return activeTab === 'upcoming' ? timeA - timeB : timeB - timeA
-  })
+  const groupedBookings = useMemo(() => {
+    const groups: { [key: string]: BookingGroup } = {}
+
+    filteredBookings.forEach(booking => {
+      // Priority 1: booking_id (multi-court/multi-day)
+      // Priority 2: recurrence_group_id (recurring)
+      // Priority 3: individual id (single)
+      const groupId = booking.booking_id || booking.recurrence_group_id || booking.id
+      const groupType = booking.booking_id 
+        ? 'grouped_multi_court' 
+        : (booking.recurrence_group_id ? 'grouped_recurring' : 'single')
+
+      if (!groups[groupId]) {
+        groups[groupId] = {
+          id: groupId,
+          type: groupType,
+          reservations: [],
+          totalAmount: 0,
+          amountPaid: 0
+        }
+      }
+
+      groups[groupId].reservations.push(booking)
+      groups[groupId].totalAmount += booking.total_amount
+      groups[groupId].amountPaid += Math.min(booking.amount_paid, booking.total_amount)
+    })
+
+    // CRITICAL: Post-process to ensure single-reservation groups are treated as single bookings
+    // This handles the case where a booking_id is shared but only 1 reservation remains (e.g. after cancellations)
+    // or if a booking_id was assigned but only 1 court was booked.
+    Object.values(groups).forEach(group => {
+      group.reservations.sort(
+        (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+      )
+
+      if (group.reservations.length === 1) {
+        group.type = 'single'
+      }
+    })
+
+    return Object.values(groups).sort((a, b) => {
+      const timeA = new Date(a.reservations[0].start_time).getTime()
+      const timeB = new Date(b.reservations[0].start_time).getTime()
+      return activeTab === 'upcoming' ? timeA - timeB : timeB - timeA
+    })
+  }, [filteredBookings, activeTab])
+
 
   const getUnpaidEarlierDays = (booking: Booking): number[] => {
     if (!booking.recurrence_group_id) return []
@@ -159,10 +213,18 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
 
     try {
       const { initiatePaymentAction } = await import('@/app/actions/payments')
-      const result = await initiatePaymentAction(booking.id, paymentMethod)
+      const result = await initiatePaymentAction(
+        booking.id, 
+        paymentMethod,
+        { isMobile: Capacitor.isNativePlatform() }
+      )
 
       if (result.success && result.checkoutUrl) {
-        window.location.href = result.checkoutUrl
+        if (Capacitor.isNativePlatform()) {
+          await Browser.open({ url: result.checkoutUrl })
+        } else {
+          window.location.href = result.checkoutUrl
+        }
       } else {
         alert(result.error || 'Failed to initiate payment. Please try again.')
         setResumingPaymentId(null)
@@ -174,12 +236,12 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     }
   }
 
-  const handleCancelBooking = (booking: Booking) => {
-    setCancelModalBooking(booking)
+  const handleCancelBooking = (booking: Booking, target: 'reservation' = 'reservation') => {
+    setCancelModalState({ booking, target })
   }
 
   const handleRefundBooking = (booking: Booking) => {
-    setCancelModalBooking(booking)
+    setCancelModalState({ booking, target: 'refund_reservation' })
   }
 
   const totalConfirmed = filteredBookings.filter((b) => b.status === 'confirmed').length
@@ -187,6 +249,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
     const isFullyPaid = b.amount_paid >= b.total_amount
     return ['pending_payment', 'pending', 'partially_paid'].includes(b.status) || (b.status === 'confirmed' && !isFullyPaid)
   }).length
+  const summaryBookings = [...bookings].sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime())
 
   return (
     <div>
@@ -398,9 +461,9 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
           </div>
 
           {/* Stats Cards (Only show for Upcoming) */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
             {/* Total Bookings */}
-            <div className="stat-glass stat-glass-teal relative overflow-hidden rounded-2xl p-4 border border-white/20 transition-transform duration-300 hover:-translate-y-1 hover:scale-[1.02]"
+            <div className="stat-glass stat-glass-teal relative overflow-hidden rounded-xl p-2.5 sm:rounded-2xl sm:p-4 border border-white/20 transition-transform duration-300 hover:-translate-y-1 hover:scale-[1.02]"
               style={{
                 backgroundImage: [
                   'radial-gradient(ellipse 80% 60% at 15% 20%, rgba(20,184,166,0.55) 0%, transparent 55%)',
@@ -410,21 +473,21 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                 boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.22), 0 4px 20px rgba(13,148,136,0.2)'
               }}>
               <div className="absolute inset-0 pointer-events-none opacity-[0.04]" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E\")", backgroundSize: '180px 180px', mixBlendMode: 'overlay' }} />
-              <div className="relative z-10 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center border border-white/30" style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', boxShadow: '0 0 0 3px rgba(255,255,255,0.06)' }}>
+              <div className="relative z-10 flex items-center gap-2 sm:gap-3">
+                <div className="hidden w-10 h-10 rounded-full sm:flex items-center justify-center border border-white/30" style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', boxShadow: '0 0 0 3px rgba(255,255,255,0.06)' }}>
                   <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-white/75">Total Bookings</p>
-                  <p className="text-2xl font-bold text-white" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.15)' }}>{filteredBookings.length}</p>
+                  <p className="text-[10px] sm:text-xs leading-tight font-medium text-white/75">Total Bookings</p>
+                  <p className="text-lg sm:text-2xl leading-none sm:leading-normal font-bold text-white" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.15)' }}>{filteredBookings.length}</p>
                 </div>
               </div>
             </div>
 
             {/* Awaiting Payment */}
-            <div className="stat-glass stat-glass-amber relative overflow-hidden rounded-2xl p-4 border border-white/20 transition-transform duration-300 hover:-translate-y-1 hover:scale-[1.02]"
+            <div className="stat-glass stat-glass-amber relative overflow-hidden rounded-xl p-2.5 sm:rounded-2xl sm:p-4 border border-white/20 transition-transform duration-300 hover:-translate-y-1 hover:scale-[1.02]"
               style={{
                 backgroundImage: [
                   'radial-gradient(ellipse 80% 60% at 20% 25%, rgba(251,191,36,0.50) 0%, transparent 55%)',
@@ -434,21 +497,21 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                 boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.22), 0 4px 20px rgba(217,119,6,0.2)'
               }}>
               <div className="absolute inset-0 pointer-events-none opacity-[0.04]" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E\")", backgroundSize: '180px 180px', mixBlendMode: 'overlay' }} />
-              <div className="relative z-10 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center border border-white/30" style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', boxShadow: '0 0 0 3px rgba(255,255,255,0.06)' }}>
+              <div className="relative z-10 flex items-center gap-2 sm:gap-3">
+                <div className="hidden w-10 h-10 rounded-full sm:flex items-center justify-center border border-white/30" style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', boxShadow: '0 0 0 3px rgba(255,255,255,0.06)' }}>
                   <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3" />
                   </svg>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-white/75">Awaiting Payment</p>
-                  <p className="text-2xl font-bold text-white" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.15)' }}>{awaitingPayment}</p>
+                  <p className="text-[10px] sm:text-xs leading-tight font-medium text-white/75">Awaiting Payment</p>
+                  <p className="text-lg sm:text-2xl leading-none sm:leading-normal font-bold text-white" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.15)' }}>{awaitingPayment}</p>
                 </div>
               </div>
             </div>
 
             {/* Confirmed / Paid */}
-            <div className="stat-glass stat-glass-emerald relative overflow-hidden rounded-2xl p-4 border border-white/20 transition-transform duration-300 hover:-translate-y-1 hover:scale-[1.02]"
+            <div className="stat-glass stat-glass-emerald relative overflow-hidden rounded-xl p-2.5 sm:rounded-2xl sm:p-4 border border-white/20 transition-transform duration-300 hover:-translate-y-1 hover:scale-[1.02]"
               style={{
                 backgroundImage: [
                   'radial-gradient(ellipse 80% 60% at 80% 20%, rgba(52,211,153,0.50) 0%, transparent 55%)',
@@ -458,22 +521,22 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                 boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.22), 0 4px 20px rgba(5,150,105,0.2)'
               }}>
               <div className="absolute inset-0 pointer-events-none opacity-[0.04]" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E\")", backgroundSize: '180px 180px', mixBlendMode: 'overlay' }} />
-              <div className="relative z-10 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center border border-white/30" style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', boxShadow: '0 0 0 3px rgba(255,255,255,0.06)' }}>
+              <div className="relative z-10 flex items-center gap-2 sm:gap-3">
+                <div className="hidden w-10 h-10 rounded-full sm:flex items-center justify-center border border-white/30" style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', boxShadow: '0 0 0 3px rgba(255,255,255,0.06)' }}>
                   <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-white/75">Confirmed / Paid</p>
-                  <p className="text-2xl font-bold text-white" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.15)' }}>{totalConfirmed}</p>
+                  <p className="text-[10px] sm:text-xs leading-tight font-medium text-white/75">Confirmed / Paid</p>
+                  <p className="text-lg sm:text-2xl leading-none sm:leading-normal font-bold text-white" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.15)' }}>{totalConfirmed}</p>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Bookings List for Upcoming */}
-          {filteredBookings.length === 0 ? (
+          {groupedBookings.length === 0 ? (
             <div className="rounded-2xl border border-primary/15 bg-gradient-to-br from-primary/5 via-white to-teal-50 p-10 text-center">
               <div className="max-w-sm mx-auto">
                 <div className="w-16 h-16 bg-gradient-to-br from-primary/15 to-teal-100 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-sm">
@@ -500,21 +563,36 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {filteredBookings.map((booking) => (
-                <BookingPreviewCard
-                  key={booking.id}
-                  booking={booking}
-                  serverDate={serverDate}
-                  onClick={() => handleSelectBooking(booking)}
-                />
-              ))}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {groupedBookings.map((group) => {
+                if (group.type === 'single') {
+                  const booking = group.reservations[0]
+
+                  return (
+                    <BookingPreviewCard
+                      key={booking.id}
+                      booking={booking}
+                      serverDate={serverDate}
+                      onClick={() => handleSelectBooking(booking)}
+                    />
+                  )
+                }
+
+                return (
+                  <GroupedBookingPreviewCard
+                    key={group.id}
+                    group={group as any}
+                    serverDate={serverDate}
+                    onClick={() => setSelectedGroup(group)}
+                  />
+                )
+              })}
             </div>
           )}
         </TabsContent>
 
         <TabsContent value="history">
-          {filteredBookings.length === 0 ? (
+          {groupedBookings.length === 0 ? (
             <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-gray-50 via-white to-gray-50 p-10 text-center">
               <div className="max-w-sm mx-auto">
                 <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-sm">
@@ -527,21 +605,36 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {filteredBookings.map((booking) => (
-                <BookingPreviewCard
-                  key={booking.id}
-                  booking={booking}
-                  serverDate={serverDate}
-                  onClick={() => handleSelectBooking(booking)}
-                />
-              ))}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {groupedBookings.map((group) => {
+                if (group.type === 'single') {
+                  const booking = group.reservations[0]
+
+                  return (
+                    <BookingPreviewCard
+                      key={booking.id}
+                      booking={booking}
+                      serverDate={serverDate}
+                      onClick={() => handleSelectBooking(booking)}
+                    />
+                  )
+                }
+
+                return (
+                  <GroupedBookingPreviewCard
+                    key={group.id}
+                    group={group as any}
+                    serverDate={serverDate}
+                    onClick={() => setSelectedGroup(group)}
+                  />
+                )
+              })}
             </div>
           )}
         </TabsContent>
 
         <TabsContent value="refunds">
-          {filteredBookings.length === 0 ? (
+          {groupedBookings.length === 0 ? (
             <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-gray-50 via-white to-gray-50 p-10 text-center">
               <div className="max-w-sm mx-auto">
                 <div className="w-16 h-16 bg-gradient-to-br from-primary/10 to-teal-100 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-sm">
@@ -554,15 +647,30 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {filteredBookings.map((booking) => (
-                <BookingPreviewCard
-                  key={booking.id}
-                  booking={booking}
-                  serverDate={serverDate}
-                  onClick={() => handleSelectBooking(booking)}
-                />
-              ))}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {groupedBookings.map((group) => {
+                if (group.type === 'single') {
+                  const booking = group.reservations[0]
+
+                  return (
+                    <BookingPreviewCard
+                      key={booking.id}
+                      booking={booking}
+                      serverDate={serverDate}
+                      onClick={() => handleSelectBooking(booking)}
+                    />
+                  )
+                }
+
+                return (
+                  <GroupedBookingPreviewCard
+                    key={group.id}
+                    group={group as any}
+                    serverDate={serverDate}
+                    onClick={() => setSelectedGroup(group)}
+                  />
+                )
+              })}
             </div>
           )}
         </TabsContent>
@@ -589,55 +697,87 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
                   <CardTitle className="relative z-10 text-xl font-bold text-white tracking-tight drop-shadow-sm">Booking Summary</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0 bg-white">
-                  <Table className="border-0">
-                    <TableHeader className="border-0">
-                      <TableRow className="bg-gray-50/50 hover:bg-gray-50/50 border-b border-gray-100">
-                        <TableHead className="font-semibold text-gray-600 pl-6 w-[40%] text-xs uppercase tracking-wider py-4">Venue & Court</TableHead>
-                        <TableHead className="font-semibold text-gray-600 text-xs uppercase tracking-wider py-4">Date & Time</TableHead>
-                        <TableHead className="font-semibold text-gray-600 text-right pr-6 text-xs uppercase tracking-wider py-4">Payment</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody className="border-0">
-                      {[...bookings]
-                        .sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime())
-                        .map((booking) => {
-                        const paymentMethod = booking.metadata?.intended_payment_method || booking.metadata?.payment_method || booking.payments?.[0]?.payment_method || 'N/A'
-                        const formattedMethod = paymentMethod === 'N/A' ? 'N/A' : paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1)
-                        
-                        return (
-                          <TableRow key={booking.id} className="border-b border-gray-100/50 last:border-0 hover:bg-teal-50/40 transition-all duration-300 cursor-pointer group" onClick={() => handleSelectBooking(booking)}>
-                            <TableCell className="pl-6 py-4">
-                              <div className="flex flex-col gap-1 border-l-2 border-transparent group-hover:border-teal-400 pl-3 transition-colors duration-300">
-                                <span className="text-[15px] font-bold text-gray-800 tracking-tight group-hover:text-teal-900 transition-colors">
-                                  {booking.courts.venues.name}
-                                </span>
-                                <span className="text-[13px] text-gray-500 font-medium">
-                                  {booking.courts.name}
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="py-4">
-                              <div className="flex flex-col gap-1">
-                                <span className="text-[14px] font-semibold text-gray-800">
-                                  {format(new Date(booking.start_time), 'MMM d, yyyy')}
-                                </span>
-                                <span className="text-[12px] text-gray-500 font-medium bg-gray-100/60 px-2 py-0.5 rounded-md inline-block w-fit">
-                                  {format(new Date(booking.start_time), 'h:mm a')} - {format(new Date(booking.end_time), 'h:mm a')}
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right pr-6 py-4">
-                              <div className="inline-flex items-center gap-2 text-[13px] font-bold text-teal-700 bg-white/60 px-3.5 py-1.5 rounded-xl ring-1 ring-teal-200/50 shadow-sm shadow-teal-900/5 whitespace-nowrap backdrop-blur-md">
-                                <span>₱{booking.total_amount.toFixed(2)}</span>
-                                <span className="w-1 h-1 rounded-full bg-teal-400/60"></span>
-                                <span>{formattedMethod}</span>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        )
-                      })}
-                    </TableBody>
-                  </Table>
+                  <div className="md:hidden p-3 space-y-2">
+                    {summaryBookings.map((booking) => {
+                      const paymentMethod = booking.metadata?.intended_payment_method || booking.metadata?.payment_method || booking.payments?.[0]?.payment_method || 'N/A'
+                      const formattedMethod = paymentMethod === 'N/A' ? 'N/A' : paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1)
+
+                      return (
+                        <button
+                          key={booking.id}
+                          type="button"
+                          onClick={() => handleSelectBooking(booking)}
+                          className="w-full text-left rounded-xl border border-gray-100 bg-white p-3 transition-colors hover:bg-teal-50/40"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-gray-800 truncate">{booking.courts.venues.name}</p>
+                              <p className="text-xs text-gray-500 truncate">{booking.courts.name}</p>
+                            </div>
+                            <div className="shrink-0 rounded-lg bg-teal-50 px-2 py-1 text-xs font-bold text-teal-700">
+                              ₱{booking.total_amount.toFixed(2)}
+                            </div>
+                          </div>
+                          <div className="mt-2 flex items-center justify-between gap-2">
+                            <p className="text-xs text-gray-600">
+                              {format(new Date(booking.start_time), 'MMM d, yyyy')} • {format(new Date(booking.start_time), 'h:mm a')} - {format(new Date(booking.end_time), 'h:mm a')}
+                            </p>
+                            <p className="shrink-0 text-[11px] font-semibold text-gray-500">{formattedMethod}</p>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div className="hidden md:block">
+                    <Table className="border-0">
+                      <TableHeader className="border-0">
+                        <TableRow className="bg-gray-50/50 hover:bg-gray-50/50 border-b border-gray-100">
+                          <TableHead className="font-semibold text-gray-600 pl-6 w-[40%] text-xs uppercase tracking-wider py-4">Venue & Court</TableHead>
+                          <TableHead className="font-semibold text-gray-600 text-xs uppercase tracking-wider py-4">Date & Time</TableHead>
+                          <TableHead className="font-semibold text-gray-600 text-right pr-6 text-xs uppercase tracking-wider py-4">Payment</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody className="border-0">
+                        {summaryBookings.map((booking) => {
+                          const paymentMethod = booking.metadata?.intended_payment_method || booking.metadata?.payment_method || booking.payments?.[0]?.payment_method || 'N/A'
+                          const formattedMethod = paymentMethod === 'N/A' ? 'N/A' : paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1)
+
+                          return (
+                            <TableRow key={booking.id} className="border-b border-gray-100/50 last:border-0 hover:bg-teal-50/40 transition-all duration-300 cursor-pointer group" onClick={() => handleSelectBooking(booking)}>
+                              <TableCell className="pl-6 py-4">
+                                <div className="flex flex-col gap-1 border-l-2 border-transparent group-hover:border-teal-400 pl-3 transition-colors duration-300">
+                                  <span className="text-[15px] font-bold text-gray-800 tracking-tight group-hover:text-teal-900 transition-colors">
+                                    {booking.courts.venues.name}
+                                  </span>
+                                  <span className="text-[13px] text-gray-500 font-medium">
+                                    {booking.courts.name}
+                                  </span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-4">
+                                <div className="flex flex-col gap-1">
+                                  <span className="text-[14px] font-semibold text-gray-800">
+                                    {format(new Date(booking.start_time), 'MMM d, yyyy')}
+                                  </span>
+                                  <span className="text-[12px] text-gray-500 font-medium bg-gray-100/60 px-2 py-0.5 rounded-md inline-block w-fit">
+                                    {format(new Date(booking.start_time), 'h:mm a')} - {format(new Date(booking.end_time), 'h:mm a')}
+                                  </span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right pr-6 py-4">
+                                <div className="inline-flex items-center gap-2 text-[13px] font-bold text-teal-700 bg-white/60 px-3.5 py-1.5 rounded-xl ring-1 ring-teal-200/50 shadow-sm shadow-teal-900/5 whitespace-nowrap backdrop-blur-md">
+                                  <span>₱{booking.total_amount.toFixed(2)}</span>
+                                  <span className="w-1 h-1 rounded-full bg-teal-400/60"></span>
+                                  <span>{formattedMethod}</span>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </CardContent>
               </Card>
             )}
@@ -647,7 +787,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
 
       {/* Booking Detail Modal */}
       <Dialog open={!!selectedBooking} onOpenChange={(open) => !open && setSelectedBooking(null)}>
-        <DialogContent className="max-w-lg p-0 overflow-hidden max-h-[90vh] flex flex-col !rounded-2xl border-primary/15 shadow-xl shadow-primary/10">
+        <DialogContent className="inset-0 translate-x-0 translate-y-0 data-[state=open]:slide-in-from-left-0 data-[state=open]:slide-in-from-top-0 data-[state=closed]:slide-out-to-left-0 data-[state=closed]:slide-out-to-top-0 w-screen h-[100dvh] max-w-none max-h-none p-0 overflow-hidden rounded-none border-0 shadow-none sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=open]:slide-in-from-top-[48%] sm:data-[state=closed]:slide-out-to-left-1/2 sm:data-[state=closed]:slide-out-to-top-[48%] sm:max-w-lg sm:max-h-[90vh] sm:flex sm:flex-col sm:!rounded-2xl sm:border sm:border-primary/15 sm:shadow-xl sm:shadow-primary/10">
           <VisuallyHidden>
             <DialogTitle>Booking Details</DialogTitle>
           </VisuallyHidden>
@@ -658,7 +798,7 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
               resumingPaymentId={resumingPaymentId}
               cancellingId={cancellingId}
               onResumePayment={handleResumePayment}
-              onCancelBooking={(b) => { setSelectedBooking(null); handleCancelBooking(b) }}
+              onCancelBooking={(b, target) => { setSelectedBooking(null); handleCancelBooking(b, target) }}
               onRefundBooking={(b) => { setSelectedBooking(null); handleRefundBooking(b) }}
               onReschedule={(b) => { setSelectedBooking(null); setReschedulingBooking(b) }}
               setBookings={setBookings}
@@ -679,22 +819,19 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
         />
       )}
 
-      {cancelModalBooking && (
+      {cancelModalState && (
         <CancelBookingModal
-          booking={cancelModalBooking}
-          isOpen={!!cancelModalBooking}
-          onClose={() => setCancelModalBooking(null)}
+          booking={cancelModalState.booking}
+          target={cancelModalState.target}
+          isOpen={!!cancelModalState}
+          onClose={() => setCancelModalState(null)}
           onCancelSuccess={() => {
-            setBookings((prev) => prev.map((b) =>
-              b.id === cancelModalBooking.id ? { ...b, status: 'cancelled' } : b
-            ))
-            setCancelModalBooking(null)
+            router.refresh()
+            setCancelModalState(null)
           }}
           onRefundSuccess={() => {
-            setBookings((prev) => prev.map((b) =>
-              b.id === cancelModalBooking.id ? { ...b, status: 'pending_refund' } : b
-            ))
-            setCancelModalBooking(null)
+            router.refresh()
+            setCancelModalState(null)
           }}
         />
       )}
@@ -747,6 +884,28 @@ export function BookingsList({ initialBookings }: BookingsListProps) {
           </div>
         </DialogContent>
       </Dialog>
+        {/* Group Details Modal */}
+        <BookingGroupModal
+          group={selectedGroup as any}
+          isOpen={!!selectedGroup}
+          onClose={() => setSelectedGroup(null)}
+          onRescheduleBooking={(b) => {
+            setSelectedGroup(null)
+            setReschedulingBooking(b)
+          }}
+          onCancelBooking={(b) => {
+            setSelectedGroup(null)
+            handleCancelBooking(b)
+          }}
+          onRefundBooking={(b) => {
+            setSelectedGroup(null)
+            handleRefundBooking(b)
+          }}
+          onResumePayment={(b, paymentMethod) => {
+            handleResumePayment(b, paymentMethod)
+          }}
+          serverDate={serverDate}
+        />
     </div>
   )
 }

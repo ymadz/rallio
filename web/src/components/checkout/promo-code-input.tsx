@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Tag, X, CheckCircle, Loader2 } from 'lucide-react'
 import { useCheckoutStore } from '@/stores/checkout-store'
 import { validatePromoCode } from '@/app/actions/promo-code-actions'
@@ -11,9 +11,11 @@ export function PromoCodeInput() {
     const [code, setCode] = useState('')
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const lastDiscountRecalcKeyRef = useRef<string | null>(null)
 
     const {
         bookingData,
+        bookingCart,
         getSubtotal,
         promoDiscountAmount,
         promoCode,
@@ -21,16 +23,20 @@ export function PromoCodeInput() {
         setPromoDiscount,
         setDiscountDetails,
         removePromoDiscount,
-        discountAmount
+        discountAmount,
+        discountType,
+        discountReason,
+        applicableDiscounts,
     } = useCheckoutStore()
 
-    // Wait for booking data
-    if (!bookingData) return null
+    const effectiveCart = useMemo(() => {
+        if (!bookingData) return []
+        return bookingCart.length > 0 ? bookingCart : [bookingData]
+    }, [bookingCart, bookingData])
 
     // Recalculate all discounts using the unified backend function
-    // Defined before early returns so it's available in all code paths
-    const recalculateDiscounts = async (promoCodeStr?: string) => {
-        if (!bookingData) return
+    const recalculateDiscounts = useCallback(async (promoCodeStr?: string) => {
+        if (!bookingData) return null
 
         // Compute the full base price (before any discounts)
         const basePrice = getSubtotal() + discountAmount + promoDiscountAmount
@@ -39,21 +45,15 @@ export function PromoCodeInput() {
         const startDateTime = `${dateStr}T${bookingData.startTime}:00+08:00`
         const endDateTime = `${dateStr}T${bookingData.endTime}:00+08:00`
 
+        // For target date count, combine recurrence and selected days.
+        const uniqueDates = new Set(effectiveCart.map(item => new Date(item.date).toDateString()))
+        let actualSlotCount = uniqueDates.size
         const recurrenceWeeks = bookingData.recurrenceWeeks || 1
         const selectedDays = bookingData.selectedDays || []
-        const initialStartTime = new Date(bookingData.date)
-        const [startH] = bookingData.startTime.split(':')
-        initialStartTime.setHours(parseInt(startH), 0, 0, 0)
-        const startDayIndex = initialStartTime.getDay()
         const uniqueSelectedDays = selectedDays.length > 0
-            ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
-            : [startDayIndex]
-        let actualSlotCount = 0
-        for (let i = 0; i < recurrenceWeeks; i++) {
-            for (const _dayIndex of uniqueSelectedDays) {
-                actualSlotCount++
-            }
-        }
+            ? Array.from(new Set(selectedDays))
+            : [new Date(bookingData.date).getDay()]
+        actualSlotCount = Math.max(actualSlotCount, uniqueSelectedDays.length * recurrenceWeeks)
 
         const unifiedResult = await calculateApplicableDiscounts({
             venueId: bookingData.venueId,
@@ -72,17 +72,61 @@ export function PromoCodeInput() {
             const venueDiscounts = unifiedResult.discounts.filter(d => d.type !== 'promo_code')
             const venueTotal = venueDiscounts.reduce((sum, d) => d.isIncrease ? sum - d.amount : sum + d.amount, 0)
 
-            setDiscountDetails({
-                amount: venueTotal,
-                type: venueDiscounts[0]?.name,
-                reason: venueDiscounts.map(d => d.description).join(', '),
-                discounts: venueDiscounts
-            })
+            const hasExistingQueueDiscount =
+                bookingData.isQueueSession &&
+                Math.abs(discountAmount) > 0 &&
+                ((applicableDiscounts && applicableDiscounts.length > 0) || !!discountType || !!discountReason)
+
+            // Do not wipe queue-session non-promo discounts if backend recalc returns only promo entries.
+            if (venueDiscounts.length > 0 || !hasExistingQueueDiscount) {
+                setDiscountDetails({
+                    amount: venueTotal,
+                    type: venueDiscounts[0]?.name,
+                    reason: venueDiscounts.map(d => d.description).join(', '),
+                    discounts: venueDiscounts
+                })
+            }
 
             return { promoDiscounts, venueDiscounts }
         }
         return null
-    }
+    }, [bookingData, discountAmount, effectiveCart, getSubtotal, promoDiscountAmount, setDiscountDetails, applicableDiscounts, discountReason, discountType])
+
+    const discountRecalcKey = useMemo(() => {
+        if (!effectiveCart.length) return 'none'
+        const cartSignature = effectiveCart
+            .map(item => `${item.courtId}|${new Date(item.date).toISOString()}|${item.startTime}|${item.endTime}|${item.recurrenceWeeks || 1}|${(item.selectedDays || []).join(',')}`)
+            .join('||')
+
+        return `${cartSignature}|promo:${promoCode || ''}`
+    }, [effectiveCart, promoCode])
+
+    useEffect(() => {
+        if (!bookingData) return
+        if (lastDiscountRecalcKeyRef.current === discountRecalcKey) return
+
+        let isCancelled = false
+        lastDiscountRecalcKeyRef.current = discountRecalcKey
+
+        const run = async () => {
+            try {
+                await recalculateDiscounts(promoCode)
+            } catch (recalcError) {
+                if (!isCancelled) {
+                    console.error('Failed to recalculate checkout discounts:', recalcError)
+                }
+            }
+        }
+
+        run()
+
+        return () => {
+            isCancelled = true
+        }
+    }, [bookingData, discountRecalcKey, promoCode, recalculateDiscounts])
+
+    // Wait for booking data
+    if (!bookingData) return null
 
     // If a promotion is already applied, show success state
     if (promoCode && promoDiscountAmount > 0) {

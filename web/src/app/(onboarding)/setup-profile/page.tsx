@@ -40,6 +40,10 @@ const SKILL_LEVELS = [
   { value: 10, label: 'Expert', description: 'Tournament level (ELO 2100)' },
 ]
 
+const ALL_STEPS: SetupStep[] = ['welcome', 'intro', 'details', 'player-info', 'play-styles', 'skill-intro', 'skill-level']
+const PROGRESS_STEPS: SetupStep[] = ['details', 'player-info', 'play-styles', 'skill-level']
+
+
 // Map Skill Level to Starting ELO
 const INITIAL_ELO_MAP: Record<number, number> = {
   1: 1200,
@@ -57,7 +61,7 @@ export default function SetupProfilePage() {
   const fromParam = searchParams.get('from')
   const isReturningUser = !!fromParam // e.g. 'reminder', 'queue'
 
-  const [step, setStep] = useState<SetupStep>(isReturningUser ? 'details' : 'welcome')
+  const [step, setStep] = useState<SetupStep>('welcome')
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isFetching, setIsFetching] = useState(true)
@@ -80,38 +84,51 @@ export default function SetupProfilePage() {
 
   useEffect(() => {
     const fetchUserData = async () => {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
+      try {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
 
-      if (user) {
-        // Check if profile is already completed
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('profile_completed')
-          .eq('id', user.id)
-          .single()
+        if (user) {
+          // Check if profile is already completed
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('profile_completed')
+            .eq('id', user.id)
+            .single()
 
-        // If profile is already completed and NOT coming from reminder, redirect to home
-        // When coming from reminder, allow user to edit their profile
-        if (profile?.profile_completed && !isReturningUser) {
-          router.push('/home')
-          return
+          // If profile is already completed and NOT coming from reminder, redirect to home
+          // When coming from reminder, allow user to edit their profile
+          if (profile?.profile_completed && !isReturningUser) {
+            console.log('[SetupProfile] Profile already completed and not returning user, redirecting to home')
+            router.push('/home')
+            return
+          }
+
+          // Check for specific starting step
+          const stepParam = searchParams.get('step') as SetupStep
+          if (stepParam && ALL_STEPS.includes(stepParam)) {
+            setStep(stepParam)
+          }
+
+          setProfileData(prev => ({
+            ...prev,
+            firstName: user.user_metadata?.first_name || user.user_metadata?.full_name?.split(' ')[0] || '',
+            middleInitial: user.user_metadata?.middle_initial || '',
+            lastName: user.user_metadata?.last_name || user.user_metadata?.full_name?.split(' ').slice(1).join(' ') || '',
+            email: user.email || '',
+            phone: user.user_metadata?.phone_number || '',
+          }))
         }
-
-        setProfileData(prev => ({
-          ...prev,
-          firstName: user.user_metadata?.first_name || user.user_metadata?.full_name?.split(' ')[0] || '',
-          middleInitial: user.user_metadata?.middle_initial || '',
-          lastName: user.user_metadata?.last_name || user.user_metadata?.full_name?.split(' ').slice(1).join(' ') || '',
-          email: user.email || '',
-          phone: user.user_metadata?.phone_number || '',
-        }))
+      } catch (err) {
+        console.error('[SetupProfile] Error fetching user data:', err)
+        setError('Failed to load profile data. Please refresh.')
+      } finally {
+        setIsFetching(false)
       }
-      setIsFetching(false)
     }
 
     fetchUserData()
-  }, [router])
+  }, [router, isReturningUser])
 
   const updateProfile = (field: keyof ProfileData, value: string | number | string[] | File | null) => {
     setProfileData(prev => ({ ...prev, [field]: value }))
@@ -274,8 +291,7 @@ export default function SetupProfilePage() {
   }
 
   // Step indicator - removed skill-intro and preferences
-  const steps = ['details', 'player-info', 'play-styles', 'skill-level']
-  const currentStepIndex = steps.indexOf(step)
+  const currentStepIndex = PROGRESS_STEPS.indexOf(step)
 
   // Welcome step - only shown after signup, not from reminder
   if (step === 'welcome') {
@@ -359,7 +375,7 @@ export default function SetupProfilePage() {
         <div className="max-w-lg w-full bg-white rounded-2xl shadow-lg p-8">
           {/* Progress */}
           <div className="flex gap-1 mb-6">
-            {steps.map((_, i) => (
+            {PROGRESS_STEPS.map((_: string, i: number) => (
               <div
                 key={i}
                 className={`flex-1 h-1 rounded ${i <= currentStepIndex ? 'bg-primary' : 'bg-gray-200'}`}
@@ -489,7 +505,7 @@ export default function SetupProfilePage() {
         <div className="max-w-lg w-full bg-white rounded-2xl shadow-lg p-8">
           {/* Progress */}
           <div className="flex gap-1 mb-6">
-            {steps.map((_, i) => (
+            {PROGRESS_STEPS.map((_, i) => (
               <div
                 key={i}
                 className={`flex-1 h-1 rounded ${i <= currentStepIndex ? 'bg-primary' : 'bg-gray-200'}`}
@@ -555,7 +571,7 @@ export default function SetupProfilePage() {
         <div className="max-w-lg w-full bg-white rounded-2xl shadow-lg p-8">
           {/* Progress */}
           <div className="flex gap-1 mb-6">
-            {steps.map((_, i) => (
+            {PROGRESS_STEPS.map((_, i) => (
               <div
                 key={i}
                 className={`flex-1 h-1 rounded ${i <= currentStepIndex ? 'bg-primary' : 'bg-gray-200'}`}
@@ -616,7 +632,7 @@ export default function SetupProfilePage() {
         <div className="max-w-lg w-full bg-white rounded-2xl shadow-lg p-8">
           {/* Progress */}
           <div className="flex gap-1 mb-6">
-            {steps.map((_, i) => (
+            {PROGRESS_STEPS.map((_: string, i: number) => (
               <div
                 key={i}
                 className={`flex-1 h-1 rounded ${i <= currentStepIndex ? 'bg-primary' : 'bg-gray-200'}`}

@@ -1,6 +1,6 @@
 'use client'
 
-import { cn } from '@/lib/utils'
+import { cn, formatTo12Hour } from '@/lib/utils'
 import { Check, Lock } from 'lucide-react'
 
 export interface TimeSlot {
@@ -27,19 +27,12 @@ export function SessionTimePicker({
     className,
 }: SessionTimePickerProps) {
 
-    // Helper to format time from 24h to 12h format
-    const formatSlotTime = (startTimeStr: string) => {
-        const [hours, minutes] = startTimeStr.split(':').map(Number)
-        const startPeriod = hours >= 12 ? 'PM' : 'AM'
-        const startHour = hours % 12 || 12
-
-        // We just show Start Time here because the end time depends on selection
-        return `${startHour}:${minutes.toString().padStart(2, '0')} ${startPeriod}`
-    }
+    const formatSlotTime = (startTimeStr: string) => formatTo12Hour(startTimeStr)
 
     // Helper to check if a range starting at 'time' is fully available
     const isRangeAvailable = (startTime: string) => {
-        const startHour = parseInt(startTime.split(':')[0])
+        const [sh, sm] = startTime.split(':')
+        const startHour = parseInt(sh || '0')
         for (let i = 0; i < duration; i++) {
             const h = startHour + i
             const timeString = `${h.toString().padStart(2, '0')}:00`
@@ -61,12 +54,14 @@ export function SessionTimePicker({
         <div className={cn("space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar", className)}>
             {slots.map((slot) => {
                 // Calculate logic for range highlighting
-                const slotHour = parseInt(slot.time.split(':')[0])
+                const [sh, sm] = slot.time.split(':')
+                const slotHour = parseInt(sh || '0')
                 let isInRange = false
                 let isStart = false
 
                 if (selectedTime) {
-                    const startHour = parseInt(selectedTime.split(':')[0])
+                    const [sh, sm] = selectedTime.split(':')
+                    const startHour = parseInt(sh || '0')
                     const endHour = startHour + duration
 
                     if (slotHour === startHour) isStart = true

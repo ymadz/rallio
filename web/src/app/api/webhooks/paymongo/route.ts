@@ -562,24 +562,32 @@ async function markReservationPaidAndConfirmed({
     amount: payment.amount,
   })
 
-  // Check for recurrence group (Bulk Payment Confirmation)
+  // Check for bulk payment group or parent booking
   const recurrenceGroupId = payment.metadata?.recurrence_group_id
+  const bookingId = payment.metadata?.booking_id || payment.booking_id
 
-  if (recurrenceGroupId) {
-    console.log('[markReservationPaidAndConfirmed] 🔄 Bulk Confirmation: Found recurrence group:', recurrenceGroupId)
+  if (bookingId || recurrenceGroupId) {
+    console.log('[markReservationPaidAndConfirmed] 🔄 Bulk Confirmation: Found group/booking:', { bookingId, recurrenceGroupId })
 
-    // 1. Fetch ALL pending reservations in this group
-    const { data: groupReservations, error: groupFetchError } = await supabase
+    // 1. Fetch ALL pending reservations in this group/booking
+    const query = supabase
       .from('reservations')
       .select('id, status, total_amount, metadata')
-      .eq('recurrence_group_id', recurrenceGroupId)
       .in('status', ['pending_payment', 'paid']) // Include 'paid' just in case
 
+    if (bookingId) {
+      query.eq('booking_id', bookingId)
+    } else {
+      query.eq('recurrence_group_id', recurrenceGroupId!)
+    }
+
+    const { data: groupReservations, error: groupFetchError } = await query
+
     if (groupFetchError) {
-      console.error('[markReservationPaidAndConfirmed] ❌ Failed to fetch recurrence group:', groupFetchError)
+      console.error('[markReservationPaidAndConfirmed] ❌ Failed to fetch group/booking reservations:', groupFetchError)
       // Fallback to single confirmation if group fetch fails
     } else if (groupReservations && groupReservations.length > 0) {
-      console.log('[markReservationPaidAndConfirmed] 🔄 Confirming group reservations:', groupReservations.length)
+      console.log('[markReservationPaidAndConfirmed] 🔄 Confirming bulk reservations:', groupReservations.length)
 
       const confirmGroupMetadata = {
         payment_confirmed_event: {
@@ -599,7 +607,9 @@ async function markReservationPaidAndConfirmed({
 
         if (isDownPayment) {
           resStatus = 'partially_paid'
-          resAmountPaid = resMeta?.down_payment_amount || payment.amount / groupReservations.length
+          // If it's a down payment, we use the amount stored in metadata if available, 
+          // or distribute the total payment proportionally
+          resAmountPaid = resMeta?.down_payment_amount || (payment.amount / groupReservations.length)
         }
 
         return {
@@ -627,9 +637,40 @@ async function markReservationPaidAndConfirmed({
           .eq('id', update.id)
 
         if (updateError) {
-          console.error(`[markReservationPaidAndConfirmed] ❌ Failed to confirm group reservation ${update.id}:`, updateError)
+          console.error(`[markReservationPaidAndConfirmed] ❌ Failed to confirm reservation ${update.id}:`, updateError)
         } else {
-          console.log(`[markReservationPaidAndConfirmed] ✅ Confirmed group reservation ${update.id}`)
+          console.log(`[markReservationPaidAndConfirmed] ✅ Confirmed reservation ${update.id}`)
+        }
+      }
+
+      // 3. Update parent booking if it exists
+      if (bookingId) {
+        const { data: booking } = await supabase
+          .from('bookings')
+          .select('total_amount, amount_paid')
+          .eq('id', bookingId)
+          .single()
+        
+        if (booking) {
+          const newAmountPaid = Number(booking.amount_paid || 0) + Number(payment.amount)
+          const isFullyPaid = newAmountPaid >= Number(booking.total_amount) - 0.01 // Handle floating point
+
+          await supabase
+            .from('bookings')
+            .update({
+              amount_paid: newAmountPaid,
+              remaining_balance: Math.max(0, Number(booking.total_amount) - newAmountPaid),
+              payment_status: isFullyPaid ? 'paid' : 'partially_paid',
+              status: 'confirmed',
+              updated_at: nowISO
+            })
+            .eq('id', bookingId)
+          
+          console.log('[markReservationPaidAndConfirmed] ✅ Parent booking updated:', { 
+            bookingId, 
+            newAmountPaid, 
+            isFullyPaid 
+          })
         }
       }
 

@@ -96,8 +96,9 @@ export function BookingPreviewCard({ booking, serverDate, onClick }: BookingPrev
           </span>
         )}
         {booking.type === 'queue_session' && (
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/90 text-green-700 border border-green-300 backdrop-blur-sm">
-            Queue
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#0d9488] text-white shadow-sm ring-1 ring-white/20 whitespace-nowrap flex items-center gap-1">
+            <span className="w-1 h-1 rounded-full bg-white animate-pulse" />
+            QUEUE SESSION
           </span>
         )}
       </div>

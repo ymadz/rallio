@@ -134,6 +134,23 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
       }
     }
 
+    // FALLBACK 2: Check for booking-level payments
+    if ((!payments || payments.length === 0) && reservation.booking_id) {
+      console.log('🔍 [requestRefundAction] No direct/group payment found, checking booking:', reservation.booking_id)
+
+      const { data: bookingPayments, error: bookingError } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('booking_id', reservation.booking_id)
+        .in('status', ['paid', 'completed'])
+
+      if (bookingPayments && bookingPayments.length > 0) {
+        console.log('✅ [requestRefundAction] Found booking payment:', bookingPayments[0].id)
+        payments = bookingPayments
+        paymentsError = bookingError
+      }
+    }
+
 
     if (paymentsError || !payments || payments.length === 0) {
       console.error('❌ [requestRefundAction] No paid payments found:', paymentsError)
@@ -155,13 +172,27 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
     // Calculate refundable amount
     const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0)
 
-    const { data: completedRefunds } = await supabase
+    let { data: completedRefunds } = await supabase
       .from('refunds')
       .select('amount')
       .eq('reservation_id', params.reservationId)
       .eq('status', 'succeeded')
 
-    const totalRefunded = completedRefunds?.reduce((sum, r) => r.amount + sum, 0) || 0
+    // FALLBACK for bulk: Sum all refunds for the entire booking/group
+    if (reservation.booking_id || reservation.recurrence_group_id) {
+      const query = supabase
+        .from('refunds')
+        .select('amount')
+        .eq('status', 'succeeded')
+      
+      if (reservation.booking_id) query.eq('metadata->>booking_id', reservation.booking_id)
+      else query.eq('metadata->>recurrence_group_id', reservation.recurrence_group_id)
+
+      const { data: groupRefunds } = await query
+      if (groupRefunds && groupRefunds.length > 0) completedRefunds = groupRefunds
+    }
+
+    const totalRefunded = completedRefunds?.reduce((sum, r) => Number(r.amount) + sum, 0) || 0
 
     // For bulk payments, ensure we don't refund more than the reservation amount
     // reservation.amount_paid is in pesos, refundableAmount is in pesos 
@@ -195,10 +226,10 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
 
     const paymongoPaymentId = paymentToRefund.external_id || paymentToRefund.metadata?.paymongo_payment?.id
 
-    // Cap refund at reservation amount_paid AND at the individual payment amount
-    const amountPaidCentavos = Math.round(reservation.amount_paid * 100)
+    // Cap refund at reservation total_amount AND at the individual payment amount
+    const reservationTotalCentavos = Math.round(reservation.total_amount * 100)
     const paymentAmountCentavos = Math.round(paymentToRefund.amount * 100)
-    const actualRefundAmountCentavos = Math.min(refundableAmountCentavos, amountPaidCentavos, paymentAmountCentavos)
+    const actualRefundAmountCentavos = Math.min(refundableAmountCentavos, reservationTotalCentavos, paymentAmountCentavos)
 
     // 5. Create refund record
     const { data: refundRecord, error: insertError } = await supabase
@@ -217,7 +248,9 @@ export async function requestRefundAction(params: RefundRequestParams): Promise<
           requested_at: new Date().toISOString(),
           original_payment_amount: paymentToRefund.amount,
           original_reservation_status: reservation.status,
-          is_bulk_partial_refund: !!reservation.recurrence_group_id
+          is_bulk_partial_refund: !!(reservation.recurrence_group_id || reservation.booking_id),
+          booking_id: reservation.booking_id,
+          recurrence_group_id: reservation.recurrence_group_id
         }
       })
       .select()
@@ -931,7 +964,7 @@ async function handleSuccessfulRefund(
   // Update reservation status
   const { data: reservation } = await supabase
     .from('reservations')
-    .select('metadata')
+    .select('metadata, booking_id')
     .eq('id', reservationId)
     .single()
 
@@ -947,6 +980,34 @@ async function handleSuccessfulRefund(
       }
     })
     .eq('id', reservationId)
+
+  // Update parent booking if it exists
+  const bookingId = reservation?.booking_id
+  if (bookingId) {
+    const { data: booking } = await supabase
+      .from('bookings')
+      .select('amount_paid, total_amount')
+      .eq('id', bookingId)
+      .single()
+
+    if (booking) {
+      const { data: refundMap } = await supabase
+        .from('refunds')
+        .select('amount')
+        .eq('id', refundId)
+        .single()
+      
+      const refundedPesos = (refundMap?.amount || 0) / 100
+      const newAmountPaid = Math.max(0, booking.amount_paid - refundedPesos)
+      const newRemainingBalance = booking.total_amount - newAmountPaid
+      
+      await supabase.from('bookings').update({
+        amount_paid: newAmountPaid,
+        remaining_balance: newRemainingBalance,
+        payment_status: newAmountPaid <= 0 ? 'refunded' : 'partially_paid',
+      }).eq('id', bookingId)
+    }
+  }
 
   // Create notification
   await createNotification({

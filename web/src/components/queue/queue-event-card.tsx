@@ -18,8 +18,24 @@ interface QueueEventCardProps {
 const modeLabel = (mode: string) =>
   mode === 'competitive' ? 'Competitive' : 'Open Play'
 
-const skillBadgeLabel = (mode: string) =>
-  mode === 'competitive' ? 'Intermediate+' : 'All Levels'
+const skillBadgeLabel = (mode: string, min?: number | null, max?: number | null) => {
+  if (min != null || max != null) {
+    const low = min ?? 1
+    const high = max ?? 10
+    const getTierName = (l: number) => l <= 3 ? 'Beginner' : l <= 6 ? 'Intermediate' : l <= 8 ? 'Advanced' : 'Elite'
+    
+    if (low === 1 && high === 3) return 'Beginner Only'
+    if (low === 4 && high === 6) return 'Intermediate Only'
+    if (low === 7 && high === 8) return 'Advanced Only'
+    if (low === 9 && high === 10) return 'Elite Only'
+    
+    const minTier = getTierName(low)
+    const maxTier = getTierName(high)
+    if (minTier === maxTier) return `${minTier} Only`
+    return `${minTier} - ${maxTier}`
+  }
+  return mode === 'competitive' ? 'Competitive (No Bracket Set)' : 'Open to All'
+}
 
 /* ── Glass-gradient styles (matches "Your Performance" card) ── */
 const qecStyles = `
@@ -255,7 +271,7 @@ export function QueueEventCard({ queue, onBack, children, actionSlot }: QueueEve
             {/* Badges */}
             <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-white/15 backdrop-blur-sm text-white border border-white/20">
-                {skillBadgeLabel(mode)}
+                {skillBadgeLabel(mode, queue.minSkillLevel, queue.maxSkillLevel)}
               </span>
             </div>
 

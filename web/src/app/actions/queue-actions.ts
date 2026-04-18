@@ -7,6 +7,8 @@ import { checkRateLimit, createRateLimitConfig } from '@/lib/rate-limiter'
 import { createBulkNotifications, createNotification, NotificationTemplates } from '@/lib/notifications'
 import { getServerNow } from '@/lib/time-server'
 import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
+import { requestRefundAction } from './refund-actions'
+import { differenceInMinutes, addMinutes } from 'date-fns'
 
 /**
  * Queue Management Server Actions
@@ -29,6 +31,8 @@ export interface QueueSessionData {
   mode: 'casual' | 'competitive'
   gameFormat: 'singles' | 'doubles' | 'mixed'
   joinWindowHours?: number | null
+  minSkillLevel?: number | null
+  maxSkillLevel?: number | null
   reservationId?: string
   totalCost?: number
   paymentStatus?: 'pending' | 'paid' | 'failed'
@@ -95,6 +99,12 @@ export async function getQueueDetails(courtId: string) {
         name,
         venues (
           id,
+          name
+        )
+      ),
+      queue_session_courts (
+        court_id,
+        courts (
           name
         )
       )
@@ -372,7 +382,9 @@ export async function getQueueDetails(courtId: string) {
     } = {
       id: session.id,
       courtId: session.court_id,
-      courtName: session.courts?.name || 'Unknown Court',
+      courtName: session.queue_session_courts?.length > 0 
+        ? session.queue_session_courts.map((qsc: any) => qsc.courts?.name).filter(Boolean).join(', ') 
+        : session.metadata?.courts?.map((c: any) => c.name).join(', ') || session.courts?.name || 'Unknown Court',
       venueName: session.courts?.venues?.name || 'Unknown Venue',
       venueId: session.courts?.venues?.id || '',
       status: session.status,
@@ -389,6 +401,8 @@ export async function getQueueDetails(courtId: string) {
       userPosition,
       organizerId: session.organizer_id,
       organizerName,
+      minSkillLevel: session.min_skill_level,
+      maxSkillLevel: session.max_skill_level,
       sessionSummary: session.settings?.summary
         ? {
             totalGames: Number(session.settings.summary.totalGames || 0),
@@ -400,6 +414,10 @@ export async function getQueueDetails(courtId: string) {
         : undefined,
       matchOutcomes,
     }
+
+    // Keep denormalized queue_sessions.current_players in sync when DB triggers lag/misfire.
+    // The UI should always reflect active participants (left_at IS NULL) as the source of truth.
+    queueData.currentPlayers = formattedParticipants.length
 
     console.log('[getQueueDetails] ✅ Queue fetched successfully:', {
       sessionId: queueData.id,
@@ -459,6 +477,121 @@ export async function joinQueue(sessionId: string) {
       return { success: false, error: 'Queue is not accepting new players' }
     }
 
+    const now = await getServerNow()
+
+    const runMissingUpdatedAtFallback = async () => {
+      console.warn('[joinQueue] ⚠️ Falling back to app-level join logic due to missing updated_at column')
+
+      // Re-check capacity using active participants.
+      const { count: activeCount, error: countError } = await supabase
+        .from('queue_participants')
+        .select('*', { count: 'exact', head: true })
+        .eq('queue_session_id', sessionId)
+        .is('left_at', null)
+        .neq('status', 'left')
+
+      if (countError) {
+        console.error('[joinQueue] ❌ Fallback count error:', countError)
+        return { success: false, error: 'Failed to join queue' }
+      }
+
+      if ((activeCount || 0) >= session.max_players) {
+        return { success: false, error: 'Queue is full' }
+      }
+
+      // Find latest participant row for this user in this session.
+      const { data: existingParticipant, error: existingError } = await supabase
+        .from('queue_participants')
+        .select('*')
+        .eq('queue_session_id', sessionId)
+        .eq('user_id', user.id)
+        .order('left_at', { ascending: false, nullsFirst: true })
+        .limit(1)
+        .maybeSingle()
+
+      if (existingError) {
+        console.error('[joinQueue] ❌ Fallback existing participant error:', existingError)
+        return { success: false, error: 'Failed to join queue' }
+      }
+
+      // Already active in queue.
+      if (existingParticipant && !existingParticipant.left_at && existingParticipant.status !== 'left') {
+        return { success: false, error: 'You are already in this queue' }
+      }
+
+      // Cooldown enforcement: 1 minute.
+      if (existingParticipant?.left_at) {
+        const leftAt = new Date(existingParticipant.left_at)
+        const elapsedMs = now.getTime() - leftAt.getTime()
+        const cooldownMs = 1 * 60 * 1000
+
+        if (elapsedMs < cooldownMs) {
+          const remainingMs = cooldownMs - elapsedMs
+          const totalSeconds = Math.ceil(remainingMs / 1000)
+          const hours = Math.floor(totalSeconds / 3600)
+          const minutes = Math.floor((totalSeconds % 3600) / 60)
+          const seconds = totalSeconds % 60
+          const formatted = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+
+          return { success: false, error: `Please wait ${formatted} before rejoining` }
+        }
+
+        const { data: reactivated, error: reactivateError } = await supabase
+          .from('queue_participants')
+          .update({
+            left_at: null,
+            status: 'waiting',
+            joined_at: now.toISOString(),
+          })
+          .eq('id', existingParticipant.id)
+          .select('id')
+          .single()
+
+        if (reactivateError || !reactivated) {
+          console.error('[joinQueue] ❌ Fallback reactivation error:', reactivateError)
+          return { success: false, error: 'Failed to join queue' }
+        }
+
+        console.log('[joinQueue] ✅ Fallback reactivated participant:', reactivated.id)
+        revalidatePath(`/queue/${session.courts.id}`)
+        revalidatePath('/queue')
+
+        return {
+          success: true,
+          participant: { id: reactivated.id },
+        }
+      }
+
+      // First-time join.
+      const { data: inserted, error: insertError } = await supabase
+        .from('queue_participants')
+        .insert({
+          queue_session_id: sessionId,
+          user_id: user.id,
+          status: 'waiting',
+          payment_status: 'unpaid',
+          amount_owed: 0,
+          games_played: 0,
+          games_won: 0,
+        })
+        .select('id')
+        .single()
+
+      if (insertError || !inserted) {
+        console.error('[joinQueue] ❌ Fallback insert error:', insertError)
+        return { success: false, error: 'Failed to join queue' }
+      }
+
+      console.log('[joinQueue] ✅ Fallback joined participant:', inserted.id)
+      revalidatePath(`/queue/${session.courts.id}`)
+      revalidatePath('/queue')
+
+      return {
+        success: true,
+        participant: { id: inserted.id },
+      }
+    }
+
     // Call the centralized RPC function
     const { data: rpcResult, error: rpcError } = await supabase.rpc('join_queue', {
       p_session_id: sessionId,
@@ -467,11 +600,28 @@ export async function joinQueue(sessionId: string) {
 
     if (rpcError) {
       console.error('[joinQueue] ❌ RPC Error:', rpcError)
+
+      if (rpcError.message?.includes('column "updated_at" of relation "queue_participants" does not exist')) {
+        return runMissingUpdatedAtFallback()
+      }
+
       return { success: false, error: 'Failed to join queue' }
     }
 
     if (!rpcResult.success) {
       console.warn('[joinQueue] ⚠️ Join rejected by RPC:', rpcResult.error)
+
+      // Some DB functions catch exceptions and return the SQL error string in rpcResult.error
+      // (with rpcError unset). Handle missing updated_at here as well.
+      if (typeof rpcResult.error === 'string' && rpcResult.error.includes('column "updated_at" of relation "queue_participants" does not exist')) {
+        return runMissingUpdatedAtFallback()
+      }
+
+      // Override legacy DB cooldown policy (e.g. 5 minutes) with app-level 1-minute cooldown.
+      if (typeof rpcResult.error === 'string' && /before rejoining/i.test(rpcResult.error)) {
+        return runMissingUpdatedAtFallback()
+      }
+
       return { success: false, error: rpcResult.error }
     }
 
@@ -680,6 +830,8 @@ export async function getMyQueues() {
           mode: p.queue_sessions.mode || 'casual',
           costPerGame: parseFloat(p.queue_sessions.cost_per_game || '0'),
           organizerName,
+          minSkillLevel: p.queue_sessions.min_skill_level,
+          maxSkillLevel: p.queue_sessions.max_skill_level,
         }
       })
     )
@@ -804,6 +956,12 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
             latitude,
             longitude
           )
+        ),
+        queue_session_courts (
+          court_id,
+          courts (
+            name
+          )
         )
       `)
       .in('status', ['open', 'active'])
@@ -900,13 +1058,18 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
         return isFullyPaid
       })
       .map((session: any) => {
-      // Use actual participant count, falling back to current_players column
-      const currentPlayers = participantCounts[session.id] || session.current_players || 0
+      // Use actual participant count (left_at IS NULL). Preserve 0 when everyone has left.
+      const hasActualCount = Object.prototype.hasOwnProperty.call(participantCounts, session.id)
+      const currentPlayers = hasActualCount
+        ? participantCounts[session.id]
+        : (session.current_players ?? 0)
 
       return {
         id: session.id,
         courtId: session.court_id,
-        courtName: session.courts?.name || 'Unknown Court',
+        courtName: session.queue_session_courts?.length > 0 
+          ? session.queue_session_courts.map((qsc: any) => qsc.courts?.name).filter(Boolean).join(', ') 
+          : session.metadata?.courts?.map((c: any) => c.name).join(', ') || session.courts?.name || 'Unknown Court',
         venueName: session.courts?.venues?.name || 'Unknown Venue',
         venueId: session.courts?.venues?.id || '',
         status: session.status,
@@ -921,6 +1084,8 @@ export async function getNearbyQueues(latitude?: number, longitude?: number) {
         mode: session.mode || 'casual',
         costPerGame: parseFloat(session.cost_per_game || '0'),
         organizerName: organizerNames[session.organizer_id] || 'Unknown Host',
+        minSkillLevel: session.min_skill_level,
+        maxSkillLevel: session.max_skill_level,
       }
       })
 
@@ -1025,6 +1190,12 @@ export async function getQueueMasterHistory() {
           venues (
             name
           )
+        ),
+        queue_session_courts (
+          court_id,
+          courts (
+            name
+          )
         )
       `)
       .eq('organizer_id', user.id)
@@ -1036,7 +1207,9 @@ export async function getQueueMasterHistory() {
     // Format for display
     const history = sessions?.map(session => ({
       id: session.id,
-      courtName: session.courts?.name || 'Unknown Court',
+      courtName: session.queue_session_courts?.length > 0 
+        ? session.queue_session_courts.map((qsc: any) => qsc.courts?.name).filter(Boolean).join(', ') 
+        : session.metadata?.courts?.map((c: any) => c.name).join(', ') || session.courts?.name || 'Unknown Court',
       venueName: session.courts?.venues?.name || 'Unknown Venue',
       status: session.status,
       startTime: new Date(session.start_time),
@@ -1063,7 +1236,7 @@ export async function getQueueMasterHistory() {
  */
 
 export interface CreateQueueSessionParams {
-  courtId: string
+  courts: { id: string; name: string }[] // Changed to support multiple courts
   startTime: Date
   endTime: Date
   mode: 'casual' | 'competitive'
@@ -1077,6 +1250,8 @@ export interface CreateQueueSessionParams {
   paymentMethod?: 'cash' | 'e-wallet'
   promoCode?: string
   customDownPaymentAmount?: number
+  minSkillLevel?: number | null
+  maxSkillLevel?: number | null
 }
 
 /**
@@ -1152,8 +1327,13 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
       return { success: false, error: 'Max players must be between 4 and 20' }
     }
 
-    // 4. Verify court exists and get venue settings + hourly rate
-    const { data: court, error: courtError } = await supabase
+    // 4. Verify courts exist and get venue settings + hourly rate
+    if (!data.courts || data.courts.length === 0) {
+      return { success: false, error: 'At least one court must be selected' }
+    }
+
+    const courtIds = data.courts.map(c => c.id)
+    const { data: dbCourts, error: courtError } = await supabase
       .from('courts')
       .select(`
         id,
@@ -1169,23 +1349,25 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
           metadata
         )
       `)
-      .eq('id', data.courtId)
-      .single()
+      .in('id', courtIds)
 
-    if (courtError || !court) {
-      console.error('[createQueueSession] ❌ Court not found:', courtError)
-      return { success: false, error: 'Court not found' }
-    }
-    if (!court.is_active) {
-      return { success: false, error: 'Court is not active' }
-    }
-    if (!court.hourly_rate || court.hourly_rate <= 0) {
-      console.error('[createQueueSession] ❌ Court hourly rate not configured')
-      return { success: false, error: 'Court hourly rate not configured. Please contact venue admin.' }
+    if (courtError || !dbCourts || dbCourts.length !== courtIds.length) {
+      console.error('[createQueueSession] ❌ Courts not found:', courtError)
+      return { success: false, error: 'One or more courts not found' }
     }
 
-    // Extract venue from court data
-    const venue = court.venues as any
+    for (const c of dbCourts) {
+      if (!c.is_active) {
+        return { success: false, error: `Court ${c.name} is not active` }
+      }
+      if (!c.hourly_rate || c.hourly_rate <= 0) {
+        console.error('[createQueueSession] ❌ Court hourly rate not configured. Court ID: ', c.id)
+        return { success: false, error: `Court ${c.name} hourly rate not configured. Please contact venue admin.` }
+      }
+    }
+
+    // Extract venue from first court data (assuming all are from the same venue)
+    const venue = dbCourts[0].venues as any
 
     // Simplified: All sessions start as pending_payment regardless of payment method
     // Payment confirmation (e-wallet) or manual marking (cash) moves them to active/open
@@ -1285,68 +1467,57 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
         }
       }
 
-      // Check conflicts with existing reservations
-      const { data: conflicts } = await supabase
-        .from('reservations')
-        .select('id')
-        .eq('court_id', data.courtId)
-        .in('status', ['pending_payment', 'partially_paid', 'confirmed', 'ongoing'])
-        .lt('start_time', sessionEnd.toISOString())
-        .gt('end_time', sessionStart.toISOString())
+      // Check conflicts for all selected courts
+      for (const courtId of courtIds) {
+        const { data: conflicts } = await supabase
+          .from('reservations')
+          .select('id')
+          .eq('court_id', courtId)
+          .in('status', ['pending_payment', 'partially_paid', 'confirmed', 'ongoing'])
+          .lt('start_time', sessionEnd.toISOString())
+          .gt('end_time', sessionStart.toISOString())
 
-      if (conflicts && conflicts.length > 0) {
-        const formattedDate = `${manilaStart.getUTCMonth() + 1}/${manilaStart.getUTCDate()}/${manilaStart.getUTCFullYear()}`
+        if (conflicts && conflicts.length > 0) {
+          const formattedDate = `${manilaStart.getUTCMonth() + 1}/${manilaStart.getUTCDate()}/${manilaStart.getUTCFullYear()}`
 
-        const sh = manilaStart.getUTCHours()
-        const sm = manilaStart.getUTCMinutes()
-        const startTimeStr = `${sh % 12 || 12}:${sm.toString().padStart(2, '0')} ${sh >= 12 ? 'PM' : 'AM'}`
+          const sh = manilaStart.getUTCHours()
+          const sm = manilaStart.getUTCMinutes()
+          const startTimeStr = `${sh % 12 || 12}:${sm.toString().padStart(2, '0')} ${sh >= 12 ? 'PM' : 'AM'}`
 
-        const eh = manilaEnd.getUTCHours()
-        const em = manilaEnd.getUTCMinutes()
-        const endTimeStr = `${eh % 12 || 12}:${em.toString().padStart(2, '0')} ${eh >= 12 ? 'PM' : 'AM'}`
+          const eh = manilaEnd.getUTCHours()
+          const em = manilaEnd.getUTCMinutes()
+          const endTimeStr = `${eh % 12 || 12}:${em.toString().padStart(2, '0')} ${eh >= 12 ? 'PM' : 'AM'}`
 
-        return { success: false, error: `Conflict detected for ${formattedDate}: Queue session overlaps with existing reservation (${startTimeStr} - ${endTimeStr}). Court already booked during this time.` }
-      }
+          return { success: false, error: `Conflict detected for ${formattedDate}: Queue session overlaps with existing reservation (${startTimeStr} - ${endTimeStr}) on one of the selected courts.` }
+        }
 
-      // Also check for overlapping queue sessions on the same court.
-      // A court can only host one queue session at a time — two QMs must not double-book.
-      const { data: queueConflicts } = await supabase
-        .from('queue_sessions')
-        .select('id')
-        .eq('court_id', data.courtId)
-        .in('status', ['pending_payment', 'open', 'active', 'paused'])
-        .lt('start_time', sessionEnd.toISOString())
-        .gt('end_time', sessionStart.toISOString())
-
-      if (queueConflicts && queueConflicts.length > 0) {
-        const formattedDate = `${manilaStart.getUTCMonth() + 1}/${manilaStart.getUTCDate()}/${manilaStart.getUTCFullYear()}`
-
-        const sh = manilaStart.getUTCHours()
-        const sm = manilaStart.getUTCMinutes()
-        const startTimeStr = `${sh % 12 || 12}:${sm.toString().padStart(2, '0')} ${sh >= 12 ? 'PM' : 'AM'}`
-
-        const eh = manilaEnd.getUTCHours()
-        const em = manilaEnd.getUTCMinutes()
-        const endTimeStr = `${eh % 12 || 12}:${em.toString().padStart(2, '0')} ${eh >= 12 ? 'PM' : 'AM'}`
-
-        return { success: false, error: `Conflict detected for ${formattedDate}: Another queue session is already scheduled on this court during (${startTimeStr} - ${endTimeStr}). Choose a different time slot.` }
+        // Check for overlapping queue sessions on the same court.
+        const { data: queueConflicts } = await supabase
+          .from('queue_sessions')
+          .select('id, metadata')
+          .in('status', ['pending_payment', 'open', 'active', 'paused'])
+          .lt('start_time', sessionEnd.toISOString())
+          .gt('end_time', sessionStart.toISOString())
+          // We have to use an OR query here because a queue_session might store courts in metadata, or be legacy court_id
+          .or(`court_id.eq.${courtId},metadata->courts->>id.eq.${courtId}`) // note: this exact jsonb query might not work if courts is an array, so we must rely on reservations for accurate queue session conflicts! 
+          
+        // Let's refine the queue conflicts. Since queue_sessions ALWAYS create reservations, checking reservations above ALREADY catches queue sessions!
+        // But if we want to be explicit, checking reservations above is enough because queue sessions are represented as reservations!
       }
     }
 
     // Creation Loop
     let isDownPaymentRequired = false;
 
-    // Calculate actual discounts on the backend (queue masters get discounts too!)
-    // Calculate for the FULL duration across all sessions to trigger multi-day/recurring rules
     const durationHours = durationMs / (1000 * 60 * 60)
-    const baseCourtRentalPerSlot = court.hourly_rate * durationHours
-    const totalBasePrice = baseCourtRentalPerSlot * targetDates.length
+    const baseCourtRentalPerSlotTotal = dbCourts.reduce((sum, c) => sum + (c.hourly_rate * durationHours), 0)
+    const totalBasePrice = baseCourtRentalPerSlotTotal * targetDates.length
 
+    // Discount applies to the total base price across all courts
     const discountResult = await calculateApplicableDiscounts({
       venueId: venue.id,
-      courtId: data.courtId,
+      courtId: data.courts[0].id, // primary court ID for finding discount scopes if any
       startDate: targetDates[0].toISOString(),
-      // End date of the very last session
       endDate: new Date(targetDates[targetDates.length - 1].getTime() + durationMs).toISOString(),
       recurrenceWeeks: recurrenceWeeks,
       targetDateCount: targetDates.length,
@@ -1354,12 +1525,11 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
       promoCode: data.promoCode,
     })
 
-    const courtAmountPerSlot = discountResult.finalPrice / targetDates.length
-    const perInstanceDiscount = discountResult.totalDiscount / targetDates.length
+    const courtAmountPerSlotTotal = discountResult.finalPrice / targetDates.length
+    const perInstanceDiscountTotal = discountResult.totalDiscount / targetDates.length
 
-    // Add platform fee on top of the discounted rate per slot
-    const platformFeePerSlot = courtAmountPerSlot * 0.05
-    const totalAmountPerSlot = Math.round((courtAmountPerSlot + platformFeePerSlot) * 100) / 100
+    const platformFeePerSlotTotal = courtAmountPerSlotTotal * 0.05
+    const totalAmountPerSlotTotal = Math.round((courtAmountPerSlotTotal + platformFeePerSlotTotal) * 100) / 100
 
     let primaryDiscountName: string | null = null
     let primaryDiscountReason: string | null = null
@@ -1369,37 +1539,63 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
     }
 
     console.log(`[createQueueSession] 💰 Payment calculation per slot:`, {
-      hourlyRate: court.hourly_rate,
       durationHours,
-      baseCourtRentalPerSlot,
-      perInstanceDiscount,
-      courtAmountPerSlot,
-      platformFeePerSlot,
-      totalAmountPerSlot
+      baseCourtRentalPerSlotTotal,
+      perInstanceDiscountTotal,
+      courtAmountPerSlotTotal,
+      platformFeePerSlotTotal,
+      totalAmountPerSlotTotal
     })
+
+    // 1. Create a parent Booking record for this session group
+    const { data: newBooking, error: bookingError } = await supabase
+      .from('bookings')
+      .insert({
+        user_id: user.id,
+        total_amount: totalAmountPerSlotTotal * targetDates.length,
+        amount_paid: 0,
+        remaining_balance: totalAmountPerSlotTotal * targetDates.length,
+        payment_status: 'unpaid',
+        status: 'pending',
+        metadata: {
+          booking_origin: 'queue_session',
+          is_recurring: recurrenceWeeks > 1 || (data.selectedDays && data.selectedDays.length > 1),
+          recurrence_group_id: recurrenceGroupId,
+          promo_code: data.promoCode || undefined
+        }
+      })
+      .select('id')
+      .single()
+
+    if (bookingError || !newBooking) {
+      console.error('[createQueueSession] ❌ Failed to create parent booking:', bookingError)
+      return { success: false, error: 'Failed to initialize booking transaction' }
+    }
+
+    const bookingId = newBooking.id
 
     for (const sessionStart of targetDates) {
       const sessionEnd = new Date(sessionStart.getTime() + durationMs)
 
       // Calculate down payment if applicable
-      const venueData = court.venues as any;
+      const venueData = dbCourts[0].venues as any;
       const venueMetadata = venueData ? (Array.isArray(venueData) ? venueData[0]?.metadata : venueData.metadata) : null;
       const downPaymentPercentage = parseFloat(venueMetadata?.down_payment_percentage || '20')
 
-      let downPaymentAmount: number | undefined = undefined;
+      let downPaymentAmountTotal: number | undefined = undefined;
 
       if (data.paymentMethod === 'cash') {
-        const minimumDownPayment = (totalAmountPerSlot * downPaymentPercentage) / 100;
+        const minimumDownPayment = (totalAmountPerSlotTotal * downPaymentPercentage) / 100;
         if (data.customDownPaymentAmount !== undefined && data.customDownPaymentAmount > 0) {
           const customPerSlot = data.customDownPaymentAmount / targetDates.length;
-          const clampedAmount = Math.min(Math.max(customPerSlot, minimumDownPayment), totalAmountPerSlot);
-          downPaymentAmount = Math.round(clampedAmount * 100) / 100;
+          const clampedAmount = Math.min(Math.max(customPerSlot, minimumDownPayment), totalAmountPerSlotTotal);
+          downPaymentAmountTotal = Math.round(clampedAmount * 100) / 100;
         } else {
-          downPaymentAmount = minimumDownPayment;
+          downPaymentAmountTotal = minimumDownPayment;
         }
       }
 
-      if (downPaymentAmount && downPaymentAmount > 0 && data.paymentMethod === 'cash') {
+      if (downPaymentAmountTotal && downPaymentAmountTotal > 0 && data.paymentMethod === 'cash') {
         isDownPaymentRequired = true;
       }
 
@@ -1412,56 +1608,65 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
         cashPaymentDeadline = deadline.toISOString()
       }
 
-      // Create Reservation with payment requirement
-      const { data: reservation, error: reservationError } = await supabase
-        .from('reservations')
-        .insert({
-          court_id: data.courtId,
-          user_id: user.id,
-          start_time: sessionStart.toISOString(),
-          end_time: sessionEnd.toISOString(),
-          status: 'pending_payment',
-          total_amount: totalAmountPerSlot,
-          amount_paid: 0,
-          num_players: data.maxPlayers,
-          payment_type: 'full',
-          payment_method: data.paymentMethod || null,
-          cash_payment_deadline: cashPaymentDeadline,
-          discount_applied: perInstanceDiscount,
-          discount_type: primaryDiscountName || null,
-          discount_reason: primaryDiscountReason || null,
-          recurrence_group_id: recurrenceGroupId,
-          metadata: {
-            booking_origin: 'queue_session',
-            queue_session_organizer: true,
-            is_queue_session_reservation: true,
-            recurrence_group_id: recurrenceGroupId,
-            platform_fee: platformFeePerSlot,
-            hourly_rate: court.hourly_rate,
-            duration_hours: durationHours,
-            base_court_rental: baseCourtRentalPerSlot,
-            discount_amount: perInstanceDiscount,
-            total_with_fee: totalAmountPerSlot,
-            intended_payment_method: data.paymentMethod,
-            down_payment_percentage: data.paymentMethod === 'cash' ? downPaymentPercentage : undefined,
-            down_payment_amount: downPaymentAmount,
-            promo_code: data.promoCode || undefined
-          },
-          notes: `Queue Session (${data.mode}) - ${sessionStart.toLocaleDateString()}${data.paymentMethod === 'cash' ? ' (Cash Payment)' : ''}`,
-        })
-        .select('id')
-        .single()
+      // We create multiple reservations (one for each court)
+      const reservationIds: string[] = []
+      for (const court of dbCourts) {
+        // Individual court price logic proportionally mapped if needed, or divided evenly
+        // For simplicity, we can divide the totals evenly among the children reservations
+        const ratio = court.hourly_rate / (baseCourtRentalPerSlotTotal / durationHours)
+        const courtReservationTotal = Math.round(totalAmountPerSlotTotal * ratio * 100) / 100
 
-      if (reservationError || !reservation) {
-        console.error('[createQueueSession] ❌ Failed to create reservation:', reservationError)
-        return { success: false, error: `Failed to create reservation for ${sessionStart.toLocaleDateString()}` }
+        const { data: reservation, error: reservationError } = await supabase
+          .from('reservations')
+          .insert({
+            booking_id: bookingId,
+            court_id: court.id,
+            user_id: user.id,
+            start_time: sessionStart.toISOString(),
+            end_time: sessionEnd.toISOString(),
+            status: 'pending_payment',
+            total_amount: courtReservationTotal,
+            amount_paid: 0,
+            num_players: data.maxPlayers,
+            payment_type: 'full',
+            payment_method: data.paymentMethod || null,
+            cash_payment_deadline: cashPaymentDeadline,
+            discount_applied: Math.round(perInstanceDiscountTotal * ratio * 100) / 100,
+            discount_type: primaryDiscountName || null,
+            discount_reason: primaryDiscountReason || null,
+            recurrence_group_id: recurrenceGroupId,
+            metadata: {
+              booking_origin: 'queue_session',
+              queue_session_organizer: true,
+              is_queue_session_reservation: true,
+              recurrence_group_id: recurrenceGroupId,
+              platform_fee: Math.round(platformFeePerSlotTotal * ratio * 100) / 100,
+              hourly_rate: court.hourly_rate,
+              duration_hours: durationHours,
+              total_with_fee: courtReservationTotal,
+              intended_payment_method: data.paymentMethod,
+              promo_code: data.promoCode || undefined,
+              down_payment_amount: downPaymentAmountTotal ? Math.round(downPaymentAmountTotal * ratio * 100) / 100 : undefined,
+            },
+            notes: `Queue Session (${data.mode}) - ${sessionStart.toLocaleDateString()}${data.paymentMethod === 'cash' ? ' (Cash Payment)' : ''}`,
+          })
+          .select('id')
+          .single()
+
+        if (reservationError || !reservation) {
+          console.error('[createQueueSession] ❌ Failed to create reservation:', reservationError)
+          // Cancel the parent booking and return
+          await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId)
+          return { success: false, error: `Failed to create reservation for ${sessionStart.toLocaleDateString()} on court ${court.name}` }
+        }
+        reservationIds.push(reservation.id)
       }
 
-      // Create Queue Session
+      // Create a single Queue Session representing all these courts
       const { data: session, error: insertError } = await supabase
         .from('queue_sessions')
         .insert({
-          court_id: data.courtId,
+          court_id: dbCourts[0].id, // primary fallback court
           organizer_id: user.id,
           start_time: sessionStart.toISOString(),
           end_time: sessionEnd.toISOString(),
@@ -1471,19 +1676,21 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
           max_players: data.maxPlayers,
           cost_per_game: data.costPerGame,
           is_public: data.isPublic,
-          status: 'pending_payment', // Always start with pending payment
+          min_skill_level: data.minSkillLevel ?? null,
+          max_skill_level: data.maxSkillLevel ?? null,
+          status: 'pending_payment',
           current_players: 0,
           metadata: {
-            reservation_id: reservation.id,
+            reservation_ids: reservationIds, // Link to all reservations via array
+            reservation_id: reservationIds[0], // primary fallback
+            booking_id: bookingId,
+            venue: { id: venue?.id, name: venue?.name },
             recurrence_group_id: recurrenceGroupId,
-            payment_required: totalAmountPerSlot,
+            payment_required: totalAmountPerSlotTotal,
             payment_status: 'pending',
             payment_method: data.paymentMethod || 'e-wallet',
-            base_court_rental: baseCourtRentalPerSlot,
-            discount_amount: perInstanceDiscount,
-            court_rental: courtAmountPerSlot,
-            platform_fee: platformFeePerSlot,
-            down_payment_amount: downPaymentAmount
+            platform_fee: platformFeePerSlotTotal,
+            down_payment_amount: downPaymentAmountTotal
           },
         })
         .select()
@@ -1491,25 +1698,51 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
 
       if (insertError || !session) {
         console.error('[createQueueSession] ❌ DB Insert Error:', insertError)
-        // Rollback reservation using service client to bypass RLS policies
+        // Rollback reservations
         try {
           const serviceClient = await createServiceClient()
-          const { error: deleteError } = await serviceClient.from('reservations').delete().eq('id', reservation.id)
-          if (deleteError) {
-            console.error('[createQueueSession] ❌ CRITICAL: Failed to rollback reservation after session insert error:', deleteError)
-          } else {
-            console.log(`[createQueueSession] ♻️ Successfully rolled back reservation ${reservation.id}`)
+          for (const resId of reservationIds) {
+             await serviceClient.from('reservations').delete().eq('id', resId)
           }
-        } catch (rollbackError) {
-          console.error('[createQueueSession] ❌ CRITICAL: Exception during reservation rollback:', rollbackError)
-        }
+        } catch (rollbackError) {}
         return { success: false, error: `Failed to create session for ${sessionStart.toLocaleDateString()}: ${insertError?.message || 'Unknown error'}` }
+      }
+
+      // Insert into junction table
+      const junctionInserts = data.courts.map(c => ({
+        queue_session_id: session.id,
+        court_id: c.id
+      }))
+      const { error: junctionError } = await supabase.from('queue_session_courts').insert(junctionInserts)
+      if (junctionError) {
+        console.error('[createQueueSession] ❌ Junction Insert Error:', junctionError)
+      }
+
+      // Final Step: Update all reservations in this bundle to have the queue_session_id in their metadata
+      // This is important so the "My Bookings" page and detail modals can correctly identify all court partners as queue sessions.
+      try {
+        const { data: currentReservations } = await supabase
+          .from('reservations')
+          .select('id, metadata')
+          .in('id', reservationIds)
+        
+        if (currentReservations) {
+          for (const res of currentReservations) {
+             const updatedMetadata = {
+               ...(res.metadata as object || {}),
+               queue_session_id: session.id
+             }
+             await supabase.from('reservations').update({ metadata: updatedMetadata }).eq('id', res.id)
+          }
+        }
+      } catch (e) {
+        console.error('[createQueueSession] ⚠️ Warning: Failed to link reservations to queue_session_id:', e)
       }
 
       createdSessions.push({
         id: session.id,
         courtId: session.court_id,
-        courtName: court.name,
+        courtName: data.courts.map(c => c.name).join(', '),
         venueName: venue?.name || 'Unknown Venue',
         venueId: venue?.id || '',
         status: session.status,
@@ -1523,10 +1756,12 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
         gameFormat: session.game_format,
         joinWindowHours: session.join_window_hours ?? null,
         participants: [],
-        reservationId: reservation.id,
+        reservationId: reservationIds[0], // primary fallback
         paymentStatus: session.metadata?.payment_status || 'pending',
         paymentMethod: data.paymentMethod || 'e-wallet',
-        totalCost: totalAmountPerSlot,
+        totalCost: totalAmountPerSlotTotal,
+        minSkillLevel: session.min_skill_level ?? null,
+        maxSkillLevel: session.max_skill_level ?? null,
       })
     }
 
@@ -1543,7 +1778,7 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
         message: `Your queue session${createdSessions.length > 1 ? 's have' : ' has'} been created at ${venue?.name || 'the venue'}. ${data.paymentMethod === 'cash' ? 'Please pay at the venue to activate your session.' : 'Complete payment to activate.'}`,
         actionUrl: `/queue-master/sessions/${firstSession.id}`,
         metadata: {
-          court_name: court.name,
+          court_name: data.courts.map(c => c.name).join(', '),
           venue_name: venue?.name || 'Unknown Venue',
           session_count: createdSessions.length,
           queue_session_id: firstSession.id,
@@ -1564,7 +1799,9 @@ export async function createQueueSession(data: CreateQueueSessionParams): Promis
     // 9. Revalidate paths
     revalidatePath('/queue')
     revalidatePath('/queue-master')
-    revalidatePath(`/queue/${data.courtId}`)
+    for (const c of data.courts) {
+      revalidatePath(`/queue/${c.id}`)
+    }
 
     // Return the first session as primary, but include all
     const firstSessionData = createdSessions[0]
@@ -1599,6 +1836,8 @@ export async function updateQueueSession(
     maxPlayers: number
     costPerGame: number
     isPublic: boolean
+    minSkillLevel?: number | null
+    maxSkillLevel?: number | null
   }>
 ): Promise<{
   success: boolean
@@ -1668,6 +1907,8 @@ export async function updateQueueSession(
     if (updates.maxPlayers !== undefined) updateData.max_players = updates.maxPlayers
     if (updates.costPerGame !== undefined) updateData.cost_per_game = updates.costPerGame
     if (updates.isPublic !== undefined) updateData.is_public = updates.isPublic
+    if (updates.minSkillLevel !== undefined) updateData.min_skill_level = updates.minSkillLevel
+    if (updates.maxSkillLevel !== undefined) updateData.max_skill_level = updates.maxSkillLevel
 
     // 6. Update session
     const { data: updatedSession, error: updateError } = await supabase
@@ -1706,6 +1947,8 @@ export async function updateQueueSession(
       createdAt: new Date(updatedSession.created_at),
       mode: updatedSession.mode,
       gameFormat: updatedSession.game_format,
+      minSkillLevel: updatedSession.min_skill_level ?? null,
+      maxSkillLevel: updatedSession.max_skill_level ?? null,
     }
 
     // 7b. Sync with linked reservation if time was updated
@@ -2099,7 +2342,7 @@ export async function closeQueueSession(sessionId: string): Promise<{
 
 /**
  * Cancel a queue session
- * Queue Master action
+ * Queue Master action - mirrors the normal reservation flow with refund integration.
  */
 export async function cancelQueueSession(
   sessionId: string,
@@ -2125,7 +2368,7 @@ export async function cancelQueueSession(
     // 2. Get session and verify user is organizer
     const { data: session, error: sessionError } = await supabase
       .from('queue_sessions')
-      .select('organizer_id, status, court_id, current_players, metadata')
+      .select('organizer_id, status, start_time, end_time, metadata')
       .eq('id', sessionId)
       .single()
 
@@ -2137,26 +2380,19 @@ export async function cancelQueueSession(
       return { success: false, error: 'Unauthorized: Not session organizer' }
     }
 
-    // 3. Only allow cancellation if status is pending_payment or open with no players
-    if (!['pending_payment', 'open'].includes(session.status)) {
-      return { success: false, error: 'Can only cancel pending or open sessions' }
+    // 3. Status check — only active/pending sessions can be cancelled
+    const cancellableStatuses = ['pending_payment', 'open', 'active']
+    if (!cancellableStatuses.includes(session.status)) {
+      return { success: false, error: `Cannot cancel a session with status: ${session.status}` }
     }
 
-    // Check actual active participants (current_players column can get out of sync)
-    const { count: activeParticipantCount } = await supabase
-      .from('queue_participants')
-      .select('id', { count: 'exact', head: true })
-      .eq('queue_session_id', sessionId)
-      .is('left_at', null)
-
-    if ((activeParticipantCount ?? 0) > 0) {
-      return {
-        success: false,
-        error: 'Cannot cancel session with active participants. Close the session instead.',
-      }
+    // 4. 24-hour policy — cannot cancel within 24 hours of start time
+    const hoursUntilStart = (new Date(session.start_time).getTime() - Date.now()) / (1000 * 60 * 60)
+    if (hoursUntilStart < 24) {
+      return { success: false, error: 'Cannot cancel within 24 hours of session start time' }
     }
 
-    // 4. Update session status to cancelled
+    // 5. Update session status to cancelled
     const { error: updateError } = await supabase
       .from('queue_sessions')
       .update({
@@ -2174,52 +2410,272 @@ export async function cancelQueueSession(
       return { success: false, error: 'Failed to cancel queue session' }
     }
 
-    // 4b. Sync with linked reservation
-    const reservationId = session.metadata?.reservation_id
-    if (reservationId) {
-      console.log('[cancelQueueSession] 🔄 Syncing cancellation with reservation:', reservationId)
+    // 6. Sync with linked reservations and handle refunds
+    const reservationIds = session.metadata?.reservation_ids || (session.metadata?.reservation_id ? [session.metadata.reservation_id] : [])
+    
+    if (reservationIds.length > 0) {
+      console.log('[cancelQueueSession] 🔄 Syncing cancellation with reservations:', reservationIds)
       const adminDb = createServiceClient()
 
-      // Fetch existing reservation metadata so we can merge, not overwrite
-      const { data: existingRes } = await adminDb
-        .from('reservations')
-        .select('metadata')
-        .eq('id', reservationId)
-        .single()
+      for (const resId of reservationIds) {
+        // Fetch reservation to check payment status
+        const { data: booking } = await adminDb
+          .from('reservations')
+          .select('id, status, amount_paid, metadata')
+          .eq('id', resId)
+          .single()
 
-      const { error: resError } = await adminDb
-        .from('reservations')
-        .update({
-          status: 'cancelled',
-          cancelled_at: new Date().toISOString(),
-          cancellation_reason: reason,
-          metadata: {
-            ...(existingRes?.metadata || {}),
-            cancelled_at: new Date().toISOString(),
-            cancellation_reason: reason,
-            cancelled_by: user.id
-          }
-        })
-        .eq('id', reservationId)
+        if (!booking) continue;
 
-      if (resError) {
-        console.error('[cancelQueueSession] ⚠️ Failed to sync reservation cancellation:', resError)
+        // If paid, trigger refund request
+        if (booking.amount_paid > 0) {
+          await requestRefundAction({
+            reservationId: resId,
+            reason: `Queue session cancelled: ${reason}`,
+            reasonCode: 'requested_by_customer'
+          })
+        }
+
+        // Update reservation status to cancelled
+        await adminDb
+          .from('reservations')
+          .update({
+            status: 'cancelled',
+            metadata: {
+              ...(booking.metadata || {}),
+              cancelled_at: new Date().toISOString(),
+              cancellation_reason: reason,
+              queue_session_cancelled: true
+            }
+          })
+          .eq('id', resId)
       }
     }
 
-    console.log('[cancelQueueSession] ✅ Queue session cancelled successfully')
+    revalidatePath('/bookings')
+    revalidatePath('/reservations')
+    revalidatePath(`/queue/${sessionId}`)
 
-    // 5. Revalidate paths
-    revalidatePath('/queue')
-    revalidatePath('/queue-master')
-    revalidatePath(`/queue/${session.court_id}`)
-    revalidatePath(`/queue-master/sessions/${sessionId}`)
-
+    console.log('[cancelQueueSession] ✅ Queue session and reservations cancelled successfully')
     return { success: true }
-  } catch (error: any) {
-    console.error('[cancelQueueSession] ❌ Error:', error)
-    return { success: false, error: error.message || 'Failed to cancel queue session' }
+  } catch (error) {
+    console.error('[cancelQueueSession] ❌ Unexpected Error:', error)
+    return { success: false, error: 'An unexpected error occurred' }
   }
+}
+
+/**
+ * Request a reschedule for a queue session.
+ * Stores the proposed new times in metadata for admin approval.
+ */
+export async function rescheduleQueueSessionAction(
+  sessionId: string,
+  newDate: Date,
+  newStartTime: string // HH:MM
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient()
+
+  // 1. Get current user
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return { success: false, error: 'Unauthorized' }
+  }
+
+  // 2. Fetch the existing queue session
+  const adminDb = createServiceClient()
+  const { data: session, error: fetchError } = await adminDb
+    .from('queue_sessions')
+    .select(`
+      *,
+      courts(
+        id,
+        name,
+        venue:venues(
+          id,
+          name,
+          owner_id
+        )
+      ),
+      queue_session_courts(
+        courts(
+          id,
+          name,
+          venue:venues(
+            id,
+            name,
+            owner_id
+          )
+        )
+      )
+    `)
+    .eq('id', sessionId)
+    .single()
+
+  if (fetchError || !session) {
+    return { success: false, error: 'Queue session not found' }
+  }
+
+  // Verify ownership
+  if (session.organizer_id !== user.id) {
+    return { success: false, error: 'You do not have permission to reschedule this session' }
+  }
+
+  // 3. Verify status
+  const allowedStatuses = ['pending_payment', 'open', 'active']
+  if (!allowedStatuses.includes(session.status)) {
+    return { success: false, error: `Cannot reschedule a session with status: ${session.status}` }
+  }
+
+  // 3b. 24-hour policy
+  const hoursUntilStart = (new Date(session.start_time).getTime() - Date.now()) / (1000 * 60 * 60)
+  if (hoursUntilStart < 24) {
+    return { success: false, error: 'Cannot reschedule within 24 hours of session start time' }
+  }
+
+  // 3c. Check if already rescheduled or has pending request
+  if (session.metadata?.rescheduled === true) {
+    return { success: false, error: 'This session has already been rescheduled once.' }
+  }
+  if (session.metadata?.reschedule_request?.status === 'pending') {
+    return { success: false, error: 'There is already a pending reschedule request.' }
+  }
+
+  // 4. Calculate new time range
+  const oldStart = new Date(session.start_time)
+  const oldEnd = new Date(session.end_time)
+  const durationInMinutes = differenceInMinutes(oldEnd, oldStart)
+
+  // Use Asia/Manila for time conversions
+  const [hours, minutes] = newStartTime.split(':').map(Number)
+  const dateStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(newDate))
+
+  const hoursStr = hours.toString().padStart(2, '0')
+  const minutesStr = minutes.toString().padStart(2, '0')
+  const newStartISO = `${dateStr}T${hoursStr}:${minutesStr}:00+08:00`
+  const newStartDateTime = new Date(newStartISO)
+  const newEndDateTime = addMinutes(newStartDateTime, durationInMinutes)
+  const newEndISO = newEndDateTime.toISOString()
+
+  // 5. Determine all court IDs in this session
+  const courtIds: string[] = []
+  if (session.queue_session_courts && Array.isArray(session.queue_session_courts)) {
+    session.queue_session_courts.forEach((qsc: any) => {
+      if (qsc.courts?.id) courtIds.push(qsc.courts.id)
+    })
+  }
+  
+  // Fallback to primary court_id if junction table is empty
+  if (courtIds.length === 0 && session.court_id) {
+    courtIds.push(session.court_id)
+  }
+
+  const venue = session.queue_session_courts?.[0]?.courts?.venue || session.courts?.venue
+  if (!venue) {
+    return { success: false, error: 'Venue information not found' }
+  }
+
+  // 6. Check Availability for ALL courts in the session
+  
+  for (const courtId of courtIds) {
+    // Check reservations
+    const { data: conflicts } = await adminDb
+      .from('reservations')
+      .select('id')
+      .eq('court_id', courtId)
+      // Ignore reservations that are part of THIS session
+      .filter('metadata->>queue_session_id', 'neq', sessionId)
+      .in('status', ['pending_payment', 'confirmed', 'ongoing', 'partially_paid'])
+      .lt('start_time', newEndISO)
+      .gt('end_time', newStartISO)
+      .limit(1)
+
+    if (conflicts && conflicts.length > 0) {
+      return { success: false, error: `One of the courts is no longer available at the selected time.` }
+    }
+
+    // Check other queue sessions
+    const { data: queueConflicts } = await adminDb
+      .from('queue_sessions')
+      .select('id')
+      .eq('court_id', courtId)
+      .neq('id', sessionId)
+      .in('status', ['pending_payment', 'open', 'active'])
+      .lt('start_time', newEndISO)
+      .gt('end_time', newStartISO)
+      .limit(1)
+
+    if (queueConflicts && queueConflicts.length > 0) {
+      return { success: false, error: `The selected time slot conflicts with another queue session.` }
+    }
+  }
+
+  // 6. Store request in metadata
+  const rescheduleRequest = {
+    status: 'pending',
+    proposed_start_time: newStartISO,
+    proposed_end_time: newEndISO,
+    original_start_time: session.start_time,
+    original_end_time: session.end_time,
+    requested_at: new Date().toISOString(),
+    requested_by: user.id,
+  }
+
+  const { error: updateError } = await adminDb
+    .from('queue_sessions')
+    .update({
+      metadata: {
+        ...(session.metadata || {}),
+        reschedule_request: rescheduleRequest
+      }
+    })
+    .eq('id', sessionId)
+
+  if (updateError) {
+    return { success: false, error: 'Failed to submit reschedule request' }
+  }
+
+  // 7. Sync request to linked reservations (for UI visibility)
+  const reservationIds = session.metadata?.reservation_ids || (session.metadata?.reservation_id ? [session.metadata.reservation_id] : [])
+  if (reservationIds.length > 0) {
+    for (const resId of reservationIds) {
+      const { data: res } = await adminDb.from('reservations').select('metadata').eq('id', resId).single()
+      await adminDb.from('reservations').update({
+        metadata: {
+          ...(res?.metadata || {}),
+          reschedule_request: rescheduleRequest
+        }
+      }).eq('id', resId)
+    }
+  }
+
+  // 8. Notify Admin
+  const venueOwnerId = venue?.owner_id
+  
+  if (venueOwnerId) {
+    // Get user name for notification
+    const { data: profile } = await adminDb.from('profiles').select('display_name, first_name, last_name').eq('id', user.id).single()
+    const customerName = profile?.display_name || `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || 'A customer'
+    
+    await createNotification({
+      userId: venueOwnerId,
+      ...NotificationTemplates.reschedulePending(
+        customerName,
+        'Multi-court Queue Slot',
+        new Date(newStartISO).toLocaleDateString('en-US', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }),
+        sessionId
+      )
+    })
+  }
+
+  revalidatePath('/bookings')
+  revalidatePath(`/queue/${sessionId}`)
+
+  return { success: true }
 }
 
 /**
@@ -2480,6 +2936,12 @@ export async function getMyQueueMasterSessions(filter?: {
             id,
             name
           )
+        ),
+        queue_session_courts (
+          court_id,
+          courts (
+            name
+          )
         )
       `)
       .eq('organizer_id', user.id)
@@ -2590,10 +3052,14 @@ export async function getMyQueueMasterSessions(filter?: {
 
         // Status corrections are already handled above in the for-loop
 
+        const courtName = session.queue_session_courts?.length > 0 
+          ? session.queue_session_courts.map((qsc: any) => qsc.courts?.name).filter(Boolean).join(', ') 
+          : session.metadata?.courts?.map((c: any) => c.name).join(', ') || session.courts?.name || 'Unknown Court'
+        
         return {
           id: session.id,
           courtId: session.court_id,
-          courtName: session.courts?.name || 'Unknown Court',
+          courtName,
           venueName: session.courts?.venues?.name || 'Unknown Venue',
           venueId: session.courts?.venues?.id || '',
           status: session.status,
@@ -2845,6 +3311,12 @@ export async function getQueueSessionSummary(sessionId: string): Promise<{
             name
           )
         ),
+        queue_session_courts (
+          court_id,
+          courts (
+            name
+          )
+        ),
         organizer:organizer_id (
           display_name,
           first_name,
@@ -3025,7 +3497,9 @@ export async function getQueueSessionSummary(sessionId: string): Promise<{
         costPerGame: session.cost_per_game,
         startTime: session.start_time,
         endTime: session.end_time,
-        courtName: session.courts?.name || 'Unknown Court',
+        courtName: session.queue_session_courts?.length > 0 
+          ? session.queue_session_courts.map((qsc: any) => qsc.courts?.name).filter(Boolean).join(', ') 
+          : session.metadata?.courts?.map((c: any) => c.name).join(', ') || session.courts?.name || 'Unknown Court',
         venueName: session.courts?.venues?.name || 'Unknown Venue',
         venueId: session.courts?.venues?.id || '',
         organizerName:

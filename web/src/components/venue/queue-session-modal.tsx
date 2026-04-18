@@ -6,7 +6,12 @@ import { DayPicker } from 'react-day-picker'
 import { format } from 'date-fns'
 import 'react-day-picker/dist/style.css'
 import { useCheckoutStore } from '@/stores/checkout-store'
-import { getAvailableTimeSlotsAction, validateBookingAvailabilityAction, getVenueMetadataAction } from '@/app/actions/reservations'
+import {
+    getAvailableTimeSlotsAction,
+    validateBookingAvailabilityAction,
+    getCourtDownPaymentPercentageAction,
+    getCourtDownPaymentPercentagesAction
+} from '@/app/actions/reservations'
 import { calculateApplicableDiscounts } from '@/app/actions/discount-actions'
 import { cn } from '@/lib/utils'
 import { QueueTutorial } from './queue-tutorial'
@@ -28,12 +33,16 @@ interface TimeSlot {
 interface QueueSessionModalProps {
     isOpen: boolean
     onClose: () => void
-    courtId: string
-    courtName: string
+    courtId?: string // fallback for backward compatibility
+    courtName?: string // fallback
+    courts?: { id: string; name: string; hourly_rate?: number }[] // for multi-court queues
     hourlyRate: number
     venueId: string
     venueName: string
     capacity: number
+    preselectedDate?: string
+    preselectedStartTime?: string
+    preselectedEndTime?: string
 }
 
 export function QueueSessionModal({
@@ -41,20 +50,28 @@ export function QueueSessionModal({
     onClose,
     courtId,
     courtName,
+    courts,
     hourlyRate,
     venueId,
     venueName,
-    capacity
+    capacity,
+    preselectedDate,
+    preselectedStartTime,
+    preselectedEndTime
 }: QueueSessionModalProps) {
     const router = useRouter()
     const { setBookingData, setDiscountDetails, setDiscount, setDownPaymentPercentage } = useCheckoutStore()
-    const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+    const [selectedDate, setSelectedDate] = useState<Date>(preselectedDate ? new Date(preselectedDate) : new Date())
     const [recurrenceWeeks, setRecurrenceWeeks] = useState<number>(1)
     const [selectedDays, setSelectedDays] = useState<number[]>([])
 
     // Time slot selection
-    const [startSlot, setStartSlot] = useState<TimeSlot | null>(null)
-    const [endSlot, setEndSlot] = useState<TimeSlot | null>(null)
+    const [startSlot, setStartSlot] = useState<TimeSlot | null>(preselectedStartTime ? { time: preselectedStartTime, available: true } : null)
+    const [endSlot, setEndSlot] = useState<TimeSlot | null>(
+        preselectedEndTime && preselectedEndTime !== preselectedStartTime 
+            ? { time: preselectedEndTime, available: true } 
+            : null
+    )
     const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
     const [loading, setLoading] = useState(false)
     const [isBooking, setIsBooking] = useState(false)
@@ -66,9 +83,15 @@ export function QueueSessionModal({
     const [costPerGame, setCostPerGame] = useState(50)
     const [isPublic, setIsPublic] = useState(true)
     const [joinWindowHours, setJoinWindowHours] = useState<number | null>(null)
+    const [isSkillRestricted, setIsSkillRestricted] = useState(false)
+    const [selectedTiers, setSelectedTiers] = useState<string[]>(['beginner', 'intermediate', 'advanced', 'elite'])
 
     // UI step: 'schedule' or 'settings'
-    const [step, setStep] = useState<'schedule' | 'settings'>('schedule')
+    const [step, setStep] = useState<'schedule' | 'settings'>(preselectedStartTime && preselectedEndTime ? 'settings' : 'schedule')
+
+    // Derived values for backward compatibility and multi-court support
+    const primaryCourtId = courtId || courts?.[0]?.id || ''
+    const primaryCourtName = courtName || courts?.map(c => c.name).join(', ') || ''
 
     // Pricing state
     const [calculatedPrice, setCalculatedPrice] = useState<{
@@ -97,11 +120,18 @@ export function QueueSessionModal({
         async function fetchTimeSlots() {
             if (!selectedDate || !isOpen) return
             setLoading(true)
-            setStartSlot(null)
-            setEndSlot(null)
+
+            // Special case: if we have preselected values and we're on the same date, 
+            // don't clear them immediately to avoid a flicker or duration loss
+            const isPreselectedDate = preselectedDate && format(new Date(preselectedDate), 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd')
+            
+            if (!isPreselectedDate) {
+                setStartSlot(null)
+                setEndSlot(null)
+            }
 
             try {
-                const slots = await getAvailableTimeSlotsAction(courtId, format(selectedDate, 'yyyy-MM-dd'))
+                const slots = await getAvailableTimeSlotsAction(primaryCourtId, format(selectedDate, 'yyyy-MM-dd'))
                 setTimeSlots(slots)
             } catch (error) {
                 console.error('Error fetching time slots:', error)
@@ -112,26 +142,35 @@ export function QueueSessionModal({
         }
 
         fetchTimeSlots()
-    }, [selectedDate, courtId, isOpen])
+    }, [selectedDate, primaryCourtId, isOpen])
 
-    // Fetch venue metadata (down payment percentage)
+    // Fetch effective court down payment percentage
     useEffect(() => {
-        async function fetchVenueMetadata() {
-            if (!venueId || !isOpen) return
+        async function fetchCourtDownPayment() {
+            if (!isOpen) return
 
             try {
-                const result = await getVenueMetadataAction(venueId)
-                if (result.success && result.metadata) {
-                    const percentage = parseFloat((result.metadata as any).down_payment_percentage || '20')
-                    setDownPaymentPercentage(percentage)
+                if (courts && courts.length > 1) {
+                    const result = await getCourtDownPaymentPercentagesAction(courts.map((court) => court.id))
+                    if (result.success && typeof result.maxPercentage === 'number') {
+                        setDownPaymentPercentage(result.maxPercentage)
+                    }
+                    return
+                }
+
+                if (!primaryCourtId) return
+
+                const result = await getCourtDownPaymentPercentageAction(primaryCourtId)
+                if (result.success && typeof result.percentage === 'number') {
+                    setDownPaymentPercentage(result.percentage)
                 }
             } catch (error) {
-                console.error('Error fetching venue metadata:', error)
+                console.error('Error fetching court down payment percentage:', error)
             }
         }
 
-        fetchVenueMetadata()
-    }, [venueId, isOpen, setDownPaymentPercentage])
+        fetchCourtDownPayment()
+    }, [courts, primaryCourtId, isOpen, setDownPaymentPercentage])
 
     // Helpers
     const getDuration = (): number => {
@@ -146,20 +185,28 @@ export function QueueSessionModal({
     const getEndTime = (): string => {
         const targetSlot = endSlot || startSlot
         if (!targetSlot) return ''
-        const [hours, minutes] = targetSlot.time.split(':').map(Number)
+        const [hs, ms] = targetSlot.time.split(':')
+        const hours = Number(hs || 0)
+        const minutes = Number(ms || 0)
         const endHour = hours + 1
         return `${endHour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
     }
 
     const formatTime = (time: string) => {
-        const [hours, minutes] = time.split(':').map(Number)
+        if (!time) return ''
+        const [hs, ms] = time.split(':')
+        const hours = Number(hs || 0)
+        const minutes = Number(ms || 0)
         const period = hours >= 12 ? 'PM' : 'AM'
         const displayHours = hours % 12 || 12
         return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`
     }
 
     const getNextHour = (time: string) => {
-        const [hours, minutes] = time.split(':').map(Number)
+        if (!time) return ''
+        const [hs, ms] = time.split(':')
+        const hours = Number(hs || 0)
+        const minutes = Number(ms || 0)
         const nextHour = hours + 1
         return `${nextHour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
     }
@@ -178,8 +225,10 @@ export function QueueSessionModal({
 
             // Calculate actual slots that will be created
             const initialStartTime = new Date(selectedDate)
-            const [startH, startM] = startSlot.time.split(':')
-            initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
+            const [sh, sm] = startSlot.time.split(':')
+            const startH = parseInt(sh || '0')
+            const startM = parseInt(sm || '0')
+            initialStartTime.setHours(startH, startM, 0, 0)
             const startDayIndex = initialStartTime.getDay()
 
             const uniqueSelectedDays = selectedDays.length > 0
@@ -193,7 +242,14 @@ export function QueueSessionModal({
                 }
             }
 
-            const basePrice = (startSlot.price || hourlyRate) * duration * actualSlotCount
+            // Calculate total hourly rate for all courts
+            const fallbackRate = Number(hourlyRate) || 0
+            const totalCourtRate = courts && courts.length > 0 
+                ? courts.reduce((sum, c) => sum + (Number(c.hourly_rate) || fallbackRate), 0)
+                : fallbackRate || 300 // Absolute fallback to 300 if everything is 0
+
+            const courtCount = courts?.length || 1
+            const basePrice = (startSlot.price ? (startSlot.price * courtCount) : totalCourtRate) * duration * actualSlotCount
 
             try {
                 const dateStr = format(selectedDate, 'yyyy-MM-dd')
@@ -203,7 +259,7 @@ export function QueueSessionModal({
 
                 const result = await calculateApplicableDiscounts({
                     venueId,
-                    courtId,
+                    courtId: primaryCourtId,
                     startDate: startDateTimeStr,
                     endDate: endDateTimeStr,
                     recurrenceWeeks: Number(recurrenceWeeks),
@@ -243,7 +299,7 @@ export function QueueSessionModal({
         }
 
         calculatePrice()
-    }, [startSlot, endSlot, recurrenceWeeks, selectedDate, courtId, venueId, hourlyRate, selectedDays])
+    }, [startSlot, endSlot, recurrenceWeeks, selectedDate, primaryCourtId, venueId, hourlyRate, selectedDays])
 
     // Validate recurring availability
     useEffect(() => {
@@ -265,7 +321,7 @@ export function QueueSessionModal({
                 const endDateTime = `${dateStr}T${endTime}:00+08:00`
 
                 const result = await validateBookingAvailabilityAction({
-                    courtId,
+                    courtId: primaryCourtId,
                     startTimeISO: startDateTime,
                     endTimeISO: endDateTime,
                     recurrenceWeeks,
@@ -289,7 +345,7 @@ export function QueueSessionModal({
 
         timeoutId = setTimeout(validateRecurring, 500)
         return () => clearTimeout(timeoutId)
-    }, [startSlot, endSlot, recurrenceWeeks, selectedDays, selectedDate, courtId])
+    }, [startSlot, endSlot, recurrenceWeeks, selectedDays, selectedDate, primaryCourtId])
 
     // Range validation
     const isRangeValid = (start: TimeSlot, end: TimeSlot): boolean => {
@@ -345,8 +401,9 @@ export function QueueSessionModal({
             const endTime = getEndTime()
 
             setBookingData({
-                courtId,
-                courtName,
+                courts,
+                courtId: primaryCourtId,
+                courtName: primaryCourtName,
                 venueId,
                 venueName,
                 date: selectedDate,
@@ -364,6 +421,8 @@ export function QueueSessionModal({
                     costPerGame,
                     isPublic,
                     joinWindowHours,
+                    minSkillLevel: isSkillRestricted ? Math.min(...selectedTiers.map(t => t === 'beginner' ? 1 : t === 'intermediate' ? 4 : t === 'advanced' ? 7 : 9)) : null,
+                    maxSkillLevel: isSkillRestricted ? Math.max(...selectedTiers.map(t => t === 'beginner' ? 3 : t === 'intermediate' ? 6 : t === 'advanced' ? 8 : 10)) : null,
                 },
             })
 
@@ -450,7 +509,7 @@ export function QueueSessionModal({
                     <div className="bg-gradient-to-r from-primary to-primary/80 text-white px-6 py-4 flex items-center justify-between shrink-0">
                         <div>
                             <div className="flex items-center gap-2">
-                                <h3 className="text-xl font-bold">{courtName}</h3>
+                                <h3 className="text-xl font-bold">{primaryCourtName}</h3>
                                 <span className="text-[10px] font-bold bg-white/20 px-2 py-0.5 rounded uppercase tracking-wider">
                                     Queue Session
                                 </span>
@@ -683,7 +742,7 @@ export function QueueSessionModal({
                                 <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
                                     <h4 className="font-semibold text-gray-900 mb-2">Session Schedule</h4>
                                     <div className="text-sm text-gray-600 space-y-1">
-                                        <p><strong>Court:</strong> {courtName}</p>
+                                        <p><strong>Court{courts && courts.length > 1 ? 's' : ''}:</strong> {primaryCourtName}</p>
                                         <div>
                                             <strong>Date:</strong>{' '}
                                             {(() => {
@@ -861,6 +920,68 @@ export function QueueSessionModal({
                                         <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                                     </label>
                                 </div>
+
+                                {/* Skill Level Restriction */}
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                        <div>
+                                            <p className="font-medium text-gray-900">Skill Level Restricted</p>
+                                            <p className="text-xs text-gray-500">Only allow certain skill levels to join</p>
+                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={isSkillRestricted}
+                                                onChange={(e) => setIsSkillRestricted(e.target.checked)}
+                                                className="sr-only peer"
+                                            />
+                                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                                        </label>
+                                    </div>
+
+                                    {isSkillRestricted && (
+                                        <div className="p-4 border border-gray-200 rounded-xl space-y-4 animate-in fade-in slide-in-from-top-2">
+                                            <Label className="text-sm font-semibold text-gray-900">Allowed Skill Tiers</Label>
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                                {[
+                                                    { id: 'beginner', label: 'Beginner', range: 'L1-3' },
+                                                    { id: 'intermediate', label: 'Intermediate', range: 'L4-6' },
+                                                    { id: 'advanced', label: 'Advanced', range: 'L7-8' },
+                                                    { id: 'elite', label: 'Elite', range: 'L9-10' },
+                                                ].map((tier) => {
+                                                    const isSelected = selectedTiers.includes(tier.id)
+                                                    return (
+                                                        <button
+                                                            key={tier.id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                if (isSelected) {
+                                                                    if (selectedTiers.length > 1) {
+                                                                        setSelectedTiers(prev => prev.filter(t => t !== tier.id))
+                                                                    }
+                                                                } else {
+                                                                    setSelectedTiers(prev => [...prev, tier.id])
+                                                                }
+                                                            }}
+                                                            className={cn(
+                                                                "flex flex-col items-center p-3 rounded-lg border-2 transition-all",
+                                                                isSelected
+                                                                    ? "border-primary bg-primary/5 text-primary"
+                                                                    : "border-gray-100 bg-white text-gray-500 hover:border-gray-200"
+                                                            )}
+                                                        >
+                                                            <span className="text-xs font-bold uppercase tracking-tight">{tier.label}</span>
+                                                            <span className="text-[10px] opacity-70">{tier.range}</span>
+                                                        </button>
+                                                    )
+                                                })}
+                                            </div>
+                                            <p className="text-[11px] text-gray-500 italic">
+                                                Note: A contiguous range will be created between the lowest and highest selected tiers.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </div>
@@ -896,8 +1017,10 @@ export function QueueSessionModal({
 
                                             // Generate exact dates
                                             const initialStartTime = new Date(selectedDate)
-                                            const [startH, startM] = startSlot.time.split(':')
-                                            initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
+                                            const [sh, sm] = startSlot.time.split(':')
+                                            const startH = parseInt(sh || '0')
+                                            const startM = parseInt(sm || '0')
+                                            initialStartTime.setHours(startH, startM, 0, 0)
                                             const startDayIndex = initialStartTime.getDay()
 
                                             const uniqueSelectedDays = selectedDays.length > 0
@@ -935,7 +1058,7 @@ export function QueueSessionModal({
                                                 <span className="animate-spin inline-block w-3 h-3 border-2 border-gray-300 border-t-primary rounded-full" />
                                                 Calculating price...
                                             </span>
-                                        ) : calculatedPrice ? (
+                                        ) : (calculatedPrice && (calculatedPrice.final > 0 || calculatedPrice.original > 0)) ? (
                                             <>
                                                 {Number(calculatedPrice.discount) !== 0 && (
                                                     <span className="text-sm text-gray-400 line-through">₱{Number(calculatedPrice.original || 0).toLocaleString()}</span>
@@ -960,9 +1083,12 @@ export function QueueSessionModal({
                                         ) : (
                                             (() => {
                                                 const getDisplayBasePrice = () => {
+                                                    if (!startSlot) return "0"
                                                     const initialStartTime = new Date(selectedDate)
-                                                    const [startH, startM] = startSlot.time.split(':')
-                                                    initialStartTime.setHours(parseInt(startH), parseInt(startM || '0'), 0, 0)
+                                                    const [sh, sm] = (startSlot.time || "").split(':')
+                                                    const startH = parseInt(sh || '0')
+                                                    const startM = parseInt(sm || '0')
+                                                    initialStartTime.setHours(startH, startM, 0, 0)
                                                     const startDayIndex = initialStartTime.getDay()
                                                     const uniqueSelectedDays = selectedDays.length > 0
                                                         ? Array.from(new Set(selectedDays)).sort((a, b) => a - b)
@@ -974,7 +1100,14 @@ export function QueueSessionModal({
                                                             actualSlotCount++
                                                         }
                                                     }
-                                                    return Number(hourlyRate * duration * actualSlotCount).toLocaleString()
+
+                                                    const fallbackRate = Number(hourlyRate) || 0
+                                                    const totalRate = courts && courts.length > 0 
+                                                        ? courts.reduce((sum, c) => sum + (Number(c.hourly_rate) || fallbackRate), 0)
+                                                        : fallbackRate || 300
+                                                    
+                                                    const price = Number(totalRate * duration * actualSlotCount)
+                                                    return price.toLocaleString()
                                                 }
                                                 return <span className="text-lg font-bold text-primary">₱{getDisplayBasePrice()}</span>
                                             })()

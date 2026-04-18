@@ -20,6 +20,7 @@ export function QueueDashboardClient() {
   const [isRoleLoading, setIsRoleLoading] = useState(true)
   const { history: sessionHistory, isLoading: loadingSessionHistory } = useQueueMasterHistory(isQueueMaster)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [userSkillLevel, setUserSkillLevel] = useState<number | null>(null)
   const [activeTab, setActiveTab] = useState<'active' | 'history' | 'session'>('active')
   const supabase = createClient()
 
@@ -31,9 +32,18 @@ export function QueueDashboardClient() {
 
       if (!user) {
         setIsQueueMaster(false)
+        setUserSkillLevel(null)
         setIsRoleLoading(false)
         return
       }
+
+      const { data: playerData } = await supabase
+        .from('players')
+        .select('skill_level')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      setUserSkillLevel(playerData?.skill_level ?? null)
 
       const { data: roles } = await supabase
         .from('user_roles')
@@ -202,7 +212,7 @@ export function QueueDashboardClient() {
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                   {myQueues.map((queue) => (
                     <div key={queue.id} className="max-w-[380px]">
-                      <QueueCard queue={queue} variant="active" />
+                      <QueueCard queue={queue} variant="active" userSkillLevel={userSkillLevel} />
                     </div>
                   ))}
                 </div>
@@ -232,7 +242,7 @@ export function QueueDashboardClient() {
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                   {nearbyQueues.map((queue) => (
                     <div key={queue.id} className="max-w-[380px]">
-                      <QueueCard queue={queue} variant="available" />
+                      <QueueCard queue={queue} variant="available" userSkillLevel={userSkillLevel} />
                     </div>
                   ))}
                 </div>

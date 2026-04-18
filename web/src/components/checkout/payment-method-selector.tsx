@@ -7,31 +7,44 @@ export function PaymentMethodSelector() {
   const {
     paymentMethod,
     setPaymentMethod,
+    cashPaymentOption,
+    setCashPaymentOption,
     downPaymentPercentage,
     getTotalAmount,
+    getMinimumDownPaymentAmount,
+    getDownPaymentBreakdown,
     setCustomDownPaymentAmount,
     customDownPaymentAmount,
   } = useCheckoutStore()
 
   const total = getTotalAmount()
-  const isDownPaymentRequired = downPaymentPercentage ? downPaymentPercentage > 0 : false
-  const minimumDownPayment = isDownPaymentRequired
-    ? Math.round((total * ((downPaymentPercentage ?? 20) / 100)) * 100) / 100
-    : 0
+  const downPaymentBreakdown = getDownPaymentBreakdown()
+  const hasMixedPercentages = new Set(downPaymentBreakdown.map((item) => item.percentage)).size > 1
+  const minimumDownPayment = getMinimumDownPaymentAmount()
+  const isDownPaymentRequired = minimumDownPayment > 0
 
   const [inputValue, setInputValue] = useState('')
 
-  // Auto-set down payment to minimum when cash is selected
+  const shouldUseDownPayment = paymentMethod === 'cash' && cashPaymentOption === 'downpayment' && isDownPaymentRequired
+
+  // Synchronize input value only when payment method changes or if empty
   useEffect(() => {
-    if (paymentMethod === 'cash' && isDownPaymentRequired) {
-      if (!customDownPaymentAmount || customDownPaymentAmount <= 0) {
-        setCustomDownPaymentAmount(minimumDownPayment)
-        setInputValue(minimumDownPayment.toFixed(2))
-      } else {
-        setInputValue(customDownPaymentAmount.toFixed(2))
+    if (shouldUseDownPayment) {
+      // Only initialize if input is empty (e.g., on mount or when first selected)
+      if (!inputValue) {
+        const initial = customDownPaymentAmount && customDownPaymentAmount > 0 
+          ? customDownPaymentAmount 
+          : minimumDownPayment
+        
+        if (initial > 0) {
+          setInputValue(initial.toFixed(2))
+          if (!customDownPaymentAmount) {
+            setCustomDownPaymentAmount(initial)
+          }
+        }
       }
     }
-  }, [paymentMethod, isDownPaymentRequired])
+  }, [shouldUseDownPayment, minimumDownPayment])
 
   const handleAmountChange = (value: string) => {
     setInputValue(value)
@@ -43,7 +56,9 @@ export function PaymentMethodSelector() {
     }
   }
 
-  const effectiveAmount = Math.min(Math.max(customDownPaymentAmount || minimumDownPayment, 0), total)
+  const effectiveAmount = shouldUseDownPayment
+    ? Math.min(Math.max(customDownPaymentAmount || minimumDownPayment, minimumDownPayment), total)
+    : Math.min(Math.max(customDownPaymentAmount || minimumDownPayment, 0), total)
   const isBelowMinimum = customDownPaymentAmount !== undefined && customDownPaymentAmount > 0 && customDownPaymentAmount < minimumDownPayment
   const isAboveTotal = customDownPaymentAmount !== undefined && customDownPaymentAmount > total
   
@@ -153,9 +168,7 @@ export function PaymentMethodSelector() {
 
           <h4 className="font-semibold text-gray-900 mb-2">Cash</h4>
           <p className="text-sm text-gray-600">
-            {isDownPaymentRequired
-              ? `Pay a minimum ${downPaymentPercentage}% down payment online to secure your slot. Pay the rest at the venue.`
-              : 'Pay in cash at the venue. Booking will be pending until payment is verified.'}
+            Choose between online down payment or full cash at the venue.
           </p>
 
           {paymentMethod === 'cash' && (
@@ -179,19 +192,104 @@ export function PaymentMethodSelector() {
         </button>
       </div>
 
+      {/* Cash sub-option toggle */}
+      {paymentMethod === 'cash' && (
+        <div className="rounded-xl border border-gray-200 p-4 space-y-3">
+          <p className="text-sm font-semibold text-gray-900">Cash Booking Option</p>
+          <div className="grid md:grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setCashPaymentOption('downpayment')}
+              className={`rounded-lg border p-3 text-left transition-colors ${
+                cashPaymentOption === 'downpayment'
+                  ? 'border-primary bg-primary/5'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <p className="text-sm font-semibold text-gray-900">Pay Down Payment Online</p>
+              <p className="text-xs text-gray-600 mt-1">
+                {isDownPaymentRequired
+                  ? hasMixedPercentages
+                    ? `Pay the minimum required amount for all selected courts, then settle the remaining balance in cash at the venue.`
+                    : `Pay minimum ${downPaymentPercentage}% now via e-wallet, then settle remaining cash at venue.`
+                  : 'No venue down payment rule configured. Full amount will be paid at venue.'}
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setCashPaymentOption('full_cash')
+                setCustomDownPaymentAmount(undefined)
+              }}
+              className={`rounded-lg border p-3 text-left transition-colors ${
+                cashPaymentOption === 'full_cash'
+                  ? 'border-primary bg-primary/5'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <p className="text-sm font-semibold text-gray-900">Pay Full Cash at Venue</p>
+              <p className="text-xs text-gray-600 mt-1">
+                Reservation stays pending and must be paid in person within 24 hours.
+              </p>
+            </button>
+          </div>
+
+          {cashPaymentOption === 'full_cash' && (
+            <div className="rounded-lg border border-amber-300 bg-gradient-to-br from-amber-50 via-yellow-50 to-amber-100 p-4 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="h-9 w-9 rounded-full bg-amber-100 border border-amber-300 flex items-center justify-center shrink-0">
+                  <svg className="w-5 h-5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-amber-900">Pay-at-Venue Rules</p>
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    For advance bookings, you must pay in cash at the venue within <strong>24 hours</strong> after checkout.
+                  </p>
+                  <ul className="text-xs text-amber-900/90 space-y-1 list-disc pl-4">
+                    <li>If unpaid after 24 hours, the booking is auto-cancelled.</li>
+                    <li>Same-day bookings are exempt from the 24-hour deadline.</li>
+                    <li>Exempt bookings remain as pay-at-venue (no deadline timer).</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Down Payment Section */}
-      {paymentMethod === 'cash' && isDownPaymentRequired && (
+      {shouldUseDownPayment && (
         <div className={`mt-2 rounded-xl overflow-hidden transition-colors bg-gradient-to-br from-primary via-primary/90 to-primary/70 ${isBelowMinimum ? 'ring-2 ring-red-400' : ''}`}>
           {/* Header */}
           <div className="px-5 py-3 backdrop-blur-md bg-white/15 border-b border-white/20">
             <h4 className="text-sm font-semibold text-white">Down Payment</h4>
             <p className="text-xs text-white/70 mt-0.5">
-              Minimum {downPaymentPercentage}% required to secure your booking
+              {hasMixedPercentages
+                ? `Minimum required today: ₱${minimumDownPayment.toFixed(2)} (computed per court)`
+                : `Minimum ${downPaymentPercentage}% required to secure your booking`}
             </p>
           </div>
 
           {/* Input */}
-          <div className="px-5 py-4 backdrop-blur-sm bg-white/10">
+          <div className="px-5 py-4 backdrop-blur-sm bg-white/10 space-y-3">
+            {downPaymentBreakdown.length > 1 && (
+              <div className="rounded-lg border border-white/25 bg-white/10 px-3 py-2 space-y-1.5">
+                {downPaymentBreakdown.map((item, index) => (
+                  <div key={`dp-${item.courtId}-${index}`} className="flex items-center justify-between text-xs text-white/90">
+                    <span className="truncate pr-2">{item.courtName} Down Payment ({item.percentage}%)</span>
+                    <span className="font-semibold">₱{item.amount.toFixed(2)}</span>
+                  </div>
+                ))}
+                <div className="pt-1.5 mt-1.5 border-t border-white/20 flex items-center justify-between text-xs text-white">
+                  <span className="font-medium">Minimum Required</span>
+                  <span className="font-bold">₱{minimumDownPayment.toFixed(2)}</span>
+                </div>
+              </div>
+            )}
+
             <label className="block text-xs font-medium text-white/70 mb-1.5">Enter amount</label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50 text-sm font-medium">₱</span>
@@ -208,7 +306,10 @@ export function PaymentMethodSelector() {
                 onBlur={() => {
                   const parsed = parseFloat(inputValue)
                   if (!isNaN(parsed) && parsed > 0) {
-                    setInputValue(parsed.toFixed(2))
+                    // Keep UI in sync with server-side clamping rules.
+                    const normalized = Math.min(Math.max(parsed, minimumDownPayment), total)
+                    setInputValue(normalized.toFixed(2))
+                    setCustomDownPaymentAmount(normalized)
                   } else {
                     setInputValue(minimumDownPayment.toFixed(2))
                     setCustomDownPaymentAmount(minimumDownPayment)
@@ -230,7 +331,7 @@ export function PaymentMethodSelector() {
                 <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
-                Minimum is ₱{minimumDownPayment.toFixed(2)}
+                The minimum down payment for these courts is ₱{minimumDownPayment.toFixed(2)}
               </p>
             )}
             {isAboveTotal && (

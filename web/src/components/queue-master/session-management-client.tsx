@@ -15,6 +15,8 @@ import {
 } from '@/app/actions/match-actions';
 import { PayMongoError } from '@/lib/paymongo/client';
 import { initiatePaymentAction } from '@/app/actions/payments';
+import { Capacitor } from '@capacitor/core'
+import { Browser } from '@capacitor/browser'
 import { StatusBadge } from '@/components/shared/status-badge';
 import { QueueEventCard } from '@/components/queue/queue-event-card';
 import type { QueueSession as QueueSessionHook } from '@/hooks/use-queue';
@@ -34,17 +36,21 @@ import {
   Trophy,
   Play,
   X,
+  Zap,
 } from 'lucide-react';
 import Link from 'next/link';
 import { ScoreRecordingModal } from './score-recording-modal';
 import { PaymentManagementModal } from './payment-management-modal';
 import { MatchAssignmentModal } from './match-assignment-modal';
 import { MatchTimer } from './match-timer';
+import { MatchHistoryViewer } from '@/components/queue/match-history-viewer';
 import { MatchStatusBadge } from './match-status-badge';
+import { AutoAssignModal } from './auto-assign-modal';
 import { useServerTime } from '@/hooks/use-server-time';
 
 interface SessionManagementClientProps {
   sessionId: string;
+  onSwitchToPlayerView?: () => void;
 }
 
 interface Participant {
@@ -65,6 +71,7 @@ interface Participant {
 
 interface QueueSession {
   id: string;
+  courtId: string;
   courtName: string;
   venueName: string;
   status: string;
@@ -75,13 +82,77 @@ interface QueueSession {
   endTime: Date;
   mode: string;
   gameFormat: string;
+  minSkillLevel?: number | null;
+  maxSkillLevel?: number | null;
   players: Participant[];
   requiresApproval?: boolean;
   approvalStatus?: string;
   metadata?: any;
+  queue_session_courts?: Array<{
+    court_id: string;
+    courts?: {
+      name: string;
+    };
+  }>;
 }
 
-export function SessionManagementClient({ sessionId }: SessionManagementClientProps) {
+const resolveSkillRange = (sessionRow: any): { minSkillLevel: number | null; maxSkillLevel: number | null } => {
+  const meta = sessionRow?.metadata || {};
+
+  let minSkillLevel = sessionRow?.min_skill_level ?? meta.min_skill_level ?? meta.minSkillLevel ?? null;
+  let maxSkillLevel = sessionRow?.max_skill_level ?? meta.max_skill_level ?? meta.maxSkillLevel ?? null;
+
+  // Fallback for older payload shapes that stored selected tiers in metadata.
+  const tiers = Array.isArray(meta.allowed_skill_tiers) ? meta.allowed_skill_tiers : null;
+  if ((minSkillLevel == null || maxSkillLevel == null) && tiers && tiers.length > 0) {
+    const tierMap: Record<string, { min: number; max: number }> = {
+      beginner: { min: 1, max: 3 },
+      intermediate: { min: 4, max: 6 },
+      advanced: { min: 7, max: 8 },
+      elite: { min: 9, max: 10 },
+    };
+
+    const ranges = tiers
+      .map((tier: string) => tierMap[String(tier).toLowerCase()])
+      .filter(Boolean);
+
+    if (ranges.length > 0) {
+      minSkillLevel = Math.min(...ranges.map((r: { min: number; max: number }) => r.min));
+      maxSkillLevel = Math.max(...ranges.map((r: { min: number; max: number }) => r.max));
+    }
+  }
+
+  return {
+    minSkillLevel: minSkillLevel != null ? Number(minSkillLevel) : null,
+    maxSkillLevel: maxSkillLevel != null ? Number(maxSkillLevel) : null,
+  };
+};
+
+const getSkillRequirementLabel = (min?: number | null, max?: number | null) => {
+  if (min == null && max == null) return 'Open to All';
+  const low = min ?? 1;
+  const high = max ?? 10;
+
+  const getTierName = (l: number) => {
+    if (l <= 3) return 'Beginner';
+    if (l <= 6) return 'Intermediate';
+    if (l <= 8) return 'Advanced';
+    return 'Elite';
+  };
+
+  if (low === 1 && high === 3) return 'Beginner Only';
+  if (low === 4 && high === 6) return 'Intermediate Only';
+  if (low === 7 && high === 8) return 'Advanced Only';
+  if (low === 9 && high === 10) return 'Elite Only';
+
+  const minTier = getTierName(low);
+  const maxTier = getTierName(high);
+
+  if (minTier === maxTier) return `${minTier} Only`;
+  return `${minTier} - ${maxTier}`;
+};
+
+export function SessionManagementClient({ sessionId, onSwitchToPlayerView }: SessionManagementClientProps) {
   const router = useRouter();
   const { date: serverDate } = useServerTime();
   const supabase = createClient();
@@ -93,8 +164,10 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
 
   // Modal states
   const [showMatchAssignModal, setShowMatchAssignModal] = useState(false);
+  const [showAutoAssignModal, setShowAutoAssignModal] = useState(false);
   const [showScoreModal, setShowScoreModal] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<'participants' | 'matches'>('participants');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
   const [activeMatches, setActiveMatches] = useState<any[]>([]);
@@ -169,6 +242,12 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
               id,
               name
             )
+          ),
+          queue_session_courts (
+            court_id,
+            courts (
+              name
+            )
           )
         `
         )
@@ -232,10 +311,15 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         })
       );
 
+      const { minSkillLevel, maxSkillLevel } = resolveSkillRange(sessionData);
+
       // Format session data
       const formattedSession: QueueSession = {
         id: sessionData.id,
-        courtName: sessionData.courts?.name || 'Unknown Court',
+        courtId: sessionData.court_id,
+        courtName: sessionData.queue_session_courts?.length > 0
+          ? sessionData.queue_session_courts.map((qsc: any) => qsc.courts?.name).filter(Boolean).join(', ')
+          : sessionData.metadata?.courts?.map((c: any) => c.name).join(', ') || sessionData.courts?.name || 'Unknown Court',
         venueName: sessionData.courts?.venues?.name || 'Unknown Venue',
         status: sessionData.status,
         currentPlayers: sessionData.current_players || formattedParticipants.length,
@@ -245,8 +329,11 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         endTime: new Date(sessionData.end_time),
         mode: sessionData.mode,
         gameFormat: sessionData.game_format,
+        minSkillLevel,
+        maxSkillLevel,
         players: formattedParticipants,
         metadata: sessionData.metadata,
+        queue_session_courts: sessionData.queue_session_courts,
       };
 
       // Call centralized status auto-advancement to handle upcoming->open->active->completed
@@ -326,7 +413,9 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
         .select(
           `
           *,
-          queue_sessions!inner(court_id, courts(name))
+          courts (
+            name
+          )
         `
         )
         .eq('queue_session_id', sessionId)
@@ -456,11 +545,20 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
     setActionLoading('pay');
     try {
       const paymentMethod = session.metadata?.payment_method === 'paymaya' ? 'paymaya' : 'gcash';
-      const result = await initiatePaymentAction(session.metadata.reservation_id, paymentMethod);
+      const result = await initiatePaymentAction(
+        session.metadata.reservation_id, 
+        paymentMethod,
+        { isMobile: Capacitor.isNativePlatform() }
+      );
       if (!result.success || !result.checkoutUrl) {
         throw new Error(result.error || 'Failed to initiate payment');
       }
-      window.location.href = result.checkoutUrl;
+      
+      if (Capacitor.isNativePlatform()) {
+        await Browser.open({ url: result.checkoutUrl });
+      } else {
+        window.location.href = result.checkoutUrl;
+      }
     } catch (err: any) {
       setActionError(err.message || 'Payment initiation failed');
     } finally {
@@ -527,7 +625,7 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="w-full">
       {actionError && (
         <div className="flex items-center justify-between bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
           <div className="flex items-center gap-2">
@@ -557,24 +655,28 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
             endTime: session.endTime,
             mode: session.mode as 'casual' | 'competitive',
             costPerGame: session.costPerGame,
+            minSkillLevel: session.minSkillLevel ?? null,
+            maxSkillLevel: session.maxSkillLevel ?? null,
             organizerName: 'You',
           }}
           onBack={() => router.push('/bookings')}
           actionSlot={
             <>
               {session.status !== 'completed' && session.status !== 'cancelled' && (
-                <button
-                  onClick={handleClose}
-                  disabled={actionLoading === 'close'}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-50 bg-red-500/60 text-white/90 hover:bg-red-500/40 hover:text-white backdrop-blur-sm"
-                >
-                  {actionLoading === 'close' ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <StopCircle className="w-3.5 h-3.5" />
-                  )}
-                  Close Session
-                </button>
+                <>
+                  <button
+                    onClick={handleClose}
+                    disabled={actionLoading === 'close'}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-50 bg-red-500/60 text-white/90 hover:bg-red-500/40 hover:text-white backdrop-blur-sm"
+                  >
+                    {actionLoading === 'close' ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <StopCircle className="w-3.5 h-3.5" />
+                    )}
+                    Close Session
+                  </button>
+                </>
               )}
               {(session.status === 'completed' || session.status === 'cancelled') && (
                 <Link
@@ -683,321 +785,395 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
 
       {/* Two Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Participants List */}
+        {/* Left Content Area */}
         <div className="lg:col-span-2 space-y-4">
-          {/* Active Matches */}
-          {activeMatches.length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-xl p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">
-                Active Matches ({activeMatches.length})
-              </h2>
-              <div className="space-y-3">
-                {activeMatches.map((match) => (
-                  <div
-                    key={match.id}
-                    className={`border-2 rounded-lg p-4 ${
-                      match.status === 'scheduled'
-                        ? 'border-gray-200 bg-gray-50'
-                        : match.status === 'in_progress'
-                          ? 'border-green-200 bg-green-50'
-                          : 'border-blue-200 bg-blue-50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                            match.status === 'scheduled'
-                              ? 'bg-gray-600'
-                              : match.status === 'in_progress'
-                                ? 'bg-green-600'
-                                : 'bg-blue-600'
-                          }`}
-                        >
-                          <Trophy className="w-4 h-4 text-white" />
-                        </div>
-                        <div>
-                          <div className="font-semibold text-gray-900">
-                            Match #{match.match_number}
-                          </div>
-                          <MatchStatusBadge status={match.status} size="sm" />
-                        </div>
-                        {(match.status === 'in_progress' || match.status === 'completed') && (
-                          <MatchTimer
-                            startedAt={match.started_at}
-                            completedAt={match.completed_at}
-                            className="text-gray-600"
-                          />
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {match.status === 'scheduled' && (
-                          <button
-                            onClick={() => handleStartMatch(match.id)}
-                            disabled={actionLoading === `start-${match.id}`}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                          >
-                            {actionLoading === `start-${match.id}` ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Play className="w-4 h-4" />
+          {/* Tab Switcher */}
+          <div className="flex items-center gap-1 p-1 bg-gray-100/50 border border-gray-200 rounded-xl w-fit">
+            <button
+              onClick={() => setActiveTab('participants')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === 'participants'
+                  ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Participants
+            </button>
+            <button
+              onClick={() => setActiveTab('matches')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === 'matches'
+                  ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Match History
+            </button>
+          </div>
+
+          {activeTab === 'participants' ? (
+            <>
+              {/* Active Matches */}
+              {activeMatches.length > 0 && (
+                <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">
+                    Active Matches ({activeMatches.length})
+                  </h2>
+                  <div className="space-y-3">
+                    {activeMatches.map((match) => (
+                      <div
+                        key={match.id}
+                        className={`border-2 rounded-lg p-4 transition-all ${
+                          match.status === 'scheduled'
+                            ? 'border-gray-200 bg-gray-50'
+                            : match.status === 'in_progress'
+                              ? 'border-green-200 bg-green-50 shadow-sm'
+                              : 'border-blue-200 bg-blue-50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`w-8 h-8 rounded-full flex items-center justify-center shadow-sm ${
+                                match.status === 'scheduled'
+                                  ? 'bg-gray-600'
+                                  : match.status === 'in_progress'
+                                    ? 'bg-green-600 animate-pulse'
+                                    : 'bg-blue-600'
+                              }`}
+                            >
+                              <Trophy className="w-4 h-4 text-white" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <div className="font-semibold text-gray-900">
+                                  Match #{match.match_number}
+                                </div>
+                                {match.courts?.name && (
+                                  <span className="text-xs font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                                    {match.courts.name}
+                                  </span>
+                                )}
+                              </div>
+                              <MatchStatusBadge status={match.status} size="sm" />
+                            </div>
+                            {(match.status === 'in_progress' || match.status === 'completed') && (
+                              <MatchTimer
+                                startedAt={match.started_at}
+                                completedAt={match.completed_at}
+                                className="text-gray-600"
+                              />
                             )}
-                            <span>Start Match</span>
-                          </button>
-                        )}
-                        {match.status === 'in_progress' && (
-                          <button
-                            onClick={() => handleOpenScoreModal(match)}
-                            className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors"
-                          >
-                            Record Winner
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <div className="text-xs text-gray-600 mb-1">Team A</div>
-                        <div className="space-y-1">
-                          {match.teamAPlayers?.map((p: any) => (
-                            <div key={p.id} className="text-sm text-gray-900">
-                              {p.name}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-600 mb-1">Team B</div>
-                        <div className="space-y-1">
-                          {match.teamBPlayers?.map((p: any) => (
-                            <div key={p.id} className="text-sm text-gray-900">
-                              {p.name}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="bg-white border border-gray-200 rounded-xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-900">
-                Participants ({session.players.length})
-              </h2>
-              {(() => {
-                const now = serverDate || new Date();
-                const isStarted = new Date(session.startTime) <= now;
-                return (
-                  <button
-                    onClick={handleAssignMatch}
-                    disabled={
-                      !isStarted ||
-                      waitingPlayers.length < (session.gameFormat === 'doubles' ? 4 : 2)
-                    }
-                    title={!isStarted ? 'Session has not started yet' : undefined}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Assign Match</span>
-                  </button>
-                );
-              })()}
-            </div>
-
-            {/* Pre-start reminder */}
-            {(() => {
-              const now = serverDate || new Date();
-              const sessionStart = new Date(session.startTime);
-              if (sessionStart > now) {
-                return (
-                  <div className="mb-4 flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
-                    <Clock className="w-5 h-5 flex-shrink-0" />
-                    <p>
-                      Match assignments will be available once the session starts at{' '}
-                      <span className="font-semibold">
-                        {sessionStart.toLocaleTimeString('en-US', {
-                          hour: 'numeric',
-                          minute: '2-digit',
-                          hour12: true,
-                        })}
-                      </span>
-                      . Players can join the queue in the meantime.
-                    </p>
-                  </div>
-                );
-              }
-              return null;
-            })()}
-
-            {/* Doubles minimum-player notice */}
-            {session.gameFormat === 'doubles' && waitingPlayers.length < 4 && (
-              <div className="mb-4 flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 text-sm">
-                <Users className="w-5 h-5 flex-shrink-0 mt-0.5 text-blue-500" />
-                <div>
-                  <p className="font-semibold">Doubles — Minimum Players Required</p>
-                  <p className="text-blue-700 mt-0.5">
-                    A match cannot start until at least{' '}
-                    <span className="font-semibold">4 players</span> are in the waiting queue (
-                    {waitingPlayers.length} of 4 players joined).
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Waiting Players */}
-            {waitingPlayers.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wider">
-                  Waiting ({waitingPlayers.length})
-                </h3>
-                <div className="space-y-2">
-                  {waitingPlayers.map((player) => (
-                    <div
-                      key={player.id}
-                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                    >
-                      <div className="flex items-center gap-3 flex-1">
-                        <div className="relative inline-block w-10 h-10 shrink-0">
-                          {player.avatarUrl ? (
-                            <img
-                              src={player.avatarUrl}
-                              alt={player.playerName}
-                              className="w-10 h-10 rounded-full object-cover border-2 border-primary"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white font-bold">
-                              {player.playerName.charAt(0).toUpperCase()}
-                            </div>
-                          )}
-                          <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-green-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border border-white shadow-sm z-10">
-                            {player.position}
                           </div>
-                        </div>
-                        <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <div className="font-semibold text-gray-900">{player.playerName}</div>
-                            {player.rating && (
-                              <span className="px-2 py-0.5 bg-gray-100 text-gray-700 text-[10px] font-semibold rounded-full border border-gray-200">
-                                {player.rating} ELO
-                              </span>
+                            {match.status === 'scheduled' && (
+                              <button
+                                onClick={() => handleStartMatch(match.id)}
+                                disabled={actionLoading === `start-${match.id}`}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 shadow-sm"
+                              >
+                                {actionLoading === `start-${match.id}` ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Play className="w-4 h-4" />
+                                )}
+                                <span>Start Match</span>
+                              </button>
+                            )}
+                            {match.status === 'in_progress' && (
+                              <button
+                                onClick={() => handleOpenScoreModal(match)}
+                                className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors shadow-sm font-medium"
+                              >
+                                Record Winner
+                              </button>
                             )}
                           </div>
-                          <div className="text-sm text-gray-600">
-                            {player.gamesPlayed} played • ₱{player.amountOwed.toFixed(0)} owed
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 border-t border-gray-100 pt-3 mt-1">
+                          <div>
+                            <div className="text-xs text-gray-500 font-medium mb-1.5 uppercase tracking-wider">Team A</div>
+                            <div className="space-y-1">
+                              {match.teamAPlayers?.map((p: any) => (
+                                <div key={p.id} className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                                  {p.name}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-500 font-medium mb-1.5 uppercase tracking-wider">Team B</div>
+                            <div className="space-y-1">
+                              {match.teamBPlayers?.map((p: any) => (
+                                <div key={p.id} className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                  {p.name}
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-gray-900">
+                    Participants ({session.players.length})
+                  </h2>
+                  {(() => {
+                    const now = serverDate || new Date();
+                    const isStarted = new Date(session.startTime) <= now;
+                    return (
+                      <div className="flex items-center gap-2">
                         <button
-                          onClick={() => handleOpenPaymentModal(player)}
-                          className={`px-3 py-1 text-xs font-medium rounded-full border ${
-                            player.paymentStatus === 'paid'
-                              ? 'bg-green-100 text-green-700 border-green-200'
-                              : player.paymentStatus === 'partial'
-                                ? 'bg-yellow-100 text-yellow-700 border-yellow-200'
-                                : 'bg-red-100 text-red-700 border-red-200 hover:bg-red-200'
-                          }`}
-                          title="Manage payment"
+                          onClick={() => setShowAutoAssignModal(true)}
+                          disabled={
+                            !isStarted ||
+                            waitingPlayers.length < (session.gameFormat === 'doubles' ? 4 : 2)
+                          }
+                          title={!isStarted ? 'Session has not started yet' : undefined}
+                          className="inline-flex items-center gap-2 px-3 py-2 bg-teal-50 text-teal-700 border border-teal-200 rounded-lg hover:bg-teal-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm font-bold text-sm"
                         >
-                          <PhilippinePeso className="w-3 h-3 inline mr-0.5" />
-                          {player.paymentStatus}
+                          <Zap className="w-4 h-4 fill-current" />
+                          <span>Auto-Assign</span>
+                        </button>
+                        <button
+                          onClick={handleAssignMatch}
+                          disabled={
+                            !isStarted ||
+                            waitingPlayers.length < (session.gameFormat === 'doubles' ? 4 : 2)
+                          }
+                          title={!isStarted ? 'Session has not started yet' : undefined}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm font-medium text-sm"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Assign Match</span>
                         </button>
                       </div>
-                      <button
-                        onClick={() => handleRemovePlayer(player.userId, player.playerName)}
-                        disabled={actionLoading === `remove-${player.userId}`}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 ml-2"
-                        title="Remove player"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
+                    );
+                  })()}
                 </div>
-              </div>
-            )}
 
-            {/* Playing Players */}
-            {playingPlayers.length > 0 && (
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
-                    Playing ({playingPlayers.length})
-                  </h3>
-                  <button
-                    onClick={() => setShowResetConfirm(true)}
-                    className="text-xs px-2.5 py-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors font-medium"
-                  >
-                    Reset All to Queue
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {playingPlayers.map((player) => (
-                    <div
-                      key={player.id}
-                      className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="relative">
-                          {player.avatarUrl ? (
-                            <img
-                              src={player.avatarUrl}
-                              alt={player.playerName}
-                              className="w-10 h-10 rounded-full object-cover border-2 border-green-500"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center text-white font-bold">
-                              {player.playerName.charAt(0).toUpperCase()}
-                            </div>
-                          )}
-                          <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 text-white rounded-full flex items-center justify-center border border-white">
-                            <Play className="w-2 h-2 fill-current" />
-                          </div>
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <div className="font-semibold text-gray-900">{player.playerName}</div>
-                            {player.rating && (
-                              <span className="px-2 py-0.5 bg-gray-100 text-gray-700 text-[10px] font-semibold rounded-full border border-gray-200">
-                                {player.rating} ELO
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-sm text-gray-600">Currently playing</div>
-                        </div>
+                {/* Pre-start reminder */}
+                {(() => {
+                  const now = serverDate || new Date();
+                  const sessionStart = new Date(session.startTime);
+                  if (sessionStart > now) {
+                    return (
+                      <div className="mb-4 flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm shadow-sm">
+                        <Clock className="w-5 h-5 flex-shrink-0" />
+                        <p>
+                          Match assignments will be available once the session starts at{' '}
+                          <span className="font-semibold">
+                            {sessionStart.toLocaleTimeString('en-US', {
+                              hour: 'numeric',
+                              minute: '2-digit',
+                              hour12: true,
+                            })}
+                          </span>
+                          . Players can join the queue in the meantime.
+                        </p>
                       </div>
+                    );
+                  }
+                  return null;
+                })()}
+
+                {/* Doubles minimum-player notice */}
+                {session.gameFormat === 'doubles' && waitingPlayers.length < 4 && (
+                  <div className="mb-4 flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 text-sm shadow-sm">
+                    <Users className="w-5 h-5 flex-shrink-0 mt-0.5 text-blue-500" />
+                    <div>
+                      <p className="font-semibold">Doubles — Minimum Players Required</p>
+                      <p className="text-blue-700 mt-0.5">
+                        A match cannot start until at least{' '}
+                        <span className="font-semibold">4 players</span> are in the waiting queue (
+                        {waitingPlayers.length} of 4 players joined).
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Waiting Players */}
+                {waitingPlayers.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wider flex items-center gap-2">
+                       <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                       Waiting ({waitingPlayers.length})
+                    </h3>
+                    <div className="space-y-2">
+                      {waitingPlayers.map((player) => (
+                        <div
+                          key={player.id}
+                          className="flex items-center justify-between p-4 bg-gray-50 border border-gray-100 rounded-lg hover:bg-white hover:border-primary/20 hover:shadow-md transition-all duration-200 group"
+                        >
+                          <div className="flex items-center gap-3 flex-1">
+                            <div className="relative inline-block w-10 h-10 shrink-0">
+                              {player.avatarUrl ? (
+                                <img
+                                  src={player.avatarUrl}
+                                  alt={player.playerName}
+                                  className="w-10 h-10 rounded-full object-cover border-2 border-primary group-hover:scale-105 transition-transform"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white font-bold group-hover:scale-105 transition-transform">
+                                  {player.playerName.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-green-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border border-white shadow-sm z-10">
+                                {player.position}
+                              </div>
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <div className="font-semibold text-gray-900 group-hover:text-primary transition-colors">{player.playerName}</div>
+                                {player.rating && (
+                                  <span className="px-2 py-0.5 bg-white text-gray-700 text-[10px] font-bold rounded-full border border-gray-200 shadow-sm">
+                                    {player.rating} ELO
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-sm text-gray-600 flex items-center gap-1.5">
+                                <span className="font-medium text-primary/80">{player.gamesPlayed} played</span>
+                                <span className="text-gray-300">•</span>
+                                <span className="font-semibold text-emerald-600">₱{player.amountOwed.toFixed(0)} owed</span>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleOpenPaymentModal(player)}
+                              className={`px-3 py-1 text-xs font-bold rounded-full border shadow-sm transition-all hover:scale-105 active:scale-95 ${
+                                player.paymentStatus === 'paid'
+                                  ? 'bg-green-100 text-green-700 border-green-200'
+                                  : player.paymentStatus === 'partial'
+                                    ? 'bg-yellow-100 text-yellow-700 border-yellow-200'
+                                    : 'bg-red-100 text-red-700 border-red-200 hover:bg-red-600 hover:text-white'
+                              }`}
+                              title="Manage payment"
+                            >
+                              <PhilippinePeso className="w-3 h-3 inline mr-0.5" />
+                              {player.paymentStatus}
+                            </button>
+                          </div>
+                          <button
+                            onClick={() => handleRemovePlayer(player.userId, player.playerName)}
+                            disabled={actionLoading === `remove-${player.userId}`}
+                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all disabled:opacity-50 ml-2"
+                            title="Remove player"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Playing Players */}
+                {playingPlayers.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                        Playing ({playingPlayers.length})
+                      </h3>
                       <button
-                        onClick={async () => {
-                          const result = await resetPlayerToWaiting(player.id, session.id);
-                          if (result.success) {
-                            loadSession();
-                          } else {
-                            setActionError('Reset failed: ' + result.error);
-                          }
-                        }}
-                        title="Return this player to the waiting queue"
-                        className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors font-medium"
+                        onClick={() => setShowResetConfirm(true)}
+                        className="text-xs px-2.5 py-1 rounded bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors font-bold shadow-sm"
                       >
-                        Reset
+                        Reset All to Queue
                       </button>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                    <div className="space-y-2">
+                      {playingPlayers.map((player) => (
+                        <div
+                          key={player.id}
+                          className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg shadow-sm group hover:bg-white hover:border-green-400 transition-all duration-200"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="relative">
+                              {player.avatarUrl ? (
+                                <img
+                                  src={player.avatarUrl}
+                                  alt={player.playerName}
+                                  className="w-10 h-10 rounded-full object-cover border-2 border-green-500 group-hover:scale-105 transition-transform"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center text-white font-bold group-hover:scale-105 transition-transform">
+                                  {player.playerName.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 text-white rounded-full flex items-center justify-center border border-white shadow-sm">
+                                <Play className="w-2 h-2 fill-current" />
+                              </div>
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <div className="font-semibold text-gray-900 group-hover:text-green-700">{player.playerName}</div>
+                                {player.rating && (
+                                  <span className="px-2 py-0.5 bg-white text-gray-700 text-[10px] font-bold rounded-full border border-gray-200 shadow-sm">
+                                    {player.rating} ELO
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-sm text-green-700 font-medium flex items-center gap-1.5">
+                                <span>Currently playing</span>
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={async () => {
+                              const result = await resetPlayerToWaiting(player.id, session.id);
+                              if (result.success) {
+                                loadSession();
+                              } else {
+                                setActionError('Reset failed: ' + result.error);
+                              }
+                            }}
+                            title="Return this player to the waiting queue"
+                            className="text-xs px-3 py-1.5 rounded-lg bg-white border border-amber-200 text-amber-700 hover:bg-amber-50 transition-colors font-bold shadow-sm"
+                          >
+                            Reset
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-            {session.players.length === 0 && (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Users className="w-8 h-8 text-gray-400" />
-                </div>
-                <h3 className="font-semibold text-gray-900 mb-2">No Participants Yet</h3>
-                <p className="text-sm text-gray-500">Waiting for players to join this session</p>
+                {session.players.length === 0 && (
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 bg-gray-50 border border-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
+                      <Users className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <h3 className="font-bold text-gray-900 mb-2">No Participants Yet</h3>
+                    <p className="text-sm text-gray-500 max-w-[200px] mx-auto">Players will appear here as they join the queue.</p>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          ) : (
+            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900">
+                  Completed Matches
+                </h2>
+                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                   <Trophy className="w-5 h-5 text-primary" />
+                </div>
+              </div>
+              <MatchHistoryViewer
+                sessionId={session.id}
+                userId=""
+                courtId=""
+                isManager={true}
+              />
+            </div>
+          )}
         </div>
 
         {/* Right: Session Details */}
@@ -1024,6 +1200,18 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-500">Format</span>
                 <span className="font-medium text-gray-900 capitalize">{session.gameFormat}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">Skill Requirement</span>
+                {session.minSkillLevel != null || session.maxSkillLevel != null ? (
+                  <span className="px-2.5 py-1 text-xs font-bold rounded-full border bg-amber-50 text-amber-700 border-amber-200">
+                    {getSkillRequirementLabel(session.minSkillLevel, session.maxSkillLevel)}
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-1 text-xs font-bold rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
+                    Open to All
+                  </span>
+                )}
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-500">Cost/Game</span>
@@ -1166,6 +1354,14 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
             isOpen={showMatchAssignModal}
             onClose={() => setShowMatchAssignModal(false)}
             sessionId={sessionId}
+            sessionCourts={
+              session.queue_session_courts && session.queue_session_courts.length > 0
+                ? session.queue_session_courts.map((qsc: any) => ({
+                    id: qsc.court_id,
+                    name: qsc.courts?.name || 'Unknown Court',
+                  }))
+                : session.metadata?.courts || [{ id: session.courtId, name: session.courtName }]
+            }
             waitingPlayers={waitingPlayers.map((p) => ({
               id: p.id,
               userId: p.userId,
@@ -1176,6 +1372,15 @@ export function SessionManagementClient({ sessionId }: SessionManagementClientPr
               gamesPlayed: p.gamesPlayed,
               position: p.position,
             }))}
+            gameFormat={session.gameFormat as 'singles' | 'doubles' | 'any'}
+            onSuccess={handleModalSuccess}
+          />
+
+          <AutoAssignModal
+            isOpen={showAutoAssignModal}
+            onClose={() => setShowAutoAssignModal(false)}
+            sessionId={sessionId}
+            waitingPlayersCount={waitingPlayers.length}
             gameFormat={session.gameFormat as 'singles' | 'doubles' | 'any'}
             onSuccess={handleModalSuccess}
           />

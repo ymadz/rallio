@@ -35,7 +35,8 @@ export async function getAvailableTimeSlots(
       venue_id,
       venues (
         opening_hours
-      )
+      ),
+      opening_hours
     `)
     .eq('id', courtId)
     .single()
@@ -88,11 +89,17 @@ export async function getAvailableTimeSlots(
 
   // Get operating hours for this day
   const venueData = Array.isArray(court.venues) ? court.venues[0] : court.venues
-  const openingHours = venueData?.opening_hours as Record<string, { open: string; close: string }> | null
+  
+  // 1. Check court-specific opening hours first
+  // 2. Fall back to venue opening hours
+  const courtOpeningHours = court.opening_hours as Record<string, { open: string; close: string }> | null
+  const venueOpeningHours = venueData?.opening_hours as Record<string, { open: string; close: string }> | null
+  
+  const openingHours = courtOpeningHours || venueOpeningHours
   const dayHours = openingHours?.[dayOfWeek]
 
   if (!dayHours) {
-    return [] // Venue closed on this day
+    return [] // Venue/Court closed on this day
   }
 
   // Parse opening and closing times

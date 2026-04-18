@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { createGCashCheckout, createMayaCheckout, getSource, createPayment } from '@/lib/paymongo'
 import { revalidatePath } from 'next/cache'
+import { headers } from 'next/headers'
 import { getServerNow } from '@/lib/time-server'
 
 export type PaymentMethod = 'gcash' | 'paymaya' | 'cash'
@@ -18,6 +19,7 @@ type ReservationWithRelations = {
   payment_type?: string
   num_players?: number
   recurrence_group_id?: string | null
+  booking_id?: string | null
   metadata?: Record<string, any> | null
   payment_method?: string
   courts: {
@@ -42,12 +44,19 @@ export interface InitiatePaymentResult {
  */
 export async function initiatePaymentAction(
   reservationId: string,
-  paymentMethod: PaymentMethod
+  paymentMethod: PaymentMethod,
+  options: { isMobile?: boolean } = {}
 ): Promise<InitiatePaymentResult> {
-  console.log('[initiatePaymentAction] 🚀 Starting payment initiation')
+  const headersList = await headers()
+  const userAgent = headersList.get('user-agent') || ''
+  const isCapacitorUserAgent = userAgent.includes('Capacitor')
+  
+  const { isMobile = isCapacitorUserAgent } = options
+  console.log('[initiatePaymentAction] 🚀 Starting payment initiation', { isMobile, userAgent })
   console.log('[initiatePaymentAction] Input:', {
     reservationId,
-    paymentMethod
+    paymentMethod,
+    isMobile
   })
 
   try {
@@ -122,9 +131,30 @@ export async function initiatePaymentAction(
     const courtName = reservation.courts?.name ?? 'Court'
     let description = `${venueName} - ${courtName}`
 
-    // Check for recurrence group to handle bulk payment
+    const resolveDownPaymentAmount = (meta: Record<string, any> | null | undefined, reservationTotal: number): number | null => {
+      if (!meta) return null
+
+      const rawStored = Number(meta.down_payment_amount)
+      if (!Number.isFinite(rawStored) || rawStored <= 0) return null
+
+      const isCustom = Boolean(meta.is_custom_down_payment)
+      if (isCustom) return Math.round(rawStored * 100) / 100
+
+      const courtAmount = Number(meta.court_amount)
+      const percentage = Number(meta.down_payment_percentage)
+
+      if (Number.isFinite(courtAmount) && courtAmount > 0 && Number.isFinite(percentage) && percentage > 0) {
+        const computedMinimum = Math.round((courtAmount * (percentage / 100)) * 100) / 100
+        return Math.min(Math.max(computedMinimum, 0), Math.round(reservationTotal * 100) / 100)
+      }
+
+      return Math.round(rawStored * 100) / 100
+    }
+
+    // Check for bulk payment group
     let amountToCharge = reservation.total_amount
     let recurrenceGroupId = reservation.recurrence_group_id
+    let bookingId = reservation.booking_id
     let isDownPayment = false
 
     // If reservation is already partially paid, we are charging the remaining balance
@@ -139,47 +169,68 @@ export async function initiatePaymentAction(
         paymentMethod === 'cash'
 
       // If it's a cash booking but requires a down payment, charge the down payment amount online.
-      if (isIntendedCash && reservation.metadata?.down_payment_amount && reservation.status === 'pending_payment') {
-        amountToCharge = Number(reservation.metadata.down_payment_amount)
-        isDownPayment = true
-        description += ' (Down Payment)'
+      if (isIntendedCash && reservation.status === 'pending_payment') {
+        const normalizedDownPayment = resolveDownPaymentAmount(reservation.metadata, reservation.total_amount)
+        if (normalizedDownPayment && normalizedDownPayment > 0) {
+          amountToCharge = normalizedDownPayment
+          isDownPayment = true
+          description += ' (Down Payment)'
+        } else if (reservation.payment_type === 'cash' || reservation.payment_method === 'cash') {
+          // Fallback: If it's explicitly marked as cash but metadata is missing the amount for some reason,
+          // still treat it as a down payment situation to avoid the "not supported" error
+          isDownPayment = true
+        }
       }
     }
 
     console.log('[initiatePaymentAction] 🔍 Down payment debug:', {
+      reservationId,
+      bookingId,
       recurrenceGroupId,
       isDownPayment,
       amountToCharge,
       reservationStatus: reservation.status,
       paymentMethod,
-      intendedMethod: reservation.metadata?.intended_payment_method,
-      downPaymentInMeta: reservation.metadata?.down_payment_amount,
+      metadata: reservation.metadata,
       reservationPaymentMethod: reservation.payment_method,
     })
 
-    if (recurrenceGroupId) {
+    if (bookingId || recurrenceGroupId) {
       // Fetch all reservations in this group
-      const { data: groupReservations } = await supabase
+      const query = supabase
         .from('reservations')
         .select('total_amount, status, metadata')
-        .eq('recurrence_group_id', recurrenceGroupId)
         .in('status', ['pending_payment'])
+
+      if (bookingId) {
+        query.eq('booking_id', bookingId)
+      } else {
+        query.eq('recurrence_group_id', recurrenceGroupId!)
+      }
+
+      const { data: groupReservations } = await query
 
       if (groupReservations && groupReservations.length > 0) {
         if (isDownPayment) {
-          // For down payments, sum the down_payment_amount from each reservation's metadata
+          // For down payments, sum the down_payment_amount from each reservation's metadata.
+          // Fallback to 20% of total_amount if metadata is missing.
           amountToCharge = groupReservations.reduce((sum, res) => {
             const meta = res.metadata as any
-            return sum + Number(meta?.down_payment_amount || 0)
+            const downPayment = resolveDownPaymentAmount(meta, Number(res.total_amount || 0)) || 0
+            if (downPayment > 0) return sum + downPayment
+            
+            // Fallback: use 20% of total_amount as a safe default for down payment
+            return sum + ((res.total_amount || 0) * 0.2)
           }, 0)
           description += ` (Down Payment - ${groupReservations.length} sessions)`
         } else {
           // For full payments, sum up the total amount
           amountToCharge = groupReservations.reduce((sum, res) => sum + (res.total_amount || 0), 0)
-          description += ` (Recurring: ${groupReservations.length} sessions)`
+          description += ` (Bulk: ${groupReservations.length} sessions)`
         }
-        console.log('[initiatePaymentAction] 🔄 Detected recurring group:', {
-          groupId: recurrenceGroupId,
+        console.log('[initiatePaymentAction] 🔄 Detected bulk group:', {
+          bookingId,
+          recurrenceGroupId,
           count: groupReservations.length,
           totalBulkAmount: amountToCharge,
           isDownPayment
@@ -192,13 +243,23 @@ export async function initiatePaymentAction(
       singleAmount: reservation.total_amount,
       numPlayers: reservation.num_players,
       amountToCharge,
-      isBulk: !!recurrenceGroupId
+      isBulk: !!(bookingId || recurrenceGroupId)
     })
 
     // Generate success/failed URLs
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    const successUrl = `${baseUrl}/checkout/success?reservation=${reservationId}`
-    const failedUrl = `${baseUrl}/checkout/failed?reservation=${reservationId}`
+    const headersList = await headers()
+    const host = headersList.get('host')
+    const proto = headersList.get('x-forwarded-proto') || 'http'
+    const baseUrl = host ? `${proto}://${host}` : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000')
+    
+    let successUrl = `${baseUrl}/checkout/success?reservation=${reservationId}${bookingId ? `&booking=${bookingId}` : ''}`
+    let failedUrl = `${baseUrl}/checkout/failed?reservation=${reservationId}`
+
+    if (isMobile) {
+      // Use the bridge callback URL to trigger deep link back to app
+      successUrl = `${baseUrl}/mobile-payment/callback?status=success&reservation=${reservationId}${bookingId ? `&booking=${bookingId}` : ''}`
+      failedUrl = `${baseUrl}/mobile-payment/callback?status=failed&reservation=${reservationId}`
+    }
 
     let checkoutUrl: string
     let sourceId: string
@@ -222,6 +283,7 @@ export async function initiatePaymentAction(
           },
           metadata: {
             reservation_id: reservationId,
+            booking_id: bookingId || undefined,
             user_id: user.id,
             payment_reference: paymentReference,
             payment_type: reservation.payment_type || 'full',
@@ -245,6 +307,7 @@ export async function initiatePaymentAction(
           },
           metadata: {
             reservation_id: reservationId,
+            booking_id: bookingId || undefined,
             user_id: user.id,
             payment_reference: paymentReference,
             payment_type: reservation.payment_type || 'full',
@@ -293,6 +356,7 @@ export async function initiatePaymentAction(
       reference: paymentReference,
       user_id: user.id,
       reservation_id: reservationId,
+      booking_id: bookingId || null,
       amount: amountToCharge, // Use the calculated per-player amount for split payments
       currency: 'PHP',
       payment_method: paymentMethod,
@@ -305,6 +369,7 @@ export async function initiatePaymentAction(
         checkout_url: checkoutUrl,
         source_id: sourceId,
         reservation_id: reservationId,
+        booking_id: bookingId || null,
         payment_reference: paymentReference,
         payment_type: reservation.payment_type || 'full',
         player_count: reservation.num_players || 1,
@@ -578,12 +643,18 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
 
     // Update reservation with comprehensive error handling
     console.log(`Updating reservation to ${newReservationStatus}:`, payment.reservation_id)
-    // Fetch latest reservation first to get current amount_paid
+    // Fetch latest reservation first to get current amount_paid and total_amount
     const { data: currentRes } = await supabase
       .from('reservations')
-      .select('amount_paid')
+      .select('amount_paid, total_amount')
       .eq('id', payment.reservation_id)
       .single()
+
+    // BULK/RECURRING PAYMENT HANDLING
+    // Check if this is part of a booking or recurrence group
+    const recurrenceGroupId = payment.metadata?.recurrence_group_id
+    const bookingId = payment.metadata?.booking_id || payment.booking_id
+    const isBulkPayment = !!(bookingId || recurrenceGroupId)
 
     // For recurring down payments, use per-reservation share, not total payment
     let newAmountPaid: number
@@ -597,6 +668,10 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
       newAmountPaid = firstResForMeta?.metadata?.down_payment_amount
         ? Number(firstResForMeta.metadata.down_payment_amount)
         : payment.amount
+    } else if (isBulkPayment) {
+      // If it's a bulk full payment, this specific reservation only gets its own total_amount
+      // The other reservations in the group are handled in the bulk loop below.
+      newAmountPaid = currentRes?.total_amount || 0
     } else {
       newAmountPaid = (currentRes?.amount_paid || 0) + payment.amount
     }
@@ -661,35 +736,44 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
     }
 
     // BULK/RECURRING PAYMENT HANDLING
-    // Check if this is part of a recurrence group and confirm the rest
-    const recurrenceGroupId = payment.metadata?.recurrence_group_id
-    if (recurrenceGroupId) {
-      console.log('🔄 Bulk Payment detected in processChargeableSourceAction:', recurrenceGroupId)
+    // Check if this is part of a booking or recurrence group and confirm the rest
 
-      // Fetch all other pending reservations in this group
-      const { data: groupReservations, error: groupFetchError } = await supabase
+    if (bookingId || recurrenceGroupId) {
+      console.log('🔄 Bulk Payment detected in processChargeableSourceAction:', { bookingId, recurrenceGroupId })
+
+      // Fetch all other pending reservations in this group/booking
+      const query = supabase
         .from('reservations')
         .select('id, total_amount, metadata')
-        .eq('recurrence_group_id', recurrenceGroupId)
         .neq('id', payment.reservation_id) // Exclude the one we just updated
         .in('status', ['pending_payment'])
 
+      if (bookingId) {
+        query.eq('booking_id', bookingId)
+      } else {
+        query.eq('recurrence_group_id', recurrenceGroupId!)
+      }
+
+      const { data: groupReservations, error: groupFetchError } = await query
+
       if (groupFetchError) {
-        console.error('❌ Failed to fetch recurrence group for bulk update:', groupFetchError)
+        console.error('❌ Failed to fetch bulk group for update:', groupFetchError)
       } else if (groupReservations && groupReservations.length > 0) {
-        console.log(`🔄 Confirming ${groupReservations.length} additional recurring reservations...`)
+        console.log(`🔄 Confirming ${groupReservations.length} additional reservations...`)
 
         for (const res of groupReservations) {
           // If original payment was a down payment, set each reservation to partially_paid
-          // with amount_paid = each reservation's down_payment_amount.
-          // Otherwise, mark as fully confirmed.
+          // with amount_paid = each reservation's down_payment_amount if available, 
+          // or a proportional share of the total payment.
           let resStatus = 'confirmed'
           let resAmountPaid = res.total_amount
 
           if (isDownPayment) {
             const resMeta = (res as any).metadata as any
             resStatus = 'partially_paid'
-            resAmountPaid = Number(resMeta?.down_payment_amount || 0)
+            // Total payment amount should be distributed. 
+            // Preferably we use the pre-calculated item split in metadata.
+            resAmountPaid = Number(resMeta?.down_payment_amount || (payment.amount / (groupReservations.length + 1)))
           }
 
           const { error: bulkUpdateError } = await supabase
@@ -701,7 +785,7 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
             .eq('id', res.id)
 
           if (bulkUpdateError) {
-            console.error(`❌ Failed to confirm recurring reservation ${res.id}:`, bulkUpdateError)
+            console.error(`❌ Failed to confirm reservation ${res.id} in bulk update:`, bulkUpdateError)
           }
         }
         console.log('✅ Bulk confirmation complete')
@@ -718,6 +802,9 @@ export async function processChargeableSourceAction(sourceId: string): Promise<{
 
     // Check if linked to Queue Session and update
     await updateQueueSessionStatus(payment.reservation_id, supabase)
+
+    // Handle Queue Participation Payment Fulfillment
+    await markQueueParticipantPaidIfApplicable(supabase, payment)
 
     return { success: true }
   } catch (error) {
@@ -846,6 +933,91 @@ async function updateQueueSessionStatus(reservationId: string, supabaseParam: an
     }
   } catch (err) {
     console.error('[updateQueueSessionStatus] 🧨 Exception checking queue session:', err)
+  }
+}
+
+/**
+ * Helper to mark queue participant as paid and clear balance
+ */
+async function markQueueParticipantPaidIfApplicable(supabase: any, payment: any) {
+  const paymentType = payment?.metadata?.payment_type
+  const participantId = payment?.metadata?.participant_id
+  const queueSessionId = payment?.metadata?.queue_session_id
+
+  if (paymentType !== 'queue_session' && !participantId) {
+    return
+  }
+
+  console.log('[markQueueParticipantPaidIfApplicable] 🔄 Processing queue participant payment:', {
+    participantId,
+    paymentId: payment.id,
+    paymentType
+  })
+
+  if (!participantId) {
+    console.warn('[markQueueParticipantPaidIfApplicable] ⚠️ Missing participant_id for queue payment:', payment?.id)
+    return
+  }
+
+  // Use service client to ensure we can update even if RLS is strict
+  const serviceClient = createServiceClient()
+
+  const { data: participant, error: participantError } = await serviceClient
+    .from('queue_participants')
+    .select('*')
+    .eq('id', participantId)
+    .single()
+
+  if (participantError || !participant) {
+    console.warn('[markQueueParticipantPaidIfApplicable] ❌ Participant not found:', {
+      participantId,
+      error: participantError,
+    })
+    return
+  }
+
+  // If already paid and balance cleared, nothing to do
+  if (participant.payment_status === 'paid' && Number(participant.amount_owed || 0) <= 0) {
+    console.log('[markQueueParticipantPaidIfApplicable] ℹ️ Participant already marked as paid')
+    return
+  }
+
+  console.log('[markQueueParticipantPaidIfApplicable] 📝 Marking participant as paid and clearing amount_owed')
+  const { error: updateError } = await serviceClient
+    .from('queue_participants')
+    .update({
+      payment_status: 'paid',
+      amount_owed: 0,
+      metadata: {
+        ...(participant.metadata || {}),
+        paid_at: new Date().toISOString(),
+        payment_id: payment.id,
+        processed_by: 'server_action'
+      }
+    })
+    .eq('id', participant.id)
+
+  if (updateError) {
+    console.error('[markQueueParticipantPaidIfApplicable] ❌ Failed to mark participant paid:', updateError)
+    return
+  }
+
+  const effectiveSessionId = participant.queue_session_id || queueSessionId
+  if (!effectiveSessionId) {
+    revalidatePath('/queue')
+    return
+  }
+
+  const { data: queueSession } = await serviceClient
+    .from('queue_sessions')
+    .select('court_id')
+    .eq('id', effectiveSessionId)
+    .single()
+
+  console.log('[markQueueParticipantPaidIfApplicable] ✅ Participant fulfillment complete. Revalidating paths.')
+  revalidatePath('/queue')
+  if (queueSession?.court_id) {
+    revalidatePath(`/queue/${queueSession.court_id}`)
   }
 }
 
@@ -1180,7 +1352,11 @@ export async function initiateQueuePaymentAction(
     const description = `${venueName} - ${courtName} (${gamesPlayed} games)`
 
     // Generate success/failed URLs
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const headersList = await headers()
+    const host = headersList.get('host')
+    const proto = headersList.get('x-forwarded-proto') || 'http'
+    const baseUrl = host ? `${proto}://${host}` : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000')
+
     const successUrl = `${baseUrl}/queue/payment/success?session=${sessionId}&participant=${participant.id}`
     const failedUrl = `${baseUrl}/queue/payment/failed?session=${sessionId}`
 

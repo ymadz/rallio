@@ -3,19 +3,23 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { CheckCircle, Loader2, ArrowRight, Receipt } from 'lucide-react'
+import { CheckCircle, Loader2, ArrowRight, Receipt, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import confetti from 'canvas-confetti'
+import { processChargeableSourceAction } from '@/app/actions/payments'
 
 function PaymentSuccessContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const participantId = searchParams.get('participant')
   const sessionId = searchParams.get('session')
+  const sourceId = searchParams.get('source_id')
 
   const [participant, setParticipant] = useState<any>(null)
   const [session, setSession] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isProcessing, setIsProcessing] = useState(!!sourceId)
+  const [processingError, setProcessingError] = useState<string | null>(null)
 
   useEffect(() => {
     // Trigger confetti celebration
@@ -49,6 +53,31 @@ function PaymentSuccessContent() {
 
     return () => clearInterval(interval)
   }, [])
+
+  useEffect(() => {
+    async function processPayment() {
+      if (!sourceId) return
+
+      try {
+        console.log('[QueuePaymentSuccessPage] 🔄 Processing source_id:', sourceId)
+        const result = await processChargeableSourceAction(sourceId)
+        
+        if (!result.success) {
+          console.error('[QueuePaymentSuccessPage] ❌ Processing failed:', result.error)
+          setProcessingError(result.error || 'Failed to process payment')
+        } else {
+          console.log('[QueuePaymentSuccessPage] ✅ Payment processed successfully')
+        }
+      } catch (err) {
+        console.error('[QueuePaymentSuccessPage] 🧨 Unexpected error:', err)
+        setProcessingError(err instanceof Error ? err.message : 'An unexpected error occurred')
+      } finally {
+        setIsProcessing(false)
+      }
+    }
+
+    processPayment()
+  }, [sourceId])
 
   useEffect(() => {
     const loadPaymentDetails = async () => {
@@ -98,6 +127,51 @@ function PaymentSuccessContent() {
 
     loadPaymentDetails()
   }, [participantId])
+
+  if (isProcessing) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="text-center max-w-sm">
+          <div className="relative mb-6">
+            <div className="w-20 h-20 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto"></div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Receipt className="w-8 h-8 text-primary animate-pulse" />
+            </div>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Finalizing Payment</h2>
+          <p className="text-gray-600">Please wait while we confirm your transaction and clear your balance...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (processingError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl p-8 text-center max-w-md w-full border border-red-100">
+          <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <AlertCircle className="w-12 h-12 text-red-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Something went wrong</h2>
+          <p className="text-red-600 mb-8 font-medium">{processingError}</p>
+          <div className="space-y-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
+            >
+              Try Again
+            </button>
+            <Link
+              href="/queue"
+              className="w-full px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium inline-block"
+            >
+              Back to Dashboard
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (isLoading) {
     return (

@@ -590,6 +590,27 @@ export function UserDetailModal({ userId, onClose, onUpdate }: UserDetailModalPr
                   </div>
                 )}
 
+                {user.no_show_user && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-amber-900">No-show flagged user</h3>
+                      <div className="mt-2 space-y-1 text-sm text-amber-800">
+                        <p>No-show count: {user.no_show_count || 0}</p>
+                        {user.last_no_show_at && (
+                          <p>Last no-show at: {new Date(user.last_no_show_at).toLocaleString()}</p>
+                        )}
+                        {user.last_no_show_reason && (
+                          <p>Last reason: {user.last_no_show_reason}</p>
+                        )}
+                        {user.last_no_show_reservation_id && (
+                          <p>Reservation ID: {String(user.last_no_show_reservation_id).slice(0, 8)}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Role Management */}
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">

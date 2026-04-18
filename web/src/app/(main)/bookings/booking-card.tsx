@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { format, differenceInHours } from 'date-fns';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -10,6 +11,7 @@ import { StatusBadge } from '@/components/shared/status-badge';
 // Redefining interface to avoid circular deps or complex exports for now
 export interface Booking {
   id: string;
+  booking_id?: string | null;
   start_time: string;
   end_time: string;
   status: string;
@@ -44,6 +46,7 @@ export interface Booking {
   }>;
   recurrence_group_id?: string | null;
   cancellation_reason?: string | null;
+  cash_payment_deadline?: string | null;
   metadata?: {
     recurrence_total?: number;
     recurrence_index?: number;
@@ -61,7 +64,7 @@ interface BookingCardProps {
   serverDate: Date | null;
   cancellingId: string | null;
   resumingPaymentId: string | null;
-  onCancelBooking: (booking: Booking) => void;
+  onCancelBooking: (booking: Booking, target?: 'reservation') => void;
   onRefundBooking: (booking: Booking) => void;
   onResumePayment: (booking: Booking, paymentMethod?: 'gcash' | 'paymaya') => void;
   onReschedule: (booking: Booking) => void;
@@ -155,8 +158,8 @@ export function BookingCard({
     } else if (status === 'pending_payment') {
       const paymentMethod = b.metadata?.intended_payment_method || b.payments?.[0]?.payment_method;
       if (paymentMethod === 'cash') {
-        displayStatus = 'confirmed'; // Map to confirmed style
-        displayLabel = 'Reserved';
+        displayStatus = 'pending_payment';
+        displayLabel = 'Awaiting Cash Payment';
       } else {
         displayLabel = 'Pending Payment';
       }
@@ -178,6 +181,37 @@ export function BookingCard({
   };
 
   const paymentStatus = getExtendedPaymentStatus(booking);
+  const cashDeadline = booking.cash_payment_deadline || booking.metadata?.cash_payment_deadline || null
+  const shouldShowCashTimer = isCashBooking(booking) && booking.status === 'pending_payment' && !!cashDeadline
+  const [nowMs, setNowMs] = useState(Date.now())
+
+  useEffect(() => {
+    if (!shouldShowCashTimer) return
+
+    const timerId = setInterval(() => setNowMs(Date.now()), 1000)
+    return () => clearInterval(timerId)
+  }, [shouldShowCashTimer])
+
+  const formatCountdown = (msRemaining: number) => {
+    if (msRemaining <= 0) return '00:00:00'
+
+    const totalSeconds = Math.floor(msRemaining / 1000)
+    const days = Math.floor(totalSeconds / 86400)
+    const hours = Math.floor((totalSeconds % 86400) / 3600)
+    const minutes = Math.floor((totalSeconds % 3600) / 60)
+    const seconds = totalSeconds % 60
+
+    const hh = String(hours).padStart(2, '0')
+    const mm = String(minutes).padStart(2, '0')
+    const ss = String(seconds).padStart(2, '0')
+
+    if (days > 0) return `${days}d ${hh}:${mm}:${ss}`
+    return `${hh}:${mm}:${ss}`
+  }
+
+  const deadlineMs = cashDeadline ? new Date(cashDeadline).getTime() : 0
+  const remainingMs = deadlineMs - nowMs
+  const isCashDeadlineExpired = shouldShowCashTimer && remainingMs <= 0
 
   return (
     <div className="overflow-hidden flex flex-col max-h-[90vh]">
@@ -220,16 +254,9 @@ export function BookingCard({
         <div className="absolute top-3 left-3 flex flex-wrap gap-2 max-w-[calc(100%-3rem)] z-10">
           {bookingStatusBadge(booking.status, booking)}
           {booking.type === 'queue_session' && (
-            <span className="px-3 py-1.5 rounded-full text-xs font-bold shadow-lg bg-white text-green-700 border border-green-300 flex items-center gap-1">
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-                />
-              </svg>
-              Queue Session
+            <span className="px-3 py-1.5 rounded-full text-[10px] font-extrabold shadow-lg bg-primary text-white ring-1 ring-white/20 flex items-center gap-1.5 backdrop-blur-md">
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+              QUEUE SESSION
             </span>
           )}
           {booking.metadata?.weeks_total && booking.metadata.weeks_total > 1 && (
@@ -452,7 +479,7 @@ export function BookingCard({
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-gray-500">Down Payment Paid</span>
                       <span className="font-medium text-gray-600">
-                        − ₱{booking.amount_paid.toFixed(2)}
+                        − ₱{Math.min(booking.amount_paid, booking.total_amount).toFixed(2)}
                       </span>
                     </div>
                     <div className="border-t border-dashed border-primary/15 my-1" />
@@ -461,7 +488,7 @@ export function BookingCard({
                         Remaining Balance Due
                       </span>
                       <span className="text-xl font-bold text-amber-700">
-                        ₱{(booking.total_amount - booking.amount_paid).toFixed(2)}
+                        ₱{Math.max(0, booking.total_amount - booking.amount_paid).toFixed(2)}
                       </span>
                     </div>
                   </div>
@@ -487,7 +514,7 @@ export function BookingCard({
                         Refund {booking.status === 'refunded' ? 'Processed' : 'Requested'}
                       </span>
                       <span className="text-xl font-bold text-primary">
-                        ₱{booking.amount_paid.toFixed(2)}
+                        ₱{Math.min(booking.amount_paid, booking.total_amount).toFixed(2)}
                       </span>
                     </div>
                   </div>
@@ -532,6 +559,33 @@ export function BookingCard({
                     </div>
                   )}
                 </>
+              )}
+
+              {shouldShowCashTimer && (
+                <div
+                  className={`col-span-2 rounded-xl p-4 mt-1 border ${isCashDeadlineExpired ? 'border-red-200' : 'border-amber-200'}`}
+                  style={{
+                    background: isCashDeadlineExpired
+                      ? 'linear-gradient(135deg, rgba(254, 226, 226, 0.45) 0%, rgba(254, 242, 242, 0.45) 100%)'
+                      : 'linear-gradient(135deg, rgba(254, 243, 199, 0.45) 0%, rgba(255, 251, 235, 0.45) 100%)',
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className={`text-xs font-semibold uppercase tracking-wider ${isCashDeadlineExpired ? 'text-red-700' : 'text-amber-700'}`}>
+                        Cash Payment Deadline
+                      </p>
+                      <p className={`text-xs mt-1 ${isCashDeadlineExpired ? 'text-red-600' : 'text-amber-700'}`}>
+                        {isCashDeadlineExpired
+                          ? 'Deadline passed. This booking will be cancelled if still unpaid.'
+                          : `Pay cash at venue before ${format(new Date(cashDeadline as string), 'MMM d, yyyy • h:mm a')}`}
+                      </p>
+                    </div>
+                    <div className={`rounded-lg px-3 py-2 text-sm font-bold tabular-nums ${isCashDeadlineExpired ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>
+                      {formatCountdown(remainingMs)}
+                    </div>
+                  </div>
+                </div>
               )}
             </>
           )}
@@ -625,7 +679,7 @@ export function BookingCard({
             {booking.type === 'queue_session' && booking.queue_session_id ? (
               /* Queue Session Actions */
               <>
-                <Link href={`/queue/${booking.queue_session_id || booking.courts?.id}`}>
+                <Link href={`/queue/${booking.queue_session_id || booking.courts?.id}`} className="col-span-2">
                   <Button
                     variant="outline"
                     className="w-full h-10 rounded-xl text-green-700 border-green-300 bg-white hover:bg-green-50 hover:text-green-800 hover:border-green-400 transition-colors"
@@ -644,10 +698,53 @@ export function BookingCard({
                         d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
                       />
                     </svg>
-                    Manage Queue
+                    Manage Queue Slots
                   </Button>
                 </Link>
-                <Link href={`/bookings/${booking.id}/receipt`}>
+
+                {/* Organizer Management Actions */}
+                {booking.metadata?.is_organizer && canCancelBooking(booking) && (
+                   <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onReschedule(booking)}
+                      className="w-full h-10 rounded-xl border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 transition-colors"
+                    >
+                      <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      Reschedule
+                    </Button>
+
+                    {booking.amount_paid > 0 ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onRefundBooking(booking)}
+                        className="w-full h-10 rounded-xl transition-colors text-primary border-primary/30 hover:bg-primary/5 hover:text-primary hover:border-primary/40"
+                      >
+                        <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                        </svg>
+                        Request Refund
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onCancelBooking(booking, 'reservation')}
+                        disabled={cancellingId === booking.id}
+                        className="w-full h-10 rounded-xl text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors"
+                      >
+                        {cancellingId === booking.id ? <Spinner className="w-4 h-4 mr-2" /> : <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>}
+                        Cancel Session
+                      </Button>
+                    )}
+                   </>
+                )}
+
+                <Link href={`/bookings/${booking.id}/receipt`} className="col-span-2">
                   <Button
                     variant="outline"
                     className="w-full h-10 rounded-xl border-primary/20 hover:bg-primary/5 hover:text-primary hover:border-primary/40 transition-colors"
@@ -726,7 +823,7 @@ export function BookingCard({
                 </Link>
 
                 {/* Refund button for paid confirmed bookings (>24h) */}
-                {booking.status === 'confirmed' &&
+                {(booking.status === 'confirmed' || booking.status === 'partially_paid') &&
                   booking.amount_paid > 0 &&
                   canCancelBooking(booking) && (
                     <div className="w-full">
@@ -779,11 +876,11 @@ export function BookingCard({
                     </Button>
 
                     {/* Show Cancel for unpaid, nothing extra for paid (refund button is above) */}
-                    {!(booking.status === 'confirmed' && booking.amount_paid > 0) && (
+                    {!((booking.status === 'confirmed' || booking.status === 'partially_paid') && booking.amount_paid > 0) && (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => onCancelBooking(booking)}
+                        onClick={() => onCancelBooking(booking, 'reservation')}
                         disabled={cancellingId === booking.id}
                         className="w-full h-10 rounded-xl text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors"
                       >
@@ -807,11 +904,12 @@ export function BookingCard({
                                 d="M6 18L18 6M6 6l12 12"
                               />
                             </svg>
-                            Cancel
+                            Cancel Slot
                           </>
                         )}
                       </Button>
                     )}
+
                   </>
                 )}
               </>

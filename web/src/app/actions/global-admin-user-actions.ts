@@ -34,7 +34,8 @@ export async function getAllUsers(options: {
   pageSize?: number
   search?: string
   roleFilter?: string
-  statusFilter?: 'all' | 'active' | 'banned'
+  statusFilter?: 'all' | 'active' | 'banned' | 'no_show'
+  skillLevelFilter?: string
 } = {}) {
   const auth = await verifyGlobalAdmin()
   if (!auth.success) return auth
@@ -44,6 +45,54 @@ export async function getAllUsers(options: {
   const pageSize = options.pageSize || 20
   const from = (page - 1) * pageSize
   const to = from + pageSize - 1
+
+  let allowedUserIds: string[] | null = null
+
+  // Apply role and skill filters BEFORE pagination so counts/pages stay accurate.
+  if (options.roleFilter && options.roleFilter !== 'all') {
+    const { data: roleUsers, error: roleUsersError } = await supabase
+      .from('user_roles')
+      .select('user_id, roles!inner(name)')
+      .eq('roles.name', options.roleFilter)
+
+    if (roleUsersError) {
+      return { success: false, error: roleUsersError.message }
+    }
+
+    allowedUserIds = (roleUsers || []).map((row: any) => row.user_id)
+  }
+
+  if (options.skillLevelFilter && options.skillLevelFilter !== 'all') {
+    const selectedSkill = Number(options.skillLevelFilter)
+    const playersQuery = supabase
+      .from('players')
+      .select('user_id')
+      .eq('skill_level', selectedSkill)
+
+    const { data: skillUsers, error: skillUsersError } = allowedUserIds
+      ? await playersQuery.in('user_id', allowedUserIds)
+      : await playersQuery
+
+    if (skillUsersError) {
+      return { success: false, error: skillUsersError.message }
+    }
+
+    const skillUserIds = (skillUsers || []).map((row: any) => row.user_id)
+    allowedUserIds = allowedUserIds
+      ? allowedUserIds.filter((id) => skillUserIds.includes(id))
+      : skillUserIds
+  }
+
+  if (allowedUserIds && allowedUserIds.length === 0) {
+    return {
+      success: true,
+      users: [],
+      totalCount: 0,
+      page,
+      pageSize,
+      totalPages: 0
+    }
+  }
 
   let query = supabase
     .from('profiles')
@@ -55,9 +104,14 @@ export async function getAllUsers(options: {
       created_at,
       is_banned,
       is_active,
+      metadata,
       banned_reason,
       banned_until
     `, { count: 'exact' })
+
+  if (allowedUserIds) {
+    query = query.in('id', allowedUserIds)
+  }
 
   // Search filter
   if (options.search) {
@@ -69,6 +123,8 @@ export async function getAllUsers(options: {
     query = query.eq('is_banned', true)
   } else if (options.statusFilter === 'active') {
     query = query.eq('is_banned', false)
+  } else if (options.statusFilter === 'no_show') {
+    query = query.contains('metadata', { no_show_user: true })
   }
 
   // Pagination
@@ -93,23 +149,31 @@ export async function getAllUsers(options: {
     `)
     .in('user_id', userIds)
 
+  // Fetch player profiles to support player-specific filtering (skill level)
+  const { data: playerProfiles } = await supabase
+    .from('players')
+    .select('user_id, skill_level')
+    .in('user_id', userIds)
+
+  const playerProfileByUserId = new Map(
+    (playerProfiles || []).map((player) => [
+      player.user_id,
+      { skill_level: player.skill_level }
+    ])
+  )
+
   // Attach roles to users
   const usersWithRoles = (users || []).map((user: any) => ({
     ...user,
-    user_roles: userRoles?.filter(ur => ur.user_id === user.id) || []
+    user_roles: userRoles?.filter(ur => ur.user_id === user.id) || [],
+    player_profile: playerProfileByUserId.get(user.id) || null,
+    no_show_user: Boolean(user?.metadata?.no_show_user),
+    no_show_count: Number(user?.metadata?.no_show_count || 0)
   }))
-
-  // Filter by role if needed
-  let filteredUsers = usersWithRoles
-  if (options.roleFilter && options.roleFilter !== 'all') {
-    filteredUsers = usersWithRoles.filter((user: any) =>
-      user.user_roles?.some((ur: any) => ur.roles?.name === options.roleFilter)
-    )
-  }
 
   return {
     success: true,
-    users: filteredUsers,
+    users: usersWithRoles,
     totalCount: count || 0,
     page,
     pageSize,
@@ -133,6 +197,7 @@ export async function getUserDetails(userId: string) {
       avatar_url,
       created_at,
       updated_at,
+      metadata,
       is_banned,
       banned_reason,
       banned_until,
@@ -178,6 +243,11 @@ export async function getUserDetails(userId: string) {
     user: {
       ...user,
       user_roles: userRoles || [],
+      no_show_user: Boolean(user?.metadata?.no_show_user),
+      no_show_count: Number(user?.metadata?.no_show_count || 0),
+      last_no_show_at: user?.metadata?.last_no_show_at || null,
+      last_no_show_reason: user?.metadata?.last_no_show_reason || null,
+      last_no_show_reservation_id: user?.metadata?.last_no_show_reservation_id || null,
       playerStats,
       recentActivity: recentActivity || []
     }

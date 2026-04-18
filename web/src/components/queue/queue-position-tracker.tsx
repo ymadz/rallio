@@ -48,7 +48,6 @@ const qptStyles = `
 interface QueuePositionTrackerProps {
   position: number
   totalPlayers: number
-  estimatedWaitTime: number // in minutes
   gamesPlayed: number
   status: 'waiting' | 'playing' | 'completed'
 }
@@ -56,7 +55,6 @@ interface QueuePositionTrackerProps {
 export function QueuePositionTracker({
   position,
   totalPlayers,
-  estimatedWaitTime,
   gamesPlayed,
   status,
 }: QueuePositionTrackerProps) {
@@ -135,27 +133,6 @@ export function QueuePositionTracker({
             </div>
           </div>
 
-          {/* Estimated Wait Time */}
-          <div className="pt-4 border-t border-gray-100">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Clock className="w-5 h-5 text-orange-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Est. Wait Time</p>
-                <p className="font-semibold text-gray-900">
-                  {estimatedWaitTime > 0 ? `~${estimatedWaitTime} min` : 'Soon'}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Queue Tips */}
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <p className="text-xs text-gray-600">
-              <span className="font-semibold text-gray-700">💡 Tip:</span> Stay ready! You'll be notified when it's your turn to play.
-            </p>
-          </div>
         </>
       )}
 

@@ -119,6 +119,7 @@ export async function createCourt(venueId: string, courtData: {
   court_type: 'indoor' | 'outdoor'
   capacity?: number
   hourly_rate: number
+  down_payment_percentage?: number
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -140,6 +141,11 @@ export async function createCourt(venueId: string, courtData: {
     }
 
     // Create court
+    const downPaymentPercentage =
+      typeof courtData.down_payment_percentage === 'number'
+        ? Math.min(Math.max(courtData.down_payment_percentage, 0), 100)
+        : undefined
+
     const { data: court, error: courtError } = await supabase
       .from('courts')
       .insert({
@@ -150,6 +156,9 @@ export async function createCourt(venueId: string, courtData: {
         court_type: courtData.court_type,
         capacity: courtData.capacity || 4,
         hourly_rate: courtData.hourly_rate,
+        metadata: downPaymentPercentage !== undefined
+          ? { down_payment_percentage: downPaymentPercentage }
+          : undefined,
         is_active: true,
       })
       .select()
@@ -179,6 +188,7 @@ export async function updateCourt(courtId: string, updates: {
   capacity?: number
   hourly_rate?: number
   is_active?: boolean
+  down_payment_percentage?: number
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -194,6 +204,7 @@ export async function updateCourt(courtId: string, updates: {
       .select(`
         id,
         venue_id,
+        metadata,
         venue:venues!inner(owner_id)
       `)
       .eq('id', courtId)
@@ -204,9 +215,24 @@ export async function updateCourt(courtId: string, updates: {
     }
 
     // Update court
+    const updatesPayload: any = {
+      ...updates,
+      updated_at: new Date().toISOString()
+    }
+
+    if (updates.down_payment_percentage !== undefined) {
+      const sanitizedDownPaymentPercentage = Math.min(Math.max(updates.down_payment_percentage, 0), 100)
+      const existingMetadata = ((court as any).metadata || {}) as Record<string, any>
+      updatesPayload.metadata = {
+        ...existingMetadata,
+        down_payment_percentage: sanitizedDownPaymentPercentage,
+      }
+      delete updatesPayload.down_payment_percentage
+    }
+
     const { error: updateError } = await supabase
       .from('courts')
-      .update({ ...updates, updated_at: new Date().toISOString() })
+      .update(updatesPayload)
       .eq('id', courtId)
 
     if (updateError) throw updateError

@@ -138,11 +138,11 @@ export default async function HomePage() {
           position: relative;
           overflow: hidden;
           border-radius: 1.5rem;
-          padding: 1.5rem;
+          padding: 1.25rem;
           display: flex;
           flex-direction: column;
           justify-content: space-between;
-          min-height: 160px;
+          min-height: 130px;
           border: 1px solid rgba(255,255,255,0.22);
           box-shadow: inset 0 1px 0 rgba(255,255,255,0.28), 0 4px 24px rgba(13,148,136,0.18);
           transition: transform 0.32s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.32s ease;
@@ -338,7 +338,7 @@ export default async function HomePage() {
         <ActiveBookingBanner />
 
         {/* Quick Actions - Large Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4 mb-8">
 
           {/* Book a Court Card */}
           <Link href="/courts" className="quick-card"
@@ -350,7 +350,7 @@ export default async function HomePage() {
             ].join(', ') }}
           >
             <div className="card-noise" />
-            <div className="card-content" style={{display:'flex', flexDirection:'column', justifyContent:'space-between', height:'100%', gap:'2rem'}}>
+            <div className="card-content" style={{display:'flex', flexDirection:'column', justifyContent:'space-between', height:'100%', gap:'1.5rem'}}>
               <div className="card-icon-wrap">
                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -370,7 +370,7 @@ export default async function HomePage() {
             ].join(', ') }}
           >
             <div className="card-noise" />
-            <div className="card-content" style={{display:'flex', flexDirection:'column', justifyContent:'space-between', height:'100%', gap:'2rem'}}>
+            <div className="card-content" style={{display:'flex', flexDirection:'column', justifyContent:'space-between', height:'100%', gap:'1.5rem'}}>
               <div className="card-icon-wrap">
                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 10H9m6 4a7 7 0 11-14 0 7 7 0 0114 0zM9 15h6" />
@@ -390,7 +390,7 @@ export default async function HomePage() {
             ].join(', ') }}
           >
             <div className="card-noise" />
-            <div className="card-content" style={{display:'flex', flexDirection:'column', justifyContent:'space-between', height:'100%', gap:'2rem'}}>
+            <div className="card-content" style={{display:'flex', flexDirection:'column', justifyContent:'space-between', height:'100%', gap:'1.5rem'}}>
               <div className="card-icon-wrap">
                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -414,7 +414,7 @@ export default async function HomePage() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {suggestedVenues && suggestedVenues.length > 0 ? (
               suggestedVenues.map((venue: any) => {
                 const courtPrimaryImg = venue.courts

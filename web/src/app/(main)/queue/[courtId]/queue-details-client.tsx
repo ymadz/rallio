@@ -12,6 +12,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { initiateQueuePaymentAction } from '@/app/actions/payments'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { differenceInSeconds, subHours, isBefore, format } from 'date-fns'
 import { useServerTime } from '@/hooks/use-server-time'
 import { formatCurrency } from '@rallio/shared/utils'
@@ -28,6 +29,10 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
   const [isLeaving, setIsLeaving] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [participant, setParticipant] = useState<any>(null)
+  const [userSkillLevel, setUserSkillLevel] = useState<number | null>(null)
+  const [isProfileCompleted, setIsProfileCompleted] = useState<boolean>(false)
+  const [joinError, setJoinError] = useState<string | null>(null)
+  const [rejoinCooldownSeconds, setRejoinCooldownSeconds] = useState<number | null>(null)
 
   const [timeUntilOpen, setTimeUntilOpen] = useState<number | null>(null)
 
@@ -60,6 +65,55 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
     return `${h}h ${m}m ${s}s`
   }
 
+  const formatCooldown = (seconds: number) => {
+    const s = Math.max(0, seconds)
+    const h = Math.floor(s / 3600)
+    const m = Math.floor((s % 3600) / 60)
+    const sec = s % 60
+
+    if (h > 0) {
+      return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+    }
+
+    return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+  }
+
+  const parseRejoinCooldownSeconds = (message: string): number | null => {
+    // Handles messages like "Please wait 00:02:29.187105 before rejoining".
+    const match = message.match(/Please wait\s+([0-9:.]+)\s+before rejoining/i)
+    if (!match) return null
+
+    const timePart = match[1].split('.')[0]
+    const parts = timePart.split(':').map((p) => Number(p))
+    if (parts.some((n) => Number.isNaN(n))) return null
+
+    if (parts.length === 3) {
+      const [h, m, s] = parts
+      return h * 3600 + m * 60 + s
+    }
+
+    if (parts.length === 2) {
+      const [m, s] = parts
+      return m * 60 + s
+    }
+
+    return null
+  }
+
+  useEffect(() => {
+    if (rejoinCooldownSeconds == null || rejoinCooldownSeconds <= 0) return
+
+    const timer = setInterval(() => {
+      setRejoinCooldownSeconds((prev) => {
+        if (prev == null) return null
+        if (prev <= 1) return null
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [rejoinCooldownSeconds])
+
   const [showMatchHistory, setShowMatchHistory] = useState(false)
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
   const [paymentRequiredInfo, setPaymentRequiredInfo] = useState<{
@@ -71,6 +125,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'gcash' | 'paymaya' | null>(null)
   const [paymentError, setPaymentError] = useState<string | null>(null)
   const [isQueueMaster, setIsQueueMaster] = useState(false)
+  const [showPlayerView, setShowPlayerView] = useState(false)
   const supabase = createClient()
 
   // Get current user ID and check if queue master
@@ -81,6 +136,15 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
 
       if (user?.id) {
         try {
+          // Fetch profile status
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('profile_completed')
+            .eq('id', user.id)
+            .single()
+
+          setIsProfileCompleted(profile?.profile_completed ?? false)
+
           const { data: roles } = await supabase
             .from('user_roles')
             .select('roles(name)')
@@ -89,13 +153,27 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
           const hasQueueMasterRole = roles?.some((r: any) => r.roles?.name === 'queue_master') || false
           setIsQueueMaster(hasQueueMasterRole)
         } catch (err) {
-          console.error('Error fetching user roles:', err)
+          console.error('Error fetching user roles/profile:', err)
           setIsQueueMaster(false)
         }
       }
     }
     getCurrentUser()
   }, [])
+
+  // Fetch user skill level
+  useEffect(() => {
+    if (!currentUserId) return
+    async function fetchUserSkill() {
+      const { data } = await supabase
+        .from('players')
+        .select('skill_level')
+        .eq('user_id', currentUserId)
+        .single()
+      setUserSkillLevel(data?.skill_level || null)
+    }
+    fetchUserSkill()
+  }, [currentUserId])
 
   // Fetch participant details and keep in sync with realtime updates
   useEffect(() => {
@@ -148,8 +226,18 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
 
 
   const handleJoinQueue = async () => {
+    setJoinError(null)
     setIsJoining(true)
-    await joinQueue()
+    const result = await joinQueue()
+    if (!result.success) {
+      const message = result.error || 'Failed to join queue'
+      setJoinError(message)
+
+      const cooldown = parseRejoinCooldownSeconds(message)
+      setRejoinCooldownSeconds(cooldown)
+    } else {
+      setRejoinCooldownSeconds(null)
+    }
     setIsJoining(false)
   }
 
@@ -399,21 +487,99 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
     )
   }
 
-  // If the current user is the organizer, show the full session management UI
-  if (queue.organizerId === currentUserId) {
-    return <SessionManagementClient sessionId={queue.id} />
+  const isRejoinCooldownActive = rejoinCooldownSeconds != null && rejoinCooldownSeconds > 0
+
+  // If the current user is the organizer, show the full session management UI by default
+  if (queue.organizerId === currentUserId && !showPlayerView) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-teal-600 text-white px-4 py-3 rounded-xl flex items-center justify-between shadow-lg animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+              <Activity className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="font-semibold">Manager Mode</p>
+              <p className="text-xs text-teal-100">You are managing this session as an organizer.</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowPlayerView(true)}
+            className="px-4 py-2 bg-white text-teal-600 rounded-lg text-sm font-bold hover:bg-teal-50 transition-colors shadow-sm"
+          >
+            Switch to Player View
+          </button>
+        </div>
+        <SessionManagementClient
+          sessionId={queue.id}
+          onSwitchToPlayerView={() => setShowPlayerView(true)}
+        />
+      </div>
+    )
   }
 
   const isUserInQueue = queue.userPosition !== null
   const playersAhead = isUserInQueue ? queue.userPosition! - 1 : 0
-  const estimatedWaitTime = Math.max(playersAhead * 15, 0) // ~15 min per game ahead
+
+  const isSkillMismatch = queue && userSkillLevel !== null && (
+    (queue.minSkillLevel != null && userSkillLevel < queue.minSkillLevel) ||
+    (queue.maxSkillLevel != null && userSkillLevel > queue.maxSkillLevel)
+  )
 
 
   return (
     <>
       <div className="space-y-6">
+        {/* Organizer View Toggle - only shown when in player view as an organizer */}
+        {queue.organizerId === currentUserId && showPlayerView && (
+          <div className="bg-teal-600 text-white px-4 py-3 rounded-xl flex items-center justify-between shadow-lg animate-in fade-in slide-in-from-top-4 duration-300">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                <Activity className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="font-semibold">Organizer Mode</p>
+                <p className="text-xs text-teal-100">You are viewing this session as a player.</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowPlayerView(false)}
+              className="px-4 py-2 bg-white text-teal-600 rounded-lg text-sm font-bold hover:bg-teal-50 transition-colors shadow-sm"
+            >
+              Switch to Manager View
+            </button>
+          </div>
+        )}
+
         {/* Event Details Card */}
         <QueueEventCard queue={queue} onBack={() => router.back()} />
+
+        {/* Skill restriction warning should appear directly below event header */}
+        {!isUserInQueue && isSkillMismatch && (
+          <div className="rounded-xl border border-red-200 bg-gradient-to-br from-red-50 to-rose-50 p-4 shadow-[0_4px_16px_rgba(239,68,68,0.10)]">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full bg-red-100 border border-red-200 flex items-center justify-center flex-shrink-0">
+                <AlertCircle className="w-5 h-5 text-red-600" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-red-800">Bracket Mismatch</p>
+                <p className="text-sm text-red-700 mt-1">
+                  Your current level does not match this queue&apos;s bracket.
+                </p>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center rounded-full border border-red-200 bg-white text-red-700 text-xs font-semibold px-2.5 py-1">
+                    Your Level: {userSkillLevel}
+                  </span>
+                  <span className="inline-flex items-center rounded-full border border-red-200 bg-white text-red-700 text-xs font-semibold px-2.5 py-1">
+                    Required Bracket: {queue.minSkillLevel || 1}-{queue.maxSkillLevel || 10}
+                  </span>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        )}
 
 
         {/* Queue Position Tracker (if in queue) */}
@@ -421,7 +587,6 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
           <QueuePositionTracker
             position={queue.userPosition!}
             totalPlayers={queue.currentPlayers}
-            estimatedWaitTime={estimatedWaitTime}
             gamesPlayed={participant.games_played || 0}
             status={participant.status || 'waiting'}
           />
@@ -514,7 +679,23 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
           <div className="bg-white border border-gray-200 rounded-xl p-6">
             <h3 className="font-semibold text-gray-900 mb-3">Join Queue</h3>
 
-            {timeUntilOpen !== null && timeUntilOpen > 0 ? (
+            {!isProfileCompleted || userSkillLevel === null ? (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-5 text-center">
+                <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <AlertCircle className="w-6 h-6 text-amber-600" />
+                </div>
+                <h4 className="font-semibold text-amber-900 mb-2">Complete Your Profile</h4>
+                <p className="text-sm text-amber-700 mb-5">
+                  You need to set up your player profile before you can join any queue sessions.
+                </p>
+                <Link
+                  href="/setup-profile?from=queue&step=welcome"
+                  className="inline-flex items-center justify-center w-full bg-amber-600 text-white py-3 rounded-lg font-semibold hover:bg-amber-700 transition-colors"
+                >
+                  Set Up Profile Now
+                </Link>
+              </div>
+            ) : timeUntilOpen !== null && timeUntilOpen > 0 ? (
               <div className="space-y-4">
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
                   <Clock className="w-8 h-8 text-blue-500 mx-auto mb-2" />
@@ -533,6 +714,17 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
               </div>
             ) : (
               <>
+                {joinError && (
+                  <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                    <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-amber-800">
+                      <p>{joinError}</p>
+                      {isRejoinCooldownActive && (
+                        <p className="mt-1 font-semibold">You can rejoin in {formatCooldown(rejoinCooldownSeconds!)}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-3 mb-6">
                   <div className="flex items-start gap-2 text-sm text-gray-600">
                     <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -546,18 +738,12 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                     </svg>
                     <span>Cancel anytime without penalty</span>
                   </div>
-                  <div className="flex items-start gap-2 text-sm text-gray-600">
-                    <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span>Estimated wait: ~{estimatedWaitTime} minutes</span>
-                  </div>
                 </div>
                 <button
                   onClick={handleJoinQueue}
-                  disabled={isJoining || queue.players.length >= queue.maxPlayers}
-                  title={queue.players.length >= queue.maxPlayers ? 'Queue is full' : undefined}
-                  className="w-full bg-primary text-white py-3.5 rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  disabled={isJoining || queue.players.length >= queue.maxPlayers || isSkillMismatch || isRejoinCooldownActive}
+                  title={isSkillMismatch ? 'Skill level mismatch' : queue.players.length >= queue.maxPlayers ? 'Queue is full' : undefined}
+                  className="hidden md:flex w-full bg-primary text-white py-3.5 rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed items-center justify-center gap-2"
                 >
                   {isJoining ? (
                     <>
@@ -566,6 +752,8 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                     </>
                   ) : queue.players.length >= queue.maxPlayers ? (
                     <span>Queue Full</span>
+                  ) : isRejoinCooldownActive ? (
+                    <span>Rejoin in {formatCooldown(rejoinCooldownSeconds!)}</span>
                   ) : (
                     <>
                       <Users className="w-5 h-5" />
@@ -622,9 +810,9 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
             ) : (
               <button
                 onClick={handleLeaveQueue}
-                disabled={isLeaving}
-                title="Leave this queue and lose your position"
-                className="w-full border-2 border-red-300 text-red-600 py-3.5 rounded-lg font-semibold hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                disabled={isLeaving || (participant && participant.amount_owed > 0 && participant.payment_status !== 'paid')}
+                title={participant && participant.amount_owed > 0 && participant.payment_status !== 'paid' ? "Settle your balance before leaving" : "Leave this queue and lose your position"}
+                className="hidden md:flex w-full border-2 border-red-300 text-red-600 py-3.5 rounded-lg font-semibold hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed items-center justify-center gap-2"
               >
                 {isLeaving ? (
                   <>
@@ -683,7 +871,7 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
           {!isUserInQueue ? (
             <button
               onClick={handleJoinQueue}
-              disabled={isJoining || queue.players.length >= queue.maxPlayers}
+              disabled={isJoining || queue.players.length >= queue.maxPlayers || isSkillMismatch || isRejoinCooldownActive}
               className="w-full bg-primary text-white py-4 rounded-xl font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg"
             >
               {isJoining ? (
@@ -693,6 +881,8 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
                 </>
               ) : queue.players.length >= queue.maxPlayers ? (
                 <span>Queue Full</span>
+              ) : isRejoinCooldownActive ? (
+                <span>Rejoin in {formatCooldown(rejoinCooldownSeconds!)}</span>
               ) : (
                 <>
                   <Users className="w-5 h-5" />
@@ -710,7 +900,8 @@ export function QueueDetailsClient({ courtId }: QueueDetailsClientProps) {
               )}
               <button
                 onClick={handleLeaveQueue}
-                disabled={isLeaving}
+                disabled={isLeaving || (participant && participant.amount_owed > 0 && participant.payment_status !== 'paid')}
+                title={participant && participant.amount_owed > 0 && participant.payment_status !== 'paid' ? "Settle your balance before leaving" : "Leave this queue and lose your position"}
                 className="w-full border-2 border-red-300 text-red-600 py-4 rounded-xl font-semibold hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg"
               >
                 {isLeaving ? (

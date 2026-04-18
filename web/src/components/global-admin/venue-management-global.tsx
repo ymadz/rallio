@@ -523,7 +523,12 @@ export function VenueManagementGlobal() {
                         )}
                       </td>
                       <td className="px-6 py-4" onClick={() => handleRowClick(venue)}>
-                        <span className="text-sm text-gray-600">{venue.court_count} courts</span>
+                        <div className="space-y-1">
+                          <span className="text-sm text-gray-600">{venue.court_count} courts</span>
+                          {!venue.is_verified && venue.court_count === 0 && (
+                            <p className="text-xs text-orange-700">Needs at least 1 court for approval</p>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4" onClick={() => handleRowClick(venue)}>
                         {getStatusBadge(venue)}

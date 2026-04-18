@@ -53,7 +53,12 @@ interface User {
   is_active: boolean
   banned_reason?: string
   banned_until?: string
+  no_show_user?: boolean
+  no_show_count?: number
   user_roles: Array<{ roles: { id: string; name: string } }>
+  player_profile?: {
+    skill_level: number | null
+  } | null
 }
 
 const roleFilters = [
@@ -68,6 +73,7 @@ const statusFilters = [
   { id: 'all', label: 'All Status' },
   { id: 'active', label: 'Active' },
   { id: 'banned', label: 'Banned' },
+  { id: 'no_show', label: 'No Show Flagged' },
 ]
 
 export default function UserManagement() {
@@ -76,7 +82,8 @@ export default function UserManagement() {
   const [searchQuery, setSearchQuery] = useState('')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [roleFilter, setRoleFilter] = useState('all')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'banned'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'banned' | 'no_show'>('all')
+  const [skillLevelFilter, setSkillLevelFilter] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
@@ -92,7 +99,8 @@ export default function UserManagement() {
       pageSize: 20,
       search: searchQuery,
       roleFilter,
-      statusFilter
+      statusFilter,
+      skillLevelFilter
     })
 
     if (result.success) {
@@ -115,7 +123,7 @@ export default function UserManagement() {
     }, 300)
 
     return () => clearTimeout(debounce)
-  }, [currentPage, searchQuery, roleFilter, statusFilter])
+  }, [currentPage, searchQuery, roleFilter, statusFilter, skillLevelFilter])
 
   const getRoleBadgeColor = (roleName: string) => {
     switch (roleName) {
@@ -367,7 +375,7 @@ export default function UserManagement() {
           <select
             value={statusFilter}
             onChange={(e) => {
-              setStatusFilter(e.target.value as 'all' | 'active' | 'banned')
+              setStatusFilter(e.target.value as 'all' | 'active' | 'banned' | 'no_show')
               setCurrentPage(1)
             }}
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
@@ -378,6 +386,28 @@ export default function UserManagement() {
               </option>
             ))}
           </select>
+
+          {/* Player Skill Level Filter */}
+          {roleFilter === 'player' && (
+            <select
+              value={skillLevelFilter}
+              onChange={(e) => {
+                setSkillLevelFilter(e.target.value)
+                setCurrentPage(1)
+              }}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+            >
+              <option value="all">All Skill Levels</option>
+              {Array.from({ length: 10 }, (_, index) => {
+                const level = index + 1
+                return (
+                  <option key={level} value={String(level)}>
+                    Skill Level {level}
+                  </option>
+                )
+              })}
+            </select>
+          )}
         </div>
       </div>
 
@@ -519,9 +549,16 @@ export default function UserManagement() {
                           </div>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2">
-                          <UserCheck className="w-4 h-4 text-green-600" />
-                          <span className="text-sm font-medium text-green-600">Active</span>
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <UserCheck className="w-4 h-4 text-green-600" />
+                            <span className="text-sm font-medium text-green-600">Active</span>
+                          </div>
+                          {user.no_show_user && (
+                            <div className="text-xs font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1 inline-block">
+                              No-show flagged ({user.no_show_count || 1})
+                            </div>
+                          )}
                         </div>
                       )}
                     </td>

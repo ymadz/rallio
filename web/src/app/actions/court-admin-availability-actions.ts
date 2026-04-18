@@ -16,19 +16,32 @@ export async function getVenueAvailability(venueId: string) {
 
   try {
     // Verify ownership
-    const { data: venue, error } = await supabase
+    const { data: venue, error: venueError } = await supabase
       .from('venues')
       .select('id, owner_id, opening_hours')
       .eq('id', venueId)
       .single()
 
-    if (error) throw error
+    if (venueError) throw venueError
 
     if (!venue || venue.owner_id !== user.id) {
       return { success: false, error: 'Unauthorized - You do not own this venue' }
     }
 
-    return { success: true, openingHours: venue.opening_hours }
+    // Also fetch courts to allow setting per-court availability in the same UI
+    const { data: courts, error: courtsError } = await supabase
+      .from('courts')
+      .select('id, name, opening_hours')
+      .eq('venue_id', venueId)
+      .order('name', { ascending: true })
+
+    if (courtsError) throw courtsError
+
+    return { 
+      success: true, 
+      openingHours: venue.opening_hours,
+      courts: courts || []
+    }
   } catch (error: any) {
     console.error('Error fetching venue availability:', error)
     return { success: false, error: error.message }
@@ -40,7 +53,8 @@ export async function getVenueAvailability(venueId: string) {
  */
 export async function updateOperatingHours(
   venueId: string,
-  schedule: Record<string, { open: string; close: string } | null>
+  schedule: Record<string, { open: string; close: string } | null>,
+  courtId?: string
 ) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -73,15 +87,30 @@ export async function updateOperatingHours(
     }
 
     // Update opening hours
-    const { error } = await supabase
-      .from('venues')
-      .update({
-        opening_hours: schedule,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', venueId)
+    if (courtId) {
+      // Update specific court
+      const { error } = await supabase
+        .from('courts')
+        .update({
+          opening_hours: schedule,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', courtId)
+        .eq('venue_id', venueId) // Security: ensure court belongs to this venue
 
-    if (error) throw error
+      if (error) throw error
+    } else {
+      // Update venue default
+      const { error } = await supabase
+        .from('venues')
+        .update({
+          opening_hours: schedule,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', venueId)
+
+      if (error) throw error
+    }
 
     revalidatePath(`/court-admin/venues/${venueId}`)
     revalidatePath('/court-admin/availability')
