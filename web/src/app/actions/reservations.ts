@@ -5,6 +5,7 @@ import { createServiceClient } from '@/lib/supabase/service';
 import { format } from 'date-fns';
 import { revalidatePath } from 'next/cache';
 import { createReservation } from '@/lib/services/reservations';
+import { calculateApplicableDiscounts } from '@/app/actions/discount-actions';
 
 export interface TimeSlot {
   time: string;
@@ -1258,101 +1259,158 @@ export async function createMultiCourtReservationsAction(data: {
   );
   const totalBookingDateCount = uniqueDates.size;
 
-  // Resolve per-court down payment percentages for minimum floor validation.
-  const uniqueCourtIds = Array.from(
-    new Set(itemsToProcess.map((item) => item.courtId).filter(Boolean))
-  );
-  const percentagesResult = await getCourtDownPaymentPercentagesAction(uniqueCourtIds);
-  const courtPercentages: Record<string, number> = percentagesResult.success
-    ? (percentagesResult.percentages as Record<string, number>)
-    : {};
-
-  const itemMinimums = itemsToProcess.map((item) => {
-    const rawPercentage = courtPercentages[item.courtId] ?? 20;
-    const percentage = Number.isFinite(rawPercentage)
-      ? Math.min(Math.max(rawPercentage, 0), 100)
-      : 20;
-    const minAmount = Math.round(item.totalAmount * (percentage / 100) * 100) / 100;
-    return {
-      ...item,
-      minimumDownPayment: minAmount,
-    };
-  });
-
-  // Phase 4B: Down payment amount validation and distribution.
-  const grandTotal = itemsToProcess.reduce((s, i) => s + i.totalAmount, 0);
-  const minimumRequiredDownPayment =
-    Math.round(itemMinimums.reduce((sum, item) => sum + item.minimumDownPayment, 0) * 100) / 100;
-
-  if (data.customDownPaymentAmount !== undefined && data.customDownPaymentAmount > 0) {
-    if (data.customDownPaymentAmount < minimumRequiredDownPayment) {
-      return {
-        success: false,
-        error: `The minimum down payment for these courts is ₱${minimumRequiredDownPayment.toFixed(2)}.`,
-      };
-    }
-
-    if (data.customDownPaymentAmount > grandTotal) {
-      return {
-        success: false,
-        error: `Down payment cannot exceed total booking amount of ₱${grandTotal.toFixed(2)}.`,
-      };
-    }
-  }
-
-  const hasCustomDownPayment =
-    data.customDownPaymentAmount !== undefined && data.customDownPaymentAmount > 0;
-  const targetDownPaymentTotal = hasCustomDownPayment
-    ? data.customDownPaymentAmount!
-    : minimumRequiredDownPayment;
-
-  const extraDownPayment = Math.max(0, targetDownPaymentTotal - minimumRequiredDownPayment);
-  const totalHeadroom = itemMinimums.reduce(
-    (sum, item) => sum + Math.max(0, item.totalAmount - item.minimumDownPayment),
-    0
+  const requiresDownPaymentValidation = itemsToProcess.some(
+    (item) => item.paymentMethod === 'cash' && item.cashPaymentOption !== 'full_cash'
   );
 
-  const allocatedDownPayments = itemMinimums.map((item) => {
-    if (extraDownPayment <= 0 || totalHeadroom <= 0) {
+  let perItemDownPayment: Array<{ index: number; amount: number }> = [];
+
+  if (requiresDownPaymentValidation) {
+
+    // Resolve per-court down payment percentages for minimum floor validation.
+    const uniqueCourtIds = Array.from(
+      new Set(itemsToProcess.map((item) => item.courtId).filter(Boolean))
+    );
+    const adminDb = createServiceClient();
+
+    const { data: courtRows, error: courtRowsError } = await adminDb
+      .from('courts')
+      .select('id, venue_id')
+      .in('id', uniqueCourtIds);
+
+    if (courtRowsError) {
+      console.error(
+        'Error fetching court venue mappings for down payment validation:',
+        courtRowsError
+      );
+    }
+
+    const courtVenueMap: Record<string, string | null> = {};
+    for (const row of courtRows || []) {
+      courtVenueMap[row.id] = (row as any).venue_id ?? null;
+    }
+
+    const downPaymentBases = await Promise.all(
+      itemsToProcess.map(async (item) => {
+        const venueId = courtVenueMap[item.courtId];
+        if (!venueId) {
+          return item.totalAmount;
+        }
+
+        const startDate = item.startTimeISO.split('T')[0];
+        const endDate = item.endTimeISO.split('T')[0];
+        const discountResult = await calculateApplicableDiscounts({
+          venueId,
+          courtId: item.courtId,
+          startDate,
+          endDate,
+          recurrenceWeeks: 1,
+          targetDateCount: totalBookingDateCount,
+          basePrice: item.totalAmount,
+          promoCode: data.promoCode,
+        });
+
+        const adjustedBase = discountResult.success ? discountResult.finalPrice : item.totalAmount;
+        return Math.round(Math.max(adjustedBase, 0) * 100) / 100;
+      })
+    );
+
+    const percentagesResult = await getCourtDownPaymentPercentagesAction(uniqueCourtIds);
+    const courtPercentages: Record<string, number> = percentagesResult.success
+      ? (percentagesResult.percentages as Record<string, number>)
+      : {};
+
+    const itemMinimums = itemsToProcess.map((item, index) => {
+      const rawPercentage = courtPercentages[item.courtId] ?? 20;
+      const percentage = Number.isFinite(rawPercentage)
+        ? Math.min(Math.max(rawPercentage, 0), 100)
+        : 20;
+      const downPaymentBaseAmount = downPaymentBases[index] ?? item.totalAmount;
+      const minAmount = Math.round(downPaymentBaseAmount * (percentage / 100) * 100) / 100;
+      return {
+        ...item,
+        downPaymentBaseAmount,
+        minimumDownPayment: minAmount,
+      };
+    });
+
+    // Phase 4B: Down payment amount validation and distribution.
+    const grandTotal = itemsToProcess.reduce((s, i) => s + i.totalAmount, 0);
+    const minimumRequiredDownPayment =
+      Math.round(itemMinimums.reduce((sum, item) => sum + item.minimumDownPayment, 0) * 100) / 100;
+
+    if (data.customDownPaymentAmount !== undefined && data.customDownPaymentAmount > 0) {
+      if (data.customDownPaymentAmount < minimumRequiredDownPayment) {
+        return {
+          success: false,
+          error: `The minimum down payment for these courts is ₱${minimumRequiredDownPayment.toFixed(2)}.`,
+        };
+      }
+
+      if (data.customDownPaymentAmount > grandTotal) {
+        return {
+          success: false,
+          error: `Down payment cannot exceed total booking amount of ₱${grandTotal.toFixed(2)}.`,
+        };
+      }
+    }
+
+    const hasCustomDownPayment =
+      data.customDownPaymentAmount !== undefined && data.customDownPaymentAmount > 0;
+    const targetDownPaymentTotal = hasCustomDownPayment
+      ? data.customDownPaymentAmount!
+      : minimumRequiredDownPayment;
+
+    const extraDownPayment = Math.max(0, targetDownPaymentTotal - minimumRequiredDownPayment);
+    const totalHeadroom = itemMinimums.reduce(
+      (sum, item) => sum + Math.max(0, item.totalAmount - item.minimumDownPayment),
+      0
+    );
+
+    const allocatedDownPayments = itemMinimums.map((item) => {
+      if (extraDownPayment <= 0 || totalHeadroom <= 0) {
+        return {
+          courtId: item.courtId,
+          amount: item.minimumDownPayment,
+        };
+      }
+
+      const headroom = Math.max(0, item.totalAmount - item.minimumDownPayment);
+      const extraShare = (headroom / totalHeadroom) * extraDownPayment;
+      const amount = Math.min(item.totalAmount, item.minimumDownPayment + extraShare);
       return {
         courtId: item.courtId,
-        amount: item.minimumDownPayment,
+        amount: Math.round(amount * 100) / 100,
       };
+    });
+
+    // Keep cent-level totals exact by adjusting the last item.
+    if (allocatedDownPayments.length > 0) {
+      const lastIndex = allocatedDownPayments.length - 1;
+      const currentSum = allocatedDownPayments.reduce((sum, item) => sum + item.amount, 0);
+      const delta = Math.round((targetDownPaymentTotal - currentSum) * 100) / 100;
+      if (Math.abs(delta) > 0) {
+        const lastItem = allocatedDownPayments[lastIndex];
+        const itemTotal = itemMinimums[lastIndex].totalAmount;
+        const adjusted = Math.min(itemTotal, Math.max(0, lastItem.amount + delta));
+        allocatedDownPayments[lastIndex] = {
+          ...lastItem,
+          amount: Math.round(adjusted * 100) / 100,
+        };
+      }
     }
 
-    const headroom = Math.max(0, item.totalAmount - item.minimumDownPayment);
-    const extraShare = (headroom / totalHeadroom) * extraDownPayment;
-    const amount = Math.min(item.totalAmount, item.minimumDownPayment + extraShare);
-    return {
-      courtId: item.courtId,
-      amount: Math.round(amount * 100) / 100,
-    };
-  });
-
-  // Keep cent-level totals exact by adjusting the last item.
-  if (allocatedDownPayments.length > 0) {
-    const lastIndex = allocatedDownPayments.length - 1;
-    const currentSum = allocatedDownPayments.reduce((sum, item) => sum + item.amount, 0);
-    const delta = Math.round((targetDownPaymentTotal - currentSum) * 100) / 100;
-    if (Math.abs(delta) > 0) {
-      const lastItem = allocatedDownPayments[lastIndex];
-      const itemTotal = itemMinimums[lastIndex].totalAmount;
-      const adjusted = Math.min(itemTotal, Math.max(0, lastItem.amount + delta));
-      allocatedDownPayments[lastIndex] = {
-        ...lastItem,
-        amount: Math.round(adjusted * 100) / 100,
-      };
-    }
+    perItemDownPayment = allocatedDownPayments.map((item, index) => ({
+      index,
+      amount: item.amount,
+    }));
   }
-
-  const perItemDownPayment = allocatedDownPayments.map((item, index) => ({
-    index,
-    amount: item.amount,
-  }));
 
   for (let index = 0; index < itemsToProcess.length; index++) {
     const item = itemsToProcess[index];
-    const itemDownPayment = perItemDownPayment[index]?.amount;
+    const itemDownPayment = requiresDownPaymentValidation
+      ? perItemDownPayment[index]?.amount
+      : undefined;
 
     const result = await createReservation(supabase, {
       courtId: item.courtId,
