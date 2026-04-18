@@ -1,7 +1,7 @@
-'use client'
+'use client';
 
-import { useState, useEffect, useRef } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useState, useEffect, useRef } from 'react';
+import { createClient } from '@/lib/supabase/client';
 import {
   getQueueDetails,
   joinQueue as joinQueueAction,
@@ -10,67 +10,67 @@ import {
   getNearbyQueues as getNearbyQueuesAction,
   getMyQueueHistory,
   getQueueMasterHistory,
-} from '@/app/actions/queue-actions'
+} from '@/app/actions/queue-actions';
 
 export interface QueuePlayer {
-  id: string
-  userId: string
-  name: string
-  avatarUrl?: string
-  skillTier?: 'beginner' | 'intermediate' | 'advanced' | 'expert'
-  skillLevel?: number
-  rating?: number
-  position: number
-  joinedAt: Date
-  gamesPlayed: number
-  gamesWon: number
-  status?: 'waiting' | 'playing' | 'completed' | 'left'
+  id: string;
+  userId: string;
+  name: string;
+  avatarUrl?: string;
+  skillTier?: 'beginner' | 'intermediate' | 'advanced' | 'expert';
+  skillLevel?: number;
+  rating?: number;
+  position: number;
+  joinedAt: Date;
+  gamesPlayed: number;
+  gamesWon: number;
+  status?: 'waiting' | 'playing' | 'completed' | 'left';
 }
 
 export interface QueueSession {
-  id: string
-  courtId: string
-  courtName: string
-  venueName: string
-  venueId: string
-  status: 'waiting' | 'active' | 'completed' | 'pending_payment'
-  players: QueuePlayer[]
-  userPosition: number | null
-  maxPlayers: number
-  currentPlayers: number
-  startTime: Date  // Added startTime
-  endTime: Date // Added endTime
-  mode: 'casual' | 'competitive'
-  gameFormat?: 'singles' | 'doubles' | 'any'
-  joinWindowHours?: number | null
-  organizerId?: string // Queue session organizer
-  organizerName?: string // Queue session organizer display name
-  costPerGame?: number // Cost per game in the queue
-  userGamesPlayed?: number // Games played by current user
-  userAmountOwed?: number // Amount owed by current user
+  id: string;
+  courtId: string;
+  courtName: string;
+  venueName: string;
+  venueId: string;
+  status: 'waiting' | 'active' | 'completed' | 'pending_payment';
+  players: QueuePlayer[];
+  userPosition: number | null;
+  maxPlayers: number;
+  currentPlayers: number;
+  startTime: Date; // Added startTime
+  endTime: Date; // Added endTime
+  mode: 'casual' | 'competitive';
+  gameFormat?: 'singles' | 'doubles' | 'any';
+  joinWindowHours?: number | null;
+  organizerId?: string; // Queue session organizer
+  organizerName?: string; // Queue session organizer display name
+  costPerGame?: number; // Cost per game in the queue
+  userGamesPlayed?: number; // Games played by current user
+  userAmountOwed?: number; // Amount owed by current user
   sessionSummary?: {
-    totalGames: number
-    totalRevenue: number
-    totalParticipants: number
-    unpaidBalances: number
-    completedAt?: string
-  }
+    totalGames: number;
+    totalRevenue: number;
+    totalParticipants: number;
+    unpaidBalances: number;
+    completedAt?: string;
+  };
   matchOutcomes?: Array<{
-    matchNumber: number
-    winnerNames: string[]
-    loserNames: string[]
-    score: string
-    completedAt?: string
-    result: 'team_a' | 'team_b' | 'draw'
-  }>
+    matchNumber: number;
+    winnerNames: string[];
+    loserNames: string[];
+    score: string;
+    completedAt?: string;
+    result: 'team_a' | 'team_b' | 'draw';
+  }>;
   currentMatch?: {
-    courtName: string
-    players: string[]
-    startTime: Date
-    duration: number
-  }
-  minSkillLevel?: number | null
-  maxSkillLevel?: number | null
+    courtName: string;
+    players: string[];
+    startTime: Date;
+    duration: number;
+  };
+  minSkillLevel?: number | null;
+  maxSkillLevel?: number | null;
 }
 
 /**
@@ -80,19 +80,21 @@ export interface QueueSession {
  * - active: session is live -> 'active'
  * - completed/cancelled: session ended -> 'completed'
  */
-function mapQueueStatusForPlayer(dbStatus: string): 'waiting' | 'active' | 'completed' | 'pending_payment' {
+function mapQueueStatusForPlayer(
+  dbStatus: string
+): 'waiting' | 'active' | 'completed' | 'pending_payment' {
   switch (dbStatus) {
     case 'open':
-      return 'waiting'
+      return 'waiting';
     case 'active':
-      return 'active'
+      return 'active';
     case 'pending_payment':
-      return 'pending_payment'
+      return 'pending_payment';
     case 'completed':
     case 'cancelled':
     case 'closed': // legacy
     default:
-      return 'completed'
+      return 'completed';
   }
 }
 
@@ -100,45 +102,45 @@ function mapQueueStatusForPlayer(dbStatus: string): 'waiting' | 'active' | 'comp
  * Convert skill level number (1-10) to skill tier label
  */
 function getSkillTier(skillLevel: number): 'beginner' | 'intermediate' | 'advanced' | 'expert' {
-  if (skillLevel <= 3) return 'beginner'
-  if (skillLevel <= 6) return 'intermediate'
-  if (skillLevel <= 8) return 'advanced'
-  return 'expert'
+  if (skillLevel <= 3) return 'beginner';
+  if (skillLevel <= 6) return 'intermediate';
+  if (skillLevel <= 8) return 'advanced';
+  return 'expert';
 }
 
 /**
  * Hook for queue state management with real-time updates
  */
 export function useQueue(courtId: string) {
-  const [queue, setQueue] = useState<QueueSession | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const supabase = createClient()
-  const fetchRef = useRef<() => Promise<void>>(() => Promise.resolve())
-  const debounceRef = useRef<NodeJS.Timeout | null>(null)
+  const [queue, setQueue] = useState<QueueSession | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const supabase = createClient();
+  const fetchRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch queue data
   const fetchQueue = async () => {
-    console.log('[useQueue] 🔍 Fetching queue for court:', courtId)
+    console.log('[useQueue] 🔍 Fetching queue for court:', courtId);
 
     try {
-      const result = await getQueueDetails(courtId)
+      const result = await getQueueDetails(courtId);
 
       if (!result.success) {
         // Use the specific error from the server if available
-        setError(result.error || 'Failed to load queue details')
-        setQueue(null)
-        return
+        setError(result.error || 'Failed to load queue details');
+        setQueue(null);
+        return;
       }
 
       if (!result.queue) {
         // No active queue for this court
-        setQueue(null)
-        setError(null)
-        return
+        setQueue(null);
+        setError(null);
+        return;
       }
 
-      const queueData = result.queue
+      const queueData = result.queue;
 
       // Transform data to match UI interface
       const transformedQueue: QueueSession = {
@@ -148,7 +150,7 @@ export function useQueue(courtId: string) {
         venueName: queueData.venueName,
         venueId: queueData.venueId,
         status: mapQueueStatusForPlayer(queueData.status),
-        players: queueData.players.map(p => ({
+        players: queueData.players.map((p) => ({
           id: p.id,
           userId: p.userId,
           name: p.playerName,
@@ -177,39 +179,39 @@ export function useQueue(courtId: string) {
         matchOutcomes: (queueData as any).matchOutcomes,
         minSkillLevel: queueData.minSkillLevel,
         maxSkillLevel: queueData.maxSkillLevel,
-      }
+      };
 
-      setQueue(transformedQueue)
-      setError(null)
+      setQueue(transformedQueue);
+      setError(null);
       console.log('[useQueue] ✅ Queue loaded:', {
         sessionId: transformedQueue.id,
         playerCount: transformedQueue.players.length,
         userPosition: transformedQueue.userPosition,
-      })
+      });
     } catch (err: any) {
-      console.error('[useQueue] ❌ Error fetching queue:', err)
-      setError(err.message || 'Failed to load queue')
-      setQueue(null)
+      console.error('[useQueue] ❌ Error fetching queue:', err);
+      setError(err.message || 'Failed to load queue');
+      setQueue(null);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   // Keep fetchQueue ref up to date so real-time callbacks always call the latest version
-  fetchRef.current = fetchQueue
+  fetchRef.current = fetchQueue;
 
   // Debounced fetch for real-time events (avoids flooding on batch updates)
   const debouncedFetch = () => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      fetchRef.current()
-    }, 300)
-  }
+      fetchRef.current();
+    }, 300);
+  };
 
   // Initial fetch
   useEffect(() => {
-    fetchQueue()
-  }, [courtId])
+    fetchQueue();
+  }, [courtId]);
 
   // Early subscription on courtId — avoids the gap between initial fetch and session ID being known
   // This catches any status changes to the queue session while data is still loading.
@@ -226,21 +228,21 @@ export function useQueue(courtId: string) {
         },
         (payload) => {
           // Only trigger if no queue loaded yet (once queue is set, the session-specific sub takes over)
-          if (!queue?.id) debouncedFetch()
+          if (!queue?.id) debouncedFetch();
         }
       )
-      .subscribe()
+      .subscribe();
 
     return () => {
-      supabase.removeChannel(earlyChannel)
-    }
-  }, [courtId])
+      supabase.removeChannel(earlyChannel);
+    };
+  }, [courtId]);
 
   // Session-specific subscription (granular, filtered — kicks in once session ID is known)
   useEffect(() => {
-    if (!queue?.id) return
+    if (!queue?.id) return;
 
-    const sessionId = queue.id
+    const sessionId = queue.id;
 
     const channel = supabase
       .channel(`queue-${sessionId}`)
@@ -274,84 +276,89 @@ export function useQueue(courtId: string) {
         },
         () => debouncedFetch()
       )
-      .subscribe()
+      .subscribe();
 
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-      supabase.removeChannel(channel)
-    }
-  }, [queue?.id])
-
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      supabase.removeChannel(channel);
+    };
+  }, [queue?.id]);
 
   const joinQueue = async (): Promise<{ success: boolean; error?: string }> => {
-    console.log('[useQueue] ➕ Joining queue')
+    console.log('[useQueue] ➕ Joining queue');
 
     if (!queue) {
-      return { success: false, error: 'No queue session found' }
+      return { success: false, error: 'No queue session found' };
     }
 
     try {
-      const result = await joinQueueAction(queue.id)
+      const result = await joinQueueAction(queue.id);
 
       if (!result.success) {
         // Joining errors (e.g., cooldown/capacity) are action-level errors.
         // Do not set global load error, or the whole queue page gets replaced.
-        return { success: false, error: result.error || 'Failed to join queue' }
+        return { success: false, error: result.error || 'Failed to join queue' };
       }
 
       // Refresh queue data
-      await fetchQueue()
-      console.log('[useQueue] ✅ Successfully joined queue')
-      return { success: true }
+      await fetchQueue();
+      console.log('[useQueue] ✅ Successfully joined queue');
+      return { success: true };
     } catch (err: any) {
-      console.error('[useQueue] ❌ Error joining queue:', err)
-      return { success: false, error: err.message || 'Failed to join queue' }
+      console.error('[useQueue] ❌ Error joining queue:', err);
+      return { success: false, error: err.message || 'Failed to join queue' };
     }
-  }
+  };
 
-  const leaveQueue = async (): Promise<{ success: boolean; requiresPayment?: boolean; amountOwed?: number; gamesPlayed?: number; error?: string }> => {
-    console.log('[useQueue] ➖ Leaving queue')
+  const leaveQueue = async (): Promise<{
+    success: boolean;
+    requiresPayment?: boolean;
+    amountOwed?: number;
+    gamesPlayed?: number;
+    error?: string;
+  }> => {
+    console.log('[useQueue] ➖ Leaving queue');
 
     if (!queue) {
-      setError('No queue session found')
-      return { success: false, error: 'No queue session found' }
+      setError('No queue session found');
+      return { success: false, error: 'No queue session found' };
     }
 
     try {
-      const result = await leaveQueueAction(queue.id)
+      const result = await leaveQueueAction(queue.id);
 
       if (!result.success) {
         if ((result as any).requiresPayment) {
           // Payment required - return this info to the caller without setting global error
-          console.log('[useQueue] ⚠️ Payment required to leave queue')
+          console.log('[useQueue] ⚠️ Payment required to leave queue');
           return {
             success: false,
             requiresPayment: true,
             amountOwed: (result as any).amountOwed,
             gamesPlayed: (result as any).gamesPlayed,
             error: 'Payment required',
-          }
+          };
         }
-        setError(result.error || 'Failed to leave queue')
-        return { success: false, error: result.error || 'Failed to leave queue' }
+        setError(result.error || 'Failed to leave queue');
+        return { success: false, error: result.error || 'Failed to leave queue' };
       }
 
       // Refresh queue data
-      await fetchQueue()
-      console.log('[useQueue] ✅ Successfully left queue')
-      return { success: true }
+      await fetchQueue();
+      console.log('[useQueue] ✅ Successfully left queue');
+      return { success: true };
     } catch (err: any) {
-      console.error('[useQueue] ❌ Error leaving queue:', err)
-      setError(err.message || 'Failed to leave queue')
-      return { success: false, error: err.message || 'Failed to leave queue' }
+      console.error('[useQueue] ❌ Error leaving queue:', err);
+      setError(err.message || 'Failed to leave queue');
+      return { success: false, error: err.message || 'Failed to leave queue' };
     }
-  }
+  };
 
   const refreshQueue = async () => {
-    console.log('[useQueue] 🔄 Manually refreshing queue')
-    setIsLoading(true)
-    await fetchQueue()
-  }
+    console.log('[useQueue] 🔄 Manually refreshing queue');
+    setIsLoading(true);
+    await fetchQueue();
+  };
 
   return {
     queue,
@@ -360,26 +367,26 @@ export function useQueue(courtId: string) {
     joinQueue,
     leaveQueue,
     refreshQueue,
-  }
+  };
 }
 
 /**
  * Hook to fetch all active queues for the current user
  */
 export function useMyQueues() {
-  const [queues, setQueues] = useState<QueueSession[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const supabase = createClient()
-  const debounceRef = useRef<NodeJS.Timeout | null>(null)
-  const sessionIdsRef = useRef<string[]>([])
+  const [queues, setQueues] = useState<QueueSession[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const supabase = createClient();
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const sessionIdsRef = useRef<string[]>([]);
 
   const fetchMyQueues = async () => {
     try {
-      const result = await getMyQueuesAction()
+      const result = await getMyQueuesAction();
 
       if (!result.success) {
-        setQueues([])
-        return
+        setQueues([]);
+        return;
       }
 
       const transformedQueues: QueueSession[] = (result.queues || []).map((q: any) => ({
@@ -400,26 +407,26 @@ export function useMyQueues() {
         organizerName: q.organizerName,
         minSkillLevel: q.minSkillLevel,
         maxSkillLevel: q.maxSkillLevel,
-      }))
+      }));
 
-      sessionIdsRef.current = transformedQueues.map(q => q.id)
-      setQueues(transformedQueues)
+      sessionIdsRef.current = transformedQueues.map((q) => q.id);
+      setQueues(transformedQueues);
     } catch (err: any) {
-      console.error('[useMyQueues] ❌ Error:', err)
-      setQueues([])
+      console.error('[useMyQueues] ❌ Error:', err);
+      setQueues([]);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const debouncedFetch = () => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => fetchMyQueues(), 500)
-  }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => fetchMyQueues(), 500);
+  };
 
   useEffect(() => {
-    fetchMyQueues()
-  }, [])
+    fetchMyQueues();
+  }, []);
 
   // Subscribe only to queue_sessions that belong to this user (filtered via current user's auth)
   // We subscribe broadly to queue_participants changes for JOIN/LEAVE events that affect the user.
@@ -439,110 +446,110 @@ export function useMyQueues() {
         },
         (payload) => {
           // Only refetch if the updated session is one the user is in
-          const changedId = (payload.new as any)?.id
+          const changedId = (payload.new as any)?.id;
           if (changedId && sessionIdsRef.current.includes(changedId)) {
-            debouncedFetch()
+            debouncedFetch();
           }
         }
       )
-      .subscribe()
+      .subscribe();
 
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-      supabase.removeChannel(channel)
-    }
-  }, [])
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
-  return { queues, isLoading }
+  return { queues, isLoading };
 }
 
 /**
  * Hook to fetch user's queue history
  */
 export function useMyQueueHistory() {
-  const [history, setHistory] = useState<any[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [history, setHistory] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     async function fetchHistory() {
       try {
-        const { success, history: data, error } = await getMyQueueHistory()
+        const { success, history: data, error } = await getMyQueueHistory();
         if (success && data) {
-          setHistory(data)
+          setHistory(data);
         } else {
-          console.error('Error fetching history:', error)
-          setHistory([])
+          console.error('Error fetching history:', error);
+          setHistory([]);
         }
       } catch (err) {
-        console.error('Error fetching history:', err)
-        setHistory([])
+        console.error('Error fetching history:', err);
+        setHistory([]);
       } finally {
-        setIsLoading(false)
+        setIsLoading(false);
       }
     }
 
-    fetchHistory()
-  }, [])
+    fetchHistory();
+  }, []);
 
-  return { history, isLoading }
+  return { history, isLoading };
 }
 
 /**
  * Hook to fetch queue sessions organized by the current queue master
  */
 export function useQueueMasterHistory(enabled = true) {
-  const [history, setHistory] = useState<any[]>([])
-  const [isLoading, setIsLoading] = useState(enabled)
+  const [history, setHistory] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(enabled);
 
   useEffect(() => {
     if (!enabled) {
-      setHistory([])
-      setIsLoading(false)
-      return
+      setHistory([]);
+      setIsLoading(false);
+      return;
     }
 
     async function fetchQueueMasterHistory() {
-      setIsLoading(true)
+      setIsLoading(true);
       try {
-        const { success, history: data, error } = await getQueueMasterHistory()
+        const { success, history: data, error } = await getQueueMasterHistory();
         if (success && data) {
-          setHistory(data)
+          setHistory(data);
         } else {
-          console.error('Error fetching queue master history:', error)
-          setHistory([])
+          console.error('Error fetching queue master history:', error);
+          setHistory([]);
         }
       } catch (err) {
-        console.error('Error fetching queue master history:', err)
-        setHistory([])
+        console.error('Error fetching queue master history:', err);
+        setHistory([]);
       } finally {
-        setIsLoading(false)
+        setIsLoading(false);
       }
     }
 
-    fetchQueueMasterHistory()
-  }, [enabled])
+    fetchQueueMasterHistory();
+  }, [enabled]);
 
-  return { history, isLoading }
+  return { history, isLoading };
 }
 
 /**
  * Hook to fetch available queues near the user
  */
 export function useNearbyQueues(latitude?: number, longitude?: number) {
-  const [queues, setQueues] = useState<QueueSession[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const supabase = createClient()
+  const [queues, setQueues] = useState<QueueSession[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const supabase = createClient();
 
   const fetchNearbyQueues = async () => {
-    console.log('[useNearbyQueues] 🔍 Fetching nearby queues')
+    console.log('[useNearbyQueues] 🔍 Fetching nearby queues');
 
     try {
-      const result = await getNearbyQueuesAction(latitude, longitude)
+      const result = await getNearbyQueuesAction(latitude, longitude);
 
       if (!result.success) {
-        console.error('[useNearbyQueues] ❌ Failed to fetch queues:', result.error)
-        setQueues([])
-        return
+        console.error('[useNearbyQueues] ❌ Failed to fetch queues:', result.error);
+        setQueues([]);
+        return;
       }
 
       const transformedQueues: QueueSession[] = (result.queues || []).map((q: any) => ({
@@ -563,28 +570,28 @@ export function useNearbyQueues(latitude?: number, longitude?: number) {
         organizerName: q.organizerName,
         minSkillLevel: q.minSkillLevel,
         maxSkillLevel: q.maxSkillLevel,
-      }))
+      }));
 
-      setQueues(transformedQueues)
-      console.log('[useNearbyQueues] ✅ Loaded queues:', transformedQueues.length)
+      setQueues(transformedQueues);
+      console.log('[useNearbyQueues] ✅ Loaded queues:', transformedQueues.length);
     } catch (err: any) {
-      console.error('[useNearbyQueues] ❌ Error:', err)
-      setQueues([])
+      console.error('[useNearbyQueues] ❌ Error:', err);
+      setQueues([]);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
-    fetchNearbyQueues()
-  }, [latitude, longitude])
+    fetchNearbyQueues();
+  }, [latitude, longitude]);
 
   // Debounce ref to avoid flooding on bursts of changes
-  const nearbyDebounceRef = useRef<NodeJS.Timeout | null>(null)
+  const nearbyDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const debouncedNearbyFetch = () => {
-    if (nearbyDebounceRef.current) clearTimeout(nearbyDebounceRef.current)
-    nearbyDebounceRef.current = setTimeout(fetchNearbyQueues, 600)
-  }
+    if (nearbyDebounceRef.current) clearTimeout(nearbyDebounceRef.current);
+    nearbyDebounceRef.current = setTimeout(fetchNearbyQueues, 600);
+  };
 
   // Real-time: subscribe to queue_sessions INSERT (new sessions) and UPDATE for active statuses.
   // The update_queue_count DB trigger updates current_players on the session row when participants
@@ -610,13 +617,13 @@ export function useNearbyQueues(latitude?: number, longitude?: number) {
         },
         debouncedNearbyFetch
       )
-      .subscribe()
+      .subscribe();
 
     return () => {
-      if (nearbyDebounceRef.current) clearTimeout(nearbyDebounceRef.current)
-      supabase.removeChannel(channel)
-    }
-  }, [])
+      if (nearbyDebounceRef.current) clearTimeout(nearbyDebounceRef.current);
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
-  return { queues, isLoading }
+  return { queues, isLoading };
 }
