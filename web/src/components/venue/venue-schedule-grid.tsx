@@ -111,7 +111,13 @@ function getTimeSectionLabel(time: string): string {
   return 'Evening Block';
 }
 
-export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, onQueueClick }: VenueScheduleGridProps) {
+export function VenueScheduleGrid({
+  courts,
+  venueId,
+  venueName,
+  isQueueMaster,
+  onQueueClick,
+}: VenueScheduleGridProps) {
   const router = useRouter();
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [loading, setLoading] = useState(false);
@@ -129,10 +135,14 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
   const [conflicts, setConflicts] = useState<any[]>([]);
   const [pendingCartItems, setPendingCartItems] = useState<any[]>([]);
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
-  const [calendarSummary, setCalendarSummary] = useState<Record<string, DailyAvailabilitySummary>>({});
+  const [calendarSummary, setCalendarSummary] = useState<Record<string, DailyAvailabilitySummary>>(
+    {}
+  );
   const [loadingCalendarSummary, setLoadingCalendarSummary] = useState(false);
   const [isAddDatePickerOpen, setIsAddDatePickerOpen] = useState(false);
-  const [sameTimeEligibilityByDate, setSameTimeEligibilityByDate] = useState<Record<string, boolean>>({});
+  const [sameTimeEligibilityByDate, setSameTimeEligibilityByDate] = useState<
+    Record<string, boolean>
+  >({});
   const [loadingSameTimeEligibility, setLoadingSameTimeEligibility] = useState(false);
   const [isQueueMode, setIsQueueMode] = useState(false);
 
@@ -226,7 +236,10 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
   }, [slotsByCourt]);
 
   const availableSlotCount = useMemo(
-    () => Object.values(slotsByCourt).flat().filter((slot) => slot.available).length,
+    () =>
+      Object.values(slotsByCourt)
+        .flat()
+        .filter((slot) => slot.available).length,
     [slotsByCourt]
   );
 
@@ -411,7 +424,7 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
 
     // Get min start time and max end time across all selected cells
     // (Assuming QueueMaster selects a uniform block)
-    const sortedTimes = selectedCells.map(c => c.time).sort();
+    const sortedTimes = selectedCells.map((c) => c.time).sort();
     const startTime = sortedTimes[0];
     const endTime = sortedTimes[sortedTimes.length - 1]; // Let modal calculate exclusive end
 
@@ -562,7 +575,9 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
           <div className="bg-primary/10 p-2 rounded-lg">
             <CalendarIcon className="h-5 w-5 text-primary" />
           </div>
-          <span className="text-lg font-bold text-gray-900 sm:text-xl md:text-2xl">{selectedDateLabel}</span>
+          <span className="text-lg font-bold text-gray-900 sm:text-xl md:text-2xl">
+            {selectedDateLabel}
+          </span>
         </div>
 
         <div className="flex w-full items-center justify-between gap-2 rounded-xl border border-gray-100 bg-gray-50 p-1 sm:w-auto sm:justify-start">
@@ -624,7 +639,7 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
                     const fullyBooked = isDateFullyBooked(date);
 
                     return (
-                      <button {...props} className={cn(className, "relative transition-all")}>
+                      <button {...props} className={cn(className, 'relative transition-all')}>
                         <span>{children}</span>
                         {fullyBooked && (
                           <span className="pointer-events-none absolute left-1/2 top-1/2 h-[1px] w-[60%] -translate-x-1/2 -translate-y-1/2 rotate-45 bg-gray-400" />
@@ -640,7 +655,9 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
                 }}
               />
               {loadingCalendarSummary && (
-                <p className="mt-4 text-center text-[10px] uppercase font-bold tracking-wider text-gray-400 bg-gray-50 py-2 rounded-lg">Loading availability...</p>
+                <p className="mt-4 text-center text-[10px] uppercase font-bold tracking-wider text-gray-400 bg-gray-50 py-2 rounded-lg">
+                  Loading availability...
+                </p>
               )}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -659,31 +676,35 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
       {/* 2) Information / Legend Bar (SIMPLIFIED) */}
       <div className="mb-6 flex flex-wrap items-center gap-4 bg-gray-50/50 px-4 py-3 rounded-2xl border border-gray-100">
         <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white shadow-sm shadow-primary/20">
-                <CheckCircle2 className="h-5 w-5" />
-            </div>
-            <span className="text-xs font-bold text-gray-700 uppercase tracking-tight">Selected</span>
-        </div>
-        
-        <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gray-200 border border-gray-300 relative overflow-hidden flex items-center justify-center">
-                <div className="absolute inset-0 opacity-20">
-                    <div className="w-[140%] h-[1px] bg-gray-600 rotate-[25deg] transform absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-                    <div className="w-[140%] h-[1px] bg-gray-600 rotate-[-25deg] transform absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-                </div>
-                <span className="text-[8px] font-bold text-gray-500 z-10">B</span>
-            </div>
-            <span className="text-xs font-bold text-gray-700 uppercase tracking-tight">Booked / Closed</span>
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white shadow-sm shadow-primary/20">
+            <CheckCircle2 className="h-5 w-5" />
+          </div>
+          <span className="text-xs font-bold text-gray-700 uppercase tracking-tight">Selected</span>
         </div>
 
         <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gray-100 border border-gray-200 transition-colors hover:border-gray-400" />
-            <span className="text-xs font-bold text-gray-700 uppercase tracking-tight">Available</span>
+          <div className="w-8 h-8 rounded-lg bg-gray-200 border border-gray-300 relative overflow-hidden flex items-center justify-center">
+            <div className="absolute inset-0 opacity-20">
+              <div className="w-[140%] h-[1px] bg-gray-600 rotate-[25deg] transform absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+              <div className="w-[140%] h-[1px] bg-gray-600 rotate-[-25deg] transform absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+            </div>
+            <span className="text-[8px] font-bold text-gray-500 z-10">B</span>
+          </div>
+          <span className="text-xs font-bold text-gray-700 uppercase tracking-tight">
+            Booked / Closed
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-gray-100 border border-gray-200 transition-colors hover:border-gray-400" />
+          <span className="text-xs font-bold text-gray-700 uppercase tracking-tight">
+            Available
+          </span>
         </div>
 
         <div className="ml-auto hidden sm:flex items-center gap-2 text-xs font-medium text-gray-500 bg-white px-3 py-1.5 rounded-full border border-gray-200 shadow-sm">
-            <Info className="h-3.5 w-3.5 text-primary/60" />
-            <span>{availableSlotCount} Slots Open Today</span>
+          <Info className="h-3.5 w-3.5 text-primary/60" />
+          <span>{availableSlotCount} Slots Open Today</span>
         </div>
       </div>
 
@@ -775,7 +796,10 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
                   disabled={isCustomAddDateDisabled}
                   modifiers={{
                     fullyBooked: (date) => isDateFullyBooked(date),
-                    sameTimeIneligible: (date) => !isCalendarDateDisabled(date) && selectedCells.length > 0 && !isSameTimeEligible(date),
+                    sameTimeIneligible: (date) =>
+                      !isCalendarDateDisabled(date) &&
+                      selectedCells.length > 0 &&
+                      !isSameTimeEligible(date),
                   }}
                   modifiersClassNames={{
                     selected: 'bg-primary text-white hover:bg-primary',
@@ -811,20 +835,24 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
         {isQueueMaster && (
           <div className="flex items-center gap-3 sm:ml-auto pl-6 border-l border-gray-100 h-8 self-center">
             <div className="flex flex-col items-end">
-                <span className="text-[10px] font-black text-primary uppercase tracking-[0.1em] leading-none mb-0.5">Queue Master</span>
-                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-tight">Queue Mode</span>
+              <span className="text-[10px] font-black text-primary uppercase tracking-[0.1em] leading-none mb-0.5">
+                Queue Master
+              </span>
+              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-tight">
+                Queue Mode
+              </span>
             </div>
             <button
               onClick={() => setIsQueueMode(!isQueueMode)}
               className={cn(
-                "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ring-offset-2 ring-primary/20",
-                isQueueMode ? "bg-primary" : "bg-gray-200"
+                'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ring-offset-2 ring-primary/20',
+                isQueueMode ? 'bg-primary' : 'bg-gray-200'
               )}
             >
               <span
                 className={cn(
-                  "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out",
-                  isQueueMode ? "translate-x-5" : "translate-x-0"
+                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out',
+                  isQueueMode ? 'translate-x-5' : 'translate-x-0'
                 )}
               />
             </button>
@@ -837,8 +865,9 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
           <span className="shrink-0">ℹ️</span>
           <span>
-            <strong>Multi-date mode:</strong> Availability shown is for <strong>{shortDate(selectedDate)}</strong>. Selected
-            slots will be added for all <strong>{allDatesToBook.length} dates</strong>:{' '}
+            <strong>Multi-date mode:</strong> Availability shown is for{' '}
+            <strong>{shortDate(selectedDate)}</strong>. Selected slots will be added for all{' '}
+            <strong>{allDatesToBook.length} dates</strong>:{' '}
             {allDatesToBook.map(shortDate).join(', ')}.
           </span>
         </div>
@@ -861,14 +890,20 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
         <>
           <div className="md:hidden space-y-3">
             {groupedTimes.map((group) => (
-              <div key={`mobile-${group.label}`} className="rounded-xl border border-gray-200 overflow-hidden">
+              <div
+                key={`mobile-${group.label}`}
+                className="rounded-xl border border-gray-200 overflow-hidden"
+              >
                 <div className="bg-gray-100/90 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-600">
                   {group.label}
                 </div>
 
                 <div className="space-y-2 p-2.5">
                   {group.times.map((time) => (
-                    <div key={`mobile-time-${time}`} className="rounded-lg border border-gray-200 bg-white p-2.5">
+                    <div
+                      key={`mobile-time-${time}`}
+                      className="rounded-lg border border-gray-200 bg-white p-2.5"
+                    >
                       <div className="mb-2.5 leading-tight">
                         <span className="text-sm font-semibold text-gray-800">
                           {to12Hour(time)} to {to12Hour(nextHour(time))}
@@ -895,7 +930,9 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
                                 <p className="text-[10px] text-gray-500 capitalize mt-0.5">
                                   {court.surface_type} • {court.court_type}
                                 </p>
-                                <p className="font-semibold text-primary mt-0.5">PHP {Number(court.hourly_rate || 0).toFixed(0)}/hr</p>
+                                <p className="font-semibold text-primary mt-0.5">
+                                  PHP {Number(court.hourly_rate || 0).toFixed(0)}/hr
+                                </p>
                               </div>
 
                               <button
@@ -950,7 +987,9 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
                         <span className="text-[10px] font-medium text-gray-500 capitalize mt-0.5">
                           {court.surface_type} • {court.court_type}
                         </span>
-                        <span className="text-xs font-semibold text-primary mt-0.5">PHP {Number(court.hourly_rate || 0).toFixed(0)}/hr</span>
+                        <span className="text-xs font-semibold text-primary mt-0.5">
+                          PHP {Number(court.hourly_rate || 0).toFixed(0)}/hr
+                        </span>
                       </div>
                     </th>
                   ))}
@@ -1062,8 +1101,6 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
           </p>
         </div>
         <div className="flex items-center gap-2">
-
-
           {validatingConflicts && (
             <span className="text-[10px] text-gray-400 animate-pulse">Checking conflicts...</span>
           )}
@@ -1080,13 +1117,17 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
               isBooking ||
               isChecking ||
               (isQueueMode && !isQueueTimesAligned) ||
-              (!isQueueMode && activeConflicts.length === selectedCells.length * allDatesToBook.length)
+              (!isQueueMode &&
+                activeConflicts.length === selectedCells.length * allDatesToBook.length)
             }
             className={cn(
               'px-6 py-2 rounded-lg text-sm font-bold transition-all shadow-md active:scale-95',
-              isQueueMode 
-                ? (isQueueTimesAligned ? 'bg-primary hover:bg-primary/90 text-white shadow-primary/20' : 'bg-gray-400 text-white cursor-not-allowed')
-                : (activeConflicts.length > 0 && activeConflicts.length < selectedCells.length * allDatesToBook.length)
+              isQueueMode
+                ? isQueueTimesAligned
+                  ? 'bg-primary hover:bg-primary/90 text-white shadow-primary/20'
+                  : 'bg-gray-400 text-white cursor-not-allowed'
+                : activeConflicts.length > 0 &&
+                    activeConflicts.length < selectedCells.length * allDatesToBook.length
                   ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-200'
                   : 'bg-primary text-white hover:bg-primary/90 shadow-primary/20',
               'disabled:opacity-40 disabled:cursor-not-allowed disabled:scale-100'
@@ -1101,11 +1142,11 @@ export function VenueScheduleGrid({ courts, venueId, venueName, isQueueMaster, o
                     ? 'Times Mismatch'
                     : `Create Queue Session (${validSlotCount} slots)`
                   : activeConflicts.length === selectedCells.length * allDatesToBook.length &&
-                    selectedCells.length > 0
-                  ? 'All Slots Conflicted'
-                  : activeConflicts.length > 0
-                    ? 'Review Conflicts'
-                    : `Book Now (${validSlotCount} slot${validSlotCount !== 1 ? 's' : ''})`}
+                      selectedCells.length > 0
+                    ? 'All Slots Conflicted'
+                    : activeConflicts.length > 0
+                      ? 'Review Conflicts'
+                      : `Book Now (${validSlotCount} slot${validSlotCount !== 1 ? 's' : ''})`}
           </button>
         </div>
       </div>
