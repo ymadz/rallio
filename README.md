@@ -1,132 +1,224 @@
-# 🏸 Rallio
+# Rallio
 
-**Badminton Court Finder & Queue Management System**  
-*Built for Zamboanga City, Philippines*
+Badminton court discovery, booking, payments, and queue management for players and venues in Zamboanga City, Philippines.
 
----
+## Preview
 
-## 📖 What is Rallio?
+- **Live demo:** [add live demo link]
+- **Repository:** [Rallio on GitHub](https://github.com/ymadz/rallio)
+- **Screenshots or GIF:** [add project preview GIF here]
 
-Rallio is a mobile and web platform that helps badminton players:
+## Overview
 
-- **Find courts** – Discover nearby badminton venues with real-time availability
-- **Book instantly** – Reserve courts and pay via GCash or Maya
-- **Join queues** – Hop into pickup games without the hassle of organizing
-- **Track matches** – Record scores, view match history, and rate players
+Rallio is a full-stack badminton platform for players, court administrators, queue masters, and global administrators. Players can find nearby courts, view availability, make reservations, pay through GCash or Maya, and join badminton queues. Venue teams can manage courts, pricing, bookings, queue sessions, notifications, and platform activity from admin dashboards.
 
-For **venue owners**, Rallio provides:
-- Dashboard for managing multiple courts
-- Pricing configuration with dynamic discounts
-- Revenue analytics and booking insights
-- Queue approval and session management
+The project is designed around the needs of the badminton community in Zamboanga City, while keeping the web and mobile clients connected to the same Supabase backend and shared TypeScript package.
 
----
+## Features
 
-## 🛠 Tech Stack
+- Email/password and Google OAuth authentication
+- Player profile setup with skill level and play style information
+- Court and venue discovery with search and filters
+- Interactive Leaflet map with location-based venue search
+- Venue details, photos, amenities, pricing, and availability
+- Court reservations with conflict detection
+- GCash and Maya payments through PayMongo
+- Payment webhook handling and reservation status updates
+- Booking history, reservation management, and cancellation
+- Queue discovery and queue joining
+- Real-time queue positions and participant updates
+- Queue session management for Queue Masters
+- Match assignment, score recording, and payment tracking
+- Court admin dashboards for venues, courts, reservations, pricing, and analytics
+- Global admin tools for users, venues, moderation, settings, and audit logs
+- In-app notifications with Supabase Realtime
+- Shared TypeScript types, validation schemas, and utilities
+- Early Capacitor Android/web-parity work
+- Mobile app foundation using Expo and React Native
 
-| Layer | Technology |
-|-------|------------|
-| **Web** | Next.js 15, React 18, TypeScript, Tailwind CSS 4, shadcn/ui |
-| **Mobile** | React Native, Expo 54, Expo Router |
-| **Backend** | Supabase (PostgreSQL + Auth + Realtime + Storage) |
-| **Maps** | Leaflet + OpenStreetMap (web), react-native-maps (mobile) |
-| **Payments** | PayMongo (GCash, Maya) |
-| **Geospatial** | PostGIS |
+## Screenshots
 
----
+Add screenshots here when the main flows are ready:
 
-## 📁 Project Structure
+- **Home dashboard:** [add screenshot here]
+- **Court discovery and map:** [add screenshot here]
+- **Court details:** [add screenshot here]
+- **Booking and time-slot selection:** [add screenshot here]
+- **Checkout and payment flow:** [add screenshot here]
+- **Queue dashboard:** [add screenshot here]
+- **Court admin dashboard:** [add screenshot here]
+- **Mobile app:** [add screenshot here]
 
-```
-rallio/
-├── web/           # Next.js web application
-├── mobile/        # React Native + Expo mobile app
-├── backend/       # Supabase migrations & Edge Functions
-├── shared/        # Shared types, validations, utilities
-└── docs/          # Documentation & planning
-```
+## Tech Stack
 
----
+### Web
 
-## 🤝 Collaboration Guide
+- Next.js 16 with App Router
+- React 18
+- TypeScript 5
+- Tailwind CSS 4
+- Radix UI and custom UI components
+- Zustand
+- React Hook Form and Zod
+- Leaflet and React Leaflet
+
+### Mobile
+
+- React Native 0.81
+- Expo 54
+- Expo Router
+- React Native Maps
+- Zustand
+- AsyncStorage
+
+### Backend and Data
+
+- Supabase Auth
+- PostgreSQL
+- PostGIS
+- Supabase Realtime
+- Supabase Storage
+- Supabase Edge Functions and database migrations
+- Row Level Security (RLS)
+
+### Integrations
+
+- PayMongo for GCash and Maya payments
+- OpenStreetMap tiles through Leaflet
+- Capacitor for Android web-parity work
+
+## My Role
+
+I worked on the full-stack implementation of Rallio, including:
+
+- Building the Next.js web application and shared TypeScript package
+- Implementing authentication, profiles, court discovery, bookings, and queues
+- Connecting the app to Supabase Auth, PostgreSQL, Realtime, Storage, and RLS
+- Integrating PayMongo payments and webhook processing
+- Building admin dashboards for venue and platform management
+- Setting up the initial Expo mobile app structure
+- Organizing the database migrations, validation schemas, and project documentation
+
+## What I Learned
+
+- How to structure a full-stack monorepo with shared TypeScript code
+- How to use Supabase Auth, RLS, Realtime, Storage, and PostgreSQL migrations together
+- How to handle payment webhooks and idempotent payment updates
+- How to prevent overlapping reservations at the database level
+- How to use PostGIS for location-based venue searches
+- How to work around Leaflet server-side rendering limitations in Next.js
+- How to build role-based dashboards and permissions
+- How to keep server actions, cache invalidation, and client refreshes in sync
+- How to plan a web application alongside an early-stage mobile client
+
+## Challenges
+
+- Keeping reservation availability accurate while preventing double bookings
+- Handling PayMongo webhook signatures, duplicate events, and payment state changes
+- Integrating Leaflet into a server-rendered Next.js application
+- Designing permissions for players, Queue Masters, court admins, and global admins
+- Supporting real-time queue changes without making the UI difficult to follow
+- Managing shared code across the web app, mobile app, and backend
+- Keeping the mobile app stable while working with a monorepo and Expo dependencies
+- Managing project scope while core features and testing are still being completed
+
+## Future Improvements
+
+- Add unit, integration, and end-to-end test coverage
+- Finish the mobile booking, map, queue, and notification flows
+- Complete ratings and reviews for courts and players
+- Add email and push notifications
+- Finish split payments and participant invitations
+- Automate payment expiration with a scheduled job or Edge Function
+- Add booking rescheduling and refund flows
+- Improve skill-based queue matching and ELO updates
+- Replace in-memory rate limiting with a shared service such as Redis or Upstash
+- Add venue approval, dispute handling, and financial reconciliation tools
+- Reduce production logging and add a structured logger
+
+## Installation
 
 ### Prerequisites
 
-1. **Node.js 18+** – [Download](https://nodejs.org/)
-2. **Git** – [Download](https://git-scm.com/)
-3. **Expo Go app** – For mobile testing (iOS/Android)
+- Node.js 18 or later
+- npm
+- A Supabase project
+- A PayMongo account for payment testing
+- Expo Go or an Android/iOS development environment for mobile testing
 
-### Quick Setup
+### Setup
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/madz/rallio.git
+git clone https://github.com/ymadz/rallio.git
 cd rallio
-
-# 2. Install all dependencies
 npm install
-
-# 3. Get environment variables from team lead
-# (See "Environment Setup" below)
-
-# 4. Run development server
-npm run dev:web      # Web app at localhost:3000
-npm run dev:mobile   # Mobile app (scan QR with Expo Go)
 ```
 
-### Environment Setup
-
-**Ask the team lead for the `.env` files.** These contain Supabase and PayMongo credentials.
-
-Create these files with the credentials you receive:
+Create the required environment files described below, then start the web app:
 
 ```bash
-# For web development
-web/.env.local
-
-# For mobile development  
-mobile/.env
+npm run dev:web
 ```
 
-> ⚠️ **Never commit `.env` files to Git.** They're already in `.gitignore`.
+The web app runs at `http://localhost:3000`.
 
----
+To start the mobile app:
 
-## 🧑‍💻 Development Commands
+```bash
+npm run dev:mobile
+```
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev:web` | Start web dev server (localhost:3000) |
-| `npm run dev:mobile` | Start Expo mobile server |
-| `npm run build:web` | Production build |
-| `npm run typecheck` | TypeScript validation |
-| `npm run lint` | ESLint check |
-| `npm run format` | Prettier format |
+Useful commands:
 
----
+```bash
+npm run build:web      # Build the web application
+npm run typecheck     # Run TypeScript checks
+npm run lint          # Run the web lint checks
+npm run format        # Format project files with Prettier
+```
 
-## 📚 Key Documentation
+Database migrations are managed with the Supabase CLI:
 
-| File | Purpose |
-|------|---------|
-| [docs/planning.md](docs/planning.md) | Development phases & roadmap |
-| [docs/tasks.md](docs/tasks.md) | Current tasks & progress |
-| [CLAUDE.md](CLAUDE.md) | AI assistant guidelines |
+```bash
+cd backend/supabase
+supabase migration new feature_name
+supabase db push --linked
+```
 
----
+## Environment Variables
 
-## 🐛 Troubleshooting
+Create `web/.env.local`:
 
-| Issue | Solution |
-|-------|----------|
-| `Module not found: @rallio/shared` | Run `npm install` from root |
-| Supabase connection error | Check your `.env` credentials |
-| Map shows white screen | Refresh page (Leaflet SSR issue) |
-| Expo app won't connect | Ensure phone and laptop are on same WiFi |
+```env
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+NEXT_PUBLIC_PAYMONGO_PUBLIC_KEY=
+PAYMONGO_SECRET_KEY=
+PAYMONGO_WEBHOOK_SECRET=
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
 
----
+Create `mobile/.env`:
 
-## 👥 Team
+```env
+EXPO_PUBLIC_SUPABASE_URL=
+EXPO_PUBLIC_SUPABASE_ANON_KEY=
+EXPO_PUBLIC_PAYMONGO_PUBLIC_KEY=
+```
 
-Built with ❤️ for the Zamboanga City badminton community.
+Do not commit environment files or secret keys. Leaflet currently uses OpenStreetMap tiles, so a Mapbox token is not required.
 
+## Project Status
+
+**In development.**
+
+The web app has working authentication, court discovery, reservations, payments, queues, notifications, and admin dashboards. The mobile app is still at an early stage, and testing has not been fully added yet. Some planned features, including ratings, email and push notifications, split payments, booking changes, and refund handling, are still in progress.
+
+## Acknowledgements
+
+- Supabase for authentication, database, storage, and real-time features
+- PayMongo for GCash and Maya payment integration
+- Leaflet and OpenStreetMap for map functionality
+- Expo and React Native for the mobile app foundation
+- Zamboanga City's badminton community for the project context and inspiration
+- [Add any UI assets, icons, design references, or other credits here]
